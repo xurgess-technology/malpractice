@@ -51,8 +51,8 @@ func _run() -> void:
 	for it in game.world_items.values():
 		if String(it.kind) == "specimen_vat":
 			items.append(it)
-	items[0].x = Eyes.pack("eye_hive", "", 5.0, 50)
-	items[1].x = Eyes.pack("eye_surgeon", "Zach", 5.0, 50)
+	items[0].x = Parts.pack("eye_hive", "", 5.0, 50)
+	items[1].x = Parts.pack("eye_surgeon", "Zach", 5.0, 50)
 	await _seconds(0.5)
 	for i in 2:
 		var at: Vector3 = items[i].global_position

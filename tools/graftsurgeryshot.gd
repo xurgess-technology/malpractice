@@ -60,7 +60,7 @@ func _run() -> void:
 	# ---- 50: the stand beside the table, with a vat on it
 	var stand_at: Vector3 = vats.stands[si].position
 	var vat: Node = game._spawn_item("specimen_vat", 1, Transform3D(tb, stand_at), WorldItem.State.LOOSE)
-	vat.x = Eyes.pack("eye_hive", "", 0.0, 120)
+	vat.x = Parts.pack("eye_hive", "", 0.0, 120)
 	me.flashlight_on = true
 	await _seconds(1.0)
 	_stand(stand_at + tb * Vector3(0.0, 0.0, 1.3))

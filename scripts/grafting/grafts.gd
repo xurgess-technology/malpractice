@@ -9,8 +9,8 @@ extends Node
 ## always a swap and never an empty socket. Nothing can be botched (the case sets `no_fail`) and the
 ## patient is awake the whole time, looking up at it.
 ##
-## Generic on purpose: everything below works on a PART KIND (Eyes.KINDS), so part two's trachea
-## (docs/GRAFTING_TRACHEA.md) slots in through PART_ABILITY and Eyes.NOUN without a rewrite.
+## Generic on purpose: everything below works on a PART KIND (Parts.KINDS), so part two's trachea
+## (docs/GRAFTING_TRACHEA.md) slots in through PART_ABILITY and Parts.NOUN without a rewrite.
 ##
 ## Authority: the host runs the case (through scripts/downed/player_surgery.gd, which already stands
 ## in as a game for one table's surgery system) and owns `_graft`; every machine gets `_graft` in the
@@ -97,14 +97,14 @@ func table_prompt(q) -> String:
 	var vat := vat_for(p)
 	if vat == null:
 		return "!No vat on the stand beside the table."
-	var d := Eyes.unpack(String(vat.x))
+	var d := Parts.unpack(String(vat.x))
 	if d.is_empty():
 		return "!The vat on the stand is empty."
 	var kind := String(d.kind)
 	var owner := String(d.owner)
 	var have := graft_of(int(p.peer_id))
-	if Eyes.is_spoiled_factor(Eyes.spoil_factor(float(d.age))):
-		return "!%s is spoiled." % Eyes.label(kind, owner)
+	if Parts.is_spoiled_factor(Parts.spoil_factor(float(d.age))):
+		return "!%s is spoiled." % Parts.label(kind, owner)
 	if kind == "eye_hive":
 		if have != "":
 			return "!%s already has one." % p.player_name
@@ -113,7 +113,7 @@ func table_prompt(q) -> String:
 	var held := String(q.selected_stack().get("kind", "")) if q.has_method("selected_stack") else ""
 	if held != "scalpel":
 		return "!Hold the scalpel to start the graft."
-	return "Operate: graft %s into %s" % [Eyes.label(kind, owner), p.player_name]
+	return "Operate: graft %s into %s" % [Parts.label(kind, owner), p.player_name]
 
 
 ## What a free table says to someone holding a graft tool while nobody lies on it.
@@ -139,7 +139,7 @@ func make_case(q) -> Dictionary:
 		return {}
 	var p = game.someone_on_table()
 	var vat := vat_for(p)
-	var d := Eyes.unpack(String(vat.x))
+	var d := Parts.unpack(String(vat.x))
 	var in_kind := String(d.kind)
 	var have := graft_of(int(p.peer_id))
 	# What comes out is whatever is in the socket now: the Hive eye they were given, or their own.
@@ -168,9 +168,9 @@ func on_step(case: Dictionary, result: Dictionary) -> void:
 		return
 	var out_kind := String(case.get("out_kind", "eye_surgeon"))
 	var out_owner := String(case.get("out_owner", ""))
-	vat.x = Eyes.pack(out_kind, out_owner, 0.0, _value_of(out_kind))
+	vat.x = Parts.pack(out_kind, out_owner, 0.0, _value_of(out_kind))
 	game._sound("items_glass", vat.global_position)
-	game.say("%s is in the vat now." % Eyes.label(out_kind, out_owner), 3.0)
+	game.say("%s is in the vat now." % Parts.label(out_kind, out_owner), 3.0)
 
 
 ## Host: the last stitch went in. The graft takes.
@@ -182,7 +182,7 @@ func finish(case: Dictionary) -> void:
 		return
 	var in_kind := String(case.get("in_kind", ""))
 	apply(int(p.peer_id), "eye_hive" if in_kind == "eye_hive" else "")
-	var label := Eyes.label(in_kind, String(case.get("in_owner", "")))
+	var label := Parts.label(in_kind, String(case.get("in_owner", "")))
 	game.say("%s is stitched in. %s can get up." % [label, p.player_name], 4.0)
 
 
@@ -232,7 +232,7 @@ func _physics_process(delta: float) -> void:
 				PartScript.attach(_human_of(p), kind, EYE_RADIUS)
 		if kind == "":
 			continue
-		# The glow: low normally, high while they are in Hive Eyes. Replicated, because `hive_view`
+		# The glow: low normally, high while they are in Hive Parts. Replicated, because `hive_view`
 		# is (Player report key "hv"), so every machine works out the same value.
 		var want := 1.0 if bool(p.get("hive_view")) else 0.0
 		var v := move_toward(float(_lock.get(peer, 0.0)), want, delta * LOCK_RATE)

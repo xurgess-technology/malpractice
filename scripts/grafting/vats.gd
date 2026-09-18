@@ -4,7 +4,7 @@ extends Node
 ## in, and an eye in a vat does not spoil.
 ##
 ## The vat is the ordinary bulky item `specimen_vat` (two hands). What it holds is the stack's /
-## world item's `x` string (Eyes.pack: kind, owner, age, value), so it rides every existing
+## world item's `x` string (Parts.pack: kind, owner, age, value), so it rides every existing
 ## carry / drop / snapshot path with no new replication. An eye going in freezes its age; coming
 ## out, its spoil clock `bt` is rebuilt from that age.
 ##
@@ -112,12 +112,12 @@ static func build_model(root: Node3D) -> void:
 	content.position = Vector3(0, 0.08, 0)
 	content.scale = Vector3.ONE * 1.5   # a bigger eye reads through the fluid
 	root.add_child(content)
-	for k in Eyes.KINDS:
+	for k in Parts.KINDS:
 		var holder := Node3D.new()
 		holder.name = "VatEye_" + k
 		holder.visible = false
 		content.add_child(holder)
-		Eyes.build(holder, k)
+		Parts.build(holder, k)
 
 
 ## Show what `x` says is inside under `node` (a vat's model, a world item or a hand's holder).
@@ -127,15 +127,15 @@ static func set_contents(node: Node, x: String) -> void:
 	var content := node.find_child("Content", true, false)
 	if content == null:
 		return
-	var d := Eyes.unpack(x)
-	for k in Eyes.KINDS:
+	var d := Parts.unpack(x)
+	for k in Parts.KINDS:
 		var holder := content.get_node_or_null("VatEye_" + k) as Node3D
 		if holder == null:
 			continue
 		var on: bool = not d.is_empty() and String(d.kind) == k
 		holder.visible = on
 		if on:
-			Eyes.set_rot(holder, Eyes.rot_of(Eyes.spoil_factor(float(d.age))))
+			Parts.set_rot(holder, Parts.rot_of(Parts.spoil_factor(float(d.age))))
 
 
 # =============================================================================== helpers
@@ -159,10 +159,10 @@ func _now() -> float:
 
 ## "Zach's eye, fresh" for a vat's contents string.
 static func describe(x: String) -> String:
-	var d := Eyes.unpack(x)
+	var d := Parts.unpack(x)
 	if d.is_empty():
 		return ""
-	return "%s, %s" % [Eyes.label(String(d.kind), String(d.owner)), Eyes.condition(Eyes.spoil_factor(float(d.age)))]
+	return "%s, %s" % [Parts.label(String(d.kind), String(d.owner)), Parts.condition(Parts.spoil_factor(float(d.age)))]
 
 
 ## Seconds an eye stack / item has been out of a vat.
@@ -178,7 +178,7 @@ func eye_age(stack_or_item) -> float:
 
 
 func eye_factor(stack_or_item) -> float:
-	return Eyes.spoil_factor(eye_age(stack_or_item))
+	return Parts.spoil_factor(eye_age(stack_or_item))
 
 
 ## What the furnace pays for an eye stack ({kind, v, bt}) right now.
@@ -190,18 +190,18 @@ func eye_value(s: Dictionary) -> int:
 
 
 func _pack_stack(s: Dictionary) -> String:
-	return Eyes.pack(String(s.kind), String(s.get("x", "")), eye_age(s), int(s.get("v", 0)))
+	return Parts.pack(String(s.kind), String(s.get("x", "")), eye_age(s), int(s.get("v", 0)))
 
 
 # =============================================================================== prompts
 
 ## WorldItem.interact_prompt for a vat lying somewhere.
 func item_prompt(player, it) -> String:
-	var d := Eyes.unpack(String(it.x))
+	var d := Parts.unpack(String(it.x))
 	var sel: Dictionary = player.selected_stack() if player != null and player.has_method("selected_stack") else {}
-	if Eyes.is_eye(String(sel.get("kind", ""))):
+	if Parts.is_part(String(sel.get("kind", ""))):
 		if d.is_empty():
-			return "Put %s in the vat" % Eyes.label(String(sel.kind), String(sel.get("x", "")))
+			return "Put %s in the vat" % Parts.label(String(sel.kind), String(sel.get("x", "")))
 		return "!The vat already holds an eye"
 	if player != null and player.has_method("can_take") and not player.can_take(KIND):
 		return "!Needs two free hands"
@@ -216,9 +216,9 @@ func hand_prompt(p) -> String:
 	if vh < 0 or String(p.slots[vh].get("x", "")) != "":
 		return ""
 	var sel: Dictionary = p.selected_stack()
-	if not Eyes.is_eye(String(sel.kind)):
+	if not Parts.is_part(String(sel.kind)):
 		return ""
-	return "Put %s in the vat" % Eyes.label(String(sel.kind), String(sel.get("x", "")))
+	return "Put %s in the vat" % Parts.label(String(sel.kind), String(sel.get("x", "")))
 
 
 func spot_prompt(p, index: int) -> String:
@@ -242,13 +242,13 @@ func item_used(p, it: Node) -> bool:
 		return false
 	var h: int = p.selected_head()
 	var s: Dictionary = p.slots[h]
-	if not Eyes.is_eye(String(s.kind)):
+	if not Parts.is_part(String(s.kind)):
 		return false
 	if String(it.x) != "":
 		game.tell(p, "The vat already holds an eye.", 2.5)
 		return true
 	it.x = _pack_stack(s)
-	game.tell(p, "%s is floating in the vat now. It won't spoil there." % Eyes.label(String(s.kind), String(s.get("x", ""))), 3.0)
+	game.tell(p, "%s is floating in the vat now. It won't spoil there." % Parts.label(String(s.kind), String(s.get("x", ""))), 3.0)
 	p.clear_slot(h)
 	game._sound("items_glass", it.global_position)
 	return true
@@ -263,10 +263,10 @@ func hand_put(p) -> void:
 		return
 	var eh: int = p.selected_head()
 	var s: Dictionary = p.slots[eh]
-	if not Eyes.is_eye(String(s.kind)):
+	if not Parts.is_part(String(s.kind)):
 		return
 	p.slots[vh]["x"] = _pack_stack(s)
-	game.tell(p, "%s is floating in the vat now. It won't spoil there." % Eyes.label(String(s.kind), String(s.get("x", ""))), 3.0)
+	game.tell(p, "%s is floating in the vat now. It won't spoil there." % Parts.label(String(s.kind), String(s.get("x", ""))), 3.0)
 	p.clear_slot(eh)
 	game._sound("items_glass", p.global_position)
 
@@ -296,7 +296,7 @@ func take_out(p, aim_id: String) -> void:
 
 ## Contents string -> an eye in p's hands, its spoil clock running again from its frozen age.
 func _to_hand(p, x: String) -> bool:
-	var d := Eyes.unpack(x)
+	var d := Parts.unpack(x)
 	if d.is_empty():
 		return false
 	var i: int = p.take_into(String(d.kind), 1, int(d.value))
@@ -307,7 +307,7 @@ func _to_hand(p, x: String) -> bool:
 	p.slots[i]["bt"] = _now() - float(d.age)
 	if String(d.owner) != "":
 		p.slots[i]["x"] = String(d.owner)
-	game.tell(p, "You took %s out of the vat. It spoils again out here." % Eyes.label(String(d.kind), String(d.owner)), 3.0)
+	game.tell(p, "You took %s out of the vat. It spoils again out here." % Parts.label(String(d.kind), String(d.owner)), 3.0)
 	game._sound("pickup", p.global_position)
 	return true
 
@@ -549,11 +549,11 @@ func _physics_process(delta: float) -> void:
 ## Host: an eye that came from nowhere (a dev spawn) starts spoiling now.
 func _stamp_spoil_times() -> void:
 	for it in game.world_items.values():
-		if is_instance_valid(it) and Eyes.is_eye(String(it.kind)) and float(it.bt) <= -100000.0:
+		if is_instance_valid(it) and Parts.is_part(String(it.kind)) and float(it.bt) <= -100000.0:
 			it.bt = _now()
 	for p in game.players.values():
 		for s in p.slots:
-			if Eyes.is_eye(String(s.kind)) and not s.has("bt"):
+			if Parts.is_part(String(s.kind)) and not s.has("bt"):
 				s["bt"] = _now()
 
 
@@ -563,14 +563,14 @@ func _show() -> void:
 		if not is_instance_valid(it):
 			continue
 		var k := String(it.kind)
-		if Eyes.is_eye(k):
-			Eyes.set_rot(it, Eyes.rot_of(eye_factor(it)))
+		if Parts.is_part(k):
+			Parts.set_rot(it, Parts.rot_of(eye_factor(it)))
 		elif k == KIND:
 			set_contents(it, String(it.x))
 	for p in game.players.values():
 		var s: Dictionary = p.selected_stack()
 		var k := String(s.kind)
-		if k != KIND and not Eyes.is_eye(k):
+		if k != KIND and not Parts.is_part(k):
 			continue
 		for holder in ["Head/FX/Camera/HeldFirstPerson", "Body/HeldThirdPerson"]:
 			var n = p.get_node_or_null(holder)
@@ -579,7 +579,7 @@ func _show() -> void:
 			if k == KIND:
 				set_contents(n, String(s.get("x", "")))
 			else:
-				Eyes.set_rot(n, Eyes.rot_of(eye_factor(s)))
+				Parts.set_rot(n, Parts.rot_of(eye_factor(s)))
 
 
 ## Local: a bench spot only takes an aim ray while you carry a vat and nobody has put one there.

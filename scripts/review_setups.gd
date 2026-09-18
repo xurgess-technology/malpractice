@@ -220,7 +220,7 @@ static func _graft_stage(game: Game, vat_kind: String, owner: String, already: b
 	var table: Vector3 = game.table_position(ti)
 	# The vat, already on that table's stand, with the part that goes in.
 	var vat = game._spawn_item("specimen_vat", 1, Transform3D(tb, game.vats.stands[si].position as Vector3), WorldItem.State.LOOSE)
-	vat.x = Eyes.pack(vat_kind, owner, 0.0, 120 if vat_kind == "eye_hive" else 45)
+	vat.x = Parts.pack(vat_kind, owner, 0.0, 120 if vat_kind == "eye_hive" else 45)
 	if already:
 		game.grafts.apply(p.peer_id, "eye_hive")   # you already wear the Hive eyeball
 	var hud = tree.get_first_node_in_group("hud")

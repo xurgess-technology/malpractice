@@ -90,7 +90,7 @@ const LOOT := {
 		"brain": true, "rooms": {}, "surfaces": [], "containers": {},
 	},
 	# GRAFTING part one (scripts/grafting/eyes.gd): taken out of a strapped Hive, or a surgeon's own
-	# eye swapped out; never found. They spoil like brains outside a vat (Eyes.spoil_factor).
+	# eye swapped out; never found. They spoil like brains outside a vat (Parts.spoil_factor).
 	"eye_hive": {
 		"name": "Hive's eyeball", "short": "Hive's eyeballs", "value": [120, 120], "tier": 3,
 		"eye": true, "rooms": {}, "surfaces": [], "containers": {},

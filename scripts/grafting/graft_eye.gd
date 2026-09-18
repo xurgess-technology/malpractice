@@ -13,7 +13,7 @@ extends RefCounted
 ## Personnel mirrors and the carry camera.
 ##
 ## `set_lock` drives the Hive eye material's `Lock`: 0 a low pinpoint, 1 the whole ball lit. Grafts
-## keeps it low normally and high while the surgeon is in Hive Eyes.
+## keeps it low normally and high while the surgeon is in Hive Parts.
 
 const HumanModel := preload("res://scripts/human/human_model.gd")
 
@@ -98,7 +98,7 @@ static func node_on(human_root: Node) -> Node3D:
 
 ## The Hive eye material's `Lock` on a grafted eye: 0 a low pinpoint, 1 the whole ball lit.
 static func set_lock(node: Node, v: float) -> void:
-	Eyes.set_lock(node, v)
+	Parts.set_lock(node, v)
 
 
 static func _build(root: Node3D, kind: String, radius: float) -> void:
@@ -110,7 +110,7 @@ static func _build(root: Node3D, kind: String, radius: float) -> void:
 	sph.radial_segments = 18
 	sph.rings = 9
 	ball.mesh = sph
-	ball.material_override = Eyes.material(kind)
+	ball.material_override = Parts.material(kind)
 	root.add_child(ball)
 	# The stitches the `surgeon_graft` render shows: short dark ticks radiating round the socket.
 	var thread := StandardMaterial3D.new()

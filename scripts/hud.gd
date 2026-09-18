@@ -485,9 +485,9 @@ func _draw_ring(r: Rect2, f: float, col: Color) -> void:
 func _spoil_of(kind: String, s: Dictionary) -> Dictionary:
 	if game == null:
 		return {}
-	if Eyes.is_eye(kind) and game.get("vats") != null:
+	if Parts.is_part(kind) and game.get("vats") != null:
 		var f: float = game.vats.eye_factor(s)
-		return {"frac": 1.0 - Eyes.rot_of(f), "spoiled": Eyes.is_spoiled_factor(f)}
+		return {"frac": 1.0 - Parts.rot_of(f), "spoiled": Parts.is_spoiled_factor(f)}
 	if game.brains != null and game.brains.is_brain(kind):
 		var f2: float = game.brains.factor_of(s)
 		return {"frac": clampf((f2 - game.brains.MIN_FACTOR) / (1.0 - game.brains.MIN_FACTOR), 0.0, 1.0), "spoiled": f2 < game.brains.ROTTEN_FACTOR}
@@ -533,8 +533,8 @@ func _sig_of(me, sel_head: int) -> String:
 
 
 func _held_name(kind: String, s: Dictionary) -> String:
-	if Eyes.is_eye(kind):
-		return Eyes.label(kind, String(s.get("x", "")))
+	if Parts.is_part(kind):
+		return Parts.label(kind, String(s.get("x", "")))
 	return Items.display_name(kind)
 
 

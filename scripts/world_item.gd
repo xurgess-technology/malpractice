@@ -27,7 +27,7 @@ var value: int = 0
 ## hand slot as "bt" and back out when dropped; the dumpster pays game.brains.current_value().
 var bt: float = -1000000.0   # "no spoil clock" (a real one can be negative early in a run)
 ## GRAFTING part one: a small string that travels with the stack (into a hand slot as "x" and back):
-## an eye's owner ("Zach"), or what a specimen vat holds (Eyes.pack). "" for everything else.
+## an eye's owner ("Zach"), or what a specimen vat holds (Parts.pack). "" for everything else.
 var x: String = ""
 
 var _visual: Node3D
@@ -184,9 +184,9 @@ func interact_prompt(player) -> String:
 	var g2 := _game()
 	if kind == "specimen_vat" and g2 != null and g2.get("vats") != null:
 		return g2.vats.item_prompt(player, self)   # GRAFTING: put an eye in, or take the vat
-	if g2 != null and g2.get("vats") != null and Eyes.is_eye(kind):
-		label = Eyes.label(kind, x)
-		label += " ($%d, %s)" % [g2.vats.eye_value({"v": value, "bt": bt}), Eyes.condition(g2.vats.eye_factor(self))]
+	if g2 != null and g2.get("vats") != null and Parts.is_part(kind):
+		label = Parts.label(kind, x)
+		label += " ($%d, %s)" % [g2.vats.eye_value({"v": value, "bt": bt}), Parts.condition(g2.vats.eye_factor(self))]
 	elif g2 != null and g2.get("brains") != null and g2.brains.is_brain(kind):
 		# SWEEP 3 HOOK (brains): what it is worth now, and how far gone it is.
 		label += " ($%d, %s)" % [g2.brains.current_value(self), g2.brains.condition(g2.brains.factor_of(self))]

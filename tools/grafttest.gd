@@ -46,15 +46,15 @@ func _data_checks() -> void:
 		_check(Items.exists(k), "%s is an item" % k)
 	_check(Items.is_surgical("scalpel") and not Items.is_consumable("scalpel") and Items.is_surgical("eye_spoon"), "scalpel and eye spoon are surgical, reusable tools")
 	_check(Items.is_bulky("specimen_vat") and Items.slots_needed("specimen_vat") == 2, "the vat takes both hands")
-	_check(Items.is_loot("eye_hive") and Items.is_loot("eye_surgeon") and Eyes.is_eye("eye_hive"), "both eyes are sellable loot")
-	_check(Eyes.label("eye_hive", "") == "Hive's eyeball" and Eyes.label("eye_surgeon", "Zach") == "Zach's eyeball", "eye labels")
-	_check(Eyes.spoil_factor(0.0) == 1.0 and Eyes.spoil_factor(Eyes.FRESH_SECONDS) == 1.0 and Eyes.is_spoiled_factor(Eyes.spoil_factor(Eyes.ROTTEN_SECONDS)), "an eye is fresh, then spoils")
+	_check(Items.is_loot("eye_hive") and Items.is_loot("eye_surgeon") and Parts.is_part("eye_hive"), "both eyes are sellable loot")
+	_check(Parts.label("eye_hive", "") == "Hive's eyeball" and Parts.label("eye_surgeon", "Zach") == "Zach's eyeball", "eye labels")
+	_check(Parts.spoil_factor(0.0) == 1.0 and Parts.spoil_factor(Parts.FRESH_SECONDS) == 1.0 and Parts.is_spoiled_factor(Parts.spoil_factor(Parts.ROTTEN_SECONDS)), "an eye is fresh, then spoils")
 	var st: Array = Procedures.steps("eye_extraction")
 	_check(st.size() == 3 and st[0].item == "scalpel" and st[1].item == "eye_spoon" and st[2].item == "scalpel" and st[0].site == "eye", "extraction steps: scalpel, spoon, scalpel")
 	_check(Procedures.is_monster_only("eye_extraction") and not Procedures.patient_ailments().has("eye_extraction"), "extraction is monster-only")
-	var packed := Eyes.pack("eye_surgeon", "Zach", 12.4, 45)
-	var u := Eyes.unpack(packed)
-	_check(String(u.get("kind", "")) == "eye_surgeon" and String(u.owner) == "Zach" and int(u.age) == 12 and int(u.value) == 45 and Eyes.unpack("").is_empty(), "vat contents round-trip")
+	var packed := Parts.pack("eye_surgeon", "Zach", 12.4, 45)
+	var u := Parts.unpack(packed)
+	_check(String(u.get("kind", "")) == "eye_surgeon" and String(u.owner) == "Zach" and int(u.age) == 12 and int(u.value) == 45 and Parts.unpack("").is_empty(), "vat contents round-trip")
 
 
 ## The eye minigames' own rules, driven directly (no body): lowering, slipping, cutting, no_fail.
@@ -169,7 +169,7 @@ func _run() -> void:
 	_check(vats.item_prompt(me, vat).begins_with("Put Hive's eyeball in the vat"), "aimed at a vat with an eye: '%s'" % vats.item_prompt(me, vat))
 	game.pickup_item(me, vat)   # E on the vat with an eye selected
 	await _frames(2)
-	var got := Eyes.unpack(String(vat.x))
+	var got := Parts.unpack(String(vat.x))
 	_check(String(got.get("kind", "")) == "eye_hive" and absf(float(got.get("age", -1.0)) - 20.0) < 1.5 and int(got.get("value", 0)) == 100, "the eye went into the vat with its age frozen (%s)" % str(got))
 	_check(String(me.slots[eh].kind) == "" and world_has(vat), "the eye left the hand; the vat stayed on the bench")
 	var loose: Node = game._spawn_item("eye_hive", 1, Transform3D(Basis(), me.global_position + Vector3(0.4, 1.0, 0.0)), WorldItem.State.LOOSE)
@@ -177,7 +177,7 @@ func _run() -> void:
 	loose.bt = now - 20.0
 	game.world_time += 400.0
 	await _frames(3)
-	_check(Eyes.condition(vats.eye_factor(loose)) == "spoiled" and Eyes.is_spoiled_factor(vats.eye_factor(loose)), "an eye left outside spoils (factor %.2f)" % vats.eye_factor(loose))
+	_check(Parts.condition(vats.eye_factor(loose)) == "spoiled" and Parts.is_spoiled_factor(vats.eye_factor(loose)), "an eye left outside spoils (factor %.2f)" % vats.eye_factor(loose))
 	_check(vats.eye_value({"v": 100, "bt": float(game.world_time) - 400.0}) < 40 and vats.eye_value({"v": 100, "bt": float(game.world_time)}) == 100
 		and game.furnace_value("eye_hive", {"v": 100, "bt": float(game.world_time) - 400.0}) < 40, "and it sells for less at the furnace")
 	game.tell(me, "")
@@ -188,7 +188,7 @@ func _run() -> void:
 		if String(me.slots[i].kind) == "eye_hive":
 			out_i = i
 	_check(out_i >= 0 and String(vat.x) == "", "V takes the eye back out (slot %d, vat '%s')" % [out_i, String(vat.x)])
-	_check(out_i >= 0 and absf(vats.eye_age(me.slots[out_i]) - 20.0) < 1.5 and not Eyes.is_spoiled_factor(vats.eye_factor(me.slots[out_i])),
+	_check(out_i >= 0 and absf(vats.eye_age(me.slots[out_i]) - 20.0) < 1.5 and not Parts.is_spoiled_factor(vats.eye_factor(me.slots[out_i])),
 		"it was not spoiling inside: still fresh after 400 s in the vat (age %.1f)" % (vats.eye_age(me.slots[out_i]) if out_i >= 0 else -1.0))
 	# Carry the vat (an eye selected would go in instead), put the eye back in with both in hand, set it down.
 	me.selected = 3
@@ -211,7 +211,7 @@ func _run() -> void:
 	for v in _vat_items():
 		if v.global_position.distance_to(vats.spots[3].position) < 0.1:
 			placed = v
-	_check(placed != null and Eyes.unpack(String(placed.x)).get("kind", "") == "eye_hive" and Vats.held_vat(me) < 0, "set down on a free bench spot with the eye still inside")
+	_check(placed != null and Parts.unpack(String(placed.x)).get("kind", "") == "eye_hive" and Vats.held_vat(me) < 0, "set down on a free bench spot with the eye still inside")
 	_check(not vats.spot_free(3), "that spot is taken now")
 	await _seconds(0.4)
 	var shown = placed.find_child("VatEye_eye_hive", true, false) if placed != null else null
@@ -330,12 +330,12 @@ func _graft_checks() -> void:
 	# ---- a vat with a spoiled Hive eye
 	var stand_at: Vector3 = vats.stands[si].position
 	var vat: Node = game._spawn_item("specimen_vat", 1, Transform3D(Basis(Vector3.UP, yaw), stand_at), WorldItem.State.LOOSE)
-	vat.x = Eyes.pack("eye_hive", "", Eyes.ROTTEN_SECONDS + 50.0, 120)
+	vat.x = Parts.pack("eye_hive", "", Parts.ROTTEN_SECONDS + 50.0, 120)
 	await _frames(3)
 	_check(vats.vat_on_stand(ti) == vat, "the vat stands on the stand beside the table")
 	var spoiled := String(game._table_prompt(bw, ti))
 	_check(spoiled.begins_with("!") and spoiled.contains("spoiled"), "a spoiled eye cannot be grafted ('%s')" % spoiled)
-	vat.x = Eyes.pack("eye_hive", "", 0.0, 120)
+	vat.x = Parts.pack("eye_hive", "", 0.0, 120)
 	await _frames(3)
 	var offer := String(game._table_prompt(bw, ti))
 	_check(offer.begins_with("Operate: graft Hive's eyeball into"), "a fresh Hive eyeball is offered ('%s')" % offer)
@@ -349,7 +349,7 @@ func _graft_checks() -> void:
 	_check(grafts.graft_of(me.peer_id) == "eye_hive", "the graft took: a Hive eyeball in the socket")
 	_check(game.brains.slot_of(me.peer_id, "hive_in") >= 0 and game.brains.level(me.peer_id, "hive") >= 1,
 		"it gave Hive Eyes 1 in an ability slot (slot %d, level %d)" % [game.brains.slot_of(me.peer_id, "hive_in"), game.brains.level(me.peer_id, "hive")])
-	var swapped := Eyes.unpack(String(vat.x))
+	var swapped := Parts.unpack(String(vat.x))
 	_check(String(swapped.get("kind", "")) == "eye_surgeon" and String(swapped.get("owner", "")) == me.player_name,
 		"your own eyeball is in the vat now (%s)" % str(swapped))
 	_check(game.get_up_block(me) == "", "the graft is over: you can get up again")
@@ -365,7 +365,7 @@ func _graft_checks() -> void:
 		return
 	_check(grafts.graft_of(me.peer_id) == "", "swapping back takes the Hive eyeball out")
 	_check(game.brains.slot_of(me.peer_id, "hive_in") < 0, "and Hive Eyes goes with it")
-	_check(String(Eyes.unpack(String(vat.x)).get("kind", "")) == "eye_hive", "the Hive eyeball is back in the vat")
+	_check(String(Parts.unpack(String(vat.x)).get("kind", "")) == "eye_hive", "the Hive eyeball is back in the vat")
 	dev.control_botsworth()
 	await _frames(4)
 

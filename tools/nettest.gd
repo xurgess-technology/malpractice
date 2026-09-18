@@ -1069,7 +1069,7 @@ func _sc_graft():
 		# The vat with a fresh Hive eyeball, on the stand beside the table.
 		var yaw: float = game.table_yaw_of(table)
 		var vat: Node = game._spawn_item("specimen_vat", 1, Transform3D(Basis(Vector3.UP, yaw), game.vats.stands[si].position), WorldItem.State.LOOSE)
-		vat.x = Eyes.pack("eye_hive", "", 0.0, 120)
+		vat.x = Parts.pack("eye_hive", "", 0.0, 120)
 		patient.teleport(game._floor_at(game.table_position(table) + Vector3(0, 0, 1.2).rotated(Vector3.UP, yaw)))
 		await _frames(4)
 		game.strap_in(patient, table)

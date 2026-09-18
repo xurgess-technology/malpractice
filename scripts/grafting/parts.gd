@@ -1,26 +1,42 @@
-class_name Eyes
+class_name Parts
 extends RefCounted
-## Grafting part one (docs/GRAFTING.md): the two eyes you can hold. `eye_hive` (taken from a strapped
-## Hive) and `eye_surgeon` (a surgeon's own, labelled with whose it is). Both are sellable loot
-## (loot_table.gd) that SPOIL outside a vat: over about a minute or two the eye clouds over and
-## dulls, and a spoiled eye can't be grafted. A vat stops the clock (vats.gd).
+## THE BODY PARTS you can hold, keep in a vat and graft (docs/GRAFTING.md, docs/GRAFTING_TRACHEA.md).
+## Grafting part one called this `Eyes`; part two renamed it, because the spoil system the brains
+## used is gone and this is what body parts use now.
 ##
-## A part's owner rides in the stack's/item's `x` string ("Hive" for one cut out of a Hive); the
-## spoil clock is `bt` (world time it came out), exactly like a brain's.
+## Four kinds, in two FAMILIES:
+##   eye      `eye_hive` (out of a strapped Hive) and `eye_surgeon` (a surgeon's own)
+##   trachea  `trachea_sono` (out of a strapped Sonographer) and `trachea_surgeon`
+## All of them are sellable loot (loot_table.gd) that SPOIL outside a vat: over about a minute or two
+## a part clouds over and dulls, and a spoiled part can't be grafted. A vat stops the clock (vats.gd).
 ##
-## PART KINDS. Body parts are named "X's Y" everywhere (2026-09-18). Everything here and in vats.gd
-## works on a *part kind* string, not on eyes as such: a vat holds one part of whatever kind, and
-## the graft (grafts.gd) swaps parts of one kind. Part two (docs/GRAFTING_TRACHEA.md) adds a
-## trachea by putting it in KINDS / NOUN and giving it a model; nothing else here has to change.
+## A part's owner rides in the stack's/item's `x` string ("Hive", "Sonographer", "Zach"); the spoil
+## clock is `bt`, the world time it came out.
+##
+## Body parts are named "X's Y" everywhere (2026-09-18): "Hive's eyeball", "Sonographer's trachea",
+## "Zach's trachea". Everything here and in vats.gd works on a *part kind*, not on eyes as such: a vat
+## holds ONE part of any kind, and a graft (grafts.gd) only swaps parts of the same family, so an
+## eyeball vat is refused for a trachea graft.
 
-const KINDS := ["eye_hive", "eye_surgeon"]
-## Part kind -> the noun in "X's <noun>". The owner comes from `x` (or the Hive).
-const NOUN := {"eye_hive": "eyeball", "eye_surgeon": "eyeball"}
+const KINDS := ["eye_hive", "eye_surgeon", "trachea_sono", "trachea_surgeon"]
+## Part kind -> the noun in "X's <noun>". The owner comes from `x` (or OWNER).
+const NOUN := {"eye_hive": "eyeball", "eye_surgeon": "eyeball",
+	"trachea_sono": "trachea", "trachea_surgeon": "trachea"}
+## Part kind -> its family. A vat holding one family is refused for a graft of the other.
+const FAMILY := {"eye_hive": "eye", "eye_surgeon": "eye",
+	"trachea_sono": "trachea", "trachea_surgeon": "trachea"}
+## Family -> the monster's part, and the surgeon's own part of the same family.
+const MONSTER_PART := {"eye": "eye_hive", "trachea": "trachea_sono"}
+const SURGEON_PART := {"eye": "eye_surgeon", "trachea": "trachea_surgeon"}
+## Family -> the body site the surgery happens at (Procedures step `site`).
+const SITE := {"eye": "eye", "trachea": "throat"}
+## A monster part's owner when nothing else says: "Hive's eyeball", "Sonographer's trachea".
+const OWNER := {"eye_hive": "Hive", "trachea_sono": "Sonographer"}
 
 const FRESH_SECONDS := 40.0     # no change for this long
 const ROTTEN_SECONDS := 130.0   # fully clouded by here
-const MIN_FACTOR := 0.15        # what a fully rotten eye still fetches
-const SPOILED_BELOW := 0.3      # a spoiled eye can't be grafted
+const MIN_FACTOR := 0.15        # what a fully rotten part still fetches
+const SPOILED_BELOW := 0.3      # a spoiled part can't be grafted
 
 const SHADER := """
 shader_type spatial;
@@ -64,15 +80,69 @@ void fragment() {
 }
 """
 
+## The trachea: a ribbed windpipe. The Sonographer's burns violet behind its rings (the Echolocation
+## icon, art/icons/echolocation.svg); a surgeon's own is pale pink cartilage and does not glow.
+## PLACEHOLDER: Godot primitives, the way part one's eyeball is. The `trachea-art` chunk replaces
+## both with real GLBs; keep the node names (`TracheaTube`) and this material so it swaps cleanly.
+const TRACHEA_SHADER := """
+shader_type spatial;
+render_mode cull_back;
+
+uniform vec3 flesh : source_color = vec3(0.86, 0.66, 0.66);
+uniform vec3 glow : source_color = vec3(0.61, 0.42, 1.0);
+uniform float lit_base = 0.0;   // 1 for the Sonographer's, 0 for a surgeon's own
+uniform float rings = 46.0;
+instance uniform float rot = 0.0;
+instance uniform float lock = 0.0;
+varying vec3 obj;
+
+void vertex() { obj = VERTEX; }
+
+void fragment() {
+	float band = 0.5 + 0.5 * sin(obj.y * rings);
+	float ring = smoothstep(0.35, 0.75, band);
+	vec3 col = mix(flesh * 0.72, flesh, ring);
+	// Spoiled: the same milky grey-yellow cloud the eyeball gets.
+	float r = smoothstep(0.0, 1.0, rot);
+	col = mix(col, vec3(0.62, 0.62, 0.55), r * 0.75);
+	ALBEDO = col;
+	ROUGHNESS = mix(0.2, 0.85, r);
+	SPECULAR = mix(0.85, 0.2, r);
+	float lit = lit_base * (1.0 - r) * (0.35 + 2.6 * clamp(lock, 0.0, 1.0));
+	EMISSION = glow * ring * lit;
+}
+"""
+
 static var _shader: Shader = null
+static var _trachea_shader: Shader = null
 static var _mats := {}
 
 
-static func is_eye(kind: String) -> bool:
+static func is_part(kind: String) -> bool:
 	return KINDS.has(kind)
 
 
-## How much of its value an eye keeps after `age_seconds` out of a vat.
+## "eye" or "trachea" ("" for anything that is not a body part).
+static func family(kind: String) -> String:
+	return String(FAMILY.get(kind, ""))
+
+
+## Is this the part a monster gives up (as opposed to a surgeon's own)?
+static func is_monster_part(kind: String) -> bool:
+	return OWNER.has(kind)
+
+
+## The part of `kind`'s family that a surgeon carries in their own body.
+static func surgeon_part(kind: String) -> String:
+	return String(SURGEON_PART.get(family(kind), ""))
+
+
+## The body site a graft or an extraction of this family works at ("eye" / "throat").
+static func site_of(kind: String) -> String:
+	return String(SITE.get(family(kind), "eye"))
+
+
+## How much of its value a part keeps after `age_seconds` out of a vat.
 static func spoil_factor(age_seconds: float) -> float:
 	if age_seconds <= FRESH_SECONDS:
 		return 1.0
@@ -96,13 +166,13 @@ static func rot_of(f: float) -> float:
 	return clampf(1.0 - (f - MIN_FACTOR) / (1.0 - MIN_FACTOR), 0.0, 1.0)
 
 
-## "Hive's eyeball" / "Zach's eyeball". Body parts are named "X's Y" everywhere.
+## "Hive's eyeball", "Sonographer's trachea", "Zach's trachea". Body parts are named "X's Y".
 static func label(kind: String, owner: String) -> String:
 	var noun := String(NOUN.get(kind, "part"))
 	var o := owner.strip_edges()
-	if kind == "eye_hive":
-		return "%s's %s" % [o if o != "" else "Hive", noun]
-	return "%s's %s" % [o if o != "" else "A surgeon", noun]
+	if o != "":
+		return "%s's %s" % [o, noun]
+	return "%s's %s" % [String(OWNER.get(kind, "A surgeon")), noun]
 
 
 # ------------------------------------------------------------------ vat contents (a string)
@@ -116,7 +186,7 @@ static func unpack(x: String) -> Dictionary:
 	if x == "":
 		return {}
 	var p := x.split("|")
-	if p.size() < 4 or not is_eye(p[0]):
+	if p.size() < 4 or not is_part(p[0]):
 		return {}
 	return {"kind": p[0], "owner": p[1], "age": float(p[2]), "value": int(p[3])}
 
@@ -126,6 +196,21 @@ static func unpack(x: String) -> Dictionary:
 static func material(kind: String) -> ShaderMaterial:
 	if _mats.has(kind):
 		return _mats[kind]
+	if family(kind) == "trachea":
+		if _trachea_shader == null:
+			_trachea_shader = Shader.new()
+			_trachea_shader.code = TRACHEA_SHADER
+		var tm := ShaderMaterial.new()
+		tm.resource_name = kind
+		tm.shader = _trachea_shader
+		if kind == "trachea_sono":
+			tm.set_shader_parameter("flesh", Color(0.44, 0.36, 0.5))
+			tm.set_shader_parameter("lit_base", 1.0)
+		else:
+			tm.set_shader_parameter("flesh", Color(0.88, 0.7, 0.72))
+			tm.set_shader_parameter("lit_base", 0.0)
+		_mats[kind] = tm
+		return tm
 	if _shader == null:
 		_shader = Shader.new()
 		_shader.code = SHADER

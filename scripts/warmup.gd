@@ -105,12 +105,12 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	_report(progress, "terminal")
 	BrainsScript.warm(shelf)  # SWEEP 3 HOOK (brains): the blender, Echo's ghosts and veil, Hive Eyes' screen
 	# GRAFTING part one: a vat with each eye floating in it (the glass, the fluid and the eye shader).
-	for ek in Eyes.KINDS:
+	for ek in Parts.KINDS:
 		var vm := ItemModels.make("specimen_vat")
 		shelf.add_child(vm)
 		vm.position = Vector3(x, 0.05, 0.6)
 		x += 0.2
-		Vats.set_contents(vm, Eyes.pack(ek, "", 60.0, 1))
+		Vats.set_contents(vm, Parts.pack(ek, "", 60.0, 1))
 	_inert(shelf)
 	_report(progress, "brains")
 	# POCKETS HOOK: the Factory's and the Restaurant's meshes, textures and materials, and a stub copy.

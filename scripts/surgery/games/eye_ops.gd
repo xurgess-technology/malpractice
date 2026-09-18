@@ -430,7 +430,7 @@ func _build() -> void:
 	if variant == "scoop" or variant == "snip" or variant == "seat":
 		_build_scoop_eye()
 		if variant == "seat" and _eye != null:
-			_eye.material_override = Eyes.material(eye_kind)   # the eye going IN, not the body's old one
+			_eye.material_override = Parts.material(eye_kind)   # the eye going IN, not the body's old one
 	elif variant != "cut" and variant != "stitch":
 		_eye = MeshInstance3D.new()
 		var sph := SphereMesh.new()
@@ -439,7 +439,7 @@ func _build() -> void:
 		sph.radial_segments = 20
 		sph.rings = 10
 		_eye.mesh = sph
-		_eye.material_override = Eyes.material(eye_kind)
+		_eye.material_override = Parts.material(eye_kind)
 		add_child(_eye)
 	match variant:
 		"cut", "stitch":
@@ -606,7 +606,7 @@ func _build_scoop_eye() -> void:
 		sph.radial_segments = 20
 		sph.rings = 10
 		_eye.mesh = sph
-		_eye.material_override = Eyes.material(eye_kind)
+		_eye.material_override = Parts.material(eye_kind)
 		_eye.basis = Basis(Vector3.RIGHT, deg_to_rad(90.0))
 		_eye_pivot.add_child(_eye)
 		_eye_base = plane_to_local(Vector2.ZERO, eye_r * 0.85)

@@ -1833,7 +1833,7 @@ func furnace_value(kind: String, s: Dictionary) -> int:
 		return 0
 	if brains != null and brains.is_brain(kind):
 		return maxi(0, int(brains.current_value(s)))
-	if vats != null and Eyes.is_eye(kind):
+	if vats != null and Parts.is_part(kind):
 		return maxi(0, int(vats.eye_value(s)))   # GRAFTING part one: eyes spoil too
 	return maxi(0, int(s.get("v", 0)))
 
