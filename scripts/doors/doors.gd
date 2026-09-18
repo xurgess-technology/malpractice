@@ -10,13 +10,13 @@ extends Node
 ##   hinged/double (E)  players press E: it swings away from them (into the tunnel when the other
 ##       side has no room) and stays where it is left. Bots, paramedic crews wheeling the gurney,
 ##       and players carrying someone or dragging a monster (E is taken), push it open by walking
-##       into it. The Hive pushes it open slowly, the Discharged bursts through when it rushes (a
+##       into it. The Hive pushes it open slowly, the Sonographer bursts through when it rushes (a
 ##       slam), otherwise opens it with a creak, the Night Nurse opens it silently and only while
 ##       nobody is looking at her or at the door. The OR's doors are a "double" pair, same as the
 ##       cafeteria/radiology/morgue (polish-or-doors: they used to be automatic).
 ##   Doors never close by themselves except the automatic ones.
 ##
-## Noise the Discharged hears: opening 0.25, a creaking push 0.5, a slam 0.95, a heavy gate 0.35.
+## Noise the Sonographer hears: opening 0.25, a creaking push 0.5, a slam 0.95, a heavy gate 0.35.
 ## Sound through a closed door: `sound_factor(from, to)` (0.55 per closed door on the line).
 
 const Plan := preload("res://scripts/level/door_plan.gd")
@@ -77,7 +77,7 @@ var _locked_sound_at := {}
 var _hold_open := {}        # id -> seconds a gate stays open after unlocking
 var _cl_locked := true
 var _applied_once := {}
-## Counters for tests: opens by who ("player", "bot", "hive", "discharged", "night_nurse",
+## Counters for tests: opens by who ("player", "bot", "hive", "sonographer", "night_nurse",
 ## "crew", "auto"), slams, jams.
 var stats := {}
 
@@ -453,17 +453,17 @@ func _push_check(d: Node, a: Dictionary) -> void:
 			_drive(d, want, SPEED_HIVE)
 			_count("hive")
 			_fx(d, "doors_creak", NOISE_CREAK, "door")
-		"discharged":
+		"sonographer":
 			if m == null or not _monster_wants_through(m):
 				return
 			if int(m.mode) == M.Mode.RUSH:
 				_drive(d, want, SPEED_BURST)
-				_count("discharged_burst")
+				_count("sonographer_burst")
 				_fx(d, "doors_slam", NOISE_SLAM, "door_slam")
 			else:
 				_drive(d, want, SPEED_CLOSE)
 				_fx(d, "doors_creak", NOISE_CREAK, "door")
-			_count("discharged")
+			_count("sonographer")
 		"night_nurse":
 			if m == null or bool(m.observed) or not _monster_wants_through(m):
 				return

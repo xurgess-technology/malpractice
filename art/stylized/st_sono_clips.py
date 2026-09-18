@@ -2,16 +2,17 @@
 (st_build.add_neck_bones). Same conventions as everything else here: armature-space poses built with
 hu_rig.Pose, in place, no root motion, 30 fps.
 
-The character is a blind doctor who learned to see with sound. Tall and thin, shoulders rounded,
-the head cocked to one side. **Calm, the neck is hunched down**: these clips all pose it hunched,
-because the stretch is not a clip. The crane is a 0..1 blend the game lays on top of whatever is
-playing (scripts/monsters/sonographer_rig.gd), driven by suspicion, and it is the suspicion meter:
-the neck rises, the windpipe rings pull apart and the throat burns brighter.
+The character is a blind doctor who learned to see with sound. Tall and thin, a slight stoop, the head
+cocked a little to one side. **Calm, it looks almost normal**: an ordinary neck under a slightly bowed
+head. The stretch is not a clip: the crane is a 0..1 blend the game lays on top of whatever is playing
+(scripts/monsters/sonographer_rig.gd), driven by suspicion, and it is the suspicion meter: the neck
+rises, the windpipe rings pull apart and the throat burns brighter. The first time you see the neck
+longer than a person's is when it starts to grow.
 
-The right hand has an ultrasound probe grown into it, so it is never a free hand: it hangs and
-sways, it rises to point where the noise came from, and it clubs. The left hand is long-fingered and
-spread, feeling the air. The ears turning, the throat and cable glow and the head tracking a sound
-are all driven by the game on top of these.
+The right hand is gone: the arm stops at the wrist and an ultrasound wand is fitted there, so it is
+never a free hand: it hangs and sways, it rises to point where the noise came from, and it clubs. The
+left hand is long-fingered and spread, feeling the air. The ears turning, the throat glow and the head
+tracking a sound are all driven by the game on top of these.
 """
 import math
 from mathutils import Vector
@@ -22,11 +23,11 @@ from hu_mesh import smooth01, lerp
 
 # name: (frames, loop, speed m/s or None, what it is)
 CLIPS = {
-    'SonoIdle': (150, True, None, 'neck low, head cocked, the free hand twitching, the jaw ticking with its clicks'),
+    'SonoIdle': (150, True, None, 'a slight stoop, head cocked a little, the free hand twitching, the jaw ticking with its clicks'),
     'SonoWander': (64, True, 0.80, 'a careful, high-stepping walk, the free hand out feeling the air; 0.8 m/s'),
     'SonoListen': (40, True, None, 'frozen mid-step, the ears snapped round, the head turned to the sound'),
-    'SonoCharge': (36, False, None, 'the head tips up, the jaw drops and the probe arm rises to point; holds'),
-    'SonoEcho': (26, False, None, 'a pulse through the body, a jolt back, and the neck snaps down'),
+    'SonoCharge': (36, False, None, 'the head stays level and the probe arm rises to point; holds'),
+    'SonoEcho': (26, False, None, 'a pulse through the body, a jolt, and the neck snaps down'),
     'SonoRush': (30, True, 3.10, 'neck low and forward, head leading, both arms out, a loping run; 3.1 m/s'),
     'SonoWail': (96, False, None, 'clubbing with the probe and clawing with the free hand, with listening pauses'),
     'SonoSearch': (110, True, None, 'still, the neck slowly rising, the head sweeping side to side'),
@@ -36,9 +37,12 @@ CLIPS = {
 WANDER_SPEED = CLIPS['SonoWander'][2]
 RUSH_SPEED = CLIPS['SonoRush'][2]
 
-LEAN = 0.10           # the trunk itself stays near upright; the neck does the work
-HUNCH = 0.70          # how far the neck chain is folded down when it is calm
-COCK = 0.30           # the head tipped over toward one ear
+LEAN = 0.05           # the trunk itself stays near upright; the neck does the work
+HUNCH = 0.13          # how far the neck chain is folded down when it is calm: a slight stoop, nothing more
+COCK = 0.14           # the head tipped over toward one ear
+# The clips below were tuned when the calm hunch was 0.70 rad; the offsets that undo it (the head levelling
+# back out of the fold, a `lift`) scale with it, so they stay in proportion.
+FOLD = HUNCH / 0.70
 NECK = ('neck', 'neck2', 'neck3', 'neck4')
 # how the hunch is shared down the chain: most of it low, so the head ends up forward and down
 SHARE = (0.34, 0.28, 0.22, 0.16)
@@ -49,15 +53,15 @@ def neck(p, hunch=1.0, turn=0.0, lift=0.0, roll=0.0):
     and `lift` straightens it back up. The game's crane blend goes on top of this, so nothing here
     ever straightens it fully."""
     # +Rx on this chain folds the neck forward and down, which is the calm pose
-    k = HUNCH * hunch - lift
+    k = HUNCH * hunch - lift * FOLD
     for i, b in enumerate(NECK):
         p.rel(b, Rx(k * SHARE[i]) @ Rz(turn * SHARE[i]) @ Ry(roll * SHARE[i]))
 
 
 def head_pose(p, up=0.0, cock=1.0, turn=0.0, jaw=0.0):
     """The head on the end of it: levelled back up out of the hunch, cocked over one ear."""
-    # -Rx brings the head back up out of the fold, so it ends up low and pushed forward, not hanging
-    p.rel('head', Rx(-0.58 - up - 0.22 * jaw) @ Ry(COCK * cock) @ Rz(turn))
+    # -Rx brings the head back up out of the fold, so the face looks level
+    p.rel('head', Rx(-0.58 * FOLD - up - 0.04 * jaw) @ Ry(COCK * cock) @ Rz(turn))
 
 
 def probe_hang(p, swing=0.0, out=0.0, bend=0.30, twist=0.0):
@@ -152,17 +156,18 @@ def search_pose(rig, f, n=110):
 
 # ====================================================================== the echo
 def charge_pose(rig, f, n=36):
-    """At full stretch: the head tips up, the jaw drops, and the probe arm comes up to point where
+    """At full stretch: the head stays level and the probe arm comes up to point where
     it heard you. About 1.2 s, and it holds on the last frame while the glow runs down the cable."""
     t = min(f / max(n - 1, 1), 1.0)
     k = smooth01(t)
     s = rig.body.s
     p = Pose(rig)
     p.hips = Vector((0.0, 0.010 * s * k, 0.012 * s * k))
-    spine(p, lean=LEAN - 0.16 * k, yaw=0.06, breathe=-1.3 * k, neck_comp=0.0)
+    spine(p, lean=LEAN - 0.04 * k, yaw=0.06, breathe=-1.3 * k, neck_comp=0.0)
     # the clip only unfolds part of the hunch: the crane blend is what has it at full stretch
-    neck(p, hunch=1.0 - 0.55 * k, lift=0.16 * k, turn=0.10 * (1 - k))
-    head_pose(p, up=0.62 * k, cock=1.0 - 0.6 * k, jaw=1.2 * k)
+    neck(p, hunch=1.0 - 0.55 * k, lift=0.04 * k, turn=0.10 * (1 - k))
+    # the head stays level for the charge: it does not tip up to fire
+    head_pose(p, up=0.0, cock=1.0 - 0.6 * k)
     _stand(p, rig, spread=1.05)
     # the probe comes up and points forward and a little up
     probe_hang(p, swing=lerp(0.06, 1.62, k), out=0.10 * k, bend=lerp(0.26, 0.34, k), twist=0.2 * k)
@@ -179,11 +184,10 @@ def echo_pose(rig, f, n=26):
     s = rig.body.s
     p = Pose(rig)
     p.hips = Vector((0.0, 0.030 * s * jolt + 0.010 * s * (1 - down), -0.016 * s * down))
-    spine(p, lean=LEAN - 0.16 + 0.22 * jolt + 0.14 * down, breathe=lerp(-1.3, 0.8, down), neck_comp=0.0)
-    neck(p, hunch=lerp(0.45, 1.0, down) + 0.18 * jolt, lift=0.16 * (1 - down))
+    spine(p, lean=LEAN - 0.04 + 0.22 * jolt + 0.04 * down, breathe=lerp(-1.3, 0.8, down), neck_comp=0.0)
+    neck(p, hunch=lerp(0.45, 1.0, down) + 0.18 * jolt, lift=0.04 * (1 - down))
     # the jaw is thrown wide for the pulse and only closes as the neck comes back down
-    head_pose(p, up=lerp(0.62, 0.0, down) - 0.30 * jolt, cock=lerp(0.4, 1.0, down),
-              jaw=2.6 * (1.0 - smooth01((t - 0.10) / 0.55)) + 0.5 * (1 - down))
+    head_pose(p, up=0.0, cock=lerp(0.4, 1.0, down))
     _stand(p, rig, spread=1.05)
     probe_hang(p, swing=lerp(1.62, 0.10, down) + 0.25 * jolt, out=0.10 * (1 - down), bend=0.30)
     feeler(p, reach=lerp(-0.35, 0.10, down), spread=1.0, curl=0.3 * (1 - down) + 0.1)
@@ -197,7 +201,7 @@ def rush_pose(rig, f, n=30):
     p = gait_pose(rig, f, n, RUSH_SPEED, 0.36, 0.12 * s, LEAN + 0.26, 0.032 * s, True, 0.0, 0.0, arms=False)
     ph = f / n
     lope = math.sin(math.tau * ph)
-    neck(p, hunch=1.25, turn=0.05 * lope)
+    neck(p, hunch=3.2, turn=0.05 * lope)
     head_pose(p, up=0.30, cock=0.25, turn=0.06 * lope, jaw=0.5)
     probe_hang(p, swing=1.15 + 0.30 * lope, out=0.16, bend=0.42 - 0.18 * lope, twist=0.15)
     feeler(p, reach=1.25 - 0.30 * lope, spread=1.0, curl=0.02)
@@ -257,7 +261,7 @@ def stagger_pose(rig, f, n=26):
     p = Pose(rig)
     p.hips = Vector((0.0, 0.060 * s * k, -0.040 * s * k))
     spine(p, lean=LEAN - 0.40 * k, yaw=0.14 * k, roll=-0.10 * k, neck_comp=0.0)
-    neck(p, hunch=1.0 + 0.55 * k, turn=-0.20 * k)
+    neck(p, hunch=1.0 + 3.0 * k, turn=-0.20 * k)
     head_pose(p, up=-0.18 * k, cock=1.0 + 0.7 * k, turn=-0.14 * k, jaw=0.5 * k)
     planted(p, 'L', Vector((rig.ball['L'].x, rig.ball['L'].y + 0.17 * s * k, rig.ball['L'].z)), 0.10 * k, yaw=0.06)
     planted(p, 'R', Vector((rig.ball['R'].x, rig.ball['R'].y + 0.06 * s * k, rig.ball['R'].z)), 0.0, yaw=-0.06)

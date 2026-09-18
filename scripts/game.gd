@@ -2247,7 +2247,7 @@ func _tick_noise(delta: float) -> void:
 		_noises.pop_front()
 	for p in alive_players():
 		# SWEEP 4A HOOK (controls): a crouching player's footsteps make no sound and no noise event
-		# at all (not just quieter): the Discharged can't hear a crouching player walk.
+		# at all (not just quieter): the Sonographer can't hear a crouching player walk.
 		if not p.moving or bool(p.get("crouching")):
 			_footstep_acc[p.peer_id] = 0.0
 			continue
@@ -2673,7 +2673,7 @@ func nurse_drop(_m: Node, p: Node) -> void:
 
 
 ## Host only. Every hurt a player takes goes through here (monsters, the dev gun). `source` is
-## free text for logs and messages ("monster:discharged", "dev_gun:<name>").
+## free text for logs and messages ("monster:sonographer", "dev_gun:<name>").
 ## Reaching 0 HP downs the player (down_player); nothing a hit does kills outright.
 func damage_player(p: Node, amount: int, source: String, knock: Vector3 = Vector3.ZERO) -> void:
 	if not is_host() or p == null or not is_instance_valid(p) or not p.alive or p.downed or amount <= 0:
@@ -2730,7 +2730,7 @@ func knock_down_monster(m: Node, dir: Vector3 = Vector3.ZERO, seconds: float = 4
 	m.shoved(dir)
 	m.lunge_t = 0.0
 	if m.brain != null and "timer" in m.brain and MonsterScript.is_capturable(m.kind):   # SWEEP 3 HOOK (monsters): the Hive too
-		m.brain.timer = seconds   # the Discharged's shove stun, lengthened
+		m.brain.timer = seconds   # the Sonographer's shove stun, lengthened
 	else:
 		m.calm = maxf(m.calm, seconds)   # the Night Nurse ignores shoves: make it stand down
 	_sound("thud", m.global_position)

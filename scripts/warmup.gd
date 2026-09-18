@@ -3,7 +3,7 @@ extends RefCounted
 ## Removes first-time hitches.
 ##
 ## Measured on a Radeon 890M: the first patient body cost 107 ms to build, the first
-## Discharged 119 ms, the first anesthetic vial 37 ms, and every surgery step 70 to 150 ms,
+## Sonographer 119 ms, the first anesthetic vial 37 ms, and every surgery step 70 to 150 ms,
 ## because each new kind of material has to be compiled. Worse, Godot frees a material's
 ## shader as soon as nothing uses it, so a step's minigame paid that cost again every time.
 ##
@@ -232,9 +232,9 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	# builds her Blender model (monster/night_nurse: its two skinned materials, shadow mesh and the
 	# first load of its six maps), so the first Night Nurse of a session does not hitch.
 	var mx := -1.0
-	# "sonographer" also builds the glow shader its throat, cable and probe share, the see-through
+	# "sonographer" also builds its gel-drip particles, the glow shader its throat and wand share, the see-through
 	# pane of skin over its windpipe and the glossy gel copy of its skin material.
-	for kind in ["discharged", "night_nurse", "hive", "sonographer"]:  # SWEEP 3 HOOK (monsters)
+	for kind in ["night_nurse", "hive", "sonographer"]:  # SWEEP 3 HOOK (monsters)
 		var model: Node3D = MonsterModel.new()
 		shelf.add_child(model)
 		model.setup(kind)

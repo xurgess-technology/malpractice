@@ -98,15 +98,15 @@ func _harvest_unlocks_tier3() -> void:
 	_say("---- a harvest (absorbed at the blender) unlocks tier 3")
 	var b: Node = game.brains
 	b.on_reset()
-	game.database.erase("discharged")
-	_check(not game.db_record("discharged").harvested, "tier 3 starts locked for the Discharged")
-	me.take_into("brain_discharged", 1, 350)
-	var slot := _slot_of("brain_discharged")
+	game.database.erase("sonographer")
+	_check(not game.db_record("sonographer").harvested, "tier 3 starts locked for the Sonographer")
+	me.take_into("brain_sonographer", 1, 350)
+	var slot := _slot_of("brain_sonographer")
 	me.slots[slot]["bt"] = game.world_time
 	me.selected = slot
 	b.drink(me)
 	await _frames(2)
-	_check(game.db_record("discharged").harvested, "drinking an absorbed brain marks tier 3 harvested")
+	_check(game.db_record("sonographer").harvested, "drinking an absorbed brain marks tier 3 harvested")
 
 
 func _guest_scan_stays_theirs() -> void:
@@ -223,8 +223,8 @@ func _wall_sign_in_and_out() -> void:
 	me.bot_laser_hold = false
 	_check(int(game.wall.user) == me.peer_id, "a 1.5 s hold on HOLD TO SIGN IN signs in")
 	_check(_hive_known(), "signed in: my scanned Hive fills its card")
-	game.mark_own_db("discharged", "scanned")
-	_check(int(game.wall.view().db.get("discharged", 0)) & 2 != 0, "a scan while signed in reaches the screen")
+	game.mark_own_db("sonographer", "scanned")
+	_check(int(game.wall.view().db.get("sonographer", 0)) & 2 != 0, "a scan while signed in reaches the screen")
 	# SIGN OUT is a click.
 	wt.ui.open({"kind": "section", "id": "monsters", "index": 0})
 	var out_px: Vector2 = wt.ui._sign.position + wt.ui._sign.size * 0.5

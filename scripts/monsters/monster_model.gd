@@ -6,7 +6,6 @@ extends Node3D
 
 const Shaper := preload("res://scripts/monsters/rig_shaper.gd")
 const Shapes := preload("res://scripts/monsters/shapes.gd")
-const DischargedLook := preload("res://scripts/monsters/discharged_look.gd")
 const NurseLook := preload("res://scripts/monsters/night_nurse_look.gd")
 const HiveLook := preload("res://scripts/monsters/hive_look.gd")
 const NurseRig := preload("res://scripts/monsters/night_nurse_rig.gd")
@@ -29,7 +28,6 @@ var hive = null
 ## The Sonographer's model: its pose modifier and its look interface (sonographer_rig.gd), null for
 ## every other look. It is `shaper` too.
 var sono = null
-var iv: Node3D = null            ## the Discharged's IV pole, top-level
 ## Movable ears: [{node: Node3D pivot on the head, side: +1 left / -1 right, rest: outward radians}]
 var ears: Array = []
 var _ear_listen := 0.0
@@ -69,19 +67,19 @@ func setup(monster_kind: String) -> void:
 	var head_mesh := skeleton.get_node_or_null("head-mesh") as MeshInstance3D
 	if head_mesh != null:
 		head_mesh.visible = false
+	# The stand-in rig (the Sonographer's model is missing) wears the Hive's or the Nurse's shapes
+	# when it is one of them, and is otherwise a plain figure.
 	match kind:
 		"night_nurse":
 			NurseLook.build(self)
 		"hive":
 			HiveLook.build(self)
-		_:
-			DischargedLook.build(self)
 	play("idle")
 
 
 ## The Sonographer's look, on top of the clip. Safe on any model: the others ignore it.
 ##   suspicion   0..1  the neck cranes with it and the throat glows brighter: the body is the meter
-##   charge      0..1  the charge pose, and the glow running down the cable into the probe
+##   charge      0..1  the charge pose, and the glow coming on in the throat and then the wand
 ##   mode              which clip family is playing (idle, wander, suspicious, charging, echo, rush,
 ##                     wail, search, stagger, lying)
 ##   aim               the world direction the probe points while it charges and echoes
@@ -98,7 +96,7 @@ func echo_origin() -> Transform3D:
 	return sono.echo_origin() if sono != null else global_transform
 
 
-## Ears that turn toward a sound and flare while listening (the Discharged). Every machine,
+## Ears that turn toward a sound and flare while listening (the Sonographer). Every machine,
 ## every frame. `listen` 0..1, `yaw` the head turn toward the sound (positive: its left).
 func set_ears(listen: float, yaw: float, delta: float) -> void:
 	if ears.is_empty():
@@ -127,9 +125,6 @@ static func make_lying(monster_kind: String) -> Node3D:
 	var m = load("res://scripts/monsters/monster_model.gd").new()
 	root.add_child(m)
 	m.setup(monster_kind)
-	if m.iv != null:
-		m.iv.queue_free()
-		m.iv = null
 	if m.shaper != null:
 		m.shaper.lying = 1.0
 	var back := 0.12 if monster_kind == "hive" else 0.09
@@ -153,7 +148,7 @@ static func make_lying(monster_kind: String) -> Node3D:
 	else:
 		m.play("idle", 0.0, 0.0)
 	# The model's up (+Y, feet to head) becomes -X, its front (-Z) becomes +Y.
-	var tall := 2.1 if monster_kind == "discharged" else (2.3 if monster_kind == "night_nurse" else (2.05 if monster_kind == "sonographer" else 1.75))
+	var tall := 2.3 if monster_kind == "night_nurse" else (1.85 if monster_kind == "sonographer" else 1.75)
 	m.transform = Transform3D(Basis(Vector3(0, 0, 1), Vector3(-1, 0, 0), Vector3(0, -1, 0)), Vector3(tall * 0.5, back, 0.0))
 	return root
 
@@ -252,14 +247,8 @@ func _build_fallback() -> void:
 	anim = null
 	_fallback = Node3D.new()
 	add_child(_fallback)
-	var tall := 2.25 if kind == "night_nurse" else (1.7 if kind == "hive" else 2.1)
+	var tall := 2.25 if kind == "night_nurse" else (1.7 if kind == "hive" else 1.85)
 	var col := Color("dcd8cc") if kind == "night_nurse" else (Color("8fa3b5") if kind == "hive" else Color("9aa39c"))
 	var body := Shapes.cylinder(0.16, tall * 0.62, Shapes.flat(col, 0.9), Vector3(0, tall * 0.45, 0), 0.12)
 	_fallback.add_child(body)
 	_fallback.add_child(Shapes.ellipsoid(Vector3(0.1, 0.13, 0.11), Shapes.flat(Color("b8b3a6")), Vector3(0, tall - 0.13, 0)))
-
-
-func _process(delta: float) -> void:
-	if iv != null and iv.has_method("follow"):
-		iv.follow(self, delta)
-

@@ -1,7 +1,7 @@
 extends Node
 ## Brains (sweep 3, docs/SWEEP3.md "Brains"): harvested brains and their spoilage, the dumpster
 ## price, the break-room blender, per-player absorbed brains, and the two abilities they teach on R:
-## Echo (Discharged brains) and Hive Eyes (Hive brains). A child "Brains" of Game on every machine.
+## Echo (Sonographer brains) and Hive Eyes (Hive brains). A child "Brains" of Game on every machine.
 ##
 ## Authority: the host decides everything (spoil clocks, blending, points, abilities, who is looking
 ## through which Hive). Clients get it through `net_state()` (global snapshot field `br`), the
@@ -20,16 +20,16 @@ const HiveViewScript := preload("res://scripts/brains/hive_view.gd")
 const LootTable := preload("res://scripts/economy/loot_table.gd")
 
 ## Brain kind -> the path it teaches.
-const PATH_OF := {"brain_hive": "hive", "brain_discharged": "discharged"}
-const KIND_OF := {"hive": "brain_hive", "discharged": "brain_discharged"}
-const PATHS := ["hive", "discharged"]
-const ABILITY_NAME := {"hive": "Hive Eyes", "discharged": "Echo"}
+const PATH_OF := {"brain_hive": "hive", "brain_sonographer": "sonographer"}
+const KIND_OF := {"hive": "brain_hive", "sonographer": "brain_sonographer"}
+const PATHS := ["hive", "sonographer"]
+const ABILITY_NAME := {"hive": "Hive Eyes", "sonographer": "Echo"}
 ## SWEEP 4A HOOK (controls): ability ids, and the ability-slot cap. add_ability()/set_level()/
 ## slot_of() are independent of how a level is earned (today: brains + blender points; grafting
 ## will source them later, docs/backlog/SWEEP4B.md), so slot code never reads `_points` directly
 ## except through level()/points().
-const ABILITY_ID := {"discharged": "echo", "hive": "hive_in"}
-const ABILITY_ID_TO_PATH := {"echo": "discharged", "hive_in": "hive"}
+const ABILITY_ID := {"sonographer": "echo", "hive": "hive_in"}
+const ABILITY_ID_TO_PATH := {"echo": "sonographer", "hive_in": "hive"}
 const MAX_SLOTS := 4
 ## A spoil time at or below this means "none" (WorldItem.bt defaults to -1e6; a real one can be negative).
 const NO_BT := -100000.0
@@ -65,7 +65,7 @@ const HIVE_PRESS_GRACE := 0.5
 
 var game: Node = null
 
-## Replicated. peer id -> [hive points, discharged points] (floats, multiples of 0.25).
+## Replicated. peer id -> [hive points, sonographer points] (floats, multiples of 0.25).
 var _points: Dictionary = {}
 ## Replicated. peer id -> [monster id, world_time it ends].
 var _hive: Dictionary = {}
@@ -454,7 +454,7 @@ func ability_slot(p: Node, slot_idx: int) -> void:
 		last_result = "cooldown"
 		game.tell(p, "%s is not ready yet (%d s)." % [ABILITY_NAME[path], ceili(left)], 1.5)
 		return
-	if path == "discharged":
+	if path == "sonographer":
 		_echo(p, lvl)
 	else:
 		_start_hive(p, lvl)
@@ -864,7 +864,7 @@ func dev_request(sender: int, action: String, a: Dictionary) -> void:
 			var id := int(a.get("id", sender))
 			for path in PATHS:
 				add_points(id, path, float(a.get("amount", 1.0)))
-			game.say("Brain levels: Hive Eyes %d, Echo %d." % [level(id, "hive"), level(id, "discharged")], 2.5)
+			game.say("Brain levels: Hive Eyes %d, Echo %d." % [level(id, "hive"), level(id, "sonographer")], 2.5)
 		"br_reset":
 			on_reset()
 			game.say("Absorbed brains reset.", 2.0)
@@ -873,13 +873,13 @@ func dev_request(sender: int, action: String, a: Dictionary) -> void:
 
 
 ## Host (dev and tests): a Hive at `pos`. Until the monsters worker's Hive exists this is a
-## stand-in: a Discharged body with kind "hive" (Hive Eyes only reads the kind).
+## stand-in: a Sonographer body with kind "hive" (Hive Eyes only reads the kind).
 func spawn_hive(pos: Vector3) -> Node:
 	if not game.is_host():
 		return null
 	var ms: GDScript = load("res://scripts/monster.gd")
 	var real: bool = ms.get_script_constant_map().has("HIVE")
-	var m: Node = game._add_monster(HIVE if real else "discharged", pos)
+	var m: Node = game._add_monster(HIVE if real else "sonographer", pos)
 	if m != null and not real:
 		m.kind = HIVE
 		m.name = "Monster_%d_hive_standin" % int(m.monster_id)

@@ -8,6 +8,30 @@ The branch history has two dead ends in it (a cart version, then a one-model-wit
 because the brief was rewritten twice. **The tip is the only thing that matters**: the diff against
 `main` has no cart code in it at all.
 
+## Revised after Zach's review (2026-09-18)
+
+He asked for five changes to the model; all five are in, and the text below has been updated to match:
+
+1. **Almost normal at rest.** The neck is an ordinary length, a slight stoop, the head cocked a little,
+   the windpipe glowing behind its pane of skin. It grows only as suspicion rises, up to 0.9 m
+   (`CRANE_M`, was 0.6 m on top of 0.3 m of extra rest neck), so the first time you see it longer than a
+   person's neck is when it starts to grow. The calm hunch went from 0.70 to 0.13 rad in the clips.
+2. **The right hand is gone.** The arm stops at the wrist, cut square with a low healed lip, and the wand
+   is fitted there in a metal collar (ridged grip, flared neck, flat face). `Site_probe` and `echo_origin()`
+   are unchanged in meaning.
+3. **No cable.** `Human_Cable_A/B/C`, the ridge under the skin and `Site_cable` are gone; the charge lights
+   the throat and then the wand.
+4. **Ears** are ordinary ears (the surgeon's, a size up) grown into the head instead of headphone cups on
+   stalks. They are still their own pieces and still swivel.
+5. **Shoulders, torso and neck cleaned up.** A sloped shoulder line instead of the flat shelf, a low
+   stand collar on the shirt and a low rolled collar on the coat, the skin under the shirt running up into
+   the neck, a flat tie, a ragged bite in the shoulder instead of a neat oval, and a roomier coat over
+   the hips (the trousers' thighs were poking out of its flanks).
+
+Two things fell out of stretching a short neck a long way: the rings can no longer stay separate hoops
+(the windpipe stretches into one long glowing column with the ring shape only as ripples), and the head's
+weights now stop just under the chin so the jaw does not stretch with it.
+
 ## What is done and working
 
 - **The model.** `assets/models/monsters/sonographer/sonographer_st.glb`, 25.5k triangles, built
@@ -18,16 +42,14 @@ because the brief was rewritten twice. **The tip is the only thing that matters*
 - **The face** is smooth blank skin where the eyes were: no sockets, no pads, no seam, no brow
   ridge, nothing eye-shaped in the geometry or the paint. Ears, nose and a wide mouth only.
 - **The neck is the suspicion meter.** The shared skeleton's neck bone is cut into a chain of four
-  (`st_build.add_neck_bones`) and `sonographer_rig.gd` stretches it by up to 0.6 m as `suspicion`
-  rises, unfolding it out of its hunch. The windpipe and the see-through skin over it ride the same
-  chain, so the violet rings pull apart as it cranes. **The bottom bone never moves**, so the
+  (`st_build.add_neck_bones`) and `sonographer_rig.gd` stretches it by up to 0.9 m as `suspicion`
+  rises, unfolding it out of its slight stoop. The windpipe and the see-through skin over it ride the
+  same chain, so the violet windpipe stretches out along it as it cranes. **The bottom bone never moves**, so the
   collar, the shoulders and the torso stay put and only the head rises.
 - **`crane_limit`** below 1 trades height for reach: the neck bends forward instead of standing up,
   so the head never goes through a ceiling. The brain does the raycast; the model obeys the number.
-- **The probe** is grown into the right palm with the grip through the middle of the hand and the
-  fingers closed round it; three runs of cable go up the arm into the side of the neck, and the
-  charge lights the throat, then each run in turn, then the probe, so it reads as running out to
-  the wand. `echo_origin()` is at the tip, `-Z` the way it points.
+- **The wand** is fitted to the cut right wrist (no hand, no cable); the charge lights the throat and
+  then the wand. `echo_origin()` is at the tip, `-Z` the way it points.
 - **The echo burst**: the jaw is thrown wide and rings of violet light fly out of the mouth and off
   the probe with a flash behind them (`SonoRig.fire_echo()`, fired automatically the first frame
   `mode` becomes `"echo"`).
@@ -135,13 +157,13 @@ Then he asked for seven changes. All seven are in:
 
 | Where | What |
 |---|---|
-| `art/stylized/st_char.py` | the `sonographer` variant, its head, throat, hands, probe, cable, gel and clothes |
+| `art/stylized/st_char.py` | the `sonographer` variant, its head, throat, arms, wand, gel and clothes |
 | `art/stylized/st_build.py` | `add_neck_bones`, the neck-chain weights, the review shots and `set_crane` |
 | `art/stylized/st_export.py` | the loose pieces, the budgets and the sites |
 | `art/stylized/st_sono_clips.py` | the ten clips |
 | `scripts/monsters/sonographer_rig.gd` | the crane, the glow, the ears, the wet skin, the echo burst |
 | `scripts/monsters/monster_model.gd` | `set_sono_look`, `echo_origin`, the lying path |
-| `shaders/sono_glow.gdshader` | the throat, cable and probe glow |
+| `shaders/sono_glow.gdshader` | the throat and wand glow |
 | `tools/sono_lab.tscn` / `.gd` | the review stage |
 | `tools/monster_lab.gd` | the `--sono` walkthrough and the `sono_*` shots |
 

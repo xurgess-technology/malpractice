@@ -863,7 +863,7 @@ func _sfx(cue: String, vol_db := 0.0) -> void:
 static func self_test(parent: Node) -> Dictionary:
 	var fscript: GDScript = load("res://scripts/surgery/games/forceps.gd")
 	var out := {}
-	for pid in ["hive", "discharged"]:
+	for pid in ["hive", "sonographer"]:
 		for mode in [["skill1.0", 1.0, false], ["skill0.5", 0.5, false], ["skill0.0", 0.0, false], ["skill1.0+jolts", 1.0, true], ["skill0.0+jolts", 0.0, true]]:
 			var runs := 4
 			var agg := {"done": 0, "time": 0.0, "botch": 0.0, "n": 0, "max_botch": 0.0, "tears": 0, "scrapes": 0, "drops": 0}

@@ -396,7 +396,7 @@ func _walk_to(target: Vector3) -> void:
 
 
 func _flee_if_hunted() -> bool:
-	return _shove_close_hive() or _stare_down_nurse() or _flee_discharged()
+	return _shove_close_hive() or _stare_down_nurse() or _flee_sonographer()
 
 
 ## Sweep 3: Hives crowd the wing entrances the bot walks through. Any awake one within arm's
@@ -467,7 +467,7 @@ func _stare_down_nurse() -> bool:
 	return true
 
 
-func _flee_discharged() -> bool:
+func _flee_sonographer() -> bool:
 	var threat: Node = null
 	var best := 1e9
 	for m in game.monsters.values():

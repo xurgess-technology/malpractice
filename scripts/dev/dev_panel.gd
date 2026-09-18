@@ -263,9 +263,9 @@ func _build() -> void:
 	s1.add_child(count)
 	_button(s1, "Spawn item", func(): _req("spawn_item", {"kind": item_names[items.selected], "count": int(count.value)}))
 	var s2 := _row(col)
-	var monsters := _option(s2, ["The Hive", "The Discharged", "The Night Nurse"])  # SWEEP 3 HOOK (monsters): the Hive
+	var monsters := _option(s2, ["The Hive", "The Sonographer", "The Night Nurse"])  # SWEEP 3 HOOK (monsters): the Hive
 	monsters.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var kinds := ["hive", "discharged", "night_nurse"]
+	var kinds := ["hive", "sonographer", "night_nurse"]
 	_button(s2, "In the dev room pen", func(): _req("spawn_monster", {"kind": kinds[monsters.selected], "where": "pen"}))
 	_button(s2, "In front", func(): _req("spawn_monster", {"kind": kinds[monsters.selected], "where": "front"}))
 	var s3 := _row(col)
@@ -302,8 +302,8 @@ func _build() -> void:
 	_section(col, "Brains")
 	var br1 := _row(col)
 	_button(br1, "Spawn brain: Hive", func(): _req("br_spawn_brain", {"kind": "brain_hive"}))
-	_button(br1, "Discharged", func(): _req("br_spawn_brain", {"kind": "brain_discharged"}))
-	_button(br1, "Rotten", func(): _req("br_spawn_brain", {"kind": "brain_discharged", "age": 200.0}))
+	_button(br1, "Sonographer", func(): _req("br_spawn_brain", {"kind": "brain_sonographer"}))
+	_button(br1, "Rotten", func(): _req("br_spawn_brain", {"kind": "brain_sonographer", "age": 200.0}))
 	var br2 := _row(col)
 	_button(br2, "Give brain levels (+1)", func(): _req("br_levels", {"amount": 1.0}))
 	_button(br2, "Reset", func(): _req("br_reset"))
@@ -349,7 +349,7 @@ func _build() -> void:
 	# SWEEP 3 HOOK (dissection): strap a monster to a patient table, sedated or already waking.
 	var pm := _row(col)
 	_button(pm, "Strap Hive", func(): _req("strap_monster", {"kind": "hive"}))
-	_button(pm, "Strap Discharged", func(): _req("strap_monster", {"kind": "discharged"}))
+	_button(pm, "Strap Sonographer", func(): _req("strap_monster", {"kind": "sonographer"}))
 	_button(pm, "...waking", func(): _req("strap_monster", {"kind": "hive", "sedation": 0.4}))
 	var p4 := _row(col)
 	_button(p4, "Stock shelf", func(): _req("stock_shelf"))

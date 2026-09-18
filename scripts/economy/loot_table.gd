@@ -85,8 +85,8 @@ const LOOT := {
 		"name": "Hive brain", "short": "Hive brains", "value": [150, 150], "tier": 3, "fragile": true,
 		"brain": true, "rooms": {}, "surfaces": [], "containers": {},
 	},
-	"brain_discharged": {
-		"name": "Discharged brain", "short": "Discharged brains", "value": [350, 350], "tier": 3, "fragile": true,
+	"brain_sonographer": {
+		"name": "Sonographer brain", "short": "Sonographer brains", "value": [350, 350], "tier": 3, "fragile": true,
 		"brain": true, "rooms": {}, "surfaces": [], "containers": {},
 	},
 	# GRAFTING part one (scripts/grafting/eyes.gd): taken out of a strapped Hive, or a surgeon's own

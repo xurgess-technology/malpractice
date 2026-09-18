@@ -2,11 +2,13 @@ extends SkeletonModifier3D
 ## The Sonographer's stylized model (`monster/sonographer`, art/stylized variant `sonographer`) on a
 ## monster model. A standalone model: no cart, no console.
 ##
-## The thing that makes it work is **the neck**. The shared skeleton's one neck bone is cut into a
-## chain of four (art/stylized: `st_build.add_neck_bones`), and this modifier stretches that chain by
-## up to `CRANE_M` as `suspicion` rises. The windpipe and the thin skin over it are weighted along the
-## same chain, so the rings pull apart as it cranes and the throat burns brighter. **The neck is the
-## suspicion meter**, so the clips never stretch it: they all pose it hunched, and the crane is a
+## The thing that makes it work is **the neck**. It looks almost normal at rest (an ordinary neck with a
+## glowing windpipe behind a thin pane of skin), and the first time you see it longer than a person's is
+## when it starts to grow. The shared skeleton's one neck bone is cut into a chain of four
+## (art/stylized: `st_build.add_neck_bones`), and this modifier stretches that chain by up to `CRANE_M`
+## as `suspicion` rises. The windpipe and the thin skin over it are weighted along the same chain, so the
+## glowing windpipe stretches out along it and the throat burns brighter. **The neck is the suspicion
+## meter**, so the clips never stretch it: they all pose it with only a slight stoop, and the crane is a
 ## 0..1 blend laid on top of whatever is playing.
 ##
 ## `build(model)` spawns the GLB under the MonsterModel, points the model's `rig`, `skeleton` and
@@ -15,8 +17,8 @@ extends SkeletonModifier3D
 ##   - takes the two ear pieces (Human_Ear_L / _R) off the mesh and re-hangs each under a pivot at its
 ##     Site_ear_*, so MonsterModel.set_ears can swivel them toward a sound;
 ##   - puts the glow shader on the windpipe (Human_Throat) behind the throat's see-through skin
-##     (Human_ThroatSkin) and on the three runs of cable up the right arm, so the charge runs from
-##     the throat, down the cable, into the probe;
+##     (Human_ThroatSkin) and on the wand (Human_Probe) fitted to the cut right wrist, so the charge
+##     lights the throat first and then the wand;
 ##   - wets the skin: a glossy copy of the skin material, because the gel is what the flashlight
 ##     catches;
 ##   - hangs a marker on the probe's tip (Site_probe), which is where an echo fires from.
@@ -37,13 +39,14 @@ const KEY := "monster/sonographer"
 ## Ground speeds the wander and rush clips were authored at (art/stylized/st_sono_clips.py).
 const WANDER_SPEED := 0.80
 const RUSH_SPEED := 3.10
-## How far the neck chain stretches from rest to fully craned, in metres (art/stylized: CRANE_M).
-const CRANE_M := 0.60
+## How far the neck chain stretches from rest to fully craned, in metres (art/stylized: CRANE_M). The
+## neck is an ordinary length at rest, so all of this is new length.
+const CRANE_M := 0.90
 ## How long the echo's burst lasts, and how far its rings get.
 const BURST_T := 0.75
 const BURST_R := 1.9
-## How far the chain unfolds out of its hunch at full crane, in radians, shared down the chain.
-const CRANE_LIFT := 0.70
+## How far the chain unfolds out of its slight stoop at full crane, in radians, shared down the chain.
+const CRANE_LIFT := 0.16
 ## Where the crane goes instead when there is a ceiling: forward, not up.
 const CRANE_FORWARD := 0.85
 const GLOW := Color(0.61, 0.42, 1.0)         # #9b6bff, the ability icon's trachea
@@ -51,8 +54,6 @@ const GLOW_SHADER := "res://shaders/sono_glow.gdshader"
 const NECK_BONES := ["neck", "neck2", "neck3", "neck4"]
 ## How the stretch and the unfold are shared down the chain, low to high.
 const NECK_SHARE := [0.34, 0.28, 0.22, 0.16]
-## The three runs of cable, neck to shoulder to elbow to probe: the charge lights them in turn.
-const CABLE_PIECES := ["Human_Cable_A", "Human_Cable_B", "Human_Cable_C"]
 
 var cfg := {"lying_spread": 6.0}
 var listen := 0.0
@@ -65,7 +66,7 @@ var daze := 0.0
 var rise := 0.0
 ## The look interface (MonsterModel.set_sono_look sets these).
 ##   suspicion  0..1  the neck stretches with it and the throat glows brighter
-##   charge     0..1  the charge pose and the glow running down the cable into the probe
+##   charge     0..1  the charge pose and the glow coming on in the throat and then the wand
 ##   mode             which clip family is playing
 ##   aim              world direction the probe points while charging and echoing
 ##   crane_limit 0..1 how far the neck may stretch up before it bends forward instead (the ceiling
@@ -86,7 +87,6 @@ var _rest_fwd := Vector3.BACK
 var _rest_up := Vector3.UP
 var _throat: ShaderMaterial = null
 var _pane: StandardMaterial3D = null
-var _cables: Array = []          ## [ShaderMaterial], neck end first
 var _probe_mat: ShaderMaterial = null
 var _light: OmniLight3D = null
 var _probe: Node3D = null
@@ -97,6 +97,8 @@ var _rings: Array = []          ## [MeshInstance3D], the echo's rings: mouth fir
 var _ring_mats: Array = []
 var _flash: Array = []          ## [OmniLight3D] at the mouth and the probe
 var _burst := -1.0              ## seconds since the echo fired, or -1 for nothing happening
+var _model: Node3D = null       ## the MonsterModel: its origin is at the feet
+var _drips: Array = []          ## [GPUParticles3D], the gel falling off the mouth, the left hand and the wand
 var _was_echo := false
 
 static var _looped := false
@@ -156,11 +158,13 @@ func _setup(root: Node3D, sk: Skeleton3D, model: Node3D) -> void:
 
 	_ears(root, sk, model)
 	_throat_glow(root, sk)
-	_cable_glow(root)
+	_probe_glow(root)
 	_wet_skin(root)
 	_probe = _marker(root, sk, "Site_probe", "hand.R", "ProbeTip", Vector3(0.0, 0.0, -0.18))
 	_mouth = _marker(root, sk, "Site_mouth", "head", "Mouth", Vector3(0.0, 0.02, 0.10))
 	_make_burst()
+	_model = model
+	_make_drips(sk)
 	set_process(true)
 	_set_glow(0.0)
 
@@ -274,13 +278,8 @@ func _throat_glow(root: Node3D, sk: Skeleton3D) -> void:
 	neck.add_child(_light)
 
 
-## The cable up the arm, and the probe it ends in: three runs plus the wand, lit in turn as the
-## charge builds, so you see the charge travelling out to the probe.
-func _cable_glow(root: Node3D) -> void:
-	for n in CABLE_PIECES:
-		var m := _glow_material(root.find_child(n, true, false) as MeshInstance3D, 0.05, 6.0, Color("38323f"))
-		if m != null:
-			_cables.append(m)
+## The wand fitted to the cut wrist lights once the charge is well built, after the throat.
+func _probe_glow(root: Node3D) -> void:
 	_probe_mat = _glow_material(root.find_child("Human_Probe", true, false) as MeshInstance3D,
 		0.02, 8.0, Color("cdc9c0"))
 
@@ -344,8 +343,8 @@ func echo_origin() -> Transform3D:
 	return Transform3D(Basis(x, fwd.cross(x).normalized(), -fwd), t.origin)
 
 
-## The throat: 0 a cold ember behind the skin, 1 the rings burning through it, with the charge
-## running out along the cable to the probe.
+## The throat: 0 a cold ember behind the skin, 1 the windpipe burning through it, with the charge
+## coming on in the wand once it is mostly built.
 func _set_glow(v: float) -> void:
 	if absf(v - _shown) < 0.01:
 		return
@@ -357,12 +356,9 @@ func _set_glow(v: float) -> void:
 	if _light != null:
 		_light.visible = v > 0.02
 		_light.light_energy = 0.75 * v
-	# the charge travels: the throat fills first, then each run of cable, then the probe
-	for i in _cables.size():
-		var lo := 0.25 + 0.20 * i
-		(_cables[i] as ShaderMaterial).set_shader_parameter("level", clampf((charge - lo) / 0.22, 0.0, 1.0))
+	# the throat fills first, then the wand
 	if _probe_mat != null:
-		_probe_mat.set_shader_parameter("level", clampf((charge - 0.82) / 0.18, 0.0, 1.0))
+		_probe_mat.set_shader_parameter("level", clampf((charge - 0.55) / 0.35, 0.0, 1.0))
 
 
 # ====================================================================== posing
@@ -453,7 +449,7 @@ func _process_modification_with_delta(delta: float) -> void:
 	_record_hands(sk)
 
 
-## The crane: the chain stretches by CRANE_M and unfolds out of its hunch. `crane_limit` below 1 is a
+## The crane: the chain stretches by CRANE_M and unfolds out of its slight stoop. `crane_limit` below 1 is a
 ## ceiling: it stretches less and leans the whole run forward instead, so the head never goes up
 ## through anything. Chunk B measures the headroom; this obeys it.
 func _stretch(sk: Skeleton3D, amount: float) -> void:
@@ -471,7 +467,7 @@ func _stretch(sk: Skeleton3D, amount: float) -> void:
 			var d := sk.get_bone_pose_position(bi)
 			if d.length() > 1e-5:
 				sk.set_bone_pose_position(bi, d + d.normalized() * per * NECK_SHARE[i] / (1.0 - NECK_SHARE[0]))
-		# unfold out of the hunch, and under a ceiling bend forward instead of standing up
+		# unfold out of the stoop, and under a ceiling bend forward instead of standing up
 		_turn(sk, NECK_BONES[i], Vector3.RIGHT, (-CRANE_LIFT * up + CRANE_FORWARD * fwd) * amount * NECK_SHARE[i])
 	# the head levels out with it, so it ends up looking where it is listening
 	_turn(sk, "head", Vector3.RIGHT, (CRANE_LIFT * 0.55 * up - CRANE_FORWARD * 0.4 * fwd) * amount)
@@ -571,6 +567,7 @@ func fire_echo() -> void:
 
 
 func _process(delta: float) -> void:
+	_update_drips()
 	if _burst < 0.0:
 		return
 	_burst += delta
@@ -601,3 +598,80 @@ func _process(delta: float) -> void:
 		var a := (1.0 - t) * (1.0 - t)
 		m.albedo_color = Color(GLOW.r, GLOW.g, GLOW.b, 0.65 * a)
 		m.emission_energy_multiplier = 9.0 * a
+
+
+# ====================================================================== the dripping
+## Ultrasound gel really does drip off it: drops form at the mouth, the left hand and the wand's face,
+## fall under gravity and are gone when they reach the floor. They are world-space particles, so they
+## are left behind when it walks. More of them the more suspicious it is.
+const DRIP_AMOUNT := 6
+const DRIP_RATE_CALM := 0.16       ## amount_ratio when calm: about two drops a second from each place
+const DRIP_RATE_TENSE := 0.6
+
+
+func _make_drips(sk: Skeleton3D) -> void:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.86, 0.90, 0.86, 0.62)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.roughness = 0.04
+	mat.metallic_specular = 0.9
+	mat.clearcoat_enabled = true
+	mat.clearcoat = 1.0
+	mat.clearcoat_roughness = 0.03
+	var drop := SphereMesh.new()
+	drop.radius = 0.0055
+	drop.height = 0.015          # a teardrop: taller than it is wide
+	drop.radial_segments = 8
+	drop.rings = 4
+	drop.material = mat
+	var pm := ParticleProcessMaterial.new()
+	pm.direction = Vector3.ZERO
+	pm.spread = 0.0
+	pm.initial_velocity_min = 0.0
+	pm.initial_velocity_max = 0.0
+	pm.gravity = Vector3(0.0, -9.8, 0.0)
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pm.emission_sphere_radius = 0.012
+	pm.scale_min = 0.6
+	pm.scale_max = 1.4
+	var hand := BoneAttachment3D.new()
+	hand.name = "DripHandBone"
+	hand.bone_name = "hand.L"
+	sk.add_child(hand)
+	# a drop of gel forms, hangs and lets go: each place gets its own emitter
+	for where in [_mouth, hand, _probe]:
+		if where == null:
+			continue
+		var p := GPUParticles3D.new()
+		p.name = "GelDrip"
+		p.amount = DRIP_AMOUNT
+		p.amount_ratio = DRIP_RATE_CALM
+		p.lifetime = 0.6
+		p.randomness = 0.7
+		p.local_coords = false
+		p.fixed_fps = 0
+		p.draw_pass_1 = drop
+		p.process_material = pm
+		p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# the drops fall a long way below where they were made (the neck can reach 2.7 m)
+		p.visibility_aabb = AABB(Vector3(-1.5, -4.0, -1.5), Vector3(3.0, 4.2, 3.0))
+		where.add_child(p)
+		_drips.append(p)
+
+
+## Each emitter's drops live exactly as long as the fall to the floor, so they vanish as they land
+## and never sink through it. Off while it lies on a table (the floor is not under it there).
+func _update_drips() -> void:
+	if _drips.is_empty() or _model == null or not _model.is_inside_tree():
+		return
+	var floor_y := _model.global_position.y
+	var ratio := lerpf(DRIP_RATE_CALM, DRIP_RATE_TENSE, clampf(maxf(suspicion, charge), 0.0, 1.0))
+	var on := lying < 0.5
+	for d in _drips:
+		var p := d as GPUParticles3D
+		p.emitting = on
+		p.amount_ratio = ratio
+		var h := maxf(p.global_position.y - floor_y, 0.1)
+		var t := sqrt(2.0 * h / 9.8)
+		if absf(t - p.lifetime) > 0.03:
+			p.lifetime = t

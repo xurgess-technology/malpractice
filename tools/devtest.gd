@@ -144,7 +144,7 @@ func _run_solo() -> void:
 	_check(not main.dev_panel.is_open(), "F1 closes the dev panel")
 
 	# ---- monsters in the pen: kill one, knock one down
-	var m = dev.spawn_monster("discharged", "pen")
+	var m = dev.spawn_monster("sonographer", "pen")
 	var mid: int = m.monster_id
 	_check(dev.in_room(m.global_position), "a pen monster spawns in the room's pen")
 	await _seconds(0.5)
@@ -154,7 +154,7 @@ func _run_solo() -> void:
 	await _frames(3)
 	_check(not game.monsters.has(mid), "a kill shot removes the monster")
 	_check(game.get_node("Entities").find_child("DevCorpse", false, false) != null, "the killed monster leaves a falling body")
-	var m2 = dev.spawn_monster("discharged", "pen")
+	var m2 = dev.spawn_monster("sonographer", "pen")
 	await _seconds(0.3)
 	_shoot(m2, DevRoomScript.KNOCK)
 	await _frames(3)
@@ -196,7 +196,7 @@ func _run_solo() -> void:
 	# would end the run otherwise)
 	dev.request("no_game_over", {"on": true})
 	dev.request("god", {"on": true})
-	var m3 = dev.spawn_monster("discharged", "front", me)
+	var m3 = dev.spawn_monster("sonographer", "front", me)
 	var hp_before := me.hp
 	game.monster_hit_player(m3, me)
 	_check(me.hp == hp_before, "god mode ignores monster hits")
@@ -461,7 +461,7 @@ func _doors_hooks() -> void:
 	await _seconds(1.2)
 	_check(h.is_closed() and dd.is_closed(), "the panel's Close all doors shuts them")
 	# A monster in one bay reaches the next through the hinged door.
-	var m = dev.spawn_monster("discharged", "pen")
+	var m = dev.spawn_monster("sonographer", "pen")
 	m.global_position = o + Vector3(4.0, 0.0, 3.75)
 	m.brain.target = o + Vector3(12.0, 0.0, 3.75)
 	m.mode = m.Mode.RUSH
@@ -470,7 +470,7 @@ func _doors_hooks() -> void:
 			m.brain.target = o + Vector3(12.0, 0.0, 3.75)
 			m.mode = m.Mode.RUSH
 		return m.global_position.x > o.x + 9.5, 12.0)
-	_check(through and absf(h.amount) > 0.5, "a Discharged rushing across the pen bursts through the hinged door (x %.1f, door %.2f)" % [m.global_position.x - o.x, h.amount])
+	_check(through and absf(h.amount) > 0.5, "a Sonographer rushing across the pen bursts through the hinged door (x %.1f, door %.2f)" % [m.global_position.x - o.x, h.amount])
 	dev.request("kill_monsters")
 	_press_panel("Close all doors")
 	await _seconds(1.0)
@@ -698,7 +698,7 @@ func _run_host() -> void:
 	game.set_dev_tools(true, me)
 	_check(game.dev_on() and dev.room_ready(), "the host turned dev mode on and built the room")
 	_host_dummy = dev.spawn_bot("dummy")
-	_host_monster = dev.spawn_monster("discharged", "pen")
+	_host_monster = dev.spawn_monster("sonographer", "pen")
 	_say("dev mode up; waiting for the client")
 	var joined := await _until(func(): return Net.names.size() >= 2, 40.0)
 	_check(joined, "a client joined")
@@ -885,7 +885,7 @@ func _take_shots() -> void:
 	await _shot("03_closet_door")
 	dev.request("gun", {"on": true})
 	dev.request("god", {"on": true})
-	dev.spawn_monster("discharged", "pen")
+	dev.spawn_monster("sonographer", "pen")
 	dev.spawn_monster("night_nurse", "pen")
 	for i in 3:
 		dev.spawn_bot("dummy")

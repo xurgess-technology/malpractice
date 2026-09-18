@@ -95,7 +95,7 @@ func _run() -> void:
 	# ---- the saw kills
 	cb.break_chance = 0.0
 	_give("bone_saw", 1)
-	var m := await _monster("discharged", o + Vector3(12.0, 0, 12.0))
+	var m := await _monster("sonographer", o + Vector3(12.0, 0, 12.0))
 	var want_hits := int(m.get("max_hp")) if "max_hp" in m else CombatScript.FALLBACK_HITS
 	var hits := 0
 	var results: Array = []
@@ -110,7 +110,7 @@ func _run() -> void:
 		await _seconds(CombatScript.SWING_COOLDOWN + 0.05)
 		if game.monsters.has(mid):
 			_calm(m)
-	_check(not game.monsters.has(mid) and hits == want_hits, "the saw kills the Discharged in %d hits (took %d: %s)" % [want_hits, hits, str(results)])
+	_check(not game.monsters.has(mid) and hits == want_hits, "the saw kills the Sonographer in %d hits (took %d: %s)" % [want_hits, hits, str(results)])
 	_check(results.size() > 0 and results[-1] == "killed" and not results.slice(0, -1).has("killed"), "every hit but the last staggers, the last kills")
 	_check(game.money == money0, "a kill pays nothing ($%d -> $%d)" % [money0, game.money])
 	_check(me.holding("bone_saw"), "break chance 0: the saw survives")
@@ -175,7 +175,7 @@ func _run() -> void:
 		"the Night Nurse refuses the needle, no vial used ('%s')" % game.message)
 	game.knock_down_monster(nurse, Vector3.ZERO, 30.0)   # a calm nurse, out of the way
 	nurse.global_position = o + Vector3(3.0, 0.0, 3.0)
-	var b := await _monster("discharged", o + Vector3(12.0, 0, 12.0))
+	var b := await _monster("sonographer", o + Vector3(12.0, 0, 12.0))
 	var bid: int = b.monster_id
 	b.calm = 0.0
 	await _use_on(b)
@@ -285,7 +285,7 @@ func _run() -> void:
 	me.bot_interact = false
 	me.bot_aim_id = ""
 	await _frames(2)
-	_check(cb.dragging(me) == bid and me.aim_prompt.begins_with("Put the Discharged down"), "dragging again; the prompt says put it down ('%s')" % me.aim_prompt)
+	_check(cb.dragging(me) == bid and me.aim_prompt.begins_with("Put the Sonographer down"), "dragging again; the prompt says put it down ('%s')" % me.aim_prompt)
 	me.bot_press += 1
 	await _frames(3)
 	_check(cb.dragging(me) < 0 and cb.is_sedated(b) and b.global_position.y - o.y < 0.3, "E away from a table puts it down, still sedated")
@@ -303,7 +303,7 @@ func _run() -> void:
 	_stand(tpos + tside, game.table_yaw_of(ti))
 	me.bot_aim_id = game.table_interact_id(ti)
 	await _frames(3)
-	_check(me.aim_prompt.begins_with("Strap the Discharged") and me.aim_id == game.table_interact_id(ti), "a free patient table offers to strap it ('%s')" % me.aim_prompt)
+	_check(me.aim_prompt.begins_with("Strap the Sonographer") and me.aim_id == game.table_interact_id(ti), "a free patient table offers to strap it ('%s')" % me.aim_prompt)
 	var left: float = cb.sedation_left(b)
 	var n_cases: int = game.cases.size()
 	me.bot_press += 1
@@ -312,7 +312,7 @@ func _run() -> void:
 	var want_sed := lerpf(CombatScript.STRAP_SEDATION_MIN, 1.0, clampf(left / CombatScript.SEDATE_SECONDS, 0.0, 1.0))
 	_check(not c.is_empty() and game.cases.size() == n_cases + 1, "strapping adds a case on table %d" % ti)
 	if not c.is_empty():
-		_check(String(c.patient_id) == "discharged" and String(c.ailment_id) == "dissection" and bool(c.get("monster", false)) and String(c.state) == "on_table" and int(c.table) == ti,
+		_check(String(c.patient_id) == "sonographer" and String(c.ailment_id) == "dissection" and bool(c.get("monster", false)) and String(c.state) == "on_table" and int(c.table) == ti,
 			"the case is the monster: %s" % str(c))
 		var s := float(c.flags.get("sedation", -1.0))
 		_check(s >= 0.35 and s <= 1.0 and absf(s - want_sed) < 0.03, "flags.sedation from the sedation left (%.2f, expected %.2f)" % [s, want_sed])
@@ -381,7 +381,7 @@ func _windups() -> void:
 	me.slots = Player.empty_slots()
 	await _seconds(C.SHOVE_COOLDOWN)
 	# ---- a tap shove: winds up SHOVE_MIN, stuns for 2 s
-	var m := await _monster("discharged", o + Vector3(12.0, 0, 12.0))
+	var m := await _monster("sonographer", o + Vector3(12.0, 0, 12.0))
 	_face(m)
 	await _frames(2)
 	var t_begin: float = game.world_time
@@ -478,7 +478,7 @@ func _windups() -> void:
 	game.kill_monster(m2)
 	# ---- taking a hit mid-wind-up cancels it (no strike) and the cooldown still starts
 	await _seconds(CombatScript.JAB_COOLDOWN + 0.1)
-	var m3 := await _monster("discharged", o + Vector3(12.0, 0, 12.0))
+	var m3 := await _monster("sonographer", o + Vector3(12.0, 0, 12.0))
 	_face(m3)
 	me.slots = Player.empty_slots()
 	await _frames(2)
@@ -556,7 +556,7 @@ func _calm(m: Node) -> void:
 
 
 func _sedated_monster(pos: Vector3) -> Node:
-	var m := await _monster("discharged", pos)
+	var m := await _monster("sonographer", pos)
 	var hands: Array = me.slots.duplicate(true)
 	me.slots = Player.empty_slots()
 	me.slots[0] = {"kind": "anesthetic", "count": 1}

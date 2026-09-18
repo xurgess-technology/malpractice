@@ -5,6 +5,14 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-18 (0.6.x)**
 
+- **0.6.16**: The Discharged is gone, the Sonographer is in 🩺
+    - Removed: The Discharged, its IV pole and its rattle. Its kind is the Sonographer everywhere now: shifts, brains, the database, dissection and the dev tools. Old databases keep its page.
+    - Added: The Sonographer walks the halls. He clicks as he goes and squelches through the gel, and both stop when he stops to listen; his neck grows while he listens and searches.
+    - Changed: He hunts the way the Discharged did for now (listen, rush, search). The echo and the rest of his hunting are next.
+- **0.6.15**: The Sonographer, finished
+    - Changed: He looks almost normal until he gets suspicious, and then his neck grows, and grows, with the glowing windpipe stretching up it.
+    - Changed: His right hand is gone: the arm ends at the wrist and an ultrasound wand is fitted there. No cable.
+    - Changed: Ears that look like part of his head, a cleaner shoulder and collar line, no head tilt when he charges, and gel that really drips off him.
 - **0.6.14**: Slim pickings, full shelves
     - Changed: Loot is scarce: 15 to 20 finds a shift instead of 70, and a shift pays about $1,000 instead of $11,000. Most rooms hold nothing, and a harvested brain is a real chunk of the pay.
     - Changed: Pill bottles and X-ray film are cheap filler now; the ultrasound, heart monitor and gold watch are where the money is.

@@ -49,16 +49,16 @@ const PATIENTS := {
 			"dissection": "Came in through the front door and never left. Still in the gown.",
 		},
 	},
-	"discharged": {
-		"name": "The Discharged",
-		"full_name": "Discharged patient, no records",
-		"body": "discharged",
+	"sonographer": {
+		"name": "The Sonographer",
+		"full_name": "Sonographer, unregistered",
+		"body": "sonographer",
 		"monster": true,
 		"weight_kg": 88.0,
 		"limb_name": "",
 		"limb_radius_m": 0.05,
 		"blurbs": {
-			"dissection": "Signed out years ago. The IV line is still taped to its arm.",
+			"dissection": "Walked out of the ultrasound room mid-scan. The wand is still fitted to its wrist.",
 		},
 	},
 }
@@ -180,7 +180,7 @@ static func is_monster_only(ailment_id: String) -> bool:
 	return bool(AILMENTS.get(ailment_id, {}).get("monster_only", false))
 
 
-## dissection (sweep 3): a monster patient (hive, discharged).
+## dissection (sweep 3): a monster patient (hive, sonographer).
 static func is_monster(patient_id: String) -> bool:
 	return bool(PATIENTS.get(patient_id, {}).get("monster", false))
 
