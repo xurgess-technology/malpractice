@@ -36,7 +36,7 @@ const CAMERA_MODES: PackedStringArray = ["first_person", "shoulder", "front"]
 const SPRINT_MODES: PackedStringArray = ["toggle", "hold"]
 
 const DEFAULTS := {
-	"master_volume": 1.0,
+	"master_volume": 0.1,   # the game starts quiet for now; the slider goes back up
 	"music_volume": 1.0,
 	"sfx_volume": 1.0,
 	"window_mode": "windowed",
