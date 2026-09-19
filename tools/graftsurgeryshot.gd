@@ -222,6 +222,24 @@ func _run() -> void:
 	_hive_hold = false
 	me.apply_fov(75.0)
 
+	# ---- the grafted face from outside your own head: the dev free camera (main.gd keeps it
+	# current; a plain Camera3D loses to your own every frame) parked in front of the face, torch off.
+	me.flashlight_on = false
+	var fc: Camera3D = main.dev_panel.free_cam
+	fc.start(game)
+	fc.set("flying", false)
+	me.dev_input_held = false
+	var face := me.camera.global_position + Vector3.DOWN * 0.03
+	var fwd := -me.camera.global_basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	fc.global_position = face + fwd * 0.55 + Vector3.UP * 0.03
+	fc.look_at(face, Vector3.UP)
+	fc.fov = 40.0
+	await _seconds(1.0)
+	await _shot("67_other_camera_face")
+	fc.stop()   # (no glow shot here: Hive Eyes takes the view over from the free camera)
+
 
 ## Hive Eyes for the look only: the host clears `hive_view` whenever its own rules say so, so hold
 ## it on for a moment instead of setting it once.
