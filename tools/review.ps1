@@ -9,6 +9,9 @@
 #   tools\review.bat 4 "ICONS: pick things up" --setup=icons      (skips the menu: a solo shift with the
 #                                                                  named setup from scripts/review_setups.gd staged)
 #
+# A review window plays at 10% of the saved volume, so it doesn't shout over what Zach is doing.
+# -Volume 0.5 (or 1 for full) picks another level.
+#
 # Anything after the named options goes to the game as user args (after "--"), e.g. --seed=3.
 # Steam is off (--no-steam) unless you pass --steam. Logs go to <slot>\.godot\review-<n>.log.
 
@@ -17,6 +20,7 @@ param(
     [Parameter(Mandatory = $true, Position = 1)][string]$Say,
     [string]$Scene = "",
     [int]$Count = 1,
+    [double]$Volume = -1,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$GameArgs = @()
 )
 
@@ -44,6 +48,7 @@ for ($i = 1; $i -le $Count; $i++) {
     if ($Count -gt 1) { $a += @("--position", ("{0},{1}" -f (60 + ($i - 1) * 820), 80), "--resolution", "800x450") }
     if ($Scene) { $a += $Scene }
     $a += @("--", "`"--review=$title`"", "--no-steam")
+    if ($Volume -ge 0) { $a += "`"--volume=$Volume`"" }
     foreach ($g in $GameArgs) { $a += "`"$g`"" }
     # Minimized and never activated (SW_SHOWMINNOACTIVE): it waits in the taskbar, flashing, until
     # Zach opens it, and doesn't take keyboard focus. Start-Process's "Minimized" still activates the
