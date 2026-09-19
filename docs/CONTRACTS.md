@@ -2268,8 +2268,8 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
   has drawn on the **human model instance**, not just the part kind, and re-attaches whenever the node
   is gone: a body_visual is thrown away and rebuilt whenever what it shows changes (getting up off the
   table, the mirror's own body), and the graft used to go with it and never come back.
-  `Grafts.BODY_EYE_RADIUS` is a shade bigger than the socket's own eye and `LOCK_IDLE` keeps a low
-  ember on it, because nothing lights your own face in the mirror.
+  The eyeball is exactly the size and place of `Human_Eye_L` (`GraftEye.RADIUS`, `SIDE`), turned so
+  its pupil (-Z) looks out of the face: the skeleton's front is +Z. `LOCK_IDLE` keeps a low ember on it.
 - **The glow** is the Hive eye material's `Lock`, a new `instance uniform float lock` on the eye
   shader (0 a low pinpoint, 1 the whole ball lit). `Grafts` eases it from `LOCK_IDLE` to 1 while that
   player's `hive_view` is on, which is already replicated, so every machine agrees. The first-person

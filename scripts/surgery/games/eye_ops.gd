@@ -199,6 +199,11 @@ func camera_pose() -> Dictionary:
 	if variant == "snip":
 		# Low and from the side: the eye rests over the socket and rises off it.
 		return {"height": 0.13, "back": 0.17, "fov": 42.0}
+	return base_camera_pose()
+
+
+## The view every graft step shares (the seat step asks for it too), so the face stays put.
+func base_camera_pose() -> Dictionary:
 	return {"height": 0.3, "back": 0.06, "fov": 48.0}
 
 

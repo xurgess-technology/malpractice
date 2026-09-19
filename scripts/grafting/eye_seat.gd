@@ -111,8 +111,10 @@ func plane_extent() -> Vector2:
 
 
 func camera_pose() -> Dictionary:
-	# Pulled back a little further than the other eye steps: the tray has to be in shot too.
-	return {"height": 0.34, "back": 0.07, "fov": 50.0}
+	# Exactly the other eye steps' view (eye_ops.camera_pose), so the face holds still in frame from
+	# the first cut to the last stitch; the tray fits in it. It used to pull back a little for the
+	# tray, which read as the patient's head shifting between steps.
+	return owner_mg.call("base_camera_pose") if owner_mg != null and owner_mg.has_method("base_camera_pose") 		else {"height": 0.3, "back": 0.06, "fov": 48.0}
 
 
 func on_jolt(_offset: Vector2, _strength: float, duration: float) -> void:
@@ -423,7 +425,10 @@ func tick(delta: float) -> void:
 	# The eye: resting in the tray, hanging under the jaws, or sinking into the socket.
 	var rest_y := 0.004 + eye_r
 	var hang_y := eye_r + 0.012
-	var home_y := -eye_r * 0.45
+	# Home is the socket's own centre: the work plane's origin on a surgeon is the eye's centre
+	# (player_body.gd's `eye` site, from GraftEye.local_offset), where the graft ends up. It used to
+	# sink 0.45 of a radius further, into the face.
+	var home_y := 0.0
 	var ey := rest_y
 	if stage == Stage.HELD:
 		ey = hang_y

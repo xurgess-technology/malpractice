@@ -159,6 +159,7 @@ func _run() -> void:
 		print("[graftshot] step %s began=%s" % [String(step[1]), str(ok)])
 		await _seconds(1.0 if String(step[1]) == "grab" else 2.0)
 		await _shot("%d_%s_operating" % [n, String(step[1])])
+		_still_probe(ps, String(step[1]))
 		if String(step[1]) == "cut" and sys.mg != null:
 			_lights_near(sys.mg.global_position)
 		n += 1
@@ -169,6 +170,10 @@ func _run() -> void:
 			await _shot("56b_grab_carry")
 			await _seconds(1.2)
 			await _shot("56c_grab_seating")
+			_still_probe(ps, "seat")
+			await _until(func(): return sys.mg == null or bool(sys.mg.get("done")), 20.0)
+			await _shot("56d_grab_seated")
+			_still_probe(ps, "seated")
 		# What the patient sees: their own camera, looking up, while the step plays.
 		var cam: Camera3D = me.camera
 		var was: Camera3D = get_viewport().get_camera_3d()
@@ -220,11 +225,15 @@ func _run() -> void:
 	await _hive_eyes(1.5)
 	await _shot("66_mirror_close_glow")
 	_hive_hold = false
+	# The same close look with the torch off: the torch sits by your chin and lights your own face
+	# from below (Player.refresh_own_lights), which is what bleaches it in the glass.
+	me.set_flashlight(false)
+	await _seconds(1.0)
+	await _shot("65b_mirror_close_torch_off")
 	me.apply_fov(75.0)
 
 	# ---- the grafted face from outside your own head: the dev free camera (main.gd keeps it
 	# current; a plain Camera3D loses to your own every frame) parked in front of the face, torch off.
-	me.flashlight_on = false
 	var fc: Camera3D = main.dev_panel.free_cam
 	fc.start(game)
 	fc.set("flying", false)
@@ -238,6 +247,42 @@ func _run() -> void:
 	fc.fov = 40.0
 	await _seconds(1.0)
 	await _shot("67_other_camera_face")
+	# What lights the face this bright: every light near it, then the same shot with the nearest
+	# ones switched off one at a time.
+	_lights_near(face, 3.0)
+	var own_glow: Light3D = me.get("_glow")
+	if own_glow != null:
+		own_glow.visible = false
+		await _seconds(0.3)
+		await _shot("67e_face_no_head_glow")
+		own_glow.visible = true
+	var near: Array = []
+	for nd in get_tree().root.find_children("*", "Light3D", true, false):
+		var l := nd as Light3D
+		if l.is_visible_in_tree() and l != own_glow and l.global_position.distance_to(face) < 3.0 				and not me.is_ancestor_of(l):
+			near.append(l)
+	for l in near:
+		l.visible = false
+	await _seconds(0.3)
+	await _shot("67f_face_no_room_lights_near")
+	for l in near:
+		l.visible = true
+	await _seconds(0.3)
+	fc.fov = 12.0   # close on the eyes
+	await _seconds(0.5)
+	await _shot("67b_other_camera_eyes_close")
+	fc.global_position = face + (fwd * 0.5 + fwd.cross(Vector3.UP) * 0.3).normalized() * 0.55
+	fc.look_at(face, Vector3.UP)
+	fc.fov = 20.0   # three-quarter: does it sit in the socket or poke out of it
+	await _seconds(0.5)
+	await _shot("67c_other_camera_three_quarter")
+	me.set_flashlight(true)
+	await _seconds(0.5)
+	fc.global_position = face + fwd * 0.55 + Vector3.UP * 0.03
+	fc.look_at(face, Vector3.UP)
+	fc.fov = 40.0
+	await _seconds(0.5)
+	await _shot("67d_other_camera_face_torch_on")
 	fc.stop()   # (no glow shot here: Hive Eyes takes the view over from the free camera)
 
 
@@ -260,6 +305,21 @@ func _process(_d: float) -> void:
 		me.hive_view = true
 	elif me != null and me.hive_view and not _hive_hold:
 		me.hive_view = false
+
+
+## The table body holding still: where its eyes' site is in the world, and where the operating view
+## draws it on screen, once per step. Every step should print the same numbers.
+func _still_probe(ps: Node, step: String) -> void:
+	var body: Node = ps.get("patient_body")
+	var site := body.find_child("Site_eyes", true, false) as Node3D if body != null else null
+	var cam := get_viewport().get_camera_3d()
+	if site == null or cam == null:
+		print("[graftshot] still %s: no body or camera" % step)
+		return
+	var px := cam.unproject_position(site.global_position)
+	print("[graftshot] still %-6s site %s  basis.z %s  on screen (%.1f, %.1f)  cam %s" % [step,
+		str(site.global_position.snapped(Vector3.ONE * 0.0001)), str(site.global_basis.z.snapped(Vector3.ONE * 0.001)),
+		px.x, px.y, str(cam.global_position.snapped(Vector3.ONE * 0.0001))])
 
 
 func _slot(p, kind: String) -> int:

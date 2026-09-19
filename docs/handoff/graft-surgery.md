@@ -187,3 +187,20 @@ the graft's eye steps (`--game=eye --patient=player --variant=grab --look=or`). 
 helpers now call `RenderingServer.force_draw()` before reading the viewport -- a minimized review
 window redraws so rarely that every shot used to be of a frame from seconds earlier (which is why
 the shots in the section above show the wrong step).
+
+### Second round (Zach's notes on the screenshots)
+
+1. **The red disc** was the grafted eye facing into the skull. `GraftEye.local_offset` gave it the
+   skeleton's axes, whose front is +Z (glTF), but the eyeball's pupil is its -Z: everyone saw the
+   back of the ball, lit all over by `LOCK_IDLE`. It is turned half round now. The earlier "size
+   bump" was making up for this and is gone: the graft is `Human_Eye_L`'s own size and centre
+   (`GraftEye.RADIUS` 0.0147, `SIDE` 0.035), so it sits in the socket instead of through the lids.
+2. **The head moving between steps** was the camera, not the body: the forceps step asked for its own
+   pulled-back view. It uses `eye_ops.base_camera_pose()` like the others now.
+   `graftsurgeryshot` logs the eyes' site and where it lands on screen at every step: identical
+   (800, 566) from the cut to the stitch.
+3. **The eye sunk into the face** during the seat step: `eye_seat` put the seated eye 0.45 of a
+   radius below the work plane, whose origin on a surgeon is already the eye's centre. Home is 0 now.
+4. **The bright yellow face after getting up** is not the graft: it is the Personnel mirror's bulb
+   glow (entrance.gd, a warm OmniLight at head height in front of the glass), 17 cm from your face
+   when you stand at the mirror. With it off, the face goes dark (`67f_face_no_room_lights_near`).

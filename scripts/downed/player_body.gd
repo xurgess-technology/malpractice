@@ -17,8 +17,8 @@ const GASH_HALF_GAP := 0.016
 ## GRAFTING chunk C: the eyeball's radius on a surgeon. Which eye and how far it sits from the eyes'
 ## site comes from GraftEye (its SIDE / local_offset), so the work site and the graft agree.
 const EYE_RADIUS := 0.0135
-## GRAFTING chunk C: the grafted eyeball sits a shade proud of the face (Grafts.BODY_EYE_RADIUS).
-const GRAFT_EYE_RADIUS := 0.0155
+## GRAFTING chunk C: the grafted eyeball fills the socket like the eye it replaces (GraftEye.RADIUS).
+const GRAFT_EYE_RADIUS := GraftEye.RADIUS
 
 var player_id: int = 0
 var ailment_id := "stitches"

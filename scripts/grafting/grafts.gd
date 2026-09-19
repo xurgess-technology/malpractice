@@ -23,9 +23,10 @@ const LootTable := preload("res://scripts/economy/loot_table.gd")
 const PART_ABILITY := {"eye_hive": "hive_in"}
 ## The eyeball's radius on a surgeon (the minigames' work plane).
 const EYE_RADIUS := 0.0135
-## And on the body afterwards. A shade bigger than the socket's own eye, so the graft sits a little
-## proud of the face and reads across a room and in the Personnel mirror, where nothing lights you.
-const BODY_EYE_RADIUS := 0.0155
+## And on the body afterwards: the size of the eye it replaces (GraftEye.RADIUS). It used to be a
+## shade bigger to read better, but that was making up for the pupil facing into the skull; a bigger
+## ball pokes through the lids.
+const BODY_EYE_RADIUS := GraftEye.RADIUS
 ## How fast the Hive eye's `Lock` climbs and falls as Hive Eyes starts and stops.
 const LOCK_RATE := 3.0
 ## What it rests at. Your own torch never lights your own face, so at a flat 0 the grafted eye was
