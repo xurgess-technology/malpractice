@@ -61,7 +61,9 @@ Nothing gets tested hard until Zach has played it.
   stages things with the helpers there (`place`, `give`, `give_abilities`, `floor_item`); then
   `tools\review.bat 4 "ICONS: pick things up" --setup=icons`.
 - **Review windows never take focus.** They open minimized and flash in the taskbar. Nothing
-  opens a game window any other way while Zach might be using the machine.
+  opens a game window any other way while Zach might be using the machine. The one exception is
+  `-Front`, for when he is sitting there waiting for it: the window comes up focused and ready for
+  clicks. A minimized window ignores clicks until it has focus, which reads as a dead window.
 - Before opening it, the subagent has done the smoke look (Tests that make sense, below).
 - The subagent ends its turn with exactly: the window's line, one sentence on what to look at, and
   anything it's unsure of. The orchestrator relays that as is, then continues **the same subagent**

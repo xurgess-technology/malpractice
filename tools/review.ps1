@@ -9,6 +9,9 @@
 #   tools\review.bat 4 "ICONS: pick things up" --setup=icons      (skips the menu: a solo shift with the
 #                                                                  named setup from scripts/review_setups.gd staged)
 #
+# -Front opens it in front, focused and ready for clicks (Zach is waiting for it); without it the
+# window waits minimized in the taskbar and its clicks go nowhere until he gives it focus.
+#
 # A review window plays at 10% of the saved volume, so it doesn't shout over what Zach is doing.
 # -Volume 0.5 (or 1 for full) picks another level.
 #
@@ -21,6 +24,7 @@ param(
     [string]$Scene = "",
     [int]$Count = 1,
     [double]$Volume = -1,
+    [switch]$Front,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$GameArgs = @()
 )
 
@@ -53,7 +57,10 @@ for ($i = 1; $i -le $Count; $i++) {
     # Minimized and never activated (SW_SHOWMINNOACTIVE): it waits in the taskbar, flashing, until
     # Zach opens it, and doesn't take keyboard focus. Start-Process's "Minimized" still activates the
     # window, and a child of this shell may take the foreground, so WMI starts it instead.
-    $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]7 }
+    # -Front: Zach is sitting there waiting for it, so show it normally and let it take focus. A
+    # minimized window ignores his clicks until he gives it focus, which reads as a dead window.
+    $show = if ($Front) { [uint16]1 } else { [uint16]7 }
+    $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = $show }
     $cmd = "`"$GodotGui`" " + ($a -join " ")
     $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
         CommandLine = $cmd; CurrentDirectory = $p; ProcessStartupInformation = $startup }
