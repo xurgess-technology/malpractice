@@ -198,8 +198,10 @@ func camera_pose() -> Dictionary:
 	if _seat != null:
 		return _seat.camera_pose()
 	if variant == "snip":
-		# Low and from the side: the eye rests over the socket and rises off it.
-		return {"height": 0.13, "back": 0.17, "fov": 42.0}
+		# From the side, because the nerve shows under the eye as it rises and a view from straight
+		# above would have the eye sitting on top of it. Raised a little (2026-09-19) so the jump
+		# between it and the extraction's other three steps is smaller.
+		return {"height": 0.22, "back": 0.20, "fov": 50.0}
 	return base_camera_pose()
 
 
@@ -380,7 +382,8 @@ func hud_state() -> Dictionary:
 			"scoop":
 				hint = "Click to lower the spoon into the socket, then circle it slowly and lightly." if not down else "Circle the inside of the socket. Slowly."
 			"snip":
-				hint = "Hold W to pull the eye up. When the nerve shows, aim the scalpel at it and click."
+				# Short: the controls line under it already says which keys (surgery_hud "keys").
+				hint = "Pull the eye up. When the nerve shows, aim at it and click."
 			"stitch":
 				hint = "Click to set the needle on the cut, then trace it round. The socket closes behind you." if not down else "Trace the cut. Not too fast."
 	return {"title": String(ctx.get("step", {}).get("label", "")), "hint": hint, "progress": progress,

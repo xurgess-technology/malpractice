@@ -236,3 +236,16 @@ the shots in the section above show the wrong step).
 - The swap moved from the scoop to the seat, so you never reach into a vat that already holds the
   eye that just came out.
 - Review setup `--setup=eyes` stages both procedures at once.
+
+### Fifth round (the extraction's last step was too hard)
+
+Zach: "I cant figure out how to get the eye from the hive to the jar, its too complicated." The
+`place` variant asked for five things in a row (lower, grab, lift clear, carry under a speed limit,
+lower in) for what should be "pick it up, drop it in the jar". It is now: hold left click near the
+loose eye, drag, let go over the vat. No W, no S (the forceps raise and lower themselves), no speed
+limit, no slack drop -- the step cannot be lost -- and letting go anywhere else just puts the eye
+back in the socket. The vat's ring is up from the first frame and 2.6x bigger, and the hint says
+what to do in one line. `grab` (the graft) still has all its careful work; only `place` changed.
+The snip's camera is raised (0.22 / 0.20 / 50) so the extraction's steps sit closer together; it
+stays side-on because the nerve shows under the lifted eye and a view from straight above would
+have the eye covering it.

@@ -119,12 +119,13 @@ func _hive_reference() -> void:
 			% [String(step[1]), str(began), int(game.case_on_table(table).get("step_index", -1)),
 				String(game._table_prompt(me, table))])
 		if String(step[1]) == "place":
+			await _seconds(0.7)
+			await _shot("43b_hive_place_start")       # the loose eye, the vat's big ring, the hint
 			await _until(func(): return _seat_stage(sys) >= 1, 30.0)
-			await _seconds(0.5)
-			await _shot("44_hive_eye_lifted_out")
+			await _seconds(0.35)
+			await _shot("44_hive_eye_lifted_out")     # in the jaws, on its way over
 			await _until(func(): return _seat_stage(sys) >= 2, 30.0)
-			await _seconds(0.8)
-			await _shot("45_hive_eye_into_the_vat")
+			await _shot("45_hive_eye_into_the_vat")   # let go over the vat: it drops in
 		else:
 			await _seconds(2.0)
 			await _shot("%d_hive_%s" % [n, String(step[1])])

@@ -2260,11 +2260,18 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
   `grab` (the graft's step 3) takes the new eye (`eye_kind_in`) out of the specimen vat standing on
   the table and seats it in the socket, `{"eye_seated": true}`; `place` (the extraction's step 4)
   takes the cut-free eye out of the socket and drops it in the vat, `{"eye_in_vat": true}`.
-  Hold **S** to lower the forceps onto the eye (into the fluid, or into the socket), hold primary to
-  close the jaws on the nerve, **W** to lift it clear, carry it across -- it hangs on its nerve and
-  lags, and moving too fast, or leaving without lifting it clear, shakes it loose back where it came
-  from -- then hold S over the target and it goes in under slow, steady pressure, turning so a
-  seated pupil faces out. Nothing here botches and a dropped eye costs nothing. ctx knobs `no_fail`,
+  The two directions are not equally fussy, because one is millimetre work on a face and the other
+  is putting a dead monster's eye in a jar. **`grab`**: hold **S** to lower the forceps into the
+  fluid, primary to close the jaws on the nerve, **W** to lift it clear, carry it across -- it hangs
+  on its nerve and lags, and moving too fast, or leaving without lifting it clear, shakes it loose
+  back into the vat -- then hold S over the socket and it goes in under slow, steady pressure,
+  turning so the pupil faces out. **`place`** (2026-09-19, after Zach could not finish it) is grab
+  and drop and nothing else: no depth keys, hold primary anywhere within `PLACE_GRAB` of the loose
+  eye and the jaws take it, drag it with the mouse (the nerve still swings, but no speed and no
+  distance can shake it out -- the step cannot be lost), and let go within `PLACE_DROP` of the vat
+  to drop it in; letting go anywhere else puts it back in the socket. The forceps raise and lower
+  themselves, and the vat's ring is up from the first frame at 2.6x size. Nothing here botches and
+  a dropped eye costs nothing. ctx knobs `no_fail`,
   `eye_kind`, `eye_kind_in`, `eye_radius`, and `vat` (the real `specimen_vat` on the table, which
   `surgery_system` looks up per machine: the game draws its own open copy where that one stands and
   hides the real one while the step runs). Every graft step shares `eye_ops.base_camera_pose()`, so

@@ -8,15 +8,27 @@ extends Node3D
 ##   place (Eyeball Extraction, step 4) the cut-free eye lies in the socket: lift it out and drop it
 ##                                      in the vat on the table. {"eye_in_vat": true}.
 ##
-## Both are the same trip, one each way: SOURCE -> carry -> TARGET.
+## Both are the same trip, one each way: SOURCE -> carry -> TARGET. How hard the trip is depends on
+## which way it goes, because one is millimetre work on somebody's face and the other is dropping a
+## dead monster's eye in a jar.
 ##
-## SOURCE  Put the forceps over the eye and hold S to lower them onto it (into the vat's fluid, or
-##         into the socket). Hold left click and the jaws close on the nerve just above it.
-## CARRY   Hold W to lift it clear, then draw it across. It hangs on the nerve and lags, so whipping
-##         the hand about, or running too far ahead of it, shakes it loose and it drops back where
-##         it came from. Pick it up and try again; it costs nothing.
-## SEAT    Over the target (its ring turns green), hold S and it goes in under slow, steady
-##         pressure: into the socket, turning so the pupil faces out, or down into the vat's fluid.
+## grab, into a socket -- the careful one:
+##   SOURCE  Put the forceps over the eye in the vat and hold S to lower them into the fluid. Hold
+##           left click and the jaws close on the nerve just above it.
+##   CARRY   Hold W to lift it clear, then draw it across. It hangs on the nerve and lags, so
+##           whipping the hand about, or running too far ahead of it, shakes it loose and it drops
+##           back in the vat. Pick it up and try again; it costs nothing.
+##   SEAT    Over the socket (its ring turns green), hold S and it goes in under slow, steady
+##           pressure, turning so the pupil ends up facing out.
+##
+## place, into the vat -- 2026-09-19, pick it up, drag it over, let go, and nothing else:
+##   SOURCE  Hold left click anywhere near the loose eye (it is lying in an open socket) and the
+##           jaws take it. No lowering, no aiming.
+##   CARRY   Move the mouse. It still swings on its nerve, but no speed and no distance can shake
+##           it out: this step cannot be lost.
+##   DROP    Let go over the vat and it falls in. Let go anywhere else and it drops back in the
+##           socket, and you pick it up again. Either way it costs nothing.
+##
 ## SETTLE  Home. The jaws open, it settles with a soft squelch, and the step finishes.
 ## A stir's shake never drops it (on_jolt).
 ##
@@ -42,6 +54,11 @@ const VAT_FLUID_Y := 0.035
 ## socket's centre.
 const VAT_REACH := 0.032
 const SOCKET_REACH := 0.016
+## `place` is the easy way round: a wide grab on the loose eye, a wide mouth to let go over, and
+## forceps that raise and lower themselves.
+const PLACE_GRAB := 0.055
+const PLACE_DROP := 0.075
+const PLACE_DEPTH_RATE := 3.0
 ## No further out on the work plane than this: the close-up view has to show both ends of the trip.
 const VAT_MAX_OUT := 0.24
 const TIP_TAU := 0.05
@@ -239,6 +256,11 @@ func handle_cursor(p: Vector2, buttons: int, delta: float) -> void:
 	elif want_up and not want_down:
 		depth = maxf(0.0, depth - DEPTH_RATE * delta)
 
+	if mode == "place":
+		_place_rules(primary, delta)
+		_update_progress()
+		return
+
 	match stage:
 		Stage.SOURCE:
 			eye = eye.lerp(source_at(), 1.0 - exp(-delta / 0.12))
@@ -310,6 +332,60 @@ func _jaws(primary: bool, delta: float, can_take: bool) -> bool:
 	return false
 
 
+## `place`, the extraction's last step: hold left click on the loose eye, drag it to the vat, let
+## go. The forceps lower and lift themselves, the carry cannot be lost, and letting go anywhere
+## else just drops it back in the socket. (It used to ask for the whole careful trip, which is right
+## for millimetre work on a face and far too much for putting a dead monster's eye in a jar.)
+func _place_rules(primary: bool, delta: float) -> void:
+	var want_depth := 0.35
+	match stage:
+		Stage.SOURCE:
+			eye = eye.lerp(source_at(), 1.0 - exp(-delta / 0.12))
+			var near := tip.distance_to(source_at()) < PLACE_GRAB
+			want_depth = 1.0 if near else 0.35
+			if primary and near and depth > 0.55:
+				jaw = JAW_ON
+				stage = Stage.HELD
+				eye = source_at()
+			elif primary:
+				jaw = minf(jaw + JAW_CLOSE_RATE * delta, 1.0)
+			else:
+				jaw = maxf(jaw - JAW_OPEN_RATE * delta, 0.0)
+		Stage.HELD:
+			jaw = JAW_ON
+			want_depth = 0.0
+			eye = eye.lerp(tip, 1.0 - exp(-delta / SWING_TAU))   # the swing is for the look only
+			if not primary:
+				if eye.distance_to(target_at()) <= PLACE_DROP or tip.distance_to(target_at()) <= PLACE_DROP:
+					stage = Stage.SEATING
+					sink = 0.0
+				else:
+					drops += 1
+					stage = Stage.SOURCE
+					_hint = "It dropped back in the socket. Pick it up again."
+					_hint_t = 3.0
+		Stage.SEATING:
+			# In it goes by itself: the jaws open and it sinks into the fluid.
+			want_depth = 0.45
+			jaw = maxf(jaw - JAW_OPEN_RATE * delta, 0.0)
+			eye = eye.lerp(target_at(), 1.0 - exp(-delta / 0.10))
+			sink = minf(1.0, sink + delta / 0.5)
+			if sink >= 1.0:
+				stage = Stage.SETTLE
+				settle = 0.0
+		Stage.SETTLE:
+			want_depth = 0.2
+			jaw = maxf(jaw - JAW_OPEN_RATE * delta, 0.0)
+			eye = target_at()
+			settle += delta
+			if settle >= SETTLE_TIME * 0.6:
+				stage = Stage.DONE
+				_update_progress()
+				owner_mg.finish({"eye_in_vat": true})
+				return
+	depth = move_toward(depth, want_depth, PLACE_DEPTH_RATE * delta)
+
+
 ## It slipped out of the jaws: back where it started, nothing lost. Never a botch (grafts can't fail).
 func _shake_loose(why: String) -> void:
 	stage = Stage.SOURCE
@@ -331,6 +407,8 @@ func _update_progress() -> void:
 			p = 0.12 + 0.36 * clampf(1.0 - eye.distance_to(target_at()) / span, 0.0, 1.0)
 		Stage.SEATING:
 			p = 0.5 + 0.42 * sink
+		Stage.SETTLE:
+			p = 0.96
 		_:
 			p = 1.0
 	owner_mg.progress = 1.0 if stage == Stage.DONE else minf(p, 0.99)
@@ -342,7 +420,15 @@ func hud_state() -> Dictionary:
 	var hint := _hint if _hint_t > 0.0 else ""
 	var from_where := "vat" if mode == "grab" else "socket"
 	var to_where := "socket" if mode == "grab" else "vat"
-	if hint == "":
+	if hint == "" and mode == "place":
+		match stage:
+			Stage.SOURCE:
+				hint = "Hold left click on the eye, drag it to the vat, and let go."
+			Stage.HELD:
+				hint = "Drag it over the vat and let go."
+			_:
+				hint = "It's in the vat."
+	elif hint == "":
 		match stage:
 			Stage.SOURCE:
 				if tip.distance_to(source_at()) >= source_reach():
@@ -357,14 +443,21 @@ func hud_state() -> Dictionary:
 				else:
 					hint = "Carry it to the %s. Slowly: it swings on the nerve." % to_where
 			Stage.SEATING:
-				hint = "Hold S. It's sliding in." if mode == "grab" else "Hold S. It's going into the fluid."
+				hint = "Hold S. It's sliding in."
 			_:
-				hint = "Seated." if mode == "grab" else "It's in the vat."
+				hint = "Seated."
 	return {"title": String(ctx.get("step", {}).get("label", "Seat the new eye with forceps")),
 		"hint": hint, "progress": owner_mg.progress, "gauges": [], "keys": keys()}
 
 
 func keys() -> Array:
+	if mode == "place":
+		match stage:
+			Stage.SOURCE:
+				return [["Hold LMB", "grab the eye"], ["Mouse", "drag it to the vat"]]
+			Stage.HELD:
+				return [["Mouse", "drag it over the vat"], ["Let go", "drop it in"]]
+		return []
 	match stage:
 		Stage.SOURCE:
 			return [["Mouse", "move the forceps"], ["Hold S", "lower them"], ["Hold LMB", "close the jaws"]]
@@ -404,6 +497,19 @@ func bot_input(t: float, skill: float) -> Dictionary:
 	_b_t = t
 	var sk := clampf(maxf(skill, (t - 30.0) / 10.0), 0.0, 1.0)
 	var buttons := 0
+	if mode == "place":
+		# Grab it, drag it over the vat, let go.
+		match stage:
+			Stage.SOURCE:
+				_b_cursor = _b_cursor.move_toward(source_at(), lerpf(0.16, 0.24, sk) * dt)
+				# A beat before it grabs, so the step reads (and a screenshot can catch its start).
+				if t > 1.2 and tip.distance_to(source_at()) < PLACE_GRAB * 0.5:
+					buttons |= MinigameBase.BUTTON_PRIMARY
+			Stage.HELD:
+				_b_cursor = _b_cursor.move_toward(target_at(), lerpf(0.12, 0.2, sk) * dt)
+				if tip.distance_to(target_at()) > PLACE_DROP * 0.4:
+					buttons |= MinigameBase.BUTTON_PRIMARY
+		return {"cursor": _b_cursor, "buttons": buttons}
 	match stage:
 		Stage.SOURCE:
 			_b_cursor = _b_cursor.move_toward(source_at(), lerpf(0.16, 0.24, sk) * dt)
@@ -603,6 +709,8 @@ func tick(delta: float) -> void:
 		ey = _vis_y
 	elif stage == Stage.SEATING:
 		ey = lerpf(_vis_y, home_y, smoothstep(0.0, 1.0, _vis_sink))
+	elif stage == Stage.SETTLE and mode == "place":
+		ey = lerpf(_vis_y, home_y, smoothstep(0.0, 1.0, _vis_sink))
 	elif stage == Stage.SETTLE or stage == Stage.DONE:
 		ey = home_y
 	_eye_node.position = _p3(_vis_eye, ey)
@@ -629,10 +737,14 @@ func tick(delta: float) -> void:
 		_source_ring.scale = Vector3(sc, sc * 0.3, sc)
 		_source_ring_mat.albedo_color = Color(0.25, 1.0, 0.45, 0.9) if near \
 			else Color(1.0, 0.95, 0.8, 0.75 * (1.0 - fmod(_cue_t * 0.9, 1.0)))
-	_target_ring.visible = held
-	if held:
-		var over := _vis_eye.distance_to(target_at()) <= target_reach()
-		var rs := eye_r * (1.7 if over else 1.5 + 0.12 * sin(_cue_t * 5.0))
+	# `place`: the vat's ring is up from the first frame and much bigger -- it is the whole target.
+	var show_target := held or (mode == "place" and stage != Stage.DONE)
+	_target_ring.visible = show_target
+	if show_target:
+		var reach: float = PLACE_DROP if mode == "place" else target_reach()
+		var over := _vis_eye.distance_to(target_at()) <= reach or _vis_tip.distance_to(target_at()) <= reach
+		var big := 2.6 if mode == "place" else 1.0
+		var rs := eye_r * big * (1.7 if over else 1.5 + 0.12 * sin(_cue_t * 5.0))
 		_target_ring.position = _p3(target_at(), home_y + eye_r * 1.4)
 		_target_ring.scale = Vector3(rs, rs * 0.25, rs)
 		_target_ring_mat.albedo_color = Color(0.25, 1.0, 0.45, 0.9 if over else 0.5)

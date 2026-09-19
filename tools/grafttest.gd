@@ -211,6 +211,20 @@ func _place_checks(script: GDScript) -> void:
 		return
 	_check(seat.source_at() == Vector2.ZERO and seat.target_at() != Vector2.ZERO,
 		"it starts in the socket and ends in the vat")
+	# 2026-09-19: grab and drop, nothing else. Hold primary near the loose eye and it comes up; no
+	# speed and no distance can shake it out; letting go off the vat only puts it back in the socket.
+	for i in 40:
+		g.handle_cursor(Vector2.ZERO, 1, dt)
+	_check(int(seat.stage) == 1, "holding left click near the loose eye picks it up, with no lowering (stage %d)" % int(seat.stage))
+	for i in 60:
+		g.handle_cursor(Vector2(0.09 if i % 2 == 0 else -0.09, 0.08 if i % 3 == 0 else -0.06), 1, dt)
+	_check(int(seat.stage) == 1 and int(seat.drops) == 0, "whipping the hand about cannot lose it (stage %d, drops %d)"
+		% [int(seat.stage), int(seat.drops)])
+	for i in 20:
+		g.handle_cursor(Vector2(0.09, 0.08), 0, dt)
+	_check(int(seat.stage) == 0 and int(seat.drops) == 1 and botches[0] == 0,
+		"letting go away from the vat drops it back in the socket, no botch (stage %d, drops %d)"
+			% [int(seat.stage), int(seat.drops)])
 	var t := 0.0
 	while t < 40.0 and not in_vat[0]:
 		t += dt
