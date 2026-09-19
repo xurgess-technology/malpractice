@@ -1,7 +1,7 @@
 extends Node
 ## Headless checks for the database terminal (sweep 4a chunk 4, docs/SWEEP4A.md "Chunk 4:
 ## Database terminal, guide removal, Hive Eyes and Echo polish"): a completed scan unlocks tier 2,
-## a harvest (dissection or an absorbed brain) unlocks tier 3, the database survives a wipe and a
+## a harvest (a body part extracted or grafted) unlocks tier 3, the database survives a wipe and a
 ## reload (saved under user://), each player's database is their own (another player's scan never
 ## lands in yours), the waiting room's Night Nurse can be scanned, and no `read` action or guide
 ## binder code remains in the project. Terminal redesign, chunk 4: on the break room screen, holding
@@ -95,18 +95,14 @@ func _scan_unlocks_tier2() -> void:
 
 
 func _harvest_unlocks_tier3() -> void:
-	_say("---- a harvest (absorbed at the blender) unlocks tier 3")
-	var b: Node = game.brains
-	b.on_reset()
+	_say("---- a harvest (a part extracted or grafted) unlocks tier 3")
+	game.brains.on_reset()
 	game.database.erase("sonographer")
 	_check(not game.db_record("sonographer").harvested, "tier 3 starts locked for the Sonographer")
-	me.take_into("brain_sonographer", 1, 350)
-	var slot := _slot_of("brain_sonographer")
-	me.slots[slot]["bt"] = game.world_time
-	me.selected = slot
-	b.drink(me)
+	# GRAFTING: the extraction and graft paths call this the moment a part changes hands.
+	game.mark_db("sonographer", "harvested", me)
 	await _frames(2)
-	_check(game.db_record("sonographer").harvested, "drinking an absorbed brain marks tier 3 harvested")
+	_check(game.db_record("sonographer").harvested, "a harvested part marks tier 3 harvested")
 
 
 func _guest_scan_stays_theirs() -> void:
@@ -176,7 +172,7 @@ func _persists_across_wipe_and_reload() -> void:
 	_say("---- the database persists across a wipe and a reload")
 	game.database.clear()
 	game.mark_db("night_nurse", "sighted")
-	game.reset_money()   # a "wipe": money and absorbed brains reset, the database must not
+	game.reset_money()   # a "wipe": money and abilities reset, the database must not
 	_check(game.db_record("night_nurse").sighted, "sighted survives reset_money() (a wipe)")
 	# A "reload": nothing at all in memory (a fresh process would start here), then load from disk.
 	var fresh: Dictionary = {}

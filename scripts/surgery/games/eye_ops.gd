@@ -27,6 +27,9 @@ extends "res://scripts/surgery/minigame.gd"
 ##   eye_kind         "eye_hive" | "eye_surgeon" (the eye's look); default from patient_id
 ##   eye_kind_in      the eye going IN, for the graft's seat step (default: eye_kind)
 ##   eye_radius       metres, default 0.0155
+##   part_site        "eye" (default) or "throat": GRAFTING part two runs the same five variants on a
+##                    windpipe instead of an eyeball, so the steps read as a throat. The rules do not
+##                    change; only what is on the work plane, and which part of the body it hides.
 ## Results: cut {"eye_cut": true}, scoop {"eye_out": true}, snip {"eye_removed": true},
 ##          seat {"eye_seated": true}, stitch {"eye_stitched": true}.
 
@@ -64,6 +67,8 @@ const INK_SHEEN := Color(0.55, 0.3, 1.0)   # the saw's marking sheen
 
 var variant := "cut"
 var no_fail := false
+## GRAFTING part two: which graft site this is playing on ("eye" or "throat").
+var part_site := "eye"
 var eye_kind := "eye_hive"
 var eye_r := 0.0155
 var ring_r := 0.03
@@ -137,7 +142,12 @@ func setup(context: Dictionary) -> void:
 	super.setup(context)
 	variant = String(ctx.get("variant", ctx.get("step", {}).get("variant", "cut")))
 	no_fail = bool(ctx.get("no_fail", false))
-	eye_kind = String(ctx.get("eye_kind", "eye_hive" if String(ctx.get("patient_id", "hive")) == "hive" else "eye_surgeon"))
+	part_site = String(ctx.get("part_site", String(ctx.get("step", {}).get("site", "eye"))))
+	if part_site != "throat":
+		part_site = "eye"
+	eye_kind = String(ctx.get("eye_kind", ""))
+	if eye_kind == "":
+		eye_kind = String(Eyes.MONSTER_PART.get(part_site, "eye_hive")) if String(ctx.get("patient_id", "hive")) != "player" else String(Eyes.OWN_PART.get(part_site, "eye_surgeon"))
 	if variant == "seat":
 		eye_kind = String(ctx.get("eye_kind_in", eye_kind))
 	eye_r = float(ctx.get("eye_radius", eye_r))
@@ -152,11 +162,11 @@ func _exit_tree() -> void:
 	_hide_body_eye(false)
 
 
-## The scoop draws its own eye, so the body's is hidden while it plays (the body reads this meta).
+## The scoop draws its own part, so the body's is hidden while it plays (the body reads this meta).
 func _hide_body_eye(on: bool) -> void:
 	var body = ctx.get("body")
 	if body != null and is_instance_valid(body) and (on or _hid_body_eye):
-		body.set_meta("eye_hidden", on)
+		body.set_meta("throat_hidden" if part_site == "throat" else "eye_hidden", on)
 		_hid_body_eye = on
 
 
@@ -441,6 +451,8 @@ func _build() -> void:
 		_eye.mesh = sph
 		_eye.material_override = Eyes.material(eye_kind)
 		add_child(_eye)
+	if part_site == "throat":
+		_as_trachea(_eye, eye_kind)
 	match variant:
 		"cut", "stitch":
 			# The marking: dashes round the ring with a hash tick across every other one, in surgical violet.
@@ -580,6 +592,26 @@ func _make_scoop_spoon() -> Node3D:
 
 ## The scoop's eye is a copy of the body's own eye (same mesh and material, same place), wrapped in a pivot at
 ## its centre so it can rock and lift; the body's eye is hidden while this plays. Without a body it is a sphere.
+## GRAFTING part two: the thing on the work plane is a length of windpipe, not an eyeball. The mesh
+## instance stays (every rule and animation drives it); only what it draws changes.
+func _as_trachea(mi: MeshInstance3D, kind: String) -> void:
+	if mi == null or not is_instance_valid(mi) or mi.has_node("TracheaPart"):
+		return
+	mi.mesh = null
+	mi.material_override = null
+	for c in mi.get_children():
+		c.queue_free()
+	var holder := Node3D.new()
+	holder.name = "TracheaPart"
+	# Built standing on its base and about 90 mm long: lay it down and shrink it to eyeball scale.
+	var k: float = eye_r / 0.0135 * 0.5
+	holder.scale = Vector3.ONE * k
+	holder.position = Vector3(0, 0, Eyes.TRACHEA_LEN * k * 0.5)
+	holder.basis = Basis(Vector3.RIGHT, deg_to_rad(-90.0))
+	mi.add_child(holder)
+	Eyes.build_trachea(holder, kind)
+
+
 func _build_scoop_eye() -> void:
 	_eye_pivot = Node3D.new()
 	add_child(_eye_pivot)
@@ -611,6 +643,8 @@ func _build_scoop_eye() -> void:
 		_eye_pivot.add_child(_eye)
 		_eye_base = plane_to_local(Vector2.ZERO, eye_r * 0.85)
 		_eye_pivot.position = _eye_base
+	if part_site == "throat":
+		_as_trachea(_eye, eye_kind)
 	var stalk_mat := StandardMaterial3D.new()
 	stalk_mat.albedo_color = Color(0.85, 0.7, 0.62)
 	stalk_mat.roughness = 0.3

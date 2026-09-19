@@ -96,7 +96,12 @@ func patient() -> Node:
 
 
 func is_graft() -> bool:
-	return String(case.get("ailment_id", "")) == "eye_graft"
+	return Grafts.SITE_AILMENT.values().has(String(case.get("ailment_id", "")))
+
+
+## Which site this graft works on ("eye", "throat"), or "".
+func graft_site() -> String:
+	return String(case.get("site", "eye")) if is_graft() else ""
 
 
 func _vitals() -> float:
@@ -113,7 +118,7 @@ func graft_commit_block(p: Node) -> String:
 		return ""
 	if int(case.get("step_index", 0)) < 2:
 		return ""
-	return "Not with your eye out."
+	return "Not with your throat open." if graft_site() == "throat" else "Not with your eye out."
 
 
 # =========================================================================
@@ -181,16 +186,24 @@ func apply_locally() -> void:
 	# GRAFTING chunk C: what is in the socket follows the step. The old eye is there until the
 	# scoop takes it out, the socket is empty until the seat puts the new one in, and from then on
 	# the new one sits there (stitched in by the last step).
-	if is_graft() and patient_body != null and patient_body.has_method("set_eye"):
+	if is_graft() and patient_body != null:
 		var si := int(case.get("step_index", 0))
-		var out_kind := String(case.get("out_kind", "eye_surgeon"))
+		var out_kind := String(case.get("out_kind", ""))
 		var in_kind := String(case.get("in_kind", ""))
+		# The part on show is the one that came out until the lift takes it, nothing while the site
+		# is open, and the one going in from the seat onward (stitched in by the last step).
+		var monster_part := String(Eyes.MONSTER_PART.get(graft_site(), ""))
+		var shown := ""
+		var empty := si == 2
 		if si < 2:
-			patient_body.set_eye("" if out_kind != "eye_hive" else "eye_hive", false)
-		elif si == 2:
-			patient_body.set_eye("", true)
-		else:
-			patient_body.set_eye("" if in_kind != "eye_hive" else "eye_hive", false)
+			shown = out_kind if out_kind == monster_part else ""
+		elif si > 2:
+			shown = in_kind if in_kind == monster_part else ""
+		if graft_site() == "throat":
+			if patient_body.has_method("set_throat"):
+				patient_body.set_throat(shown, empty)
+		elif patient_body.has_method("set_eye"):
+			patient_body.set_eye(shown, empty)
 
 
 ## Every machine: the player on the table has a lying stand-in body, so their own must not draw.

@@ -97,7 +97,8 @@ prompt already uses for its own styling. Technique: a copy of each of the target
 unlit, one material per highlight faded in by a tween.
 
 This replaced a handful of always-on `Label3D` room/prop labels that duplicated this cue (the OR
-supply shelf's "SUPPLY - SURGICAL" tag, the break-room blender's "BLENDER" tag): removed outright,
+supply shelf's "SUPPLY - SURGICAL" tag, and the break-room blender's "BLENDER" tag before the
+blender was removed): removed outright,
 since the aim highlight plus the crosshair prompt already say the same thing without covering the
 screen the whole time you are in the room. Navigational signage (the hospital's own room-name
 signs over doorways, `hospital_builder.gd`'s `_sign_node`, "OR" / "EMERGENCY" / wing names) is
@@ -471,7 +472,7 @@ func eye_transform() -> Transform3D                         # every machine: eye
   (`monsters_sono_click`, faster with suspicion) and squelches (`monsters_sono_step`) as it walks, and
   both stop while it listens. `MonsterModel.set_ears(listen, yaw, delta)` swivels its ears toward
   `listen_yaw` (every machine, from the report's mode and `ly`). Its kind id is `sonographer`
-  (`brain_sonographer`, Brains path `sonographer`, database key `sonographer`); old saves' `discharged`
+  (abilities path `sonographer`, database key `sonographer`); old saves' `discharged`
   database page loads as it (`database_store.gd`). The echo, imaging and the rest of its planned
   hunting (docs/SONOGRAPHER.md, chunk B) are not in yet.
 - **Placement** (`hive_spots`, host): hallway tiles (`.`/`M`, outside every room rect grown by a
@@ -597,8 +598,8 @@ HiveRig.WALK_SPEED 0.85      # rate = speed / WALK_SPEED (0.4..2.4x)
   light on the face; sedated, the eyes go back to the pinpoint.
 - Lying (sedated, dragged, `make_lying`): the poser eases every bone back to rest and brings the arms
   in to the sides. On the OR table (`monster_builder.gd _build_st`) the body is strapped down with its
-  fungus showing; the dissection head that opens is built hidden, only to place the `skull`, `brain`
-  and `injection` sites, since the Hive has no brain (harvest waits on the grafting redesign).
+  fungus showing; the dissection head that opens is built hidden, only to place the `skull` and
+  `injection` sites.
 
 ### The Sonographer's model (2026-09-18, chunk A of docs/SONOGRAPHER.md)
 
@@ -693,6 +694,7 @@ static func page(section, key, view) -> Dictionary
 # wall_session.gd (game.wall): who is signed in, the shared page, clicks and lasers
 var user: int                          # signed-in peer, 0 for nobody
 func view() -> Dictionary              # {db: {kind: bits 1 sighted 2 scanned 4 harvested}, peer, brains}
+                                       # (`brains` = the abilities node)
 func click(px) / func sign_in() / func sign_out() / func own_db_changed()
 func laser_of(player) -> Dictionary    # {from, to, landed, terminal, px}
 ```
@@ -738,13 +740,13 @@ game.mark_db(kind, field)             # host: sets a field true (once), saves to
     # ("db_full" event) -- there is no continuous replication of the database.
 ```
 
-- `mark_db` is what `game._tick_scan` (sighted/scanned), `dissection.on_case_finished` (a won
-  monster case: harvested) and `brains.drink` (an absorbed brain: harvested) call. It is not
+- `mark_db` is what `game._tick_scan` (sighted/scanned) and the extraction/graft paths (a body part
+  taken out or grafted: harvested) call. It is not
   cleared by `reset_money()` (a wipe): species knowledge is meant to survive a wipe, and
   `DatabaseStore.save`/`load_into` make it survive a full reload too.
 - A guest's scan or harvest is recorded exactly like the host's own: `_tick_scan` and the
-  dissection/brains hooks are already host-only and iterate every player (`alive_players()`),
-  so whichever peer is aiming or holding the brain, the record it changes is `game.database` on
+  dissection/grafting hooks are already host-only and iterate every player (`alive_players()`),
+  so whichever peer is aiming or holding the part, the record it changes is `game.database` on
   the host. Guests never keep their own copy; their terminal only ever shows a fetched mirror.
 
 ## Hospital (hospital worker, sweep 2 wave 1)
@@ -1110,7 +1112,7 @@ Loot (`scripts/economy/`):
   batch, rooms {room_kind: weight, "*": any}, surfaces [...], containers {type: weight}, trinket}`, 11 kinds (plain: `pill_bottle`, `xray_film`,
   `heart_monitor`, `gold_watch`, `ultrasound`; trinkets, which sell and get a job in a later chunk:
   `desk_phone`, `laptop`, `defibrillator`, `reflex_hammer`, `epipen`, `pulse_oximeter`) plus the
-  brains and eyes. Room keys are the real generated room kinds (`patient_room`, `supply_closet`,
+  body parts. Room keys are the real generated room kinds (`patient_room`, `supply_closet`,
   `janitor_closet`, `lab`, ...); trinkets are kept rarer than plain loot;
   `weight(kind, room_kind, depth)`, `roll_value(kind, depth, roll)` (+20% per depth).
 - `loot_spawner.gd`: `plan(seed, shift, level_info, occupied) -> [{kind, count, value, container_id,
@@ -1161,8 +1163,8 @@ game.buy_pills(p) -> bool           # host; one set of pills, order_pharmacy(p, 
 game.PHARMACY_CATALOG               # [{kind, name, count, price}] per set; PHARMACY_MAX_QTY sets a line
 game.eat_pill(p)                    # host; take one from the held bottle, same hit reaction as a throw
 game.furnace_sell(kind, count, value, at)   # host; the furnace calls this once a sale resolves
-game.furnace_can_sell(kind) -> bool  # loot (incl. brains) and placebo_pills; nothing else
-game.furnace_value(kind, slot) -> int  # brains: spoiled value; placebo_pills: 0; else slot.v
+game.furnace_can_sell(kind) -> bool  # loot and placebo_pills; nothing else
+game.furnace_value(kind, slot) -> int  # body parts: spoiled value; placebo_pills: 0; else slot.v
 game.PILL_PRICE / game.PILL_COUNT    # $15, 10 pills a bottle
 game.ROCKET_BOOTS_PRICE              # $100 a pair (catalog line "rocket_boots", count 1)
 game.player_faceplanted(p)           # host; a rocket dive hit a wall head on: damage_player(p, 1, "faceplant")
@@ -1482,7 +1484,7 @@ OrScreenModel.build(game) -> Dictionary # scripts/orscreen/or_screen_model.gd, p
   from the crosshair into that slot in 0.3 s (`pickup_pop`). Alt shrinks the row to small squares and the
   ability bar grows into the bar as before (the ability circles now sit just under that small row).
   Body parts spoil visibly: a ring drains round the slot and the icon greys (a spoiled part stays grey).
-  Eyes read `game.vats.eye_factor`, brains `game.brains.factor_of`, any other kind the numbers in its
+  Eyes read `game.vats.eye_factor`, any other kind the numbers in its
   stack: `fresh` (0..1) and `spoiled` (bool). A used-up trinket is a stack with `used: true`: greyed with
   a crack (nothing sets it yet; the trinkets chunk does). A kind with no icon draws a plain slot with its
   first letters in its category colour.
@@ -1709,8 +1711,8 @@ game.combat.last_result / swings_seen / rng / break_chance / anim_freeze / pose_
   `drop_dragged` and `strap` set and clear `m.dragged_by`, and combat clears a stale one.
 - **Strap**: `strap_problem(ti)` is "" in `Phase.SHIFT` with no case on the table and no crew
   heading there. The case is exactly `game.add_case({table, patient_id: m.kind, ailment_id:
-  "dissection", monster: true, flags: {sedation: lerp(0.35, 1.0, sedation_left / 75), snapped to
-  0.01}})`; then `game.monsters.erase(id)`, `on_monster_removed(m)`, `m.queue_free()` (no death
+  Dissection.extraction_for(m.kind), monster: true, flags: {sedation: lerp(0.35, 1.0,
+  sedation_left / 75), snapped to 0.01}})`; then `game.monsters.erase(id)`, `on_monster_removed(m)`, `m.queue_free()` (no death
   effect, no `monster_killed` event), `combat_strap` and "X strapped the Y to the table.".
 - **Wind-ups** (hands sweep, `scripts/combat/windup.gd`, every machine): every shove, jab and saw
   swing goes WINDUP -> STRIKE -> RECOVER. `WINDUP_TIME` jab 0.35 s, saw 0.3 s; the shove charges
@@ -1867,36 +1869,44 @@ HumanModel.sample_clip(skel, anim, t) / bone_global(skel, bone) / chain_to(node,
 ## Dissection (dissection worker, sweep 3)
 
 Strapped monsters on the patient tables (`scripts/dissection/`, `game.dissection`). A monster case is
-an ordinary `game.cases` entry: `{table, patient_id: "hive" | "sonographer", ailment_id: "dissection",
-monster: true, flags: {sedation}}` plus `doses` (re-doses given). The surgery systems operate it like
-any patient; everything below is host authoritative.
+an ordinary `game.cases` entry: `{table, patient_id: "hive" | "sonographer", ailment_id: <the species'
+EXTRACTION>, monster: true, flags: {sedation}}` plus `doses` (re-doses given). The surgery systems
+operate it like any patient; everything below is host authoritative.
+
+**One monster, one plan (grafting part two).** The `dissection` ailment is gone with the brains: a
+strapped monster is only ever there to have its one body part taken out, so nothing chooses a plan
+any more. `Dissection.EXTRACTION` = `{"hive": "eye_extraction", "sonographer": "trachea_extraction"}`
+and `extraction_for(patient_id)`; `ailment_for(c, p)` returns it while the case is still on step 0 and
+ignores the tool in hand (`_pick_ailment` in `table_used` still writes it in before the first step).
+Both `combat.strap` and `dev_strap` add the case with `ailment_id: extraction_for(kind)`, so a
+strapped monster reads correctly on the OR screen and on the table prompt before anyone touches it.
 
 ```gdscript
 # Procedures (scripts/procedures.gd)
-PATIENTS.hive / .sonographer        # monster: true (name, full_name, weight, blurbs.dissection)
-AILMENTS.dissection                   # monster_only: true; steps
-    # {id "open", "Saw open the skull", bone_saw, uses 0, game "saw", variant "skull", site "skull"}
-    # {id "harvest", "Pull out the brain", forceps, uses 0, game "forceps", variant "brain", site "brain"}
+SITES = ["injection", "gunshot", "limb_cut", "limb", "skull", "eye", "throat"]   # "throat" is new
+
+PATIENTS.hive / .sonographer        # monster: true (name, full_name, weight, blurbs)
+AILMENTS.eye_extraction / .trachea_extraction     # monster_only: true (AILMENTS.dissection is gone)
 Procedures.is_monster(patient_id) / is_monster_only(ailment_id)
 Procedures.human_patients() -> ["bob", "seal"]    # roll(), the dev panel, the loop's extra call, the guide
 Procedures.monster_patients() -> ["sonographer", "hive"]
-# roll() and patient_ailments() never return a monster or dissection (same results as before).
+# roll() and patient_ailments() never return a monster or an extraction (same results as before).
 
 # game.dissection (scripts/dissection/dissection.gd), child "Dissection" of Game
 owns_case(c) -> bool / owns_table(table) -> bool      # every machine
+static extraction_for(patient_id) -> String             # EXTRACTION; ailment_for(c, p) uses it
 sedation(c) -> float                                    # host: precise; clients: replicated (hundredths)
 static sedation_state(s) -> "under" | "stirring" | "awake"   # STIR 0.75, AWAKE 0.35
 static dose_amount(n) -> float                          # DOSE * DOSE_FALLOFF^n = 0.6 * 0.6^n
-static brain_kind(patient_id) -> "brain_hive" | "brain_sonographer"
 table_prompt(p, table) -> String                        # game._table_prompt hands monster tables here
 table_used(p, table) -> bool                            # host, from game._proxy_used: true = it was a re-dose
 redose(p, table) -> float                               # host: one vial from p's hands; returns the sedation added
 on_case_finished(c, won)                                # host, from game.finish_case
-spawn_brain(patient_id, quality, pos) -> Node           # host: game.brains.spawn_brain, else a plain loot item
 dev_strap(kind, sedation := 1.0, table := -1) -> int    # host: tests and the dev panel (request "strap_monster")
 set_sedation(case_id, s)                                # host, tests
-last_brain: {kind, quality, pos, node}                  # tests
+last_operator: int / last_part: {kind, quality, node, peer} / last_shriek: {pos, loudness, time}   # tests
 SEDATION_SECONDS 120, SAW_MULT 2.5, THRASH_BOTCH 1.5, THRASH_EVERY 3.0, SHRIEK_NOISE 0.7, REMOVE_AFTER 6.0
+FREE_NOISE 1.4, FREE_STEP 1        # grafting part two: the cut that frees the windpipe
 ```
 
 - **Sedation** falls from 1 to 0 in 120 s, 2.5x while the saw is held in the kerf. The host keeps the
@@ -1907,24 +1917,30 @@ SEDATION_SECONDS 120, SAW_MULT 2.5, THRASH_BOTCH 1.5, THRASH_EVERY 3.0, SHRIEK_N
 - 0.35..0.75 the surgery system's existing stirs. Under 0.35 awake: the body thrashes against the
   straps (every machine, from the sedation), shrieks every 3.5-6.5 s (`emit_noise(table, 0.7,
   "shriek")`, event `dx_shriek`), and while someone operates `surgery_botch(1.5)` every 3 s.
+- **The freeing cut shrieks** (grafting part two). Whatever the sedation is, the first host tick that
+  sees a `trachea_extraction` case past `FREE_STEP` (step index 1, "Cut the windpipe free") emits one
+  `game.emit_noise(table + 1 m up, FREE_NOISE = 1.4, "shriek")`, once per case (`_shrieked`), plus the
+  `dx_shriek` event, the usual shriek audio and body stir, and a `game.say`. It is an ordinary noise
+  event, so every monster that hears noise hears it -- a Sonographer at roughly 22 m per unit of
+  loudness. `last_shriek` records it for the headless check.
 - **Re-dose:** E on the table holding anesthetic (any hand; the selected stack first) re-doses instead
   of operating, also while someone else operates. Prompt: `Re-dose <name> (sedation 42%, +36%)`;
   otherwise `Operate: <step> (sedation 42%)` / `!<reason> (sedation 42%)`. Event `dx_dose`.
-- **Brain condition** is the case's `vitals`: `_sim_shift` does not drain it, and the host clamps it
-  so it never rises (the +8 of `surgery_step_done` is taken back). At 0 the case is lost ("The brain
-  is ruined."). Winning the last step: `spawn_brain(kind, condition / 100, pos)` at the specimen tray
-  beside the head (+0.12 m), `game.mark_db(patient_id, "harvested")` (sweep 4a chunk 4: unlocks
-  tier 3 of the database terminal for that species), event `dx_flatline`, the case becomes
+- **The part's condition** is the case's `vitals`: `_sim_shift` does not drain it, and the host clamps
+  it so it never rises (the +8 of `surgery_step_done` is taken back). At 0 the case is lost and the
+  part is ruined. Winning the last step puts the species' part (`Eyes.MONSTER_PART[site]`, the site
+  from the ailment's first step) in the last operator's hand at `base value x condition` with a fresh
+  `bt`, or over the head end of the table (+1.15 m) if their hands are full; `last_part` records it.
+  Then `game.mark_db(patient_id, "harvested")` (sweep 4a chunk 4: tier 3 of the database terminal for
+  that species, which now means *extracted or grafted*), event `dx_flatline`, the case becomes
   `stable` and is removed 6 s later (dead cases too). `ShiftLoop.pay_for` pays 0; monster cases
   never block clocking out.
 - **Bodies** (`PatientBody.create` dispatches `Procedures.is_monster(id)` to
   `scripts/dissection/monster_builder.gd`; the node is a normal `PatientBody`): lying along X, head
-  -X, sites `injection`, `skull`, `brain`, leather straps over chest/arms, hips/wrists, thighs, shins
+  -X, sites `injection` and `skull`, leather straps over chest/arms, hips/wrists, thighs, shins
   (sized for the 0.7 m OR table). Flags `skull_open` (the cap lifts off along the cut over 0.9 s and
-  lies bone side up beside the head), `brain_removed` (empty cavity; the body flatlines), `sedation`.
-  `site_section("skull")` = `{half_up, half_side, axis_depth, shape}`; `site_section("brain")` also
-  carries `half_u`, `brain_radii`, `brain_seed`, `brain_y`, `tray` (site-local Vector3) and `table_up`.
-  Body meta `dx_brain_hidden` (set by the brain step while it draws the moving brain). The head is
+  lies bone side up beside the head), `eye_removed` (the body flatlines), `sedation`.
+  `site_section("skull")` = `{half_up, half_side, axis_depth, shape}`. The head is
   always this file's own (it opens); the body is `make_lying(kind)` from `Monster` or
   `scripts/monsters/monster_model.gd` when the copy has its rig: scaled to the 2 m table (the
   Sonographer 0.9), arms in at the sides (RigShaper cfg `lying_spread`), the rig's `Head` node hidden.
@@ -1936,16 +1952,15 @@ SEDATION_SECONDS 120, SAW_MULT 2.5, THRASH_BOTCH 1.5, THRASH_EVERY 3.0, SHRIEK_N
   arm and leg bones (`strap_thrash.gd`, a SkeletonModifier3D after the shaper), heaves the body and
   pulls the straps over the lifting limbs taut. Without the rig: primitives (the Hive a greenish
   patient in a teal gown, the Sonographer taller, pink-grey, blank-faced, in a white coat).
-- **Minigames:** `saw.gd` variant `skull` (layers Scalp/Bone/Dura, no tourniquet, steady scalp bleed,
-  finishes `{skull_open: true, cut_quality}`; the saw model is hidden until someone saws). `forceps.gd`
-  variant `brain` hands every call to `scripts/dissection/brain_forceps.gd`: clamp each nerve at its
-  ring and draw it in along itself (yanking tears: 2.0), take the brain, lift it straight out (scraping
-  the bone: 1.5 per 0.5 s), carry it to the tray (dropping: 3.0); finishes `{brain_removed: true}`.
-  Net state keys `x y j c k s g l bx bz st h r dr p`. Limb and gunshot behaviour and their self-test
-  output are unchanged; `--selftest=saw` and `--selftest=forceps` also run the variants.
-- OR screen: panels carry `monster` and `sedation`; the canvas tags the number "BRAIN", shows
-  `SEDATION n%` (amber stirring, red and blinking AWAKE), and the status line says BRAIN HARVESTED /
-  BRAIN RUINED.
+- **Minigames:** the extractions play `eye_ops.gd` (see grafting parts one and two), not the saw. The
+  forceps' `brain` variant is gone with the brains, and with `AILMENTS.dissection` no ailment reaches
+  `saw.gd`'s `skull` variant any more (the variant, the `skull` site and the monster body's
+  `skull_open` flag are all still there, just unused). Limb and gunshot behaviour and their self-test
+  output are unchanged; `--selftest=saw` and `--selftest=forceps` also run the remaining variants.
+- OR screen: panels carry `monster`, `sedation` and `part` (`or_screen_model.gd`: "EYE" for
+  `eye_extraction`, "THROAT" for `trachea_extraction`). The canvas tags the big number with it, shows
+  `SEDATION n%` (amber stirring, red and blinking AWAKE), and the status line says EYE OUT / PART OUT
+  and EYE BURST / PART RUINED.
 - Sounds `dissection_shriek`, `dissection_strap` (creaks while thrashing, local), `dissection_snap`,
   `dissection_plop`, `dissection_crack`, `dissection_inject` (`tools/gen_audio_dissection.mjs`).
 - Tests: `tools/dissectiontest.tscn` (headless; `-- --shots` windowed into `tools/dissection_shots/`),
@@ -2032,72 +2047,47 @@ Tests: `godot --headless --path . --script tools/nettest_run.gd` runs every mult
 scenario (`-- --only=a,b`, `--lag=MS --jitter=MS --loss=P`, `--only=bandwidth`). Add a scenario
 for anything that changes what crosses the wire.
 
-## Brains (brains worker, sweep 3)
+## Abilities (brains worker, sweep 3)
 
-`game.brains` (`scripts/brains/brains.gd`, child "Brains" of Game on every machine; parts in
-`scripts/brains/`: `brain_model.gd`, `blender.gd`, `echo_view.gd`, `hive_view.gd`).
+`game.brains` (`scripts/brains/brains.gd`, child "Brains" of Game on every machine -- the node keeps
+its old name, but all it does now is abilities; parts in `scripts/brains/`: `echo_view.gd`,
+`hive_view.gd`). Abilities come from grafts (docs/GRAFTING.md, docs/GRAFTING_TRACHEA.md): the brain
+items, the brain harvest and the break-room blender are gone, and nothing here earns a level on its
+own any more.
 
 ```gdscript
-game.brains.spawn_brain(kind: String, quality: float, pos: Vector3) -> Node   # host: a WorldItem on
-    # whatever is under pos; value = base * quality (min $1); spoil clock starts now; squelch sound
-Brains.is_brain(kind) -> bool              # "brain_hive", "brain_sonographer" (static)
-Brains.spoil_factor(age_seconds) -> float  # 1.0 for 45 s, linear to 0.15 at 225 s, then 0.15 (static)
-Brains.condition(factor) -> String         # "fresh" (>= 0.6), "spoiling" (>= 0.3), "rotten" (static)
-Brains.base_value(kind) -> int             # 150 / 350 (loot_table.gd "value")
-game.brains.current_value(stack_or_item) -> int   # a hand slot {kind, v, bt} or a WorldItem: v * factor
-    # for brains (min $1), the plain value for any other kind
-game.brains.factor_of(stack_or_item) / age_of(stack_or_item)
 game.brains.points(peer_id, path) -> float # path "hive" | "sonographer"; 0..3, steps of 0.25
 game.brains.level(peer_id, path) -> int    # floor(points), 0..3
-game.brains.add_points(peer_id, path, amount)   # host (the blender, dev, tests); the moment a path
+game.brains.add_points(peer_id, path, amount)   # host (dev, tests); the moment a path
     # first reaches level 1 it also grants that ability's slot (add_ability, below)
 game.brains.on_reset()                     # host, from game.reset_money (game over, new session)
 
 # SWEEP 4A (docs/SWEEP4A.md "Ability slots"): 4 ability slots per player, independent of how a
-# level is earned (today: points/level above; grafting will source levels later, docs/backlog/
-# SWEEP4B.md), so nothing here reads `_points` except through level()/points().
+# level is earned (grafting sources them), so nothing here reads `_points` except through
+# level()/points().
 Brains.ABILITY_ID := {"sonographer": "echo", "hive": "hive_in"}   # path -> ability id (static)
 game.brains.slots_for(peer_id) -> Array    # this player's 4 slots, ability id or "" (host authoritative,
     # replicated: net_state()["ab"]; the ability bar is local-only, so a client only really needs its own)
 game.brains.add_ability(peer_id, id) -> bool    # host: id into the first empty slot; true if it was
     # already in a slot (no-op); false and unchanged once all 4 slots are full (refused, not swapped)
 game.brains.slot_of(peer_id, id) -> int    # this player's slot index for id, or -1
-game.brains.set_level(peer_id, id, lvl)    # host (tests, dev, later grafting): sets the level directly
+game.brains.set_level(peer_id, id, lvl)    # host (grafting, tests, dev): sets the level directly
     # (id must be "echo" / "hive_in") and grants the slot the same as reaching it through points
+game.brains.clear_ability(peer_id, id)     # host (swapping a graft back out): empties the slot,
+    # zeroes the points and ends any Hive Eyes view in progress
 game.brains.ability_slot(p, slot_idx)      # host, from game.player_ability_slot (Alt+1..4): per-slot
     # dispatch, replacing the old best_path()/ability(p) (removed). Each slot's ability still cools
     # down on its own path's cooldown key (echo:<peer> / hive:<peer>), unaffected by which slot it
     # sits in. Pressing the slot again while its ability is active (Hive Eyes) ends it.
-game.brains.blender                        # the placed blender node (interact_id "blender") or null
-game.brains.blend_progress(peer_id) -> float    # 0..1 while that player holds E on the blender
 game.brains.camera() -> Camera3D           # every machine: the Hive Eyes camera while the LOCAL
                                            # player looks through a Hive (main.gd renders it), else null
 game.brains.local_hive_active() / local_exit()  # main.gd: Esc during Hive Eyes
 game.brains.spawn_hive(pos) -> Node     # host (dev, tests): a Hive; a stand-in Sonographer body
                                            # with kind "hive" while Monster.HIVE does not exist
-game.brains.dev_request(sender, action, args)   # "br_spawn_brain" {kind, quality, age}, "br_levels"
-                                           # {amount, id}, "br_reset", "br_spawn_hive" (dev_room forwards br_*)
+game.brains.dev_request(sender, action, args)   # "br_levels" {amount, id}, "br_reset",
+                                           # "br_spawn_hive" (dev_room forwards br_*)
 ```
 
-- **Brain items.** Loot kinds `brain_hive` ($150) and `brain_sonographer` ($350) in
-  `loot_table.gd` with `brain: true`, fragile, not stackable, not bulky, no rooms / surfaces /
-  containers (the loot spawner never picks them). The model is one merged mesh with the gold rim.
-- **Spoil time `bt`** (world_time of the harvest): `WorldItem.bt` (default -1e6 = none; any value
-  above -1e5 is a real clock, it may be negative early in a run), reported as `bt` (snapped 0.5);
-  in a hand slot as `slots[i].bt`. Carried by `game.pickup_item`, `drop_selected`, `_drop_hands`
-  (a violent drop cracks the brain like other fragile loot, the clock stays), `_drop_hands_in_place`
-  and the dev room's `hand_over`. **Anything else that moves a stack between hands and the world
-  must carry `bt` too.** The host stamps `bt = world_time` on any brain found without one (4 Hz).
-- **The dumpster** is the existing sell bin (interact_id `sell_bin`, unchanged): its sign says
-  DUMPSTER, its prompt `Sell X for $N at the dumpster` with the current value, `game.sell_selected`
-  pays `current_value`. The HUD slot and the world item prompt show the current value (and the
-  condition for brains).
-- **Blender:** on a break-room counter top found with downward rays over `level_info.rooms` kind
-  `break_room` (the free end nearest the time clock, backed toward the wall), else on a steel stand
-  on free floor beside `level_info.economy.shop` (dev room), else near the clock. Placed two physics
-  frames after a new `game.level`, same spot on every machine. Holding a brain selected: hold E
-  (`interact_hold` 1.5 s; the host simulates it from `wants_interact` + `aim_id`, like the clock).
-  Drinking: +1.0 fresh, +0.75 spoiling, +0.5 rotten to that path, capped at 3.0.
 - **Alt+1..4 (sweep 4a):** fires that slot's ability through `ability_slot`; an empty slot (or the
   slot pressed again while its ability is active, other than ending Hive Eyes): "Nothing happens."
   (at most once a second). Cooldowns: Echo 20 s from the shriek, Hive Eyes 12 s from when the view
@@ -2139,13 +2129,9 @@ game.brains.dev_request(sender, action, args)   # "br_spawn_brain" {kind, qualit
   **Known gap:** cycling between Hives at level 2+ and the hold-to-exit key are not wired up
   this pass (`hive_view._begin_cycle` exists but nothing calls it) -- see KNOWN_ISSUES.md.
 - **Replication:** `net_state()` = `{"p": {peer: [hive, sonographer]}, "hv": {peer: [id, end]},
-  "bh": {peer: progress}, "ab": {peer: [4 ability ids]}}` (copies, quantized; empty dictionaries
-  when idle).
-- Sounds `brains_squelch`, `brains_blend`, `brains_gulp`, `brains_shriek`, `brains_hive_in`,
-  `brains_hive_out` (`tools/gen_audio_brains.mjs`).
-- Tests: `tools/braintest.tscn` (headless; sweep 4a chunk 4 added the fly-through/fly-back timing
-  cases), nettest scenario `brains`, `tools/brainshot.tscn` (windowed shots to `tools/brain_shots/`),
-  `tools/perfprobe.tscn -- --brains`, `tools/controlstest.tscn` (sweep 4a chunk 1: crouch/jump,
+  "ab": {peer: [4 ability ids]}}` (copies, quantized; empty dictionaries when idle).
+- Sounds `brains_shriek`, `brains_hive_in`, `brains_hive_out` (`tools/gen_audio_brains.mjs`).
+- Tests: `tools/perfprobe.tscn -- --abilities`, `tools/controlstest.tscn` (sweep 4a chunk 1: crouch/jump,
   Alt+1..4 slot dispatch, the scanner), `tools/databasetest.tscn` (sweep 4a chunk 4: scan/harvest
   unlocking tiers, persistence across a wipe and a reload, a second peer's scan landing in the
   host's database, the guide binder and `read` action being gone).
@@ -2169,7 +2155,7 @@ game.vats: item_used(p, item) / hand_put(p) / take_out(p, aim_id) / set_down(p, 
 
 - **`x`** is a new small string on `WorldItem` and on a hand slot (like `bt`, it rides pickup, drop,
   throw, storage and the snapshot): a part's owner ("Zach"; "" means the Hive), or what a vat holds.
-  An eye's spoil clock is `bt`, like a brain's. Going into a vat freezes the age in the vat's `x`;
+  An eye's spoil clock is `bt`. Going into a vat freezes the age in the vat's `x`;
   coming out rebuilds `bt`, so a vat stops the clock. `game.furnace_value` prices eyes by spoilage.
 - **Inputs.** E on a vat (bench or dropped) with an eye selected puts it in; E aimed at nothing with a
   vat and an eye in hand does the same (aim id `vat_hand`). **V** (`vat_take`, its own input action,
@@ -2208,11 +2194,11 @@ be added through `Eyes.KINDS` / `NOUN` and `Grafts.PART_ABILITY` without a rewri
 Vats.stands            # [{position (the tray top), yaw, table: table index}], STAND_TOP 0.92
 Vats.build_stand(root) / stand_free(i) / stand_prompt(p, i) / set_down_on_stand(p, i)
 Vats.vat_on_stand(table_index) -> WorldItem / stand_of_table(ti) / nearest_stand(pos, within)
-# the graft (grafts.gd)
-game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field "gf"
+# the graft (grafts.gd) -- part two added the `site` argument to most of these; see below
+game.grafts.graft_of(peer_id, site := "eye") -> String   # "eye_hive" or ""; snapshot field "gf"
            table_prompt(q) / empty_table_prompt(q, ti)   # the offer and its refusals
-           make_case(q) / on_step(case, result) / finish(case) / apply(peer, kind)
-           local_lock() -> float             # -1 no graft, else how lit the eye is (the HUD tint)
+           make_case(q) / on_step(case, result) / finish(case) / apply(peer, site, kind)
+           local_lock(site := "eye") -> float   # -1 no graft there, else how lit it is (the HUD tint)
 ```
 
 - **The stand.** A small steel stand beside each patient table, on the first of `STAND_OFFSETS`
@@ -2228,16 +2214,18 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
 - **The offer** hangs off the table's existing prompt: `_table_prompt` -> `player_surgery.operate_
   prompt` -> `grafts.table_prompt` while somebody lies strapped there with no case. The refusals are
   "!No vat on the stand beside the table.", "!The vat on the stand is empty.", "!X's eyeball is
-  spoiled.", "!X already has one.", "!X has two normal eyes.", "!You cannot operate on yourself." and
-  "!Hold the scalpel to start the graft."; a free table with a loaded vat on its stand says
-  "!Nobody is strapped to this table." to someone holding a scalpel or an eye spoon. The case is
-  created by the first `begin` (`player_surgery.start_graft`).
+  spoiled.", "!X already has one.", "!X has two normal eyes." (`Eyes.SITE_NORMAL`), "!You cannot
+  operate on yourself." and "!Hold the scalpel to start the graft." (`Grafts.first_tool(site)`, the
+  first step's item); a free table with a loaded vat on its stand says "!Nobody is strapped to this
+  table." to someone holding a scalpel, an eye spoon, forceps or a suture kit. The case is created by
+  the first `begin` (`player_surgery.start_graft`).
 - **The swap.** The `scoop` step's result (`eye_out`) is the moment it happens: the eye that was in
   the socket is packed into the vat on the stand (fresh, age 0) and the eye that was in the vat is
   now the one going in. So a graft is always a swap and never an empty socket.
 - **Committed after the scoop.** `game.get_up_block` asks `player_surgery.graft_commit_block`, which
-  refuses ("Not with your eye out.") from step 2 on. Before that the surgeon can hold E and go, which
-  clears the case.
+  refuses ("Not with your eye out.", or "Not with your throat open." on a trachea graft) from step 2
+  on -- the step that takes the surgeon's own part out, in both grafts. Before that the surgeon can
+  hold E and go, which clears the case.
 - **The eye minigames** gained two variants (`eye_ops.gd`): `seat` is the scoop's rules run the other
   way (the new eye sinks into the socket as the turns add up, result `eye_seated`) and `stitch` is the
   cut's rules run over an already-open wound (it closes behind the needle and stitch marks appear,
@@ -2255,21 +2243,120 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
 - **The glow** is the Hive eye material's `Lock`, a new `instance uniform float lock` on the eye
   shader (0 a low pinpoint, 1 the whole ball lit). `Grafts` eases it to 1 while that player's
   `hive_view` is on, which is already replicated, so every machine agrees.
-- **The ability.** `Grafts.PART_ABILITY` maps `eye_hive` -> `hive_in`: finishing the graft calls
+- **The ability.** `Grafts.PART_ABILITY` maps `eye_hive` -> `hive_in` (and, part two,
+  `trachea_sonographer` -> `echo`): finishing the graft calls
   `brains.set_level(peer, "hive_in", 1)` (the next free slot and the new-ability card), and swapping
   back calls the new `brains.clear_ability(peer, id)`, which empties the slot, zeroes the points and
   ends any Hive Eyes view in progress. A graft lasts the run, through death, and `grafts.on_reset()`
-  clears it on a game over with the money and the brains.
-- **Hive brains teach nothing now.** `Brains.blendable(kind)` is false for `brain_hive`; the blender
-  refuses it ("!Blender: a Hive brain teaches nothing. Sell it.") and `drink` ignores it. Echo, the
-  Sonographer brains and the blender are unchanged.
+  clears it on a game over with the money and the abilities.
 - **The first-person tell**: `scripts/grafting/graft_view.gd` (`main.graft_view`), a faint orange
-  wash down the LEFT edge, stronger as `grafts.local_lock()` rises. It is its own CanvasLayer at 52,
+  wash down the LEFT edge, stronger as `grafts.local_lock("eye")` rises (part two added a second
+  wash for the throat). It is its own CanvasLayer at 52,
   **above** the look pass's grain, vignette and teal grade (layer 50) that the HUD sits under -- a
   faint orange graded toward teal disappears completely. Local and cosmetic, from replicated state.
 - Tests: `tools/grafttest.tscn` (the graft section: the stands, the refusals, the four steps with
   Dr. Botsworth operating, Hive Eyes 1 in and out, and not getting up after the scoop),
   nettest scenario `graft`.
+
+### Grafting part two: body parts, the trachea and graft sites (docs/GRAFTING_TRACHEA.md, 2026-09-18)
+
+Part one's eye code was generalised rather than copied: everything in `Eyes`, `Vats` and `Grafts`
+works on a **part kind** and a **graft site**, and the trachea is another kind at another site. New
+file: `scripts/grafting/graft_throat.gd` (`GraftThroat`, statics). Echo now comes only from a graft.
+
+```gdscript
+# scripts/grafting/eyes.gd (still `Eyes`; it is the body-part file now)
+Eyes.KINDS   = ["eye_hive", "eye_surgeon", "trachea_sonographer", "trachea_surgeon"]
+Eyes.NOUN    = {eye_hive: "eyeball", ..., trachea_sonographer: "trachea", ...}
+Eyes.SITE    = {eye_hive: "eye", eye_surgeon: "eye", trachea_*: "throat"}   # SITES = ["eye", "throat"]
+Eyes.MONSTER_PART = {eye: "eye_hive", throat: "trachea_sonographer"}        # the one that teaches something
+Eyes.OWN_PART     = {eye: "eye_surgeon", throat: "trachea_surgeon"}
+Eyes.SITE_NORMAL  = {eye: "two normal eyes", throat: "their own windpipe"}  # for the refusals
+Eyes.SITE_MONSTER = {eye: "hive", throat: "sonographer"}
+Eyes.site_of(kind) -> "eye" | "throat" | ""
+Eyes.label(kind, owner)          # "Sonographer's trachea", "Zach's trachea"
+Eyes.build(root, kind)           # dispatches on the site: build_eye / build_trachea
+Eyes.trachea_material(kind) / TRACHEA_SHADER / TRACHEA_LEN 0.092 / TRACHEA_R 0.0125
+Eyes.set_rot(node, r) / set_lock(node, v)      # both walk "EyeBall*" AND "Windpipe*"
+Eyes.footprint(kind) -> Vector3                # a trachea is bigger than an eyeball
+
+# scripts/grafting/grafts.gd
+Grafts.PART_ABILITY = {eye_hive: "hive_in", trachea_sonographer: "echo"}
+Grafts.SITE_AILMENT = {eye: "eye_graft", throat: "trachea_graft"}
+Grafts.first_tool(site) -> String              # the first step's item, for "!Hold the X ..."
+game.grafts.grafts_of(peer) -> {site: kind} / graft_of(peer, site) -> String / has_graft(p)
+           site_for(p) -> String               # which site the vat on p's stand would operate on
+           apply(peer, site, kind)             # two-arg apply(peer, kind) still works (site from the kind)
+           local_lock(site) -> float
+
+# scripts/grafting/graft_throat.gd (statics, every machine)
+GraftThroat.attach(human_root, kind) -> Node3D / detach(human_root) / node_on(human_root)
+GraftThroat.set_lock(node, v)                  # the windpipe's `lock`, the pane's alpha and the light
+```
+
+- **The wire format changed.** The snapshot field `gf` used to be `{peer: kind}`; it is now
+  `{peer: {site: kind}}`, e.g. `{1: {"eye": "eye_hive", "throat": "trachea_sonographer"}}`. A site
+  missing from a player's entry means their own part is in it, and a player with no grafts at all is
+  not in the dictionary. `net_state` duplicates each inner dictionary and `apply_net_state` takes the
+  whole thing deep. Anything that read `graft_of(peer)` as "the graft" has to say which site now.
+- **Authority** is unchanged: the host runs the case through `player_surgery.gd` and owns `_graft`;
+  every machine draws the parts, their glow and the first-person washes off the replicated copy.
+  `_lock` and `_shown` are local, per peer, and keyed by site.
+- **Two ailments.** `trachea_extraction` (monster_only, on a strapped Sonographer): scalpel "open"
+  (variant `cut`), scalpel "free" (`snip`), forceps "lift" (`scoop`). `trachea_graft` (player_only,
+  `Grafts.SITE_AILMENT.throat`): scalpel "open" (`cut`), forceps "lift" (`scoop`), forceps "seat"
+  (`seat`), suture kit "stitch" (`stitch`). All eight steps are `game: "eye"`, site `throat`. The
+  graft case is the eye graft's shape plus `site`, and its flags carry `part_site` as well as
+  `eye_kind` / `eye_kind_in` / `eye_radius` / `no_fail`.
+- **The minigames did not fork.** `eye_ops.gd` gained one ctx knob, `part_site` ("eye" | "throat",
+  defaulting to the step's `site`). On `throat` the work-plane part is replaced by a length of
+  windpipe (`_as_trachea` empties the eye `MeshInstance3D` and hangs `Eyes.build_trachea` under it,
+  laid down and scaled to eyeball size), and the body meta it hides is `throat_hidden` instead of
+  `eye_hidden`. Every rule, camera and animation is the same.
+- **The freeing cut is loud.** The middle step of `trachea_extraction` emits a real noise event
+  (`Dissection.FREE_NOISE` 1.4, `FREE_STEP` 1) that any monster which hears noise can come to -- see
+  the Dissection section above. It is host-only, once per case, and independent of sedation.
+- **The throat on the body.** Like the grafted eye, there is no `surgeon_graft` GLB in the game
+  (`art/stylized/` renders the look for review only), so `GraftThroat` builds it at runtime: a
+  `BoneAttachment3D` named `GraftThroat` on the `neck` bone (`head` as a fallback), holding a `Throat`
+  node placed `UP` 0.46 of the neck-to-head run in the bone's frame but with the model's own axes.
+  Under it: the violet windpipe (`Eyes.trachea_material`, tube plus 5 rings) just inside the neck, a
+  see-through `Pane` of skin over it, 8 `ThroatStitch*` ticks round the pane, and a small violet
+  `ThroatGlow` OmniLight3D. It copies the body's visual layers and casts no shadow, so it shows
+  wherever the body does: third person, other players' screens, the carry camera and the Personnel
+  mirrors. `Grafts._physics_process` attaches and detaches it from the replicated `_graft`.
+- **The glow.** The trachea shader has its own `instance uniform float lock` (0 the low violet it
+  always has, 1 burning). `GraftThroat.set_lock` drives it, thins the pane's alpha and raises the
+  light's energy together. `Grafts` eases `lock` toward 1 while that player is firing Echo, worked
+  out from `brains._echo_pose_until` (set on every machine from the reliable `br_echo` event) and
+  `ECHO_BURN`, so every machine agrees without a new replicated field.
+- **Two washes.** `graft_view.gd` now builds one `Wash` per site: `wash` (the eye's orange one down
+  the LEFT edge, the name the tests use) and `throat_wash` (violet along the BOTTOM edge, narrower
+  and a little stronger -- `THROAT_WIDTH`, `THROAT_ALPHA`). Each reads `grafts.local_lock(site)` and
+  draws nothing when it is -1. A surgeon wearing both sees both.
+- **A vat holds one part of any kind.** Nothing about the vat changed: its `x` is still
+  `Eyes.pack(kind, owner, age, value)` and `Vats.set_contents` shows the one holder of the kind the
+  string names -- the model builds a hidden holder per `Eyes.KINDS` entry (`VatEye_<kind>`), so a new
+  part kind needs no new vat code. What floats in the vat on the stand is what decides the surgery:
+  `table_prompt` / `make_case` unpack it, take `Eyes.site_of(kind)` and build the case for that site
+  (`Grafts.site_for(p)` is the same lookup on its own, currently unused elsewhere). A vat holding the
+  wrong part for the surgeon in front of you just refuses ("!X has their own windpipe." /
+  "!X already has one."). `on_level_built` also stocks **forceps** in the OR's storage.
+- **Loot and icons.** `trachea_sonographer` (160) and `trachea_surgeon` (55), both `tier: 3`, marked
+  `eye: true` and with empty `rooms` / `surfaces` / `containers` so nothing ever spawns them. What
+  makes them spoil and prices them at the furnace is `Eyes.is_eye(kind)` (membership of
+  `Eyes.KINDS`), not that flag. `ItemIcons.ALIAS` files their art under `sonographer_trachea` /
+  `surgeon_trachea`.
+- **The database's third tier** now means *extracted or grafted*: `Dissection.on_case_finished` marks
+  the species on an extraction, and `Grafts.apply` marks the ability's page (`brains.ABILITY_ID_TO_PATH`)
+  for the patient when a graft lands.
+- **The body on the table.** `player_body.gd` gained the `throat` site (part way up the neck bone
+  toward the head, out of its front: `THROAT_UP` 0.45, `THROAT_OUT` 0.05) and `set_throat(kind, out)`,
+  the counterpart of `set_eye`. `player_surgery.is_graft()` matches both ailments,
+  `graft_site()` returns the case's `site`, and the part on show follows the step for either site.
+- Review setups `trachea` and `trachea_back` (`scripts/review_setups.gd`) stage the graft and the swap
+  back; `scripts/warmup.gd` registers the trachea item, the vat's trachea holders, both new cases'
+  bodies and the grafted throat.
 
 ### Ability bar (HUD, local-only, sweep 4a)
 

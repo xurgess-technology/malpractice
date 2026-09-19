@@ -187,16 +187,24 @@ def set_lock(v):
 
 
 SONO_GLOW = (0.10, 0.60, 1.0)       # linear cold blue: the light inside the windpipe
+## The same windpipe once it is grafted into a surgeon: the violet the game actually lights it with
+## (#9b6bff, scripts/monsters/sonographer_rig.gd GLOW and art/icons/echolocation.svg), in linear.
+GRAFT_GLOW = (0.33, 0.15, 1.0)
 SONO_EMIT = 26.0                    # emission at a full charge (it idles at a twentieth of that)
+GLOW_MATS = ('ST_SonoGlow', 'ST_SonoGlowGraft')
 
 
-def sono_glow_material():
+def sono_glow_material(V=None):
     """The Sonographer's windpipe: pale cartilage lit from inside. The node 'Charge' ramps it,
-    0 quiet through 1 charging an echo; set_charge() drives it for the review shots."""
-    m = bpy.data.materials.get('ST_SonoGlow')
+    0 quiet through 1 charging an echo; set_charge() drives it for the review shots. The grafted
+    surgeon gets his own copy of it, lit the violet the game uses."""
+    graft = bool(V and V.get('graft_throat'))
+    name = 'ST_SonoGlowGraft' if graft else 'ST_SonoGlow'
+    col = GRAFT_GLOW if graft else SONO_GLOW
+    m = bpy.data.materials.get(name)
     if m:
         return m
-    m = bpy.data.materials.new('ST_SonoGlow')
+    m = bpy.data.materials.new(name)
     m.use_nodes = True
     nt = m.node_tree
     b = nt.nodes['Principled BSDF']
@@ -212,7 +220,7 @@ def sono_glow_material():
     ma.inputs[1].default_value = SONO_EMIT
     ma.inputs[2].default_value = SONO_EMIT / 20.0
     nt.links.new(ma.outputs[0], b.inputs['Emission Strength'])
-    b.inputs['Emission Color'].default_value = SONO_GLOW + (1.0,)
+    b.inputs['Emission Color'].default_value = col + (1.0,)
     b.inputs['Roughness'].default_value = 0.22
     return m
 
@@ -234,9 +242,10 @@ def sono_pane_material():
 
 
 def set_charge(v):
-    m = bpy.data.materials.get('ST_SonoGlow')
-    if m:
-        m.node_tree.nodes['Charge'].outputs[0].default_value = v
+    for name in GLOW_MATS:
+        m = bpy.data.materials.get(name)
+        if m:
+            m.node_tree.nodes['Charge'].outputs[0].default_value = v
 
 
 def sono_gel_material():
@@ -255,9 +264,9 @@ def sono_gel_material():
     return m
 
 
-def material_for(kind, hive_eye=False):
+def material_for(kind, hive_eye=False, V=None):
     if kind == st_char.GLOW:
-        return sono_glow_material()
+        return sono_glow_material(V)
     if kind == st_char.PANE:
         return sono_pane_material()
     if kind == st_char.SKIN:
@@ -303,7 +312,7 @@ def mesh_part(prefix, part, V, coll):
     ma.data.foreach_set('color', np.concatenate([mk, np.ones((len(mk), 1))], axis=1).astype(np.float32).ravel())
     me.color_attributes.active_color = me.color_attributes['Col']
     me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
-    me.materials.append(material_for(part.mat, getattr(part, 'eye_kind', '') == 'hive'))
+    me.materials.append(material_for(part.mat, getattr(part, 'eye_kind', '') == 'hive', V))
     ob = bpy.data.objects.new(prefix + part.name, me)
     coll.objects.link(ob)
     log('  %-12s %7d verts %7d quads  %.1fs' % (part.name, len(verts), len(quads), time.time() - t))
@@ -322,6 +331,7 @@ ALLOWED = {
     'Wristband': ['forearm.L'],
     'Throat': ['neck', 'neck2', 'neck3', 'neck4', 'head'],
     'ThroatSkin': ['neck', 'neck2', 'neck3', 'neck4', 'head'],
+    'ThroatStitches': ['neck', 'neck2', 'neck3', 'neck4', 'head'],
 }
 
 
@@ -423,7 +433,7 @@ def assign_weights(ob, part, sk, arm):
     groups = {n: ob.vertex_groups.new(name=n) for n in names}
     if len(names) == 1:
         groups[names[0]].add(list(range(len(P))), 1.0, 'REPLACE')
-    elif part.name in ('Head', 'Throat', 'ThroatSkin'):
+    elif part.name in ('Head', 'Throat', 'ThroatSkin', 'ThroatStitches'):
         chain = 'neck2' in {b.name for b in arm.data.bones}
         z = P[:, 2]
         zn = sk.J['neck'][2]
@@ -1078,6 +1088,34 @@ def main():
         cam = camera((3.9, -3.0, 1.35), (3.0, 0, 0.95), 50)
         render('graft_full', (1000, 1200))
         clear(L + [cam])
+    if 'surgeon_graft' in chars:
+        # The grafted throat (docs/GRAFTING_TRACHEA.md): the stitched window and the Sonographer's
+        # windpipe glowing violet behind it, lit and in the dark, quiet and while Echo fires.
+        c = chars['surgeon_graft']
+        x0 = layout['surgeon_graft']
+        nz = 0.5 * (c['body'].J['neck'].z + c['body'].HC.z)
+        for fire in (0.0, 1.0):
+            sfx = '_echo' if fire else ''
+            set_charge(fire)
+            if want('graft_throat' + sfx):
+                show_only(chars, ('surgeon_graft',))
+                tgt = (x0, 0.0, nz)
+                L = std_lights(tgt, 0.3)
+                cam = camera((x0 + 0.10, -0.95, nz - 0.10), tgt, 85)
+                render('graft_throat' + sfx, (900, 1100))
+                clear(L + [cam])
+            if want('graft_dark' + sfx):
+                show_only(chars, ('surgeon_graft',))
+                w = bpy.context.scene.world.node_tree.nodes['Background'].inputs['Color']
+                w.default_value = (0.004, 0.012, 0.012, 1)
+                tgt = (x0, 0, 1.45)
+                cam = camera((x0 + 0.3, -3.2, 1.70), tgt, 34)
+                fl = add_light('SPOT', (x0 + 0.5, -3.1, 1.58), tgt, 700, (1.0, 0.82, 0.58), 0.05, 'Flash', spot=(40, 0.6))
+                amb = add_light('AREA', (x0, 0, 3.4), (x0, 0, 0), 40, (0.35, 0.8, 0.75), 4.0, 'Amb')
+                render('graft_dark' + sfx, (1400, 1000))
+                clear([cam, fl, amb])
+                w.default_value = (0.02, 0.025, 0.03, 1)
+        set_charge(0.0)
     if want('save'):
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, 'stylized_test.blend'), compress=True)
     log('done')

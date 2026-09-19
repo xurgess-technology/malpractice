@@ -656,7 +656,7 @@ static func _counter_body(g: Geo, w: float, h: float, d: float, body: Color, top
 
 
 ## GRAFTING part one: a jar of fluid on a shelf with something floating in it, `i` picks what: mostly
-## heads (a surgeon's, a Hive's), now and then an eye or a brain. Origin is the jar's base.
+## heads (a surgeon's, a Hive's), now and then an eyeball. Origin is the jar's base.
 static func _specimen_jar(g: Geo, base: Vector3, i: int, rng: RandomNumberGenerator) -> void:
 	var fluid: Color = [Color(0.85, 0.8, 0.45, 0.35), Color(0.6, 0.8, 0.7, 0.35), Color(0.8, 0.7, 0.55, 0.35)][rng.randi() % 3]
 	g.cyl(0.072, 0.27, base + Vector3(0, 0.135, 0), fluid, "y", 14, 2)

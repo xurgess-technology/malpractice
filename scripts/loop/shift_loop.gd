@@ -541,7 +541,7 @@ func phone_prompt() -> String:
 ## What a case pays at clock-out.
 static func pay_for(c: Dictionary, shift: int) -> int:
 	if bool(c.get("monster", false)):
-		return 0   # SWEEP 3 HOOK: a strapped monster pays through its brain, never the paycheck
+		return 0   # SWEEP 3 HOOK: a strapped monster pays through what comes out of it, not the paycheck
 	match String(c.get("state", "")):
 		"stable":
 			if bool(c.get("optional", false)):

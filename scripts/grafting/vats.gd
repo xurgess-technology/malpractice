@@ -1,7 +1,8 @@
 class_name Vats
 extends Node
-## Grafting part one (docs/GRAFTING.md): specimen vats. A glass jar of cloudy fluid an eye floats
-## in, and an eye in a vat does not spoil.
+## Grafting (docs/GRAFTING.md, docs/GRAFTING_TRACHEA.md): specimen vats. A glass jar of cloudy fluid
+## a body part floats in, and a part in a vat does not spoil. A vat holds ONE part, of any kind: an
+## eyeball or a trachea.
 ##
 ## The vat is the ordinary bulky item `specimen_vat` (two hands). What it holds is the stack's /
 ## world item's `x` string (Eyes.pack: kind, owner, age, value), so it rides every existing
@@ -9,9 +10,9 @@ extends Node
 ## out, its spoil clock `bt` is rebuilt from that age.
 ##
 ## Inputs (docs/CONTRACTS.md "Grafting"):
-##   E on a vat (on a bench or dropped) with an eye selected     puts the eye in
-##   E with a vat AND an eye in your hands, aimed at nothing      puts the eye in
-##   V ("vat_take") aimed at a vat, or with one in your hands     takes the eye back out
+##   E on a vat (on a bench or dropped) with a part selected     puts the part in
+##   E with a vat AND a part in your hands, aimed at nothing     puts the part in
+##   V ("vat_take") aimed at a vat, or with one in your hands    takes the part back out
 ##   E on a free lab-bench spot while carrying a vat              sets it down there
 ##   E on an OR table's VAT STAND while carrying a vat            sets it down there (chunk C)
 ## Three empty vats stand on the lab wall at the start of a run (level_info.vat_spots, from the
@@ -110,7 +111,7 @@ static func build_model(root: Node3D) -> void:
 	var content := Node3D.new()
 	content.name = "Content"
 	content.position = Vector3(0, 0.08, 0)
-	content.scale = Vector3.ONE * 1.5   # a bigger eye reads through the fluid
+	content.scale = Vector3.ONE * 1.5   # a bigger part reads through the fluid
 	root.add_child(content)
 	for k in Eyes.KINDS:
 		var holder := Node3D.new()
@@ -165,7 +166,7 @@ static func describe(x: String) -> String:
 	return "%s, %s" % [Eyes.label(String(d.kind), String(d.owner)), Eyes.condition(Eyes.spoil_factor(float(d.age)))]
 
 
-## Seconds an eye stack / item has been out of a vat.
+## Seconds a body-part stack / item has been out of a vat.
 func eye_age(stack_or_item) -> float:
 	var bt := -1000000.0
 	if stack_or_item is Dictionary:
@@ -181,7 +182,7 @@ func eye_factor(stack_or_item) -> float:
 	return Eyes.spoil_factor(eye_age(stack_or_item))
 
 
-## What the furnace pays for an eye stack ({kind, v, bt}) right now.
+## What the furnace pays for a body-part stack ({kind, v, bt}) right now.
 func eye_value(s: Dictionary) -> int:
 	var v := int(s.get("v", 0))
 	if v <= 0:
@@ -202,12 +203,12 @@ func item_prompt(player, it) -> String:
 	if Eyes.is_eye(String(sel.get("kind", ""))):
 		if d.is_empty():
 			return "Put %s in the vat" % Eyes.label(String(sel.kind), String(sel.get("x", "")))
-		return "!The vat already holds an eye"
+		return "!The vat already holds a body part"
 	if player != null and player.has_method("can_take") and not player.can_take(KIND):
 		return "!Needs two free hands"
 	if d.is_empty():
 		return "Take the empty specimen vat"
-	return "Take the specimen vat (%s)  [V: take the eye out]" % describe(String(it.x))
+	return "Take the specimen vat (%s)  [V: take it out]" % describe(String(it.x))
 
 
 ## The local prompt for E aimed at nothing: an eye and a vat both in hand.
@@ -245,7 +246,7 @@ func item_used(p, it: Node) -> bool:
 	if not Eyes.is_eye(String(s.kind)):
 		return false
 	if String(it.x) != "":
-		game.tell(p, "The vat already holds an eye.", 2.5)
+		game.tell(p, "The vat already holds a body part.", 2.5)
 		return true
 	it.x = _pack_stack(s)
 	game.tell(p, "%s is floating in the vat now. It won't spoil there." % Eyes.label(String(s.kind), String(s.get("x", ""))), 3.0)
@@ -378,6 +379,9 @@ func on_level_built(info: Dictionary) -> void:
 			game._spawn_item(KIND, 1, Transform3D(Basis(Vector3.UP, float(sp.get("yaw", 0.0))), sp.position as Vector3), WorldItem.State.LOOSE)
 		game.stock_storage("scalpel", 1)
 		game.stock_storage("eye_spoon", 1)
+		# GRAFTING part two: the forceps lift a trachea out and seat the new one, so the OR always
+		# has a pair as well (docs/GRAFTING_TRACHEA.md).
+		game.stock_storage("forceps", 1)
 	_build_stands()
 
 
@@ -546,7 +550,7 @@ func _physics_process(delta: float) -> void:
 			_stamp_spoil_times()
 
 
-## Host: an eye that came from nowhere (a dev spawn) starts spoiling now.
+## Host: a part that came from nowhere (a dev spawn) starts spoiling now.
 func _stamp_spoil_times() -> void:
 	for it in game.world_items.values():
 		if is_instance_valid(it) and Eyes.is_eye(String(it.kind)) and float(it.bt) <= -100000.0:
@@ -557,7 +561,7 @@ func _stamp_spoil_times() -> void:
 				s["bt"] = _now()
 
 
-## Every machine: the rot on every eye lying about or in hand, and what floats in every vat.
+## Every machine: the rot on every part lying about or in hand, and what floats in every vat.
 func _show() -> void:
 	for it in game.world_items.values():
 		if not is_instance_valid(it):

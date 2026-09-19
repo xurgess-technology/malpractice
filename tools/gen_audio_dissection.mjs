@@ -9,8 +9,8 @@
 //
 //   dissection_shriek_01/_02  an awake monster screaming on the table: a torn, wavering howl
 //   dissection_strap_01/_02   a limb yanking against a strap: leather creak and a buckle rattle
-//   dissection_snap           a nerve popping free of the brain: a wet elastic pluck
-//   dissection_plop           a brain landing (in the tray or on the drapes): a soft wet slap
+//   dissection_snap           a nerve popping free: a wet elastic pluck
+//   dissection_plop           a part landing (in the tray or on the drapes): a soft wet slap
 //   dissection_crack          the skull cap coming away: a dry crack and a suck of air
 //   dissection_inject         a re-dose going in: a short plunger hiss
 

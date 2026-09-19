@@ -64,24 +64,24 @@ func _ready() -> void:
 	bot.bot_aim_id = ""
 	await _settle_and_shot("c_shelf_not_aimed_highlight_off")
 
-	# (d) the blender, aimed at while holding a brain (so the prompt is real, not "!Blender: bring
-	# a brain"), for a second interactable's highlight.
-	var blender: Node3D = game.brains.blender if game.brains != null else null
-	if blender != null and is_instance_valid(blender):
+	# (d) the furnace hatch, aimed at while holding something sellable, for a second interactable's
+	# highlight.
+	var hatch: Node3D = game.find_interactable("furnace_hatch")
+	if hatch != null and is_instance_valid(hatch):
 		for i in bot.slots.size():
 			bot.clear_slot(i)
-		bot.take_into("brain_hive", 1)
+		bot.take_into("gold_watch", 1)
 		bot.selected = 0
-		var bout: Vector3 = blender.global_basis.z.normalized()
-		_look_from(blender.global_position + bout * 1.5 + Vector3(0, 1.05, 0), blender.global_position + Vector3(0, 0.95, 0))
-		bot.bot_aim_id = "blender"
-		await _settle_and_shot("d_blender_aimed_highlight_on")
-		var shells := blender.find_children("AimOutlineFx", "MeshInstance3D", true, false)
-		print("[affordanceshot] blender outline shells: ", shells.size())
+		var hout: Vector3 = hatch.global_basis.z.normalized()
+		_look_from(hatch.global_position + hout * 1.5 + Vector3(0, 1.05, 0), hatch.global_position + Vector3(0, 0.95, 0))
+		bot.bot_aim_id = "furnace_hatch"
+		await _settle_and_shot("d_furnace_aimed_highlight_on")
+		var shells := hatch.find_children("AimOutlineFx", "MeshInstance3D", true, false)
+		print("[affordanceshot] furnace outline shells: ", shells.size())
 		bot.bot_aim_id = ""
-		await _settle_and_shot("e_blender_not_aimed_highlight_off")
+		await _settle_and_shot("e_furnace_not_aimed_highlight_off")
 	else:
-		print("[affordanceshot] no blender placed this level")
+		print("[affordanceshot] no furnace in this level")
 
 	print("[affordanceshot] done")
 	get_tree().quit(0)

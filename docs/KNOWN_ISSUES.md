@@ -354,7 +354,11 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 - **`tools/mapcheck.gd` reports seed 112** (a morgue tray anchor 3.3 m off the navmesh); the same
   on `main` before the pod removal.
 
-## Brains (sweep 3, brains worker)
+## Abilities (sweep 3, brains worker)
+
+The brain items, the brain harvest and the break-room blender were removed
+(docs/GRAFTING_TRACHEA.md); the entries about brain spoilage, the blender's placement, the
+procedural brain model and their perf numbers went with them.
 
 - **Hive Eyes was built against a stand-in Hive.** On the brains branch `Monster.HIVE` does
   not exist, so `brains.spawn_hive` makes a Sonographer body with `kind = "hive"` (it still
@@ -367,30 +371,15 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 - **Echo's veil does not fully hide a lit flashlight cone** (volumetric fog and the post layer draw
   after it), so the spot on the nearest wall stays faintly visible under the outlines. Outlines of
   skinned meshes follow their skeleton; only the dev dummy surgeon was checked in a screenshot.
-- **Brains keep spoiling through the paycheck screen and the next lobby** (world_time keeps
-  running), so a brain carried over a shift change is rotten by the next shift. Intended as "brains
-  spoil fast", but worth a look once the loop is tuned.
-- **Absorbed brains are keyed by peer id.** A player who leaves and joins again (a new ENet peer id)
+- **Abilities are keyed by peer id.** A player who leaves and joins again (a new ENet peer id)
   starts from nothing; the old entry stays until game over.
-- **A client's shown value can be $1-2 off the host's** while the spoil clock runs: `bt` is snapped
-  to 0.5 s in the item report and a client's world_time is only corrected when more than 1 s off.
-  The host's `current_value` is what the dumpster pays.
-- **Blender placement is a heuristic:** the counter-height cell nearest the time clock with a
-  0.2 m margin, backed toward the nearest wall. On the hospital's entrance building (the same break
-  room every seed) it lands on the free end of the sink counter by the fridge; nothing checks for the
-  models that stand on counters without colliders (the coffee machine, the microwave), so a changed
-  break-room layout could put it inside one. Levels without a break room get a steel stand.
-- **The brain is procedural** (merged ellipsoids, folds in the shader). It reads as a brain from
-  above and behind at hand and table distance (`tools/brain_shots/01..04`); from low side angles the
-  hemispheres still look like two smooth eggs, and the rot mostly changes colour (no geometry
-  change, so the gold rim overlay keeps fitting).
-- **Perf** (`perfprobe -- --brains`, 1600x900 medium, two passes): pharmacy baseline 188-201 fps
+- **A client's shown value can be $1-2 off the host's** while a body part's spoil clock runs: `bt`
+  is snapped to 0.5 s in the item report and a client's world_time is only corrected when more than
+  1 s off. The host's value is what the furnace pays.
+- **Perf** (`perfprobe -- --abilities`, 1600x900 medium, two passes): pharmacy baseline 188-201 fps
   (1% low 134-150), Echo at level 3 with 66 outlines 180-192 (132-150); corridor baseline 88-94
-  (75-82), Echo 93-96 (81-86); Hive Eyes depends on what the Hive looks at (131-236); five brains
-  in view 102-108 (89-96). Starting Echo takes 1.8-2.8 ms (it walks every container once).
-- **One lagged `nettest --only=brains` run never connected** (port 7941; the client timed out
-  before joining); the same run passed on another port, lagged and unlagged. Probably a port clash
-  with another worktree's nettest.
+  (75-82), Echo 93-96 (81-86); Hive Eyes depends on what the Hive looks at (131-236). Starting Echo
+  takes 1.8-2.8 ms (it walks every container once).
 
 ## Monsters (sweep 3, monsters worker)
 
@@ -546,12 +535,6 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   with sphere eyes, no hands to speak of. Only used when the Kenney rig asset is missing.
 - **The saw's calm guide glow shows on the forehead before anyone saws** (the same idle glow limbs
   have); the saw model itself is hidden until someone saws the skull.
-- **The brain step's camera looks from past the end of the table**, so the body appears upside down
-  above the opening (`05_brain_nerves.png`). Readable, but a surgeon standing at the head end would
-  be the natural view.
-- **The nerves are short**: the gap between the brain and the bone is 1-1.5 cm, so the cords are
-  small; the rings carry the read. The rig heads are smaller than the old primitive heads (about
-  0.11 m half length), so their brains are scaled to 0.92 of what the opening would fit to keep the gap.
 - **Awake thrashing only adds botches, shrieks and body motion.** The operator's hand shake stays
   the surgery system's stir (strongest at sedation 0, roughly every 2.5 s); there is no separate,
   stronger jolt for an awake monster. The head barely moves so the work planes stay on it.
@@ -565,15 +548,13 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
 - **`game.case` can be a monster case** (the alias is the first non-player case) when a monster is
   strapped before the phone patient arrives. Old single-case code paths and tests that read
   `game.case` would then look at the monster.
-- **Brain quality is the brain's condition only**; the saw's `cut_quality` is recorded in the flags
-  but not used.
 - **The minigame lab needs `--ailment=dissection`** for monster patients (it infers amputation for
   the saw and gunshot for the forceps), and `--flags=skull_open:1` to show the opened skull.
 - **Shutdown noise in the nettest logs**: `Condition "!peers.has(p_id)" is true` repeats on clients as
   the scenario ends; the dissection scenario passes regardless (not checked whether other scenarios
   print it too).
-- **Warmup builds four more bodies and four more minigames** (both monsters, closed and opened, the
-  skull saw and the brain forceps). `tools/perfprobe.tscn` was not run for this change.
+- **Warmup builds four more bodies and four more minigames** (both monsters, closed and opened,
+  with their extraction tools). `tools/perfprobe.tscn` was not run for this change.
 
 ## Pocket spaces (2026-09-14, pockets worker)
 
@@ -907,7 +888,7 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   Reads correctly (a stooped lean) in the common cases; not verified against every hold pose.
 - **`game.database` (the scanner's sighted/scanned records) has no reset hook.** It is host-only,
   in-memory, and intentionally not cleared on `reset_money()` / game over the way `brains.on_reset()`
-  clears absorbed brains — species knowledge is meant to persist across a wipe with money — but
+  clears abilities — species knowledge is meant to persist across a wipe with money — but
   nothing has exercised that assumption yet (chunk 4 is expected to formalize it when the database
   is saved to disk).
 - **Screenshots were not taken.** `tools/gameshot.tscn` needs a windowed run; this chunk was built
@@ -1042,7 +1023,7 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   checks that the list matches whatever `Monster.kind` values actually exist at runtime.
 - **The X-ray is a simple 2D silhouette-plus-marker drawn in the terminal UI**
   (`TerminalUI.TerminalSilhouette`), not a real render of the creature's actual 3D model with its
-  brain highlighted inside it. Reads clearly as "here is roughly where the brain sits" but is not
+  innards highlighted inside it. Reads clearly as "here is roughly where the part sits" but is not
   a literal X-ray of the in-game model.
 - **The database terminal's own UI is plain Controls and Labels**, not a bespoke "computer
   terminal" look (no CRT curvature, no scanlines, no monospace terminal font) -- functional and
@@ -1172,7 +1153,7 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
 
 - **Only two always-on `Label3D` props were actually found and replaced**: the OR supply shelf's
   "SUPPLY - SURGICAL" tag (`scripts/supply_shelf.gd`) and the break-room blender's "BLENDER" tag
-  (`scripts/brains/blender.gd`). Both are gone outright; `AimHighlight` (`scripts/aim_highlight.gd`)
+  (the blender has since been removed entirely). Both are gone outright; `AimHighlight` (`scripts/aim_highlight.gd`)
   plus the existing crosshair prompt now carry the "you can interact with this" signal instead.
   `scripts/economy/economy_props.gd` and `scripts/economy/furnace.gd` (the pharmacy window and the
   furnace, which also carry price/amount `Label3D`s) were deliberately left untouched -- a sibling
@@ -1184,13 +1165,6 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   label (which table is which, similar in spirit to the hospital's own room-name signs) than a
   "you can interact with this" cue, and the table's own aim highlight now covers the latter. Worth
   a second look if it turns out players read "STAFF" as redundant once they get used to the rim.
-- **The blender's highlight is hard to see in a screenshot taken close up and level with its own
-  overhead lamp** (`tools/affordanceshot.tscn` shot `d_blender_aimed_highlight_on.png`): the lamp's
-  own bright bloom washes out the thin rim on the jar and motor housing at that framing. Confirmed
-  by instrumentation that the rim shells are actually created (6, `AimHighlight.MAX_MESHES`), so
-  this is a lighting/screenshot-framing issue, not a mechanism bug -- the same rim reads clearly on
-  the supply shelf's steel frame in the same run. Worth a look with a wider shot or the lamp dimmed
-  if the blender specifically still feels unclear in a real playtest.
 - **No other floating always-on interactable labels were found** in a full `Label3D` grep of
   `scripts/`: the rest are either transient (the pharmacy's `_spawn_pill_line` flavor quotes in
   `game.gd`, which rise and fade on their own), dev-only (`scripts/dev/dev_level.gd`,

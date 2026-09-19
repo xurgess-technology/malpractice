@@ -6,8 +6,7 @@ extends RefCounted
 ##
 ## Frame (PatientBody): lying along X, head toward -X, face up (+Y), back on the table top at y = 0,
 ## centred on the origin. Sites: `injection` (upper arm), `skull` (the craniotomy line across the
-## forehead: +Y out of the head along the cut plane, X toward the cap, the line along Z) and `brain`
-## (the centre of the opening: +Y out of the opening, X back toward the table, Z ear to ear).
+## forehead: +Y out of the head along the cut plane, X toward the cap, the line along Z).
 ##
 ## The body is `make_lying(kind)` (the walking monster's still lying rig, on Monster or on
 ## scripts/monsters/monster_model.gd) fitted to the table by monster_rig_look.gd; its own head is
@@ -15,7 +14,7 @@ extends RefCounted
 ## the walking look's face. Without the rig the whole body is primitives.
 ##
 ## State read from the body every frame (flags replace, see PatientBody.apply_flags):
-## `skull_open` (cap lies beside the head, the brain shows), `brain_removed` (empty cavity),
+## `skull_open` (the cap lies beside the head), `eye_removed` (the socket is empty),
 ## sedation (b._sedation): under 0.75 twitches, under 0.35 thrashes against the straps.
 
 const Kit := preload("res://scripts/patients/patient_kit.gd")
@@ -33,13 +32,13 @@ const LOOKS := {
 		"length": 1.74, "head": Vector3(0.14, 0.125, 0.112), "width": 1.0, "thin": 1.0,
 		"skin": Color(0.5, 0.55, 0.38), "scalp": Color(0.14, 0.12, 0.1), "hair": 0.9,
 		"gown": Color(0.34, 0.56, 0.6), "gown_dark": Color(0.28, 0.32, 0.2), "eyeless": false,
-		"ear": 1.0, "brain_scale": 1.0,
+		"ear": 1.0,
 	},
 	"sonographer": {
 		"length": 1.82, "head": Vector3(0.145, 0.12, 0.104), "width": 0.9, "thin": 0.82,
 		"skin": Color(0.78, 0.63, 0.65), "scalp": Color(0.78, 0.63, 0.65), "hair": 0.0,
 		"gown": Color(0.86, 0.85, 0.78), "gown_dark": Color(0.36, 0.35, 0.33), "eyeless": true,
-		"ear": 1.0, "brain_scale": 1.0,
+		"ear": 1.0,
 	},
 }
 
@@ -131,8 +130,7 @@ static func _build_rig(b, lying: Node3D, skel: Skeleton3D, seed_v: int) -> void:
 	head.position = head_c - bone
 	neck.add_child(head)
 	var hair_fn := func(p: Vector3) -> bool: return RigLook.has_hair(id, p)
-	var hd: Dictionary = Head.build(head, hr, {"skin_mat": skin, "hair_mat": RigLook.hair_material(id), "hair_fn": hair_fn,
-		"brain_scale": float(fit.brain_scale)}, seed_v)
+	var hd: Dictionary = Head.build(head, hr, {"skin_mat": skin, "hair_mat": RigLook.hair_material(id), "hair_fn": hair_fn}, seed_v)
 	_head_parts(parts, head, neck, hd)
 	# The look's face, in the model head frame turned face up; what lies past the cut rides the cap.
 	var info: Dictionary = hd.info
@@ -174,9 +172,8 @@ static func _build_rig(b, lying: Node3D, skel: Skeleton3D, seed_v: int) -> void:
 
 
 ## The stylized Hive (hive_rig.gd) and Sonographer (sonographer_rig.gd): their own bodies lying straight, strapped down, the fungus in its open
-## skull showing. There is no brain to take out (the fungus replaced it; harvest waits on the grafting
-## redesign), so the dissection head that opens is built but kept hidden: it only places the skull and
-## brain sites where the head is, so the saw and forceps steps still run.
+## skull showing. The dissection head that opens is built but kept hidden: it only places the skull
+## site where the head is, so the saw step still runs.
 static func _build_st(b, lying: Node3D, skel: Skeleton3D, seed_v: int) -> void:
 	var id: String = b.patient_id
 	var lk := look_of(id)
@@ -218,12 +215,11 @@ static func _build_st(b, lying: Node3D, skel: Skeleton3D, seed_v: int) -> void:
 	head.visible = false
 	neck.add_child(head)
 	var hd: Dictionary = Head.build(head, hr, {"skin": lk.skin, "scalp": lk.scalp, "hair": 0.0,
-		"eyeless": false, "brain_scale": lk.brain_scale}, seed_v)
+		"eyeless": false}, seed_v)
 	_head_parts(parts, head, neck, hd)
-	# Nothing of the dissection head shows: no cap to lift, no brain.
+	# Nothing of the dissection head shows: no cap to lift.
 	parts["cap"] = null
 	parts["open_skull"] = null
-	parts["brain"] = null
 	parts["jaw"] = null
 	# Straps: across the chest, the hips and wrists, the thighs, the shins (x along the body, its half
 	# width, the height of the body top there).
@@ -272,7 +268,7 @@ static func _build_primitive(b, seed_v: int) -> void:
 	head.position = head_c - neck.position
 	neck.add_child(head)
 	var hd: Dictionary = Head.build(head, hr, {"skin": lk.skin, "scalp": lk.scalp, "hair": lk.hair,
-		"eyeless": lk.eyeless, "brain_scale": lk.brain_scale}, seed_v)
+		"eyeless": lk.eyeless}, seed_v)
 	_head_parts(parts, head, neck, hd)
 	# The face is laid out for a 0.112 m head and scaled up to this one.
 	var fk := hr.x / 0.112
@@ -295,9 +291,7 @@ static func _head_parts(parts: Dictionary, head: Node3D, neck: Node3D, hd: Dicti
 	parts["cap"] = hd.cap
 	parts["cap_home"] = (hd.cap as Node3D).transform
 	parts["open_skull"] = hd.rim
-	parts["brain"] = hd.brain
 	parts["cut"] = hd.info
-	parts["brain_radii"] = hd.brain_radii
 
 
 ## Sites, sections, drips and the cap's resting place. `cap_z`: how far beside the head the cap lies.
@@ -308,21 +302,18 @@ static func _sites(b, head: Node3D, head_c: Vector3, hr: Vector3, hd: Dictionary
 	var m: Vector3 = info.m
 	var u: Vector3 = info.u
 	var skull_xf := Transform3D(Basis(m, u, m.cross(u)), head_c + (info.top as Vector3))
-	var brain_xf := Transform3D(Basis(-u, m, (-u).cross(m)), head_c + (info.centre as Vector3))
 	_site(b, "skull", skull_xf, head)
-	_site(b, "brain", brain_xf, head)
 	_site(b, "injection", inj_xf, rig)
+	# GRAFTING part two (docs/GRAFTING_TRACHEA.md): the throat, where the Sonographer's windpipe
+	# glows through the skin: just past the head along the body, on the front of the neck, which
+	# lying face up points at the ceiling. Taken from the body's own numbers rather than the model's
+	# `Site_throat`, whose bone attachment is not posed yet while this builds.
+	var throat_at: Vector3 = head_c + Vector3(hr.x * 0.9, 0.09, 0.0)
+	_site(b, "throat", Transform3D(Basis(), throat_at), rig)
+	b.drips["throat"] = [throat_at, Vector3(throat_at.x, 0.003, throat_at.z - 0.05)]
 	# The saw reads the section at the cut: the kerf runs across the head, a few centimetres deep.
 	b.sections["skull"] = {"half_up": 0.04, "half_side": float(info.half_z) * 0.92, "axis_depth": float(info.half_u), "shape": 2.0}
-	# The brain step reads the opening and where the specimen tray stands on the table (site-local).
-	var tray_body := Vector3(head_c.x + 0.01, 0.0, -0.21)
-	b.sections["brain"] = {"half_up": float((hd.brain_radii as Vector3).y), "half_side": float(info.half_z) * (1.0 - Head.BONE_T),
-		"axis_depth": head_c.y + float((info.centre as Vector3).y), "shape": 2.0,
-		"half_u": float(info.half_u) * (1.0 - Head.BONE_T), "brain_radii": hd.brain_radii,
-		"brain_seed": hash(String(b.patient_id)) & 0xffff, "brain_y": -(float((hd.brain_radii as Vector3).y) * 0.55 + 0.004),
-		"tray": brain_xf.affine_inverse() * tray_body, "table_up": brain_xf.basis.inverse() * Vector3.UP}
 	b.drips["skull"] = [skull_xf.origin, Vector3(head_c.x - hr.x * 0.9, 0.003, 0.05)]
-	b.drips["brain"] = [brain_xf.origin, Vector3(head_c.x - hr.x * 0.9, 0.003, -0.04)]
 	b.drips["injection"] = [inj_xf.origin, Vector3(inj_xf.origin.x, 0.003, inj_xf.origin.z - 0.08)]
 	# Where the removed cap lies: beside the head, bone side up.
 	# The cap's origin is the centre of its cut face and its dome points along the cut direction
@@ -641,7 +632,7 @@ static func animate(b, jolt: float, env: float, _fidget: float, _twitch: float, 
 	var flags: Dictionary = b._flags
 	var flat: bool = b._flat
 	var open := bool(flags.get("skull_open", false))
-	var removed := bool(flags.get("brain_removed", false)) or bool(flags.get("eye_removed", false))   # GRAFTING part one: an eye taken is a dead Hive too
+	var removed := bool(flags.get("eye_removed", false))   # GRAFTING part one: an eye taken is a dead Hive too
 	var dt: float = minf(0.1, maxf(0.0, t - float(parts.get("last_t", t))))
 	parts["last_t"] = t
 	if removed and not flat:
@@ -678,10 +669,6 @@ static func animate(b, jolt: float, env: float, _fidget: float, _twitch: float, 
 	var rim: Node3D = parts.get("open_skull")
 	if rim != null:
 		rim.visible = open
-	var brain: Node3D = parts.get("brain")
-	if brain != null:
-		# The brain forceps step draws its own brain and hides this one (meta dx_brain_hidden).
-		brain.visible = open and not removed and not bool(b.get_meta("dx_brain_hidden", false))
 
 	var sed: float = b._sedation
 	var st: Dictionary = parts["thrash"]

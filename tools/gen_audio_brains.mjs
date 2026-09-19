@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// tools/gen_audio_brains.mjs: offline synth for brains (sweep 3): harvested brains, the blender,
-// Echo and Hive Eyes.
+// tools/gen_audio_brains.mjs: offline synth for the abilities (sweep 3): Echo and Hive Eyes.
 //
 //   node tools/gen_audio_brains.mjs          # write audio/sfx/brains_*.wav
 //   node tools/gen_audio_brains.mjs --check  # render and report, write nothing
@@ -8,9 +7,6 @@
 // Same style as gen_audio.mjs: dependency-free, one seeded PRNG stream per file, so re-running
 // produces byte-identical output.
 //
-//   brains_squelch   a brain landing: a wet slap and a soft settle
-//   brains_blend     the blender: motor spin-up, a chunky grind, a wet whirr, spin-down (1.6 s)
-//   brains_gulp      drinking it: three thick gulps and a shudder
 //   brains_shriek    Echo: a rising, throat-tearing shriek with a ringing tail
 //   brains_hive_in   into a Hive's eyes: a sucking whoosh into a sick low drone
 //   brains_hive_out  back into your body: a snap and a falling breath
@@ -69,79 +65,6 @@ class Buf {
 }
 
 const env = (t, a, d) => Math.min(1, t / a) * Math.exp(-t * d);
-
-function squelch() {
-  const r = rngFor('squelch'), b = new Buf(0.55);
-  const lp = biquad('lowpass', 900, 0.9);
-  const bp = biquad('bandpass', 420, 2.5);
-  let ph = 0;
-  for (let i = 0; i < b.d.length; i++) {
-    const t = i / SR;
-    const n = r() * 2 - 1;
-    // The slap: a low wet thump with a falling pitch, bubbles of band-passed noise after it.
-    ph += TAU * (140 * Math.exp(-t * 18) + 55) / SR;
-    let v = Math.sin(ph) * env(t, 0.002, 22) * 0.9;
-    v += lp(n) * env(t, 0.001, 30) * 0.8;
-    const bub = Math.max(0, Math.sin(TAU * 23 * t + Math.sin(TAU * 7 * t) * 3));
-    v += bp(n, 380 + 300 * bub) * bub * env(t, 0.04, 7) * 0.6;
-    b.add(i, v);
-  }
-  return b;
-}
-
-function blend() {
-  const r = rngFor('blend'), b = new Buf(1.6);
-  const motor = biquad('bandpass', 600, 1.2);
-  const grind = biquad('lowpass', 1400, 0.8);
-  const wet = biquad('bandpass', 900, 3);
-  let ph = 0, ph2 = 0;
-  for (let i = 0; i < b.d.length; i++) {
-    const t = i / SR;
-    const up = Math.min(1, t / 0.25);
-    const down = Math.min(1, (1.6 - t) / 0.25);
-    const speed = up * down;
-    const f = 90 + 230 * speed;
-    ph += TAU * f / SR;
-    ph2 += TAU * f * 3.02 / SR;
-    const saw = ((ph / TAU) % 1) * 2 - 1;
-    const n = r() * 2 - 1;
-    let v = motor(saw * 0.6 + n * 0.25, 400 + 900 * speed) * 0.9 * speed;
-    v += Math.sin(ph2) * 0.08 * speed;
-    // Chunks hitting the blades: random clunks in the first half, fewer as it liquefies.
-    const chunky = Math.max(0, 1 - t / 0.9);
-    if (r() < 0.0009 * chunky) {
-      for (let k = 0; k < 900; k++) b.add(i + k, grind(r() * 2 - 1) * Math.exp(-k / 140) * 0.9 * chunky);
-    }
-    v += wet(n, 700 + 500 * Math.sin(TAU * 11 * t)) * 0.35 * speed * (1 - chunky * 0.5);
-    b.add(i, v);
-  }
-  return b;
-}
-
-function gulp() {
-  const r = rngFor('gulp'), b = new Buf(1.1);
-  for (let k = 0; k < 3; k++) {
-    const at = 0.05 + k * 0.27;
-    const i0 = Math.round(at * SR);
-    const bp = biquad('bandpass', 300, 4);
-    let ph = 0;
-    for (let i = 0; i < Math.round(0.22 * SR); i++) {
-      const t = i / SR;
-      // A throat bloop: a pitch that drops fast, with a wet noise edge.
-      const f = 320 * Math.exp(-t * 9) + 90 + k * 12;
-      ph += TAU * f / SR;
-      const e = env(t, 0.008, 14);
-      b.add(i0 + i, (Math.sin(ph) * 0.8 + bp(r() * 2 - 1, f * 2) * 0.6) * e);
-    }
-  }
-  // A shudder of breath after.
-  const hp = biquad('bandpass', 1800, 0.8);
-  for (let i = Math.round(0.85 * SR); i < b.d.length; i++) {
-    const t = i / SR - 0.85;
-    b.add(i, hp(r() * 2 - 1) * env(t, 0.03, 9) * 0.25 * (0.6 + 0.4 * Math.sin(TAU * 18 * t)));
-  }
-  return b;
-}
 
 function shriek() {
   const r = rngFor('shriek'), b = new Buf(2.1);
@@ -223,9 +146,6 @@ function writeWav(file, buf, targetDb = -3) {
 }
 
 const FILES = {
-  'brains_squelch.wav': [squelch, -5],
-  'brains_blend.wav': [blend, -6],
-  'brains_gulp.wav': [gulp, -5],
   'brains_shriek.wav': [shriek, -2],
   'brains_hive_in.wav': [hiveIn, -6],
   'brains_hive_out.wav': [hiveOut, -7],

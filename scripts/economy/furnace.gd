@@ -373,7 +373,7 @@ func _on_body_entered(body: Node) -> void:
 		var out := Transform3D(it.global_basis, global_transform * Vector3(randf_range(-0.6, 0.6), HEAD - 0.3, 0.45))
 		it.toss(out, global_basis * Vector3(0, 1.2, 2.2))
 		return
-	# A hand-slot shaped stack ({kind, count, v, bt}): brains price by kind and their spoil clock.
+	# A hand-slot shaped stack ({kind, count, v, bt}): body parts price by kind and their spoil clock.
 	var s := {"kind": kind, "count": count, "v": int(it.value), "bt": float(it.bt)}
 	var value: int = int(g.furnace_value(kind, s))
 	g.world_items.erase(it.item_id)

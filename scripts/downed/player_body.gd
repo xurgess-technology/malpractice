@@ -10,6 +10,7 @@ extends Node3D
 const Kit := preload("res://scripts/patients/patient_kit.gd")
 const HumanModel := preload("res://scripts/human/human_model.gd")   # HUMAN HOOK
 const GraftEye := preload("res://scripts/grafting/graft_eye.gd")   # GRAFTING chunk C
+const GraftThroat := preload("res://scripts/grafting/graft_throat.gd")   # GRAFTING part two
 
 const GASH_POS := Vector3(-0.2, 0.24, 0.04)
 const GASH_HALF_LEN := 0.1
@@ -53,6 +54,14 @@ var _eye_l: MeshInstance3D = null
 var _graft_eye: Node3D = null
 var _eye_kind := ""      # "" the surgeon's own, "eye_hive" a grafted Hive eye
 var _eye_out := false    # the socket is empty (between the scoop and the seat)
+## GRAFTING part two: the same for the throat.
+var _throat_kind := ""   # "" their own windpipe, "trachea_sonographer" a grafted one
+var _throat_out := false
+var _throat_node: Node3D = null
+var _throat_key := "?"
+## Where the throat site sits: how far up the neck-to-head run, and how far out of the front of it.
+const THROAT_UP := 0.30
+const THROAT_OUT := 0.045
 ## Tools and A/B: build the primitive body.
 static var primitive_only := false
 
@@ -195,6 +204,30 @@ func _apply_eye() -> void:
 	_graft_eye = GraftEye.build(_eye_l, _eye_kind, EYE_RADIUS)
 
 
+## GRAFTING part two: what is in the throat -- "" their own windpipe, "trachea_sonographer" a
+## grafted one, and `out` while the throat is open and empty (between the lift and the seat).
+func set_throat(kind: String, out := false) -> void:
+	_throat_kind = kind
+	_throat_out = out
+	_apply_throat()
+
+
+func _apply_throat() -> void:
+	if _human == null or not is_instance_valid(_human):
+		return
+	var hidden: bool = _throat_out or bool(get_meta("throat_hidden", false))
+	var key := "%s|%s" % [_throat_kind, hidden]
+	if key == _throat_key:
+		return
+	_throat_key = key
+	if _throat_node != null and is_instance_valid(_throat_node):
+		GraftThroat.detach(_human)
+	_throat_node = null
+	if hidden or _throat_kind == "":
+		return
+	_throat_node = GraftThroat.attach(_human, _throat_kind)
+
+
 func infection_start(_site: String) -> float:
 	return INF
 
@@ -276,6 +309,7 @@ func _apply_visuals() -> void:
 
 func _process(delta: float) -> void:
 	_apply_eye()   # GRAFTING chunk C: the socket follows the case and the minigame's own eye
+	_apply_throat()
 	delta = minf(delta, 0.1)
 	_t += delta
 	var v01 := _vitals / 100.0
@@ -360,6 +394,17 @@ func _build_human() -> bool:
 		_sites["eye"] = Transform3D(Basis(x, y, x.cross(y)), exf.origin + left * EYE_SIDE)
 	_eye_l = HumanModel.piece(root, "Human_Eye_L")
 	parts["eye_l"] = _eye_l
+	# GRAFTING part two (docs/GRAFTING_TRACHEA.md): the throat, part way up the neck and out of the
+	# front of it. Lying face up on the table, the model's front points at the ceiling.
+	var nb := skel.find_bone("neck")
+	if nb >= 0:
+		var nxf: Transform3D = to_rig * HumanModel.bone_global(skel, nb)
+		var at: Vector3 = nxf.origin
+		var hb := skel.find_bone("head")
+		if hb >= 0:
+			at = at.lerp((to_rig * HumanModel.bone_global(skel, hb)).origin, THROAT_UP)
+		var front: Vector3 = nxf.basis.orthonormalized() * Vector3.FORWARD
+		_sites["throat"] = Transform3D(Basis(x, y, x.cross(y)), at + front * THROAT_OUT)
 	var inj := root.find_child("Site_injection", true, false) as Node3D
 	if inj != null:
 		var ia := inj.get_parent() as BoneAttachment3D

@@ -210,11 +210,11 @@ const BrainsScript := preload("res://scripts/brains/brains.gd")
 const VatsScript := preload("res://scripts/grafting/vats.gd")
 const GraftsScript := preload("res://scripts/grafting/grafts.gd")
 var combat: Node = null       # bone saw swings, anesthetic jabs, dragging and strapping monsters
-var dissection: Node = null   # monster cases on the patient tables: sedation, re-dosing, the brain
+var dissection: Node = null   # monster cases on the patient tables: sedation, re-dosing, extraction
 var _step_operator := 0     # host: who finished the step that is finishing the case (only inside surgery_step_done)
 var vats: Node = null         # GRAFTING part one: specimen vats, eye spoilage (scripts/grafting/vats.gd)
 var grafts: Node = null       # GRAFTING chunk C: Eyeball Grafting on a strapped surgeon (scripts/grafting/grafts.gd)
-var brains: Node = null       # brain spoilage, the blender, per-player upgrades, Echo and Hive Eyes
+var brains: Node = null       # abilities: per-player slots and levels, Echo and Hive Eyes
 # POCKETS HOOK: pocket spaces (the Factory, the Restaurant), their seams and crossings.
 const PocketSpacesScript := preload("res://scripts/level/pockets/pocket_spaces.gd")
 var pockets: Node = null
@@ -279,8 +279,8 @@ func _ready() -> void:
 	or_screen.name = "ORScreen"
 	add_child(or_screen)
 	or_screen.setup(self)
-	# SWEEP 3 HOOK: fighting and capturing monsters, dissection on the patient tables, brains and
-	# the abilities they teach. Same path on every machine.
+	# SWEEP 3 HOOK: fighting and capturing monsters, dissection on the patient tables, and the
+	# abilities grafts give. Same path on every machine.
 	combat = CombatScript.new()
 	combat.name = "Combat"
 	add_child(combat)
@@ -1441,7 +1441,7 @@ func pickup_item(p: Node, it: Node) -> void:
 		return
 	p.selected = i
 	if float(it.bt) > -100000.0:
-		p.slots[i]["bt"] = float(it.bt)   # SWEEP 3 HOOK (brains): the spoil clock travels with it
+		p.slots[i]["bt"] = float(it.bt)   # GRAFTING: the spoil clock travels with it
 	if String(it.x) != "":
 		p.slots[i]["x"] = String(it.x)   # GRAFTING part one: an eye's owner, a vat's contents
 	var pos: Vector3 = it.global_position
@@ -1526,7 +1526,7 @@ func drop_selected(p: Node, charge: float = 0.0) -> void:
 		return
 	var it := _spawn_item(s.kind, s.count, from, WorldItem.State.LOOSE)
 	it.value = int(s.get("v", 0))
-	it.bt = float(s.get("bt", -1000000.0))   # SWEEP 3 HOOK (brains)
+	it.bt = float(s.get("bt", -1000000.0))   # GRAFTING: the spoil clock
 	it.x = String(s.get("x", ""))   # GRAFTING part one
 	it.toss(from, vel)
 	p.clear_slot(head)
@@ -1559,7 +1559,7 @@ func _drop_hands(p: Node, violent: bool) -> void:
 		var from := Transform3D(Basis(), p.global_position + Vector3.UP * 1.1 + dir * 0.3)
 		var it := _spawn_item(s.kind, n, from, WorldItem.State.LOOSE)
 		it.value = v
-		it.bt = float(s.get("bt", -1000000.0))   # SWEEP 3 HOOK (brains)
+		it.bt = float(s.get("bt", -1000000.0))   # GRAFTING: the spoil clock
 		it.x = String(s.get("x", ""))   # GRAFTING part one
 		it.toss(from, dir * randf_range(2.0, 3.5) + Vector3.UP * 2.0)
 		p.clear_slot(i)
@@ -1601,7 +1601,7 @@ func storage_place(p: Node, ct: Node3D, slot: int) -> void:
 			String(ct.get_meta("interact_id")), slot)
 	it.value = int(s.get("v", 0))
 	if s.has("bt"):
-		it.bt = float(s.bt)   # SWEEP 3 HOOK (brains): the spoil clock travels with it
+		it.bt = float(s.bt)   # GRAFTING: the spoil clock travels with it
 	it.x = String(s.get("x", ""))   # GRAFTING part one
 	p.clear_slot(head)
 	_sound("items_clink", ct.slot_transform(slot).origin)
@@ -1740,7 +1740,7 @@ func reset_money() -> void:
 	if economy != null:
 		economy.on_reset()
 	if brains != null:
-		brains.on_reset()   # SWEEP 3 HOOK: absorbed brains go with the money
+		brains.on_reset()   # SWEEP 3 HOOK: abilities go with the money
 	if grafts != null:
 		grafts.on_reset()   # GRAFTING chunk C: a graft lasts the run, and goes with a game over
 
@@ -1807,7 +1807,7 @@ func order_pharmacy(p: Node, order: Variant) -> bool:
 
 
 ## SWEEP 4A HOOK (pharmacy, chunk 3): the crematorium furnace (scripts/economy/furnace.gd) calls
-## this once a thrown item lands in the fire. Sellable (loot, brains) pays out; anything else
+## this once a thrown item lands in the fire. Sellable loot pays out; anything else
 ## (surgical tools, the guide, pill bottles) is not sellable and the furnace bounces it back out
 ## instead of calling this. Placebo pills ARE sellable, for exactly $0 (3e).
 func furnace_sell(kind: String, count: int, value: int, at: Vector3) -> void:
@@ -1819,20 +1819,17 @@ func furnace_sell(kind: String, count: int, value: int, at: Vector3) -> void:
 		say("%s went into the furnace for $%d." % [Items.stack_label(kind, count), value], 2.5)
 
 
-## SWEEP 4A HOOK (pharmacy, chunk 3): whether the furnace can sell a stack at all. Loot (including
-## brains) and placebo pills are sellable; everything else (surgical tools, the guide) bounces
-## back out unsold.
+## SWEEP 4A HOOK (pharmacy, chunk 3): whether the furnace can sell a stack at all. Loot and placebo
+## pills are sellable; everything else (surgical tools, the guide) bounces back out unsold.
 func furnace_can_sell(kind: String) -> bool:
 	return Items.is_loot(kind) or kind == "placebo_pills"
 
 
-## SWEEP 4A HOOK (pharmacy, chunk 3): what a stack is worth burned. Brains pay what they are worth
-## now (spoilage); placebo pills always burn for $0; other loot pays its carried value.
+## SWEEP 4A HOOK (pharmacy, chunk 3): what a stack is worth burned. Body parts pay what they are
+## worth now (spoilage); placebo pills always burn for $0; other loot pays its carried value.
 func furnace_value(kind: String, s: Dictionary) -> int:
 	if kind == "placebo_pills":
 		return 0
-	if brains != null and brains.is_brain(kind):
-		return maxi(0, int(brains.current_value(s)))
 	if vats != null and Eyes.is_eye(kind):
 		return maxi(0, int(vats.eye_value(s)))   # GRAFTING part one: eyes spoil too
 	return maxi(0, int(s.get("v", 0)))
@@ -1923,8 +1920,8 @@ func finish_case(id: int, won: bool) -> void:
 			s.end_current()
 	_apply_cases_locally()
 	if dissection.owns_case(c):
-		# SWEEP 3 HOOK (dissection): a strapped monster: the brain is handed over (or ruined) with its
-		# own wording and no paycheck sting; the case clears itself a few seconds later.
+		# SWEEP 3 HOOK (dissection): a strapped monster: the extracted part is handed over (or ruined)
+		# with its own wording and no paycheck sting; the case clears itself a few seconds later.
 		dissection.last_operator = operated_by if operated_by != 0 else _step_operator   # GRAFTING part one: the extracted eye goes in their hand
 		dissection.on_case_finished(c, won)
 		loop.on_case_finished(c)
@@ -2054,8 +2051,9 @@ func _apply_cases_locally() -> void:
 			_free_body(t)
 	for t in want.keys():
 		var c: Dictionary = want[t]
-		# GRAFTING part one: a strapped Hive turning from dissection into eye extraction keeps its body.
-		var body_ailment: String = "dissection" if String(c.ailment_id) == "eye_extraction" else String(c.ailment_id)
+		# GRAFTING: every extraction uses the same strapped-monster body, so changing the plan on a
+		# table does not rebuild it.
+		var body_ailment: String = "dissection" if bool(c.get("monster", false)) else String(c.ailment_id)
 		var key := "%d|%s|%s" % [int(c.get("id", 0)), c.patient_id, body_ailment]
 		var e: Dictionary = _bodies.get(t, {})
 		if String(e.get("key", "")) != key:
@@ -2545,7 +2543,7 @@ func _sim_shift(delta: float) -> void:
 		if String(c.get("state", "")) != "on_table" or String(c.get("patient_id", "")) == "player":
 			continue
 		if dissection.owns_case(c):
-			continue   # SWEEP 3 HOOK: a strapped monster's vitals are its brain's condition (no drain)
+			continue   # SWEEP 3 HOOK: a strapped monster on a table does not drain
 		c.vitals = float(c.vitals) - delta * 100.0 / drain
 		if float(c.vitals) <= 0.0:
 			c.vitals = 0.0
@@ -4398,7 +4396,7 @@ func _drop_hands_in_place(p: Node) -> bool:
 		var xf := Transform3D(Basis(Vector3.UP, randf() * TAU), at)
 		var it := _spawn_item(s.kind, int(s.count), xf, WorldItem.State.LOOSE)
 		it.value = int(s.get("v", 0))  # inventory: loot keeps its value
-		it.bt = float(s.get("bt", -1000000.0))   # SWEEP 3 HOOK (brains)
+		it.bt = float(s.get("bt", -1000000.0))   # GRAFTING: the spoil clock
 		it.x = String(s.get("x", ""))   # GRAFTING part one
 		it.toss(xf, Vector3(cos(a), 0.0, sin(a)) * 0.4)
 		p.clear_slot(i)

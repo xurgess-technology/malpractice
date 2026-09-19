@@ -26,7 +26,7 @@ const RIG := {
 		"scale": 1.0, "offset": Vector3(-0.01, 0.05, 0.0), "head_bone": Vector3(-0.648, 0.1204, 0.0),
 		"centre": Vector3(0.0, 0.12, -0.008), "radii": Vector3(0.095, 0.11, 0.108), "spread": 2.0,
 		"straps": [[-0.42, 0.29, 0.15], [0.12, 0.3, 0.27], [0.42, 0.19, 0.13], [0.68, 0.18, 0.12]],
-		"injection": Vector3(-0.42, 0.1, -0.205), "brain_scale": 0.92,
+		"injection": Vector3(-0.42, 0.1, -0.205),
 		"shoulder_x": -0.57, "arm_reach": 0.75, "hip_x": -0.07,
 	},
 }

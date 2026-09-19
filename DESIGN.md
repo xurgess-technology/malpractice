@@ -78,7 +78,7 @@ All items are physical 3D objects: on shelves, in containers, in hands, on the O
 | Tourniquet | AM | no | red trauma bags (corridors, nurse stations); sometimes dropped |
 | Bone saw | AM | no | pegboards (maintenance, storage); sometimes leaning on a gurney |
 
-- **Loot** is what you find to sell at the furnace: five plain kinds (pill bottle, X-ray film, heart monitor, gold watch, portable ultrasound) and six trinkets (desk phone, laptop, defibrillator, reflex hammer, EpiPen, pulse oximeter), which sell too but are rarer and are meant to do one thing each (their jobs come later; see docs/ITEMS_AND_ICONS.md). Loot is scarce: 15 to 20 stacks a shift, about $1,000 in all, so most rooms hold nothing and a harvested brain is a real share of a shift's pay. Anything that isn't bulky can turn up in a container too.
+- **Loot** is what you find to sell at the furnace: five plain kinds (pill bottle, X-ray film, heart monitor, gold watch, portable ultrasound) and six trinkets (desk phone, laptop, defibrillator, reflex hammer, EpiPen, pulse oximeter), which sell too but are rarer and are meant to do one thing each (their jobs come later; see docs/ITEMS_AND_ICONS.md). Loot is scarce: 15 to 20 stacks a shift, about $1,000 in all, so most rooms hold nothing and a harvested body part is a real share of a shift's pay. Anything that isn't bulky can turn up in a container too.
 - **Aim and press E** for everything: take items, open and close containers, put things on the OR's storage shelves, clock in, revive, operate.
 - **Two hands.** A batch fills one hand; picking up more of the same consumable merges into it. 1, 2 or the mouse wheel switch hands; G sets the selected stack down gently.
 - **Getting hit or shoved** drops both hands; fragile stacks lose about a third, never all of it.
@@ -95,7 +95,7 @@ All items are physical 3D objects: on shelves, in containers, in hands, on the O
 A computer terminal in the break room, opened with E; full-screen, and you can't move while using it. It replaced the old guide binder entirely — no carryable version.
 
 - Three sections: Monsters, Abilities, Items & Procedures.
-- Monster entries unlock in tiers as you learn more about that species: **sighted** (name, silhouette), **scanned** (behaviour, senses, threat, sedative doses, an X-ray of where its brain sits), **harvested** (the brain's look, spoil time, the ability it grants, a level table). The Night Nurse has no brain, so her entry never reaches tier 3.
+- Monster entries unlock in tiers as you learn more about that species: **sighted** (name, silhouette), **scanned** (behaviour, senses, threat, sedative doses, an X-ray of where the part you want sits), **harvested** (the part's look, spoil time, the ability it grants, a level table). Nothing can be taken out of the Night Nurse, so her entry never reaches tier 3.
 - Items and procedures are unlocked from the start, same as the old guide.
 - The database belongs to the host, saved to disk, and survives a wipe; guests share the host's copy for the session but don't keep their own.
 
@@ -104,7 +104,7 @@ A computer terminal in the break room, opened with E; full-screen, and you can't
 - One floor: the entrance building (break room with the time clock, phone and database terminal, the OR, lobby with the pharmacy window and crematorium, and personnel) and three or four procedurally generated wings behind it, with an outdoor lot outside the main doors: empty asphalt and fog, nothing else. Thick fog rings the lot; walk into it and visibility and sound fall away within a few metres, and past a certain depth you're quietly turned back toward the lot before you ever touch anything. Player spawns and respawns are inside, in the lobby.
 - **The ambulance** drives itself out of the fog for every patient delivery, parks at the bay, unloads along the gurney walk, and drives back into the fog once it's done; it stops and honks for anyone standing in its lane rather than hitting them.
 - **The pharmacy** is a window behind a steel grate in the lobby: order with E, and a pneumatic tube thunks a capsule into a wall slot a moment later. Sells placebo pills and rocket boots.
-- **The OR**: three tables along one wall, each with its monitor and surgical lamp, an anesthesia cart between each pair, the crash cart by the west wall and the scrub sinks by the doors. Across from the tables, on your left coming in, a **lab wall** of benches with shelves of bottles over them: a fume hood, a blood bank fridge with gas cylinders, specimen jars and a dissection tray, a microscope, racks of vials and beakers, a centrifuge, a blood analyser and a lab sink with an eyewash. Two of the benches are **vat benches**: three empty specimen vats stand there at the start of a run, with shelves of jars over them, mostly heads. The old locker bay is the lab's storage now, glass supply cabinets and shelving, and the scalpel and eye spoon start there. Every OR table has a small **vat stand** beside it, where the vat sits while someone is being grafted.
+- **The OR**: three tables along one wall, each with its monitor and surgical lamp, an anesthesia cart between each pair, the crash cart by the west wall and the scrub sinks by the doors. Across from the tables, on your left coming in, a **lab wall** of benches with shelves of bottles over them: a fume hood, a blood bank fridge with gas cylinders, specimen jars and a dissection tray, a microscope, racks of vials and beakers, a centrifuge, a blood analyser and a lab sink with an eyewash. Two of the benches are **vat benches**: three empty specimen vats stand there at the start of a run, with shelves of jars over them, mostly heads. A vat holds one body part, an eyeball or a trachea. The old locker bay is the lab's storage now, glass supply cabinets and shelving, and the scalpel, the eye spoon and a pair of forceps start there. Every OR table has a small **vat stand** beside it, where the vat sits while someone is being grafted.
   - **TODO**: the lab stations do things, the centrifuge first (spinning vials).
 - **The crematorium** is a room off the spine with a lit furnace, and the fire is its only light. Charred brick walls, floor and ceiling. Junk and the dead are heaped up both long walls, tallest at the wall: garbage and biohazard bags, body bags, sheeted corpses with a foot and a toe tag out, skulls and bones, bins, drip stands, broken chairs, bloody rags. Only a lane is left from the doors to the furnace, with a drag trail of blood down it; the end by the furnace stays low, under the hatch. Selling loot means throwing it through the grate into the fire (a miss bounces off the frame); a burst of flame and the amount floating up confirms a sale. Bodies (downed, dead, carried) bounce off the grate like a miss and can never go in. No gold bars, no dumpster, no shop van any more.
 - **Personnel** is the staff locker room across the spine from the break room, next to the crematorium, and it's lit. Walking in: lockers down the left wall with the four staff lockers (one per player, a blank emblem plate on each door) among them; sinks with mirrors down the right wall, then a big mirror with dressing-room bulbs, practically floor to ceiling; benches between. The mirrors reflect for real, you included. The back half is white tile: three showers on each side wall with a drain under each, and the whole end wall is the palm vein machine, a big screen (off) over a base cabinet with the palm console standing in front of it, tanks of blood either side, a server tower at each end with gauges and panels of lights, blood lines across the top. Set dressing apart from the mirrors.
@@ -122,8 +122,8 @@ Each monster runs on one sense, so players learn them in order: eyes, then ears,
 | Monster | Sense | Rule |
 | --- | --- | --- |
 | **The Hive** | Eyes | A shambling patient, common near the start of every wing. Sees you and lumbers slowly after you; break line of sight and it loses interest within a few seconds. Deaf. Weak: the easy fight that teaches the saw and the capture loop. Hives share a hive mind (that is why they forget you so fast). **Look (2026-09-18):** charcoal-grey skin; the skull is broken open and the brain is gone, replaced by a pale shelf fungus that bulges out of the break and roots into the scalp; orange eyes, a soft pinpoint while it wanders and the whole eyeball lit up once it locks on to someone. With no brain, what you harvest from a Hive is an **eyeball** -- taken out on the table, kept in a specimen vat, and grafted into a surgeon (see Grafting). |
-| **The Sonographer** | Ears | A blind doctor in old tattered whites, with blank smooth skin where the eyes were, a glowing windpipe behind a thin pane of throat skin, ordinary ears that swivel toward sounds, and an ultrasound wand fitted to its cut-off right wrist. Looks almost normal until it gets suspicious, then its neck grows and grows. Clicks as it walks. Hunts by sound: the clicking stops, the ears turn and the neck rises, then it rushes the noise. A shove stuns it. Has a brain. (It replaced the Discharged, 2026-09-18.) |
-| **The Night Nurse** | Being watched | Moves only while nobody is looking at it with light on it. A shove does nothing, and neither do the saw or the needle: she is the one you run from. No brain. If she gets a hand on you she takes no hearts: in a snap she has you by the throat with both hands and straightens to her full height, holding you up to her face. Your view is locked on it, straight on, until her head snaps over to one side, cocked, considering you; then she drops you, downed, and is gone, somewhere far off in the dark. About two seconds, and nothing anyone can do. |
+| **The Sonographer** | Ears | A blind doctor in old tattered whites, with blank smooth skin where the eyes were, a glowing windpipe behind a thin pane of throat skin, ordinary ears that swivel toward sounds, and an ultrasound wand fitted to its cut-off right wrist. Looks almost normal until it gets suspicious, then its neck grows and grows. Clicks as it walks. Hunts by sound: the clicking stops, the ears turn and the neck rises, then it rushes the noise. A shove stuns it. What you harvest from a Sonographer is its **trachea** -- taken out on the table, kept in a specimen vat, and grafted into a surgeon for Echo (see Grafting). (It replaced the Discharged, 2026-09-18.) |
+| **The Night Nurse** | Being watched | Moves only while nobody is looking at it with light on it. A shove does nothing, and neither do the saw or the needle: she is the one you run from. Nothing to harvest. If she gets a hand on you she takes no hearts: in a snap she has you by the throat with both hands and straightens to her full height, holding you up to her face. Your view is locked on it, straight on, until her head snaps over to one side, cocked, considering you; then she drops you, downed, and is gone, somewhere far off in the dark. About two seconds, and nothing anyone can do. |
 
 Surgery is the worst case: the monitors and the bone saw call the Sonographer, and every surgeon's eyes are on the table instead of the door.
 
@@ -133,13 +133,12 @@ The core choice in every fight: **kill it to be safe, or catch it to get paid.**
 
 - **Kill:** the bone saw is a weapon (left mouse while holding it). Hits stagger, a few hits kill. Every hit has a chance to snap the saw, which is also the saw the surgery needs. Swinging is loud. A killed monster pays nothing: organs are only worth anything harvested alive.
 - **Catch:** shove it (stunned), then jab it with anesthetic (left mouse while holding a vial) inside the stun window. It drops, sedated, for a while. Hold E to drag it, E on a free patient table to strap it down. Strapped monsters cannot hurt anyone.
-- **On the table:** sedation wears off, faster with noise (the saw is the loudest). Low sedation makes it stir (the operator's hand shakes); lower still it is awake and thrashing, which botches the work and damages the brain. Anyone can re-dose it with anesthetic from their hands (E at the table), but every dose works for less time than the last.
-- **Dissection:** saw open the skull, pull the brain out with the forceps. Botches cost brain condition instead of patient vitals. The finished monster dies on the table.
-- **Brains spoil.** A harvested brain loses value quickly: run it to the crematorium (thrown into the furnace, the only sell point now) or to the break-room blender.
-- **The blender:** blend a brain and drink it to absorb that monster's knowledge. Per player, and lost on a game over along with the money. The ability it grants lands in the next empty slot of your 4-slot ability bar; its level still comes from these same points.
-  - (Hive brains teach nothing any more: **Hive Eyes** comes from the graft, below.)
-  - **Hive Eyes** (from a grafted Hive eyeball): fire from its slot to see through a nearby Hive's eyes for a few seconds. Your camera flies there along the navmesh first (about 1-1.5s), then settles into its eyes; your own body stands with glazed eyes teammates can see. A hit snaps you back instantly instead of flying back. More brains: longer range and time, and at level 2+ you can cycle between Hives in range instead of only the nearest. (Later: Puppet, steering it.)
-  - Sonographer brains, **Echo**: fire from its slot for a loud shriek, visibly coming from you (a pulse ring, a body lean) on every machine; for a few seconds everything nearby shows as outlines through walls. It is loud enough to bring every Sonographer in the wing. More brains: bigger radius and longer.
+- **On the table:** sedation wears off, faster with noise (the saw is the loudest). Low sedation makes it stir (the operator's hand shakes); lower still it is awake and thrashing, which botches the work and damages the part you are taking out. Anyone can re-dose it with anesthetic from their hands (E at the table), but every dose works for less time than the last.
+- **Extraction:** take the part out on the table (a Hive's eyeball, a Sonographer's trachea). Botches cost the part's condition instead of patient vitals. The finished monster dies on the table.
+- **Body parts spoil.** A part out of a vat loses value quickly: get it into a specimen vat, or run it to the crematorium and throw it in the furnace (the only sell point now).
+- **Abilities come from grafts** (see Grafting). Each one lands in the next empty slot of your 4-slot ability bar, at level 1. Per player, and lost on a game over along with the money.
+  - **Hive Eyes** (from a grafted Hive eyeball): fire from its slot to see through a nearby Hive's eyes for a few seconds. Your camera flies there along the navmesh first (about 1-1.5s), then settles into its eyes; your own body stands with glazed eyes teammates can see. A hit snaps you back instantly instead of flying back. Higher levels: longer range and time, and at level 2+ you can cycle between Hives in range instead of only the nearest. (Later: Puppet, steering it.)
+  - **Echo** (from a grafted Sonographer trachea): fire from its slot for a loud shriek, visibly coming from you (a pulse ring, a body lean) on every machine; for a few seconds everything nearby shows as outlines through walls. It is loud enough to bring every Sonographer in the wing. Higher levels: bigger radius and longer.
 - Later sweeps: Puppet, Rise (get back up as a shambler when downed), visible side effects (pale skin, groans, bigger ears, loud noises hurt), rare strap breaks.
 
 Shift 1 has Hives and one Sonographer; the Night Nurse joins from shift 2; more of each on later shifts and with more players.
@@ -147,27 +146,39 @@ Shift 1 has Hives and one Sonographer; the Night Nurse joins from shift 2; more 
 ## Grafting
 
 Body parts come out of monsters and go into surgeons. Every part is named after whoever it came out
-of: **Hive's eyeball**, **Zach's eyeball**.
+of: **Hive's eyeball**, **Sonographer's trachea**, **Zach's trachea**. There are two graft sites, the
+left eye socket and the throat, and a surgeon can wear a graft in both at once.
 
-- **Take it out.** Strap a Hive to a table and run **Eyeball Extraction** on it with a scalpel and an
-  eye spoon: cut round the eye, scoop it out, snip the optic nerve. One eye per Hive, and the Hive
-  dies on the table like any dissection.
+- **Take it out.** A strapped monster has one part worth having, and taking it is the only thing you
+  do to it. A Hive gives up an **eyeball**: **Eyeball Extraction** with a scalpel and an eye spoon --
+  cut round the eye, scoop it out, snip the optic nerve. A Sonographer gives up its **trachea**:
+  **Trachea Extraction** with a scalpel and forceps -- open the throat along the glowing line, cut
+  the windpipe free top and bottom, lift it out. That middle cut makes it shriek, whatever the
+  sedation says: a real noise, loud enough to bring everything in the building to the OR. Either way
+  the monster dies on the table.
 - **Keep it.** A part spoils in a minute or two out in the open, clouding over and losing its value.
-  A **specimen vat** stops the clock: a glass jar carried in both hands, put down on the lab benches
-  or on the stand beside an OR table. A spoiled part cannot be grafted, only sold.
-- **Put it in.** A surgeon lies down on any free OR table and straps themselves in, **awake**:
-  first person, face up, watching the tools come at their own eye. Somebody else sets the vat on
-  that table's stand and runs **Eyeball Grafting**: cut round the socket, scoop the old eye out (it
-  drops into the vat), seat the new one, stitch it in. A graft is always a swap, never an empty
-  socket, and nothing about it can be botched. You can hold a key to get up until the scoop; after
-  that you are committed.
-- **What you get.** One normal eye and one orange Hive eye, stitched in and visible to everyone --
-  in the mirror, over your shoulder, on other players' screens. It glows low all the time and lights
-  right up while you are using **Hive Eyes 1**, which the graft gives you in your next free ability
-  slot. Your own view carries a faint orange tint down its left edge, stronger while the ability is
-  running. Swap your own eye back in and the ability goes with it.
-- A graft lasts the whole run, through death, and is lost on a game over, like the abilities from
-  brains. Eyes sell at the crematorium furnace like any other loot.
+  A **specimen vat** stops the clock: a glass jar carried in both hands, holding one body part, an
+  eyeball or a trachea, put down on the lab benches or on the stand beside an OR table. A spoiled
+  part cannot be grafted, only sold.
+- **Put it in.** A surgeon lies down on any free OR table and straps themselves in, **awake**: first
+  person, face up, watching the tools come at their own eye or their own throat. Somebody else sets
+  the vat on that table's stand, and what floats in the vat decides which surgery it is. **Eyeball
+  Grafting**: cut round the socket, scoop the old eye out (it drops into the vat), seat the new one,
+  stitch it in. **Trachea Grafting**: open the throat, lift the old windpipe out (into the vat), seat
+  the new one, stitch the throat closed. A graft is always a swap, never an empty socket, and nothing
+  about it can be botched. You can hold a key to get up until your own part is out; after that you
+  are committed.
+- **What you get.** A Hive's eyeball gives you **Hive Eyes 1**; a Sonographer's trachea gives you
+  **Echo 1**, and a graft is the only way to get either of them. Each lands in your next free
+  ability slot. Both show on the body for everyone -- in the mirror, over your shoulder, on other
+  players' screens: one normal eye and one orange Hive eye stitched into the socket, and a throat you
+  can see the violet windpipe glowing through a thin pane of skin, stitched shut, throwing a little
+  violet light onto your collar and jaw. Both sit low all the time and burn while the ability they
+  came with is running. Your own view carries a faint orange wash down its left edge for the eye and
+  a violet one along the bottom edge, under your own chin, for the throat, each stronger while its
+  ability fires. Swap your own part back in and that ability goes with it.
+- A graft lasts the whole run, through death, and is lost on a game over, along with the money.
+  Body parts sell at the crematorium furnace like any other loot.
 
 ## Look and sound
 

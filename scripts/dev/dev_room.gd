@@ -737,7 +737,7 @@ func _apply_request(sender: int, action: String, a: Dictionary) -> void:
 			if target != null:
 				game.knock_down_player(target, "dev:panel")
 		_:
-			# SWEEP 3 HOOK (brains): "br_spawn_brain", "br_levels", "br_reset", "br_spawn_hive".
+			# SWEEP 3 HOOK (abilities): "br_levels", "br_reset", "br_spawn_hive".
 			if action.begins_with("br_") and game.brains != null and game.brains.has_method("dev_request"):
 				game.brains.dev_request(sender, action, a)
 	state_changed.emit()
@@ -810,7 +810,7 @@ func hand_over(from: Node, to: Node, hand: int) -> bool:
 		return true
 	var got: int = to.take_into(String(s.kind), int(s.count), int(s.get("v", 0)))
 	if got >= 0 and s.has("bt"):
-		to.slots[got]["bt"] = s.bt   # SWEEP 3 HOOK (brains): the spoil clock goes with the brain
+		to.slots[got]["bt"] = s.bt   # GRAFTING: the spoil clock goes with the part
 	from.clear_slot(hand)
 	game._sound("pickup", to.global_position)
 	game.tell(to, "%s handed you %s." % [from.player_name, Items.display_name(s.kind)], 2.5)

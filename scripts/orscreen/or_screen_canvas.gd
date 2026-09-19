@@ -185,13 +185,13 @@ func _header(r: Rect2, p: Dictionary, name_px: int, sub_px: int) -> void:
 	_txt(Vector2(x + 16, 24 + name_px + sub_px), _fit(ail, sub_px, w - 32), sub_px, AMBER)
 
 
-## SWEEP 3 HOOK (dissection): on a strapped monster's panel the big number is the brain's condition
-## (a "BRAIN" tag on it) and the top right of the box shows the sedation, amber while it stirs and
+## GRAFTING: on a strapped monster's panel the big number is the condition of the part being taken
+## (an "EYE" / "THROAT" tag on it) and the top right of the box shows the sedation, amber while it stirs and
 ## blinking red once it is awake.
 func _monster_labels(box: Rect2, p: Dictionary, px: int) -> void:
 	if not bool(p.get("monster", false)):
 		return
-	_txt(Vector2(box.position.x + 10, box.position.y + px + 2), "EYE" if bool(p.get("eye", false)) else "BRAIN", px, Color(TEXT, 0.7))
+	_txt(Vector2(box.position.x + 10, box.position.y + px + 2), String(p.get("part", "EYE")), px, Color(TEXT, 0.7))
 	if String(p.state) != "on_table":
 		return
 	var s := float(p.get("sedation", 1.0))
@@ -383,10 +383,10 @@ func _status_line(at: Vector2, p: Dictionary, width: float, px: int) -> void:
 	var col := GREEN
 	match String(p.state):
 		"dead":
-			text = (("EYE BURST" if bool(p.get("eye", false)) else "BRAIN RUINED") if bool(p.get("monster", false)) else "FLATLINE") if _blink(1.0) else ""   # SWEEP 3 HOOK (dissection)
+			text = (("EYE BURST" if bool(p.get("eye", false)) else "PART RUINED") if bool(p.get("monster", false)) else "FLATLINE") if _blink(1.0) else ""   # GRAFTING
 			col = RED
 		"stable":
-			text = ("EYE OUT" if bool(p.get("eye", false)) else "BRAIN HARVESTED") if bool(p.get("monster", false)) else "STABLE"   # SWEEP 3 HOOK (dissection)
+			text = ("EYE OUT" if bool(p.get("eye", false)) else "PART OUT") if bool(p.get("monster", false)) else "STABLE"   # GRAFTING
 		_:
 			if String(p.operator) != "":
 				text = "%s OPERATING  %d%%" % [String(p.operator).to_upper(), roundi(float(p.progress) * 100.0)]

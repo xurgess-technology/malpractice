@@ -600,7 +600,8 @@ func strap(q: Node, ti: int) -> int:
 		return -1
 	var s := lerpf(STRAP_SEDATION_MIN, 1.0, clampf(sedation_left(m) / SEDATE_SECONDS, 0.0, 1.0))
 	var kind := String(m.kind)
-	var id: int = game.add_case({"table": ti, "patient_id": kind, "ailment_id": "dissection", "monster": true,
+	var plan: String = game.dissection.extraction_for(kind) if game.get("dissection") != null else "eye_extraction"
+	var id: int = game.add_case({"table": ti, "patient_id": kind, "ailment_id": plan, "monster": true,
 		"flags": {"sedation": snappedf(s, 0.01)}})
 	if id < 0:
 		game.tell(q, "The table is taken.", 2.0)

@@ -48,7 +48,7 @@ const TIPS := {
 	"furnace": {
 		"title": "THE FURNACE",
 		"text": [
-			"Anything worth money gets sold here: loot, brains, the lot.",
+			"Anything worth money gets sold here: loot, body parts, the lot.",
 			"Press E at the window to open the hatch. Hold G to charge a throw, let go to toss what you are holding into the fire.",
 			"Surgical tools and supplies bounce back out. Pills burn for nothing.",
 		],

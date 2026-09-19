@@ -53,7 +53,7 @@ const ITEMS := {
 		"loose_surfaces": ["tray", "counter"],
 		"real_use": "Surgical forceps are long, hinged tweezers used to grip tissue or remove foreign objects without putting fingers into a wound. In a gunshot wound they are how a surgeon reaches in and draws out the bullet or its fragments.",
 		"where": "Sealed in sterile packs inside the steel drawer units of supply closets, janitor closets, labs and the morgue. Occasionally abandoned on an instrument tray.",
-		"handling": "Reusable. One pair. Stays in the OR once delivered.",
+		"handling": "Reusable. One pair. Stays in the OR once delivered. Trachea extraction lifts the windpipe out with it, and trachea grafting swaps one for another with it.",
 	},
 	"tourniquet": {
 		"name": "Tourniquet",
@@ -128,9 +128,9 @@ const ITEMS := {
 		"where": "Only sold at the pharmacy window.",
 		"handling": "Worn, not carried: taking a pair puts them on. Hold crouch through a sprint-dive to burn fuel and fly straight ahead. Walls hurt.",
 	},
-	# GRAFTING part one (docs/GRAFTING.md): the two eye tools, and the specimen vat. `found` is empty:
-	# game.gd stocks the scalpel and the eye spoon on the OR's storage shelves at the start of a run,
-	# and the vats stand on the lab wall (scripts/grafting/vats.gd).
+	# GRAFTING (docs/GRAFTING.md, docs/GRAFTING_TRACHEA.md): the two eye tools, and the specimen vat.
+	# `found` is empty: vats.gd stocks the scalpel, the eye spoon and a pair of forceps on the OR's
+	# storage shelves at the start of a run, and the vats stand on the lab wall.
 	"scalpel": {
 		"name": "Scalpel",
 		"short": "Scalpels",
@@ -142,7 +142,7 @@ const ITEMS := {
 		"loose_surfaces": [],
 		"real_use": "A small, very sharp blade on a slim handle for the first careful cut. Where a saw takes a limb or a skull, a scalpel takes a line through skin, or around an eye, or through a nerve.",
 		"where": "Starts on the OR's storage shelves.",
-		"handling": "Reusable. Eyeball extraction uses it twice: to cut around the eye, and to snip the optic nerve.",
+		"handling": "Reusable. Eyeball extraction uses it twice, to cut around the eye and to snip the optic nerve; trachea extraction uses it to open the throat and then to cut the windpipe free. Both grafts start with it.",
 	},
 	"eye_spoon": {
 		"name": "Eye spoon",
@@ -169,7 +169,7 @@ const ITEMS := {
 		"loose_surfaces": [],
 		"real_use": "A glass jar of cloudy preserving fluid. Anything floating in it stops rotting.",
 		"where": "Three empty ones stand on the lab wall in the OR at the start of a run.",
-		"handling": "Carried in both hands. E with an eye in hand puts it in; the vat key reaches an eye back out. E on a lab bench sets it down.",
+		"handling": "Carried in both hands, and holds one body part: an eyeball or a trachea. E with a part in hand puts it in; the vat key reaches it back out. E on a lab bench sets it down, E on an OR table's stand puts it where a graft can reach it.",
 	},
 }
 

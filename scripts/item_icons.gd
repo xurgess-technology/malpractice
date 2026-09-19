@@ -20,7 +20,8 @@ const ABILITY_FILES := {"hive_in": "res://art/icons/hive_eyes.svg", "echo": "res
 ## Ability id -> its colour (the glow the HUD puts behind the round icon).
 const ABILITY_COLOR := {"hive_in": Color("ff8a2a"), "echo": Color("9b6bff")}
 ## Game kinds whose art is filed under another name.
-const ALIAS := {"eye_hive": "hive_eyeball", "eye_surgeon": "surgeon_eyeball"}
+const ALIAS := {"eye_hive": "hive_eyeball", "eye_surgeon": "surgeon_eyeball",
+	"trachea_sonographer": "sonographer_trachea", "trachea_surgeon": "surgeon_trachea"}
 const DEFAULT_BORDER := Color("6a7378")
 
 static var _data: Dictionary = {}

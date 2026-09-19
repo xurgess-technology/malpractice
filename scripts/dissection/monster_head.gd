@@ -1,7 +1,7 @@
 extends RefCounted
 ## The head of a strapped monster, built so it can be opened: a lat-long ellipsoid split exactly
-## along the craniotomy plane into the skull cap and the rest, the bone rims of both cut faces, the
-## cavity and the brain. Also the brain mesh itself (the brain forceps step and fallbacks use it).
+## along the craniotomy plane into the skull cap and the rest, the bone rims of both cut faces and
+## the cavity.
 ##
 ## Head-local frame (the PatientBody frame, moved to the head centre): +Y the face, -X the crown,
 ## +X the chin, Z ear to ear. The cut plane has the normal CUT_DIR (up and toward the crown, 45
@@ -16,7 +16,6 @@ const REST_RINGS := 14
 const BONE_T := 0.16          # rim width as a fraction of the opening radius
 
 static var _mats := {}
-static var _brain_meshes := {}
 
 
 static func vmat(key: String, rough := 0.8, spec := 0.35, cull_off := false) -> StandardMaterial3D:
@@ -95,7 +94,7 @@ static func cut_info(r: Vector3) -> Dictionary:
 
 
 ## Builds the head under `parent` (a Node3D at the head centre). `look` = {skin: Color, hair: float,
-## scalp: Color, brain_scale: float}. Returns {cap, rest, rim, cavity, brain, cap_rim, info}.
+## scalp: Color}. Returns {cap, rest, rim, cavity, cap_rim, info}.
 static func build(parent: Node3D, r: Vector3, look: Dictionary, seed_v: int) -> Dictionary:
 	var info := cut_info(r)
 	var skin: Color = look.get("skin", Color(0.6, 0.6, 0.55))
@@ -180,23 +179,7 @@ static func build(parent: Node3D, r: Vector3, look: Dictionary, seed_v: int) -> 
 	_mi(rim, cavity_mesh, vmat("mh_cavity", 0.25, 0.7, true), "Cavity")
 	rim.visible = false
 
-	# The brain sits in the cavity with its dome just under the cut.
-	var brain := Node3D.new()
-	brain.name = "Brain"
-	parent.add_child(brain)
-	var bs := float(look.get("brain_scale", 1.0))
-	var bradii := brain_radii(info) * bs
-	var u: Vector3 = info.u
-	# Brain-local: X along u (front to back of the opening), Y out of the opening, Z ear to ear.
-	brain.transform = Transform3D(Basis(u, CUT_DIR, u.cross(CUT_DIR)), centre - CUT_DIR * (bradii.y * 0.55 + 0.004))
-	_mi(brain, brain_mesh(bradii, seed_v), vmat("mh_brain", 0.35, 0.55), "BrainMesh")
-	brain.visible = false
-	return {"cap": cap, "rest": rest_mi, "rim": rim, "brain": brain, "info": info, "brain_radii": bradii}
-
-
-## How big a brain fits this opening (brain-local radii: along u, out of the opening, ear to ear).
-static func brain_radii(info: Dictionary) -> Vector3:
-	return Vector3(float(info.half_u) * 0.68, float(info.half_u) * 0.55, float(info.half_z) * 0.68)
+	return {"cap": cap, "rest": rest_mi, "rim": rim, "info": info}
 
 
 static func _mi(parent: Node3D, mesh: Mesh, mat: Material, nm: String) -> MeshInstance3D:
@@ -322,48 +305,3 @@ static func _bowl(ring: PackedVector3Array, centre: Vector3, frac: float, depth:
 			st.add_index(a); st.add_index(c); st.add_index(b)
 			st.add_index(b); st.add_index(c); st.add_index(d)
 	return st.commit()
-
-
-## A brain: an ellipsoid with folds (gyri) and the fissure between the hemispheres along X.
-## Local frame: X front to back, Y up (the dome), Z ear to ear; flattened underneath. Cached.
-static func brain_mesh(radii: Vector3, seed_v: int) -> ArrayMesh:
-	var key := "%s|%d" % [str(radii.snapped(Vector3(0.001, 0.001, 0.001))), seed_v % 5]
-	if _brain_meshes.has(key):
-		return _brain_meshes[key]
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segs := 44
-	var rings := 26
-	var off := Vector3(float(seed_v % 5) * 1.7, 0.3, 0.9)
-	for j in rings + 1:
-		var v := float(j) / float(rings)
-		var phi := PI * v
-		for s in segs + 1:
-			var th := TAU * float(s) / float(segs)
-			var n := Vector3(sin(phi) * cos(th), cos(phi), sin(phi) * sin(th))
-			# Folds: ridged noise; deeper in the fissure between the hemispheres.
-			var w := noise3(n * 4.2 + off) * 0.6 + noise3(n * 9.0 + off * 2.0) * 0.4
-			var ridge := 1.0 - absf(sin(w * 18.0))
-			var fis := 1.0 - smoothstep(0.02, 0.14, absf(n.z)) * 1.0
-			fis *= smoothstep(-0.3, 0.2, n.y)
-			var k := 1.0 - 0.055 * (1.0 - ridge) - 0.16 * fis
-			var p := n * radii * k
-			if p.y < -radii.y * 0.45:
-				p.y = -radii.y * 0.45 + (p.y + radii.y * 0.45) * 0.25   # flattened base
-			var groove := clampf((1.0 - ridge) * 1.2 + fis * 1.3, 0.0, 1.0)
-			var col := Color(0.9, 0.7, 0.68).lerp(Color(0.5, 0.26, 0.3), groove)
-			col = col.lerp(Color(0.55, 0.12, 0.14), 0.25 * smoothstep(0.55, 0.8, noise3(n * 3.0 + off * 3.0)))
-			st.set_color(col)
-			st.add_vertex(p)
-	for j in rings:
-		for s in segs:
-			var a := j * (segs + 1) + s
-			var b := a + 1
-			var c := a + segs + 1
-			var d := c + 1
-			st.add_index(a); st.add_index(c); st.add_index(b)
-			st.add_index(b); st.add_index(c); st.add_index(d)
-	st.generate_normals()
-	var mesh := st.commit()
-	_brain_meshes[key] = mesh
-	return mesh

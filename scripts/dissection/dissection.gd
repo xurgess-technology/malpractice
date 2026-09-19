@@ -2,9 +2,11 @@ extends Node
 ## dissection (sweep 3): strapped monsters on the patient tables. See docs/SWEEP3.md ("Dissection")
 ## and docs/CONTRACTS.md ("Dissection").
 ##
-## A monster case is a normal game case with `monster: true`, `patient_id` hive | sonographer and
-## `ailment_id` "dissection" (Procedures). The surgery systems operate it like any patient; this
-## node adds what only a monster has, all host authoritative:
+## A monster case is a normal game case with `monster: true`, `patient_id` hive | sonographer and an
+## EXTRACTION `ailment_id` (Procedures: `eye_extraction` on a Hive, `trachea_extraction` on a
+## Sonographer). Dissecting one for its brain is gone with the brains (docs/GRAFTING_TRACHEA.md):
+## taking a body part out is the only thing a monster on a table is for now. The surgery systems
+## operate it like any patient; this node adds what only a monster has, all host authoritative:
 ##
 ## - Sedation (flags.sedation) wears off: SEDATION_SECONDS from 1 to 0, SAW_MULT faster while the
 ##   bone saw is in the kerf. 0.35..0.75 it stirs (the surgery system's stir code), under AWAKE it
@@ -15,10 +17,13 @@ extends Node
 ##   hundredths and clients put it back into their case flags right after the cases apply.
 ## - Re-dosing: anyone holding anesthetic presses E on the table (also while someone operates):
 ##   one vial, +DOSE * DOSE_FALLOFF^n (n = doses so far, case field `doses`), capped at 1.
-## - Vitals are the brain's condition: nothing drains them and nothing gives them back (the step
-##   bonus is taken away again). At 0 the case is lost. The last step hands the brain over by the
-##   table (game.brains.spawn_brain, or a plain loot item), the monster flatlines, and the case stays
-##   as a body until someone burns it (scripts/loop/corpses.gd).
+## - Vitals are the PART's condition: nothing drains them and nothing gives them back (the step
+##   bonus is taken away again). At 0 the case is lost and the part is ruined. The last step puts the
+##   part in the operator's hand, the monster flatlines, and the case stays as a body until someone
+##   burns it (scripts/loop/corpses.gd).
+## - GRAFTING part two: the middle step of a Trachea Extraction, the cut that frees the windpipe top
+##   and bottom, makes the Sonographer SHRIEK -- a real, loud noise event that can pull monsters to
+##   the OR (FREE_NOISE below).
 
 const SEDATION_SECONDS := 120.0
 const SAW_MULT := 2.5
@@ -32,31 +37,34 @@ const SHRIEK_NOISE := 0.7
 const SHRIEK_EVERY := Vector2(3.5, 6.5)
 const REMOVE_AFTER := 6.0
 const FLAG_STEP := 0.05
-const BRAIN_KINDS := {"hive": "brain_hive", "sonographer": "brain_sonographer"}
+## GRAFTING part two: how loud the cut that frees the windpipe is, and which step of
+## `trachea_extraction` it is. A Sonographer hears about 22 m per unit of loudness.
+const FREE_NOISE := 1.4
+const FREE_STEP := 1
 const LootTable := preload("res://scripts/economy/loot_table.gd")
-## Fallback when the brains system has no spawn_brain: a plain loot item worth this much at quality 1.
-const FALLBACK_KIND := "gold_watch"
-const FALLBACK_VALUE := {"hive": 150, "sonographer": 350}
+## Monster -> the extraction it is strapped down for (the part it has that a surgeon can use).
+const EXTRACTION := {"hive": "eye_extraction", "sonographer": "trachea_extraction"}
 
 var game: Node = null
 
 # host
 var _sed := {}          # case id -> precise sedation
-var _cond := {}         # case id -> brain condition last tick (it never goes up)
+var _cond := {}         # case id -> the part's condition last tick (it never goes up)
 var _thrash_t := {}     # case id -> seconds until the next thrash botch while operated
 var _shriek_t := {}     # case id -> seconds until the next shriek while awake
 var _remove_at := {}    # case id -> world_time to remove the finished case
+var _shrieked := {}     # case id -> the freeing cut has already shrieked
 
 # every machine (cosmetic)
 var _creak_t := {}      # table -> seconds until the next strap creak
 var _rng := RandomNumberGenerator.new()
 
-## Tests: the last brain handed over {kind, quality, pos, node}.
-var last_brain: Dictionary = {}
-## GRAFTING part one: the peer who was operating when the last case finished (set by game.finish_case),
-## who gets the extracted eye in their hand; tests read last_eye {kind, quality, node, peer}.
+## GRAFTING: the peer who was operating when the last case finished (set by game.finish_case), who
+## gets the extracted part in their hand; tests read last_part {kind, quality, node, peer}.
 var last_operator := 0
-var last_eye: Dictionary = {}
+var last_part: Dictionary = {}
+## The last noise the freeing cut made, for the headless check: {pos, loudness, time}.
+var last_shriek: Dictionary = {}
 
 
 func setup(g: Node) -> void:
@@ -86,22 +94,21 @@ func sedation(c: Dictionary) -> float:
 	return float(flags.get("sedation", 1.0)) if flags is Dictionary else 1.0
 
 
-## GRAFTING part one: what a strapped Hive would be given by what p holds, before its first step: the
-## scalpel makes it Eyeball Extraction, the bone saw Dissection. Anything else keeps what it has.
-func ailment_for(c: Dictionary, p) -> String:
+## GRAFTING: the extraction a strapped monster is for. One part per species, so there is nothing to
+## choose: a Hive gives up an eye, a Sonographer its trachea (docs/GRAFTING_TRACHEA.md).
+static func extraction_for(patient_id: String) -> String:
+	return String(EXTRACTION.get(patient_id, "eye_extraction"))
+
+
+## The plan this monster case runs. It never changes any more; the tool in hand does not pick it.
+## Anything that is not a strapped monster keeps whatever it came in with -- the surgery system asks
+## this about every case, human patients included (surgery_system._step_for).
+func ailment_for(c: Dictionary, _p = null) -> String:
 	var cur := String(c.get("ailment_id", ""))
-	if String(c.get("patient_id", "")) != "hive" or int(c.get("step_index", 0)) != 0:
+	if not owns_case(c) or int(c.get("step_index", 0)) != 0:
 		return cur
-	if cur != "dissection" and cur != "eye_extraction":
-		return cur
-	if p == null or not p.has_method("selected_stack"):
-		return cur
-	match String(p.selected_stack().get("kind", "")):
-		"scalpel":
-			return "eye_extraction"
-		"bone_saw":
-			return "dissection"
-	return "eye_extraction"   # empty-handed (or anything else): the Hive's default plan is its eye
+	var want := extraction_for(String(c.get("patient_id", "")))
+	return want if Procedures.AILMENTS.has(want) else cur
 
 
 ## Host: before an operation starts, the case takes the ailment p's tool asks for (ailment_for).
@@ -127,10 +134,6 @@ static func sedation_state(s: float) -> String:
 ## How much the next dose adds after `doses_given` doses.
 static func dose_amount(doses_given: int) -> float:
 	return DOSE * pow(DOSE_FALLOFF, float(maxi(0, doses_given)))
-
-
-static func brain_kind(patient_id: String) -> String:
-	return String(BRAIN_KINDS.get(patient_id, "brain_" + patient_id))
 
 
 # =============================================================================== frame
@@ -168,7 +171,7 @@ func _host_tick(delta: float) -> void:
 		var snapped := snappedf(s, FLAG_STEP)
 		if absf(float(flags.get("sedation", -1.0)) - snapped) > 0.001:
 			flags["sedation"] = snapped
-		# The brain's condition only ever goes down (surgery_step_done gives patients vitals back).
+		# The part's condition only ever goes down (surgery_step_done gives patients vitals back).
 		var v := float(c.get("vitals", 100.0))
 		var last := float(_cond.get(id, v))
 		if v > last:
@@ -180,6 +183,16 @@ func _host_tick(delta: float) -> void:
 			game.finish_case(id, false)
 			continue
 		var table := int(c.get("table", -1))
+		# GRAFTING part two: the cut that frees the windpipe. Whatever the sedation says, the body
+		# knows: it shrieks, loudly enough to bring whatever is in the building to the OR.
+		if String(c.get("ailment_id", "")) == "trachea_extraction" and int(c.get("step_index", 0)) > FREE_STEP and not _shrieked.has(id):
+			_shrieked[id] = true
+			var sat: Vector3 = game.table_position(table) + Vector3.UP * 1.0
+			game.emit_noise(sat, FREE_NOISE, "shriek")
+			last_shriek = {"pos": sat, "loudness": FREE_NOISE, "time": float(game.world_time)}
+			_fx_shriek(table)
+			game._broadcast("dx_shriek", {"tb": table})
+			game.say("The throat tears open and SHRIEKS. Everything in the building heard that.", 5.0)
 		if s < AWAKE:
 			_shriek_t[id] = float(_shriek_t.get(id, 0.8)) - delta
 			if float(_shriek_t[id]) <= 0.0:
@@ -205,7 +218,7 @@ func _host_tick(delta: float) -> void:
 
 
 func _forget(id: int) -> void:
-	for dct in [_sed, _cond, _thrash_t, _shriek_t, _remove_at]:
+	for dct in [_sed, _cond, _thrash_t, _shriek_t, _remove_at, _shrieked]:
 		dct.erase(id)
 
 
@@ -306,9 +319,9 @@ func table_prompt(p, table_index: int) -> String:
 	var pname := String(Procedures.patient(String(c.patient_id)).get("name", "The monster"))
 	match String(c.get("state", "")):
 		"stable":
-			return "!The brain is out."
+			return "!There is nothing left to take."
 		"dead":
-			return "!The brain is ruined."
+			return "!It is ruined."
 	var s := sedation(c)
 	var sed_txt := "sedation %d%%" % roundi(s * 100.0)
 	if s < AWAKE:
@@ -316,10 +329,6 @@ func table_prompt(p, table_index: int) -> String:
 	if p != null and _anesthetic_slot(p) >= 0:
 		var next := minf(1.0, s + dose_amount(int(c.get("doses", 0)))) - s
 		return "Re-dose %s (%s, +%d%%)" % [pname, sed_txt, roundi(next * 100.0)]
-	if p != null and String(c.patient_id) == "hive" and int(c.step_index) == 0:
-		var held_kind := String(p.selected_stack().get("kind", ""))
-		if held_kind != "scalpel" and held_kind != "bone_saw":
-			return "!Hold the scalpel to take its eye, or the bone saw to open the skull (%s)" % sed_txt
 	var step := Procedures.step(ailment_for(c, p), int(c.step_index))
 	var sys = game.surgery_for_table(table_index)
 	if step.is_empty() or sys == null:
@@ -339,7 +348,7 @@ func table_used(p, table_index: int) -> bool:
 	if c.is_empty() or not owns_case(c) or String(c.get("state", "")) != "on_table":
 		return false
 	if _anesthetic_slot(p) < 0:
-		_pick_ailment(p, c)   # GRAFTING part one: the scalpel means Eyeball Extraction
+		_pick_ailment(p, c)   # GRAFTING: the monster's own extraction plan
 		return false
 	redose(p, table_index)
 	return true
@@ -392,92 +401,60 @@ func _anesthetic_slot(p) -> int:
 
 # =============================================================================== the end
 
-## Host, from game.finish_case: the monster case is over. Won: the brain is handed over by the table
-## and the monster dies on it. Lost: the brain is ruined. Its own wording, no paycheck sting.
+## Host, from game.finish_case: the monster case is over. Won: the body part is handed over by the
+## table and the monster dies on it. Lost: the part is ruined. Its own wording, no paycheck sting.
 func on_case_finished(c: Dictionary, won: bool) -> void:
 	var id := int(c.get("id", -1))
 	var table := int(c.get("table", -1))
 	var at: Vector3 = game.table_position(table)
 	var pname := String(Procedures.patient(String(c.patient_id)).get("name", "The monster"))
 	_remove_at[id] = float(game.world_time) + REMOVE_AFTER
-	if String(c.get("ailment_id", "")) == "eye_extraction":
-		_finish_eye(c, won, table, at, pname)
-		return
+	var kind := String(Eyes.MONSTER_PART.get(_site_of(c), "eye_hive"))
+	var noun := String(Eyes.NOUN.get(kind, "part"))
 	if not won:
 		game._sound("flatline", at)
-		game.say("The brain is ruined. %s died on the table." % pname, 5.0)
+		game.say("The %s is ruined. %s died on the table." % [noun, pname], 5.0)
 		return
 	var cond := minf(float(c.get("vitals", 100.0)), float(_cond.get(id, float(c.get("vitals", 100.0)))))
 	c["vitals"] = cond
 	var quality := clampf(cond / 100.0, 0.0, 1.0)
-	var pos := _brain_spot(table)
-	var node = spawn_brain(String(c.patient_id), quality, pos)
-	last_brain = {"kind": brain_kind(String(c.patient_id)), "quality": quality, "pos": pos, "node": node}
-	game.mark_db(String(c.patient_id), "harvested")   # SWEEP 4A HOOK (database terminal, chunk 4): tier 3, for the whole team
-	_fx_flatline(table)
-	game._broadcast("dx_flatline", {"tb": table})
-	game._sound("flatline", at)
-	game.say("Brain out, condition %d%%. %s is dead. Get the brain to the dumpster before it spoils." % [roundi(cond), pname], 5.0)
-
-
-## Host, GRAFTING part one: an Eyeball Extraction case is over. Won: the Hive's eye comes out in the
-## operator's hand (else lies by the head) and the Hive dies on the table like a dissection. Lost: the
-## eye burst.
-func _finish_eye(c: Dictionary, won: bool, table: int, at: Vector3, pname: String) -> void:
-	var id := int(c.get("id", -1))
-	if not won:
-		game._sound("flatline", at)
-		game.say("The eye burst. %s died on the table." % pname, 5.0)
-		return
-	var cond := minf(float(c.get("vitals", 100.0)), float(_cond.get(id, float(c.get("vitals", 100.0)))))
-	c["vitals"] = cond
-	var quality := clampf(cond / 100.0, 0.0, 1.0)
-	var value := maxi(1, roundi(float(_base_value("eye_hive")) * quality))
+	var value := maxi(1, roundi(float(_base_value(kind)) * quality))
 	var who = game.players.get(last_operator) if last_operator != 0 else null
 	var node: Node = null
 	var given := false
 	if who != null and is_instance_valid(who) and who.alive:
-		var i: int = who.take_into("eye_hive", 1, value)
+		var i: int = who.take_into(kind, 1, value)
 		if i >= 0:
 			who.selected = i
 			who.slots[i]["bt"] = float(game.world_time)
 			given = true
 	if not given:
-		var pos := _brain_spot(table)
-		node = game._spawn_item("eye_hive", 1, Transform3D(Basis(Vector3.UP, randf() * TAU), pos), WorldItem.State.LOOSE)
+		var pos := _part_spot(table)
+		node = game._spawn_item(kind, 1, Transform3D(Basis(Vector3.UP, randf() * TAU), pos), WorldItem.State.LOOSE)
 		node.value = value
 		node.bt = float(game.world_time)
-	last_eye = {"kind": "eye_hive", "quality": quality, "node": node, "peer": last_operator}
+	last_part = {"kind": kind, "quality": quality, "node": node, "peer": last_operator}
+	# The database's third tier: a part has been extracted (docs/GRAFTING_TRACHEA.md).
+	game.mark_db(String(c.patient_id), "harvested")
 	_fx_flatline(table)
 	game._broadcast("dx_flatline", {"tb": table})
 	game._sound("flatline", at)
-	game.say("Eye out, condition %d%%. %s is dead. Put it in a vat before it spoils." % [roundi(cond), pname], 5.0)
+	game.say("%s out, condition %d%%. %s is dead. Put it in a vat before it spoils." % [
+		noun.capitalize(), roundi(cond), pname], 5.0)
+
+
+## The graft site a monster case is working on ("eye", "throat").
+func _site_of(c: Dictionary) -> String:
+	var steps: Array = Procedures.steps(String(c.get("ailment_id", "")))
+	return String(steps[0].get("site", "eye")) if not steps.is_empty() else "eye"
 
 
 func _base_value(kind: String) -> int:
 	return int(LootTable.LOOT.get(kind, {}).get("value", [0, 0])[0])
 
 
-## Host: hands a brain over at pos through the brains system, or a plain loot item.
-func spawn_brain(patient_id: String, quality: float, pos: Vector3) -> Node:
-	var kind := brain_kind(patient_id)
-	var br = game.get("brains")
-	if br != null and br.has_method("spawn_brain"):
-		return br.spawn_brain(kind, quality, pos)
-	var loot_kind := kind if not Items.def(kind).is_empty() else FALLBACK_KIND
-	var it = game._spawn_item(loot_kind, 1, Transform3D(Basis(), pos), WorldItem.State.LOOSE)
-	if it != null:
-		it.value = maxi(1, roundi(float(FALLBACK_VALUE.get(patient_id, 150)) * quality))
-	return it
-
-
-## Where the brain lands: the specimen tray beside the head (the brain step's tray), a little above.
-func _brain_spot(table: int) -> Vector3:
-	var body = game.body_for_table(table)
-	if body != null and body.has_method("site_section") and body.has_method("site_transform"):
-		var sec: Dictionary = body.site_section("brain")
-		if sec.has("tray"):
-			return body.site_transform("brain") * (sec.tray as Vector3) + Vector3.UP * 0.12
+## Where a part lands when nobody's hands were free: over the head end of the table.
+func _part_spot(table: int) -> Vector3:
 	return game.table_position(table) + Vector3.UP * 1.15
 
 
@@ -497,7 +474,7 @@ func dev_strap(kind: String, sed := 1.0, table := -1) -> int:
 	var there: Dictionary = game.case_on_table(table)
 	if not there.is_empty():
 		game.remove_case(int(there.id))
-	var id: int = game.add_case({"table": table, "patient_id": kind, "ailment_id": "dissection", "monster": true,
+	var id: int = game.add_case({"table": table, "patient_id": kind, "ailment_id": extraction_for(kind), "monster": true,
 		"flags": {"sedation": clampf(sed, 0.0, 1.0)}, "state": "on_table"})
 	if id >= 0:
 		_sed[id] = clampf(sed, 0.0, 1.0)

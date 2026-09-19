@@ -1,5 +1,5 @@
 extends SubViewportContainer
-## The database terminal's 3D viewer: the models a page talks about (a monster, its brain, an item,
+## The database terminal's 3D viewer: the models a page talks about (a monster, an item,
 ## every tool a procedure needs), lit and slowly turning in their own little world beside the text.
 ## One per terminal, kept for its whole life; `show_models` swaps what stands on the turntable, so a
 ## page that redraws its text every frame never rebuilds the viewport.
@@ -7,7 +7,7 @@ extends SubViewportContainer
 ##   show_models(key, models, silhouette)   models: [Node3D] (not in a tree yet), laid out in a row
 ##                                     and framed; silhouette: every surface flat black (unscanned).
 ##                                     Meta on a model: "preview_monster" = kind (a MonsterModel to
-##                                     set up in the tree), "preview_scale" = enlarge it (a brain),
+##                                     set up in the tree), "preview_scale" = enlarge it (a small part),
 ##                                     "preview_bounds" = its AABB (origin on the floor) when mesh
 ##                                     bounds would lie (skinned rigs).
 ##   clear()

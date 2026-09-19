@@ -41,7 +41,13 @@ VARIANTS = {
         hair=(0.16, 0.10, 0.07), iris=(0.26, 0.42, 0.52), cloth=(0.24, 0.56, 0.52), glove=(0.50, 0.66, 0.86),
         jaw=0.55, cheek=0.5, nose=1.0, brow=1.0, jowl=0.0, sag=0.0, mouth_open=0.0, eye_open=0.62,
         outfit='scrubs', graft=False, seed=5),
-    'surgeon_graft': dict(base='surgeon', graft=True),
+    # A surgeon who has been grafted. Both grafts at once, because a surgeon can hold both
+    # (docs/GRAFTING_TRACHEA.md): the left eye is a stitched Hive eye, and the front of the throat is
+    # a see-through pane with the Sonographer's violet windpipe glowing behind it, stitched shut.
+    # Render-only. The game builds both looks at runtime on the plain `surgeon` GLB
+    # (scripts/grafting/graft_eye.gd and graft_throat.gd), so this variant is never exported.
+    'surgeon_graft': dict(base='surgeon', graft=True, graft_throat=True, throat_dy=-0.009,
+                          throat_dz=0.018, glow=(0.61, 0.42, 1.0)),
     # The Hive: the surgeon's head and kit, charcoal skin, the skull open with the brain gone and a
     # pale shelf fungus grown in its place, rooting into the scalp; orange eyes (a soft pinpoint
     # while it wanders, the whole ball when it locks on to someone). Patient gown, hunched.
@@ -358,7 +364,7 @@ class Head:
             h = S.union(h, S.mirror_x(self.ear_v2()), k=0.009)
         if with_neck:
             h = S.union(h, self.neck_sdf_local(), k=0.016)
-            if self.V.get('sono'):
+            if self.V.get('sono') or self.V.get('graft_throat'):
                 h = S.subtract(h, self.throat_window(), k=0.004)
         if opened and self.V.get('hive'):
             h = self.open_skull(h)
@@ -409,21 +415,37 @@ class Head:
             return base(c + ((P - c) @ R) / k) * k
         return f
 
+    def throat_dy(self):
+        """How far forward (-Y) the whole throat assembly sits. Zero on the Sonographer, whose neck
+        this was built for; a little forward on the grafted surgeon, whose neck is fatter, so the
+        rings still stand in the opening instead of sinking into it."""
+        return self.V.get('throat_dy', 0.0)
+
+    def throat_dz(self):
+        """How far up the neck the throat assembly sits. Zero on the Sonographer; a little higher on
+        the grafted surgeon, whose neck is shorter, so the window sits on the throat and not on the
+        collarbone."""
+        return self.V.get('throat_dz', 0.0)
+
     def throat_window(self):
         """The shallow lens carved out of the front of the neck, where the skin goes thin and
         see-through over the windpipe."""
         ext = self.neck_ext()
-        z0 = -0.086
-        z1 = -0.188 - ext
+        dy = self.throat_dy()
+        dz = self.throat_dz()
+        z0 = -0.086 + dz
+        z1 = -0.188 + dz - ext
         # deep enough that the rings (centred 0.016 back) stand in the opening, not buried in the neck
-        c = np.array([0.0, -0.020, 0.5 * (z0 + z1)])
+        c = np.array([0.0, -0.020 + dy, 0.5 * (z0 + z1)])
         return S.ellipsoid(c, (0.026, 0.033, 0.5 * (z0 - z1) + 0.002))
 
     def windpipe(self):
         """The rings: a stack of open cartilage hoops down the middle of the neck, on a soft tube.
         They are what glows (scripts/monsters/sonographer_rig.gd)."""
         ext = self.neck_ext()
-        z0, z1 = -0.090, -0.192 - ext
+        dy = self.throat_dy()
+        dz = self.throat_dz()
+        z0, z1 = -0.090 + dz, -0.192 + dz - ext
         # close together at rest, so the throat reads as a windpipe and not a ladder; the crane is what
         # pulls them apart
         n = max(6, int(round((z0 - z1) / RING_PITCH)))
@@ -432,9 +454,9 @@ class Head:
         for i in range(n):
             t = i / max(n - 1, 1)
             z = z0 + (z1 - z0) * t
-            y = 0.016 - 0.008 * t
+            y = 0.016 - 0.008 * t + dy
             fs.append(S.torus((0.0, y, z), 0.0140 + 0.0030 * t, 0.0030, R))
-        tube = S.round_cone((0, 0.016, z0 + 0.008), (0, 0.008, z1 - 0.006), 0.0125, 0.0145)
+        tube = S.round_cone((0, 0.016 + dy, z0 + 0.008), (0, 0.008 + dy, z1 - 0.006), 0.0125, 0.0145)
         f = S.union(*fs, k=0.0035)
         return S.union(f, tube, k=0.004)
 
@@ -806,6 +828,25 @@ class Head:
             col = mix(col, srgb((0.78, 0.42, 0.40)), np.clip(swell * 0.55, 0, 1))
             col = mix(col, srgb((0.34, 0.06, 0.07)), np.clip(cut * 0.95, 0, 1))
             rough = rough - 0.25 * cut
+        if V.get('graft_throat'):
+            col, rough = self.paint_graft_throat(L, col, rough)
+        return col, rough
+
+    def paint_graft_throat(self, L, col, rough):
+        """The grafted throat on a surgeon (docs/GRAFTING_TRACHEA.md): the rim of the window is a raw
+        pink incision with a bruise spreading off it, and the skin just outside goes thin and violet
+        where the light underneath comes through."""
+        w = self.throat_window()(L)
+        # only on the neck: the scrubs' chest is part of the same piece and passes close enough to
+        # the window's field to pick up the bruise otherwise
+        on_neck = smooth01((0.010 - np.abs(self.neck_sdf_local()(L))) / 0.012)
+        rim = np.exp(-(w / 0.0045) ** 2) * on_neck
+        near = smooth01((0.022 - w) / 0.024) * (w > -0.001) * on_neck
+        bruise = np.exp(-((w - 0.012) / 0.020) ** 2) * on_neck
+        col = mix(col, srgb((0.50, 0.34, 0.52)), np.clip(bruise * 0.40, 0, 1))
+        col = mix(col, srgb((0.55, 0.38, 0.78)), np.clip(near * 0.28, 0, 1))
+        col = mix(col, srgb((0.36, 0.07, 0.09)), np.clip(rim * 0.9, 0, 1))
+        rough = rough - 0.25 * rim
         return col, rough
 
     def paint_opening(self, L, col, rough):
@@ -877,7 +918,7 @@ class Head:
     def paint_throat_skin(self, P):
         """The pane itself: bluish-grey, wet, and thin enough to see the rings through."""
         L = self.local(P)
-        col = np.tile(srgb((0.78, 0.63, 0.65)), (len(P), 1)) * (0.94 + 0.10 * S.fbm(L, 180.0, 23, 2))[:, None]
+        col = np.tile(srgb(self.V.get('skin', (0.78, 0.63, 0.65))), (len(P), 1)) * (0.94 + 0.10 * S.fbm(L, 180.0, 23, 2))[:, None]
         vein = smooth01(1 - np.abs(S.fbm(L, 120.0, 41, 3) - 0.5) / 0.02)
         col = mix(col, srgb((0.56, 0.23, 0.36)), np.clip(vein * 0.5, 0, 1))      # #8e3a5c
         return col, np.full(len(P), 0.18)
@@ -1107,6 +1148,23 @@ def build(name, body):
     if V['graft']:
         parts.append(Part('Stitches', THREAD, stitches_sdf(head), head.world((0.0, -0.11, -0.02)), head.world((0.07, -0.05, 0.05)), 0.0005,
                           paint=lambda P: (np.tile(srgb((0.06, 0.04, 0.05)), (len(P), 1)), np.full(len(P), 0.5)), rigid='head'))
+
+    if V.get('graft_throat'):
+        # The grafted throat (docs/GRAFTING_TRACHEA.md): the Sonographer's windpipe glowing behind a
+        # see-through pane of the surgeon's own throat skin, stitched shut all round.
+        ext = head.neck_ext()
+        dz = head.throat_dz()
+        tl = head.world(np.array([-0.032, -0.070, -0.200 + dz - ext]))
+        th = head.world(np.array([0.032, 0.052, -0.058 + dz]))
+        wp = head.windpipe()
+        parts.append(Part('Throat', GLOW, (lambda P: wp(head.local(P)) * head.hs), tl, th, 0.0007,
+                          paint=head.paint_windpipe))
+        ts = head.throat_skin()
+        parts.append(Part('ThroatSkin', PANE, (lambda P: ts(head.local(P)) * head.hs), tl, th, 0.0006,
+                          paint=head.paint_throat_skin))
+        slo, shi = throat_stitch_bounds(head)
+        parts.append(Part('ThroatStitches', THREAD, throat_stitches_sdf(head), slo, shi, 0.0005,
+                          paint=lambda P: (np.tile(srgb((0.06, 0.04, 0.05)), (len(P), 1)), np.full(len(P), 0.5))))
 
     if V['outfit'] == 'scrubs':
         _scrubs(V, sk, parts)
@@ -1452,23 +1510,76 @@ def stitches_sdf(head):
     return f
 
 
+## The grafted throat's incision: the oval that rings the see-through pane, a hair outside its rim.
+THROAT_INC = 1.06
+THROAT_STITCHES = 14
+THROAT_THREAD = 0.0013
+
+
+def throat_stitches_sdf(head):
+    """Stitches closing a grafted throat (docs/GRAFTING_TRACHEA.md): short bars across the incision
+    that rings the see-through pane, lying on the skin of the neck. The surgeon's own trachea came
+    out through this cut and the Sonographer's went in."""
+    ext = head.neck_ext()
+    dz = head.throat_dz()
+    z0, z1 = -0.086 + dz, -0.188 + dz - ext
+    zc = 0.5 * (z0 + z1)
+    rx = 0.026 * THROAT_INC
+    rz = (0.5 * (z0 - z1) + 0.002) * THROAT_INC
+    neck = head.neck_sdf_local()
+    fs = []
+    for i in range(THROAT_STITCHES):
+        a = 2 * math.pi * i / THROAT_STITCHES + 0.26
+        ca, sa = math.cos(a), math.sin(a)
+        cx, cz = ca * rx, zc + sa * rz
+        # the outward normal of the oval, so each bar crosses the incision rather than running along it
+        nx, nz = ca / rx, sa / rz
+        ln = math.hypot(nx, nz)
+        nx, nz = nx / ln, nz / ln
+        # kept clear of the neck's ends, where the oval runs off the bottom of the cone and the march
+        # for the skin finds nothing
+        zlo, zhi = z1 + 0.010, z0 - 0.006
+        p0 = np.array([cx - nx * 0.0034, 0.0, min(max(cz - nz * 0.0034, zlo), zhi)])
+        p1 = np.array([cx + nx * 0.0034, 0.0, min(max(cz + nz * 0.0034, zlo), zhi)])
+        fs.append((p0, p1))
+
+    def f(P):
+        L = head.local(P)
+        best = np.full(len(P), 1e9)
+        for p0, p1 in fs:
+            best = np.minimum(best, _stitch_d(L, p0, p1, neck, ys=(-0.075, 0.02), r=THROAT_THREAD))
+        return best * head.hs
+    return f
+
+
+def throat_stitch_bounds(head):
+    """(lo, hi) in world space for the throat stitches part."""
+    ext = head.neck_ext()
+    dz = head.throat_dz()
+    z0, z1 = -0.086 + dz, -0.188 + dz - ext
+    rx = 0.026 * THROAT_INC + 0.006
+    lo = head.world((-rx, -0.075, z1 - 0.008))
+    hi = head.world((rx, 0.02, z0 + 0.008))
+    return np.minimum(lo, hi), np.maximum(lo, hi)
+
+
 _stitch_cache = {}
 
 
-def _stitch_d(L, p0, p1, hl):
-    key = (tuple(p0), tuple(p1))
+def _stitch_d(L, p0, p1, hl, ys=(-0.14, -0.04), r=0.00055):
+    key = (tuple(p0), tuple(p1), ys, r)
     if key not in _stitch_cache:
         pts = []
         for q in (p0, p0 * 0.5 + p1 * 0.5, p1):
-            # march from the front toward the face to find the skin
-            ys = np.linspace(-0.14, -0.04, 400)
-            Q = np.stack([np.full(400, q[0]), ys, np.full(400, q[2])], 1)
+            # march from the front toward the skin and stop on the surface
+            yy = np.linspace(ys[0], ys[1], 400)
+            Q = np.stack([np.full(400, q[0]), yy, np.full(400, q[2])], 1)
             d = hl(Q)
             i = int(np.argmax(d < 0))
-            pts.append(np.array([q[0], ys[max(i - 1, 0)] + 0.0006, q[2]]))
+            pts.append(np.array([q[0], yy[max(i - 1, 0)] + 0.0006, q[2]]))
         _stitch_cache[key] = pts
     a, m, b = _stitch_cache[key]
-    return np.minimum(S.capsule(a, m, 0.00055)(L), S.capsule(m, b, 0.00055)(L))
+    return np.minimum(S.capsule(a, m, r)(L), S.capsule(m, b, r)(L))
 
 
 def _scrubs(V, sk, parts):

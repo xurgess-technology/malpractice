@@ -10,10 +10,11 @@ extends RefCounted
 ##                                      links (link: a surgery item's key, label over it when pointed at)
 ##
 ## `view` is whose database the screen shows (wall_session.gd view()): {db: {kind: bits (1 sighted,
-## 2 scanned, 4 harvested)}, peer, brains}; nobody signed in is an empty db and peer 0.
+## 2 scanned, 4 harvested)}, peer, brains}; nobody signed in is an empty db and peer 0. (`brains` is
+## the abilities node, scripts/brains/brains.gd.)
 ## Known: surgery items and procedures always; a monster once scanned; any other item once picked
 ## up (game.mark_db(kind, "sighted", player) in pickup_item). Ability names show once harvested,
-## each level's numbers once the player's brain level reaches it.
+## each level's numbers once the player's ability level reaches it.
 
 const MonsterPages := preload("res://scripts/database/monster_pages.gd")
 const Pages := preload("res://scripts/database/database_pages.gd")
@@ -28,7 +29,7 @@ const SECTIONS := [
 	{"id": "other", "title": "OTHER ITEMS"},
 ]
 
-## Which brain path a monster's ability grows on, and its name.
+## Which ability path a monster grants, and its name.
 const ABILITY := {"hive": "Hive Eyes", "sonographer": "Echo"}
 
 const MONSTER_TEXT := {
@@ -41,14 +42,14 @@ const PROCEDURE_TEXT := {
 	"gunshot": "A bullet is still inside the patient. Get it out and stop the bleeding.",
 	"amputation": "An infected limb that can't be saved. Take it off before the infection spreads.",
 	"stitches": "A downed teammate with a deep gash. Stitch it shut and they get back up.",
-	"dissection": "A sedated monster on the table. Open the skull and pull out the brain.",
-	"eye_extraction": "A strapped Hive on the table. Hold the scalpel to start: cut round the eye, scoop it out, snip the nerve. Then get the eye into a vat before it spoils.",
+	"eye_extraction": "A sedated Hive on the table. Cut round the eye, scoop it out, snip the nerve.",
+	"trachea_extraction": "A sedated Sonographer on the table. Open the glowing throat and take the windpipe. The last cut is loud.",
 }
 
 const SURGERY_TEXT := {
 	"anesthetic": ["Puts the patient under so they don't feel a thing. Too little and they wake up mid-surgery.", "Found in medicine fridges. Glass: dropping it breaks some."],
 	"gauze": ["Rolls of dressing that pack wounds and soak up bleeding.", "Found in nurse station drawers."],
-	"forceps": ["Long tongs for pulling out bullets, and brains.", "Found in steel drawer units. Kept after use."],
+	"forceps": ["Long tongs for pulling out bullets, and body parts.", "Found in steel drawer units. Kept after use."],
 	"tourniquet": ["A strap that cuts off the blood to a limb before you saw.", "Found in trauma bags. Kept after use."],
 	"bone_saw": ["Cuts through bone: infected limbs, and monster skulls.", "Found on pegboards. Kept after use."],
 	"suture_kit": ["Needle and thread for closing a downed teammate's wound.", "Found in trauma bags and drawers."],
@@ -68,8 +69,6 @@ const LOOT_BLURBS := {
 	"heart_monitor": "A bedside heart monitor. Takes both hands.",
 	"defibrillator": "A portable defibrillator. Takes both hands.",
 	"ultrasound": "A portable ultrasound. The best find in the wings.",
-	"brain_hive": "A Hive's brain. Drink it to grow Hive Eyes.",
-	"brain_sonographer": "A Sonographer brain. Drink it to grow Echo.",
 	"eye_hive": "The eyeball of a strapped Hive. It clouds over and spoils in a minute or two unless it goes in a vat.",
 	"eye_surgeon": "A surgeon's own eyeball, labelled with whose it is. It spoils outside a vat, too.",
 }
@@ -212,9 +211,7 @@ static func _other(kind: String) -> Dictionary:
 	var def := LootTable.def(kind)
 	var value: Array = def.get("value", [0, 0])
 	var worth := "Sells for $%d to $%d at the furnace." % [int(value[0]), int(value[value.size() - 1])]
-	if kind.begins_with("brain_"):
-		worth = "Or sell it at the furnace, before it spoils."
-	elif kind.begins_with("eye_"):
+	if kind.begins_with("eye_"):
 		worth = "Sells for less every second it spends out of a vat."
 	return {
 		"title": ItemsDB.display_name(kind).to_upper(),

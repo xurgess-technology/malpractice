@@ -14,6 +14,7 @@ extends RefCounted
 ## `seed` is optional (default DEFAULT_SEED). Stage functions may await (use game.get_tree()).
 ## Then open it:  tools\review.bat 2 "HIVE: does the lunge read?" --setup=hive_lunge
 
+const LootTableDB := preload("res://scripts/economy/loot_table.gd")
 const DEFAULT_SEED := 4242
 
 const SETUPS := {
@@ -23,6 +24,10 @@ const SETUPS := {
 	# Dr. Botsworth, ready to operate. `graft_back` is the same with the graft already done.
 	"graft": {"seed": 4242, "stage": "_graft"},
 	"graft_back": {"seed": 4242, "stage": "_graft_back"},
+	# GRAFTING part two (docs/GRAFTING_TRACHEA.md): the same, with a Sonographer's trachea in the
+	# vat. Graft it and you get Echo; `trachea_back` puts your own windpipe in the vat to swap back.
+	"trachea": {"seed": 4242, "stage": "_trachea"},
+	"trachea_back": {"seed": 4242, "stage": "_trachea_back"},
 }
 
 
@@ -194,10 +199,38 @@ static func _graft(game: Game) -> void:
 	await _graft_stage(game, "eye_hive", "", false)
 
 
+## TRACHEA (docs/GRAFTING_TRACHEA.md): you are strapped to a free OR table with a vat holding a
+## Sonographer's trachea on its stand, and you are already Dr. Botsworth beside your own head with
+## the scalpel, the forceps and the suture kit. Aim at the table and press E for each of the four
+## steps. F1 -> "Back to my own body", hold E to get up, then go and look in the Personnel mirror:
+## your throat glows. Alt shows the ability bar with Echo 1; fire it and the glow burns.
+static func _trachea(game: Game) -> void:
+	await _graft_stage(game, "trachea_sonographer", "", false)
+
+
+## TRACHEA BACK: the graft is already done, and your own windpipe is the one in the vat.
+static func _trachea_back(game: Game) -> void:
+	await _graft_stage(game, "trachea_surgeon", String(game.local_player().player_name), true)
+
+
 ## GRAFT BACK: the same table and stand, but the graft has already been done -- you have the Hive
 ## eyeball, and your own eyeball is the one floating in the vat, waiting to go back in.
 static func _graft_back(game: Game) -> void:
 	await _graft_stage(game, "eye_surgeon", String(game.local_player().player_name), true)
+
+
+## What a part in a vat is worth, from the loot table.
+static func _value_for(kind: String) -> int:
+	var e: Dictionary = LootTableDB.LOOT.get(kind, {})
+	var v = e.get("value", [45, 45])
+	return int(v[0]) if v is Array and not (v as Array).is_empty() else 45
+
+
+static func _holds(p, kind: String) -> bool:
+	for s in p.slots:
+		if String(s.get("kind", "")) == kind:
+			return true
+	return false
 
 
 static func _graft_stage(game: Game, vat_kind: String, owner: String, already: bool) -> void:
@@ -220,12 +253,15 @@ static func _graft_stage(game: Game, vat_kind: String, owner: String, already: b
 	var table: Vector3 = game.table_position(ti)
 	# The vat, already on that table's stand, with the part that goes in.
 	var vat = game._spawn_item("specimen_vat", 1, Transform3D(tb, game.vats.stands[si].position as Vector3), WorldItem.State.LOOSE)
-	vat.x = Eyes.pack(vat_kind, owner, 0.0, 120 if vat_kind == "eye_hive" else 45)
+	var site := Eyes.site_of(vat_kind)
+	var monster_part := String(Eyes.MONSTER_PART.get(site, "eye_hive"))
+	vat.x = Eyes.pack(vat_kind, owner, 0.0, _value_for(vat_kind))
 	if already:
-		game.grafts.apply(p.peer_id, "eye_hive")   # you already wear the Hive eyeball
+		game.grafts.apply(p.peer_id, site, monster_part)   # you already wear the monster's part
 	var hud = tree.get_first_node_in_group("hud")
 	if hud != null:
-		hud._card_seen["hive_in"] = true   # the new-ability card is for a first play, not a review
+		# the new-ability card is for a first play, not a review
+		hud._card_seen[String(Grafts.PART_ABILITY.get(monster_part, "hive_in"))] = true
 	# You, strapped to that table, awake and looking up.
 	clear_hands(game)
 	p.teleport(game._floor_at(table + tb * Vector3(0.0, 0.0, 1.2)))
@@ -243,9 +279,11 @@ static func _graft_stage(game: Game, vat_kind: String, owner: String, already: b
 	bw.bot_move = Vector2.ZERO
 	for i in bw.slots.size():
 		bw.slots[i] = Player.empty_slot()
-	bw.take_into("scalpel", 1)
-	bw.take_into("eye_spoon", 1)
-	bw.take_into("suture_kit", 1)
+	# The tools this graft's steps ask for, in step order.
+	for st in Procedures.steps(String(Grafts.SITE_AILMENT.get(site, "eye_graft"))):
+		var tool := String(st.get("item", ""))
+		if tool != "" and not _holds(bw, tool):
+			bw.take_into(tool, 1)
 	bw.selected = 0
 	bw.flashlight_on = true
 	await tree.physics_frame

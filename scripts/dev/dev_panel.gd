@@ -298,14 +298,10 @@ func _build() -> void:
 	_button(pk2, "Back to the start", func(): game.dev.pocket_go(false))
 	_label(col, "Builds the space beside the hospital for this session (no entrances to it).", 11, DIM)
 
-	# ---- brains (SWEEP 3 HOOK, scripts/brains/brains.gd dev_request)
-	_section(col, "Brains")
-	var br1 := _row(col)
-	_button(br1, "Spawn brain: Hive", func(): _req("br_spawn_brain", {"kind": "brain_hive"}))
-	_button(br1, "Sonographer", func(): _req("br_spawn_brain", {"kind": "brain_sonographer"}))
-	_button(br1, "Rotten", func(): _req("br_spawn_brain", {"kind": "brain_sonographer", "age": 200.0}))
+	# ---- abilities (SWEEP 3 HOOK, scripts/brains/brains.gd dev_request)
+	_section(col, "Abilities")
 	var br2 := _row(col)
-	_button(br2, "Give brain levels (+1)", func(): _req("br_levels", {"amount": 1.0}))
+	_button(br2, "Give ability levels (+1)", func(): _req("br_levels", {"amount": 1.0}))
 	_button(br2, "Reset", func(): _req("br_reset"))
 	_button(br2, "Hive in front", func(): _req("br_spawn_hive"))
 

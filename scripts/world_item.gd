@@ -23,8 +23,8 @@ var anchor: int = -1
 ## Sell value of the whole stack in dollars (loot only; 0 for everything else). Rolled by the
 ## loot spawner, carried into a hand slot as "v" and back out when dropped.
 var value: int = 0
-## SWEEP 3 HOOK (brains): world_time a brain was harvested, -1 for everything else. Carried into a
-## hand slot as "bt" and back out when dropped; the dumpster pays game.brains.current_value().
+## GRAFTING: world_time a body part was taken, -1 for everything else. Carried into a hand slot as
+## "bt" and back out when dropped; what a part is worth follows from it.
 var bt: float = -1000000.0   # "no spoil clock" (a real one can be negative early in a run)
 ## GRAFTING part one: a small string that travels with the stack (into a hand slot as "x" and back):
 ## an eye's owner ("Zach"), or what a specimen vat holds (Eyes.pack). "" for everything else.
@@ -187,9 +187,6 @@ func interact_prompt(player) -> String:
 	if g2 != null and g2.get("vats") != null and Eyes.is_eye(kind):
 		label = Eyes.label(kind, x)
 		label += " ($%d, %s)" % [g2.vats.eye_value({"v": value, "bt": bt}), Eyes.condition(g2.vats.eye_factor(self))]
-	elif g2 != null and g2.get("brains") != null and g2.brains.is_brain(kind):
-		# SWEEP 3 HOOK (brains): what it is worth now, and how far gone it is.
-		label += " ($%d, %s)" % [g2.brains.current_value(self), g2.brains.condition(g2.brains.factor_of(self))]
 	elif value > 0:
 		label += " ($%d)" % value
 	if player != null and player.has_method("can_take") and not player.can_take(kind):
@@ -218,7 +215,7 @@ func report() -> Dictionary:
 	if value > 0:
 		d["v"] = value
 	if bt > -100000.0:
-		d["bt"] = snappedf(bt, 0.5)   # SWEEP 3 HOOK (brains)
+		d["bt"] = snappedf(bt, 0.5)   # GRAFTING: the spoil clock
 	if x != "":
 		d["x"] = x   # GRAFTING part one
 	if state != State.IN_CONTAINER:
@@ -235,7 +232,7 @@ func apply_remote(s: Dictionary) -> void:
 	container_id = String(s.ct)
 	slot = int(s.sl)
 	value = int(s.get("v", 0))
-	bt = float(s.get("bt", -1000000.0))   # SWEEP 3 HOOK (brains)
+	bt = float(s.get("bt", -1000000.0))   # GRAFTING: the spoil clock
 	x = String(s.get("x", ""))   # GRAFTING part one
 	set_count(int(s.n))
 	if not s.has("p"):

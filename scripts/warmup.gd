@@ -25,11 +25,13 @@ const ExteriorScript := preload("res://scripts/level/exterior.gd")  # the hospit
 const PlayerBodyScript := preload("res://scripts/downed/player_body.gd")  # DOWNED HOOK
 const PlayerTableScript := preload("res://scripts/downed/player_table.gd")  # DOWNED HOOK
 const OrScreenScript := preload("res://scripts/orscreen/or_screen.gd")  # ORSCREEN HOOK
-const BrainsScript := preload("res://scripts/brains/brains.gd")  # SWEEP 3 HOOK (brains)
+const BrainsScript := preload("res://scripts/brains/brains.gd")  # SWEEP 3 HOOK (abilities)
 const DoorScript := preload("res://scripts/doors/door.gd")  # DOORS HOOK
 const DoorModels := preload("res://scripts/doors/door_models.gd")  # DOORS HOOK
 const HospitalBuilderScript := preload("res://scripts/hospital_builder.gd")  # DOORS HOOK
 const HumanModelScript := preload("res://scripts/human/human_model.gd")  # HUMAN HOOK
+const GraftEyeScript := preload("res://scripts/grafting/graft_eye.gd")  # GRAFTING
+const GraftThroatScript := preload("res://scripts/grafting/graft_throat.gd")  # GRAFTING part two
 const TerminalModelScript := preload("res://scripts/database/terminal_model.gd")  # HUB REDESIGN
 
 
@@ -103,8 +105,9 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	syringe.position = Vector3(x, 0.3, 0.3)
 	_inert(shelf)
 	_report(progress, "terminal")
-	BrainsScript.warm(shelf)  # SWEEP 3 HOOK (brains): the blender, Echo's ghosts and veil, Hive Eyes' screen
-	# GRAFTING part one: a vat with each eye floating in it (the glass, the fluid and the eye shader).
+	BrainsScript.warm(shelf)  # SWEEP 3 HOOK (abilities): Echo's ghosts and veil, Hive Eyes' screen
+	# GRAFTING: a vat with each body part floating in it (the glass, the fluid, the eye and trachea
+	# shaders). Eyes.KINDS covers both eyeballs and both tracheas (docs/GRAFTING_TRACHEA.md).
 	for ek in Eyes.KINDS:
 		var vm := ItemModels.make("specimen_vat")
 		shelf.add_child(vm)
@@ -112,7 +115,7 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 		x += 0.2
 		Vats.set_contents(vm, Eyes.pack(ek, "", 60.0, 1))
 	_inert(shelf)
-	_report(progress, "brains")
+	_report(progress, "abilities")
 	# POCKETS HOOK: the Factory's and the Restaurant's meshes, textures and materials, and a stub copy.
 	preload("res://scripts/level/pockets/pocket_spaces.gd").warm(shelf)
 	_inert(shelf)
@@ -173,12 +176,14 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 			shelf.add_child(mb)
 			mb.position = Vector3(bx, -0.3, -0.8)
 			mb.scale = Vector3.ONE * 0.5
-			mb.set_ailment("dissection")
+			mb.set_ailment("dissection")   # every strapped monster uses the one body
 			mb.apply_flags({"sedation": 1.0 if opened else 0.1, "skull_open": opened})
 			mb.set_bleeding("skull", 0.6)
 			if opened:
 				bodies["%s|dissection" % mpid] = mb
-				bodies["%s|eye_extraction" % mpid] = mb   # GRAFTING part one: the eye steps work on the same body (site "eye")
+				# GRAFTING: every extraction works on the same strapped body, site "eye" or "throat".
+				bodies["%s|eye_extraction" % mpid] = mb
+				bodies["%s|trachea_extraction" % mpid] = mb
 			bx += 0.4
 			await _slice(slice)
 	# DOWNED HOOK: the lying player on the player table (bleeding and stitched) and the table itself.
@@ -193,8 +198,12 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 		# GRAFTING chunk C: the same body runs Eyeball Grafting (site "eye"), and one of them wears
 		# the grafted Hive eyeball, so its shader and the stitches round the socket compile here.
 		bodies["player|eye_graft"] = pb
+		# GRAFTING part two: Trachea Grafting (site "throat") on the same body, and one of them wears
+		# the grafted windpipe, so its shader, the pane and the stitches compile here too.
+		bodies["player|trachea_graft"] = pb
 		if stitched:
 			pb.set_eye("eye_hive", false)
+			pb.set_throat("trachea_sonographer", false)
 		bx += 0.4
 		await _slice(slice)
 	_inert(shelf)
@@ -212,6 +221,12 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 			var hap := HumanModelScript.anim_player(hb)
 			if hap != null and hap.has_animation("Idle"):
 				hap.play("Idle")
+			# GRAFTING: the runtime `surgeon_graft` look on a standing surgeon -- the Hive eyeball in
+			# the socket and the grafted windpipe behind its see-through pane (part two) -- so the
+			# first grafted teammate you see does not hitch.
+			if bx > 0.0:
+				GraftEyeScript.attach(hb, "eye_hive")
+				GraftThroatScript.attach(hb, "trachea_sonographer")
 			bx += 0.4
 		await _slice(slice)
 	var ptable := PlayerTableScript.make()
@@ -319,7 +334,7 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 			var path: String = Procedures.MINIGAME_SCRIPTS.get(step.game, "")
 			if path == "" or not ResourceLoader.exists(path):
 				continue
-			# SWEEP 3 HOOK (dissection): the skull saw and brain forceps on the monster bodies.
+			# SWEEP 3 HOOK (dissection): the extraction minigames on the monster bodies.
 			var pids: Array = ["player"] if Procedures.is_player_only(ail) else (Procedures.monster_patients() if Procedures.is_monster_only(ail) else Procedures.human_patients())
 			for pid in pids:
 				var body: Node3D = bodies["%s|%s" % [pid, ail]]

@@ -47,7 +47,19 @@ func _data_checks() -> void:
 	_check(Items.is_surgical("scalpel") and not Items.is_consumable("scalpel") and Items.is_surgical("eye_spoon"), "scalpel and eye spoon are surgical, reusable tools")
 	_check(Items.is_bulky("specimen_vat") and Items.slots_needed("specimen_vat") == 2, "the vat takes both hands")
 	_check(Items.is_loot("eye_hive") and Items.is_loot("eye_surgeon") and Eyes.is_eye("eye_hive"), "both eyes are sellable loot")
+	_check(Items.is_loot("trachea_sonographer") and Items.is_loot("trachea_surgeon") and Eyes.is_eye("trachea_sonographer"), "both tracheas are sellable loot")
 	_check(Eyes.label("eye_hive", "") == "Hive's eyeball" and Eyes.label("eye_surgeon", "Zach") == "Zach's eyeball", "eye labels")
+	_check(Eyes.label("trachea_sonographer", "") == "Sonographer's trachea" and Eyes.label("trachea_surgeon", "Zach") == "Zach's trachea", "trachea labels")
+	_check(Eyes.site_of("trachea_sonographer") == "throat" and Eyes.site_of("eye_hive") == "eye", "parts know their graft site")
+	_check(Grafts.PART_ABILITY.get("trachea_sonographer") == "echo" and Grafts.PART_ABILITY.get("eye_hive") == "hive_in", "each monster part teaches its own ability")
+	var tst: Array = Procedures.steps("trachea_extraction")
+	_check(tst.size() == 3 and tst[0].item == "scalpel" and tst[1].item == "scalpel" and tst[2].item == "forceps" and tst[0].site == "throat",
+		"trachea extraction steps: scalpel, scalpel, forceps")
+	var tgt: Array = Procedures.steps("trachea_graft")
+	_check(tgt.size() == 4 and tgt[0].item == "scalpel" and tgt[1].item == "forceps" and tgt[2].item == "forceps" and tgt[3].item == "suture_kit" and tgt[0].site == "throat",
+		"trachea graft steps: scalpel, forceps, forceps, suture kit")
+	_check(Procedures.is_monster_only("trachea_extraction") and Procedures.is_player_only("trachea_graft"), "extraction is monster-only, the graft player-only")
+	_check(not Procedures.AILMENTS.has("dissection"), "dissecting for a brain is gone")
 	_check(Eyes.spoil_factor(0.0) == 1.0 and Eyes.spoil_factor(Eyes.FRESH_SECONDS) == 1.0 and Eyes.is_spoiled_factor(Eyes.spoil_factor(Eyes.ROTTEN_SECONDS)), "an eye is fresh, then spoils")
 	var st: Array = Procedures.steps("eye_extraction")
 	_check(st.size() == 3 and st[0].item == "scalpel" and st[1].item == "eye_spoon" and st[2].item == "scalpel" and st[0].site == "eye", "extraction steps: scalpel, spoon, scalpel")
@@ -190,6 +202,22 @@ func _run() -> void:
 	_check(out_i >= 0 and String(vat.x) == "", "V takes the eye back out (slot %d, vat '%s')" % [out_i, String(vat.x)])
 	_check(out_i >= 0 and absf(vats.eye_age(me.slots[out_i]) - 20.0) < 1.5 and not Eyes.is_spoiled_factor(vats.eye_factor(me.slots[out_i])),
 		"it was not spoiling inside: still fresh after 400 s in the vat (age %.1f)" % (vats.eye_age(me.slots[out_i]) if out_i >= 0 else -1.0))
+	# ---- GRAFTING part two: a trachea spoils out of a vat and not in one
+	var t_now := float(game.world_time)
+	var t_vat: WorldItem = vat_items[1]
+	t_vat.x = Eyes.pack("trachea_sonographer", "", 0.0, 160)
+	game.world_time += 400.0
+	await _seconds(0.4)
+	var t_loose := {"kind": "trachea_sonographer", "v": 160, "bt": t_now}
+	_check(Eyes.is_spoiled_factor(vats.eye_factor(t_loose)), "a trachea left outside a vat spoils (factor %.2f)" % vats.eye_factor(t_loose))
+	_check(game.furnace_value("trachea_sonographer", t_loose) < 60, "and it sells for less at the furnace (%d)" % game.furnace_value("trachea_sonographer", t_loose))
+	_check(not Eyes.is_spoiled_factor(Eyes.spoil_factor(float(Eyes.unpack(String(t_vat.x)).get("age", 999.0)))),
+		"a trachea in a vat does not (vat '%s')" % String(t_vat.x))
+	var t_shown = t_vat.find_child("VatEye_trachea_sonographer", true, false)
+	_check(t_shown != null and (t_shown as Node3D).visible and (t_shown as Node3D).is_visible_in_tree(),
+		"the trachea shows floating in the vat")
+	t_vat.x = ""
+	await _seconds(0.3)
 	# Carry the vat (an eye selected would go in instead), put the eye back in with both in hand, set it down.
 	me.selected = 3
 	game.pickup_item(me, vat)
@@ -222,7 +250,7 @@ func _run() -> void:
 	dev.request("strap_monster", {"kind": "hive", "sedation": 1.0})
 	await _frames(3)
 	var c := _monster_case("hive")
-	_check(not c.is_empty() and String(c.ailment_id) == "dissection", "a strapped Hive starts as a dissection")
+	_check(not c.is_empty() and String(c.ailment_id) == "eye_extraction", "a strapped Hive is an Eyeball Extraction")
 	if c.is_empty():
 		return
 	var table := int(c.table)
@@ -234,22 +262,18 @@ func _run() -> void:
 	me.bot_move = Vector2.ZERO
 	_clear_hands()
 	var p0 := String(game._table_prompt(me, table))
-	_check(p0.begins_with("!Hold the scalpel") and p0.contains("bone saw"), "empty-handed at a fresh Hive the prompt says what to hold ('%s')" % p0)
-	game.give_hand(me, "bone_saw", 1)
-	var p1 := String(game._table_prompt(me, table))
-	_check(p1.begins_with("Operate: Saw open the skull"), "the bone saw offers dissection ('%s')" % p1)
-	_clear_hands()
+	_check(p0.begins_with("!"), "empty-handed at a strapped Hive the table refuses ('%s')" % p0)
 	var panels: Array = load("res://scripts/orscreen/or_screen_model.gd").build(game).panels
 	var kinds := []
 	for pn in panels:
 		if String(pn.get("patient_id", "")) == "hive":
 			_check(String(pn.steps[0].label) == "Cut around the eye" and String(pn.ailment_name).begins_with("Eyeball Extraction") and bool(pn.eye),
-				"the wall monitor leads with Eyeball Extraction for a fresh Hive, not the brain ('%s': '%s')" % [String(pn.ailment_name), String(pn.steps[0].label)])
+				"the wall monitor shows Eyeball Extraction for a strapped Hive ('%s': '%s')" % [String(pn.ailment_name), String(pn.steps[0].label)])
 			var d0: String = game.dissection.ailment_for(_monster_case("hive"), me)
-			_check(d0 == "eye_extraction", "empty-handed, a fresh Hive's plan is extraction (%s)" % d0)
+			_check(d0 == "eye_extraction", "a Hive's plan is its eye (%s)" % d0)
 			for sp in pn.supplies:
 				kinds.append(String(sp.kind))
-	_check(not panels.is_empty() and (kinds.has("scalpel") and kinds.has("eye_spoon") and kinds.has("bone_saw")), "the OR screen lists both plans' tools for a fresh Hive (%s)" % str(kinds))
+	_check(not panels.is_empty() and kinds.has("scalpel") and kinds.has("eye_spoon"), "the OR screen lists the extraction's tools (%s)" % str(kinds))
 	game.give_hand(me, "scalpel", 1)
 	await _frames(2)
 	var prompt := String(game._table_prompt(me, table))
@@ -258,7 +282,7 @@ func _run() -> void:
 	var sys = game.surgery_for_table(table)
 	game._proxy_used(game.table_interact_id(table), me)
 	var began := await _until(func(): return sys.is_local_operating() and sys.mg != null, 5.0)
-	_check(began and String(c.ailment_id) == "eye_extraction" and String(sys.mg.get("variant")) == "cut", "E with the scalpel makes the case Eyeball Extraction and plays the cut")
+	_check(began and String(c.ailment_id) == "eye_extraction" and String(sys.mg.get("variant")) == "cut", "E with the scalpel plays the cut")
 	var ok1 := await _until(func(): return int(c.get("step_index", 0)) >= 1, 40.0)
 	_check(ok1 and bool(c.flags.get("eye_cut", false)), "the cut finishes (flags %s)" % str(c.flags))
 	await _seconds(0.5)
@@ -278,7 +302,7 @@ func _run() -> void:
 	_check(began3, "then the nerve snip")
 	var ok3 := await _until(func(): return String(c.get("state", "")) != "on_table", 60.0)
 	_check(ok3 and String(c.state) == "stable" and bool(c.flags.get("eye_removed", false)), "the snip wins the case (state %s, flags %s)" % [String(c.get("state", "")), str(c.flags)])
-	var le: Dictionary = game.dissection.last_eye
+	var le: Dictionary = game.dissection.last_part
 	_check(not le.is_empty() and String(le.kind) == "eye_hive", "the Hive's eye is handed over (%s)" % str(le.keys()))
 	var in_hand := -1
 	for i in me.slots.size():
@@ -346,7 +370,7 @@ func _graft_checks() -> void:
 	game.player_surgery.surgery.bot_skill = 1.0
 	if not await _graft_run(bw, ti, true):
 		return
-	_check(grafts.graft_of(me.peer_id) == "eye_hive", "the graft took: a Hive eyeball in the socket")
+	_check(grafts.graft_of(me.peer_id, "eye") == "eye_hive", "the graft took: a Hive eyeball in the socket")
 	_check(game.brains.slot_of(me.peer_id, "hive_in") >= 0 and game.brains.level(me.peer_id, "hive") >= 1,
 		"it gave Hive Eyes 1 in an ability slot (slot %d, level %d)" % [game.brains.slot_of(me.peer_id, "hive_in"), game.brains.level(me.peer_id, "hive")])
 	var swapped := Eyes.unpack(String(vat.x))
@@ -363,18 +387,93 @@ func _graft_checks() -> void:
 	_check(again.begins_with("Operate: graft %s's eyeball into" % me.player_name), "your own eyeball is offered back ('%s')" % again)
 	if not await _graft_run(bw, ti, false):
 		return
-	_check(grafts.graft_of(me.peer_id) == "", "swapping back takes the Hive eyeball out")
+	_check(grafts.graft_of(me.peer_id, "eye") == "", "swapping back takes the Hive eyeball out")
 	_check(game.brains.slot_of(me.peer_id, "hive_in") < 0, "and Hive Eyes goes with it")
 	_check(String(Eyes.unpack(String(vat.x)).get("kind", "")) == "eye_hive", "the Hive eyeball is back in the vat")
+
+	await _trachea_checks(bw, ti, vat)
 	dev.control_botsworth()
 	await _frames(4)
 
 
+# =========================================================================
+# GRAFTING part two (docs/GRAFTING_TRACHEA.md): Trachea Grafting, and both grafts at once
+# =========================================================================
+
+## Still strapped to table `ti`, with Botsworth operating and `vat` on its stand.
+func _trachea_checks(bw, ti: int, vat: Node) -> void:
+	var grafts: Node = game.grafts
+	# ---- an eyeball vat is refused for a trachea graft: it simply offers the eye graft instead,
+	# and a trachea graft can never be started from it.
+	vat.x = Eyes.pack("eye_hive", "", 0.0, 120)
+	_clear_hands_of(bw)
+	game.give_hand(bw, "scalpel", 1)
+	bw.selected = _slot_of_for(bw, "scalpel")
+	await _frames(3)
+	_check(grafts.site_for(me) == "eye", "an eyeball vat on the stand is an EYE graft, never a trachea one")
+	var eye_case: Dictionary = grafts.make_case(bw)
+	_check(String(eye_case.get("ailment_id", "")) == "eye_graft" and String(eye_case.get("site", "")) == "eye",
+		"an eyeball vat builds an Eyeball Grafting case (%s)" % str(eye_case.get("ailment_id", "")))
+
+	# ---- a spoiled trachea is refused
+	vat.x = Eyes.pack("trachea_sonographer", "", Eyes.ROTTEN_SECONDS + 50.0, 160)
+	await _frames(3)
+	var spoiled := String(game._table_prompt(bw, ti))
+	_check(spoiled.begins_with("!") and spoiled.contains("spoiled"), "a spoiled trachea cannot be grafted ('%s')" % spoiled)
+
+	# ---- a fresh one is offered
+	vat.x = Eyes.pack("trachea_sonographer", "", 0.0, 160)
+	await _frames(3)
+	_check(grafts.site_for(me) == "throat", "a trachea vat on the stand is a THROAT graft")
+	var offer := String(game._table_prompt(bw, ti))
+	_check(offer.begins_with("Operate: graft Sonographer's trachea into"), "a fresh Sonographer's trachea is offered ('%s')" % offer)
+
+	# ---- the four steps
+	if not await _graft_run(bw, ti, true, "throat"):
+		return
+	_check(grafts.graft_of(me.peer_id, "throat") == "trachea_sonographer", "the trachea graft took")
+	_check(game.brains.slot_of(me.peer_id, "echo") >= 0 and game.brains.level(me.peer_id, "sonographer") >= 1,
+		"it gave Echo 1 in an ability slot (slot %d, level %d)" % [game.brains.slot_of(me.peer_id, "echo"), game.brains.level(me.peer_id, "sonographer")])
+	var swapped := Eyes.unpack(String(vat.x))
+	_check(String(swapped.get("kind", "")) == "trachea_surgeon" and String(swapped.get("owner", "")) == me.player_name,
+		"your own windpipe is in the vat now (%s)" % str(swapped))
+	_check(game.db_record("sonographer").harvested, "grafting a part marks the database's third tier")
+
+	# ---- both grafts at once
+	game.grafts.apply(me.peer_id, "eye", "eye_hive")
+	await _frames(3)
+	_check(grafts.graft_of(me.peer_id, "eye") == "eye_hive" and grafts.graft_of(me.peer_id, "throat") == "trachea_sonographer",
+		"a surgeon can wear both grafts at once (%s)" % str(grafts.grafts_of(me.peer_id)))
+	_check(game.brains.slot_of(me.peer_id, "hive_in") >= 0 and game.brains.slot_of(me.peer_id, "echo") >= 0,
+		"and holds both abilities")
+	await _frames(6)
+	var human = grafts._human_of(me)
+	_check(human == null or GraftThroat.node_on(human) != null, "the grafted throat is on the body")
+	game.grafts.apply(me.peer_id, "eye", "")
+	await _frames(3)
+
+	# ---- swapping the trachea back takes Echo away
+	_clear_hands_of(bw)
+	game.give_hand(bw, "scalpel", 1)
+	bw.selected = _slot_of_for(bw, "scalpel")
+	await _frames(3)
+	var again := String(game._table_prompt(bw, ti))
+	_check(again.begins_with("Operate: graft %s's trachea into" % me.player_name), "your own windpipe is offered back ('%s')" % again)
+	if not await _graft_run(bw, ti, false, "throat"):
+		return
+	_check(grafts.graft_of(me.peer_id, "throat") == "", "swapping back takes the Sonographer's trachea out")
+	_check(game.brains.slot_of(me.peer_id, "echo") < 0, "and Echo goes with it")
+	_check(String(Eyes.unpack(String(vat.x)).get("kind", "")) == "trachea_sonographer", "the trachea is back in the vat")
+
+
 ## One whole graft, Botsworth operating. `first` only changes the messages. False on a timeout.
-func _graft_run(bw, ti: int, first: bool) -> bool:
-	var tag := "graft" if first else "swap back"
-	var tools := ["scalpel", "eye_spoon", "eye_spoon", "suture_kit"]
-	var names := ["cut", "scoop", "seat", "stitch"]
+func _graft_run(bw, ti: int, first: bool, site := "eye") -> bool:
+	var tag := ("graft" if first else "swap back") + (" (throat)" if site == "throat" else "")
+	var tools := []
+	var names := []
+	for st in Procedures.steps(String(Grafts.SITE_AILMENT.get(site, "eye_graft"))):
+		tools.append(String(st.get("item", "")))
+		names.append(String(st.get("variant", "")))
 	var ps: Node = game.player_surgery
 	var sys: Node = ps.surgery
 	for i in tools.size():
@@ -395,8 +494,8 @@ func _graft_run(bw, ti: int, first: bool) -> bool:
 		if not done:
 			return false
 		if i == 1:
-			# The scoop is the point of no return: the socket is open.
-			_check(game.get_up_block(me) != "", "%s: you cannot get up once your eye is out ('%s')" % [tag, game.get_up_block(me)])
+			# The lift is the point of no return: the site is open.
+			_check(game.get_up_block(me) != "", "%s: you cannot get up once the part is out ('%s')" % [tag, game.get_up_block(me)])
 		await _seconds(0.4)
 	return true
 

@@ -6,7 +6,7 @@ extends RefCounted
 ## ("injection", "gunshot", "limb_cut") and each patient body provides a marker
 ## for every site. Adding a patient means placing those markers on a new model.
 
-const SITES := ["injection", "gunshot", "limb_cut", "limb", "skull", "brain"]
+const SITES := ["injection", "gunshot", "limb_cut", "limb", "skull", "eye", "throat"]
 
 const PATIENTS := {
 	"bob": {
@@ -33,10 +33,10 @@ const PATIENTS := {
 			"amputation": "Tangled in fishing line for weeks. The flipper has to go.",
 		},
 	},
-	# dissection (sweep 3): strapped monsters. `monster: true` keeps them out of roll(), the dev
-	# panel's patient list and anything else that means a human patient (human_patients()). Their
-	# bodies are built by scripts/dissection/monster_builder.gd; the only ailment they take is
-	# `dissection`.
+	# GRAFTING: strapped monsters. `monster: true` keeps them out of roll(), the dev panel's patient
+	# list and anything else that means a human patient (human_patients()). Their bodies are built by
+	# scripts/dissection/monster_builder.gd, and the only ailment each takes is its own EXTRACTION
+	# (scripts/dissection/dissection.gd): a Hive gives up an eyeball, a Sonographer its trachea.
 	"hive": {
 		"name": "The Hive",
 		"full_name": "Hive, unregistered",
@@ -46,7 +46,7 @@ const PATIENTS := {
 		"limb_name": "",
 		"limb_radius_m": 0.05,
 		"blurbs": {
-			"dissection": "Came in through the front door and never left. Still in the gown.",
+			"eye_extraction": "Came in through the front door and never left. Still in the gown.",
 		},
 	},
 	"sonographer": {
@@ -58,7 +58,7 @@ const PATIENTS := {
 		"limb_name": "",
 		"limb_radius_m": 0.05,
 		"blurbs": {
-			"dissection": "Walked out of the ultrasound room mid-scan. The wand is still fitted to its wrist.",
+			"trachea_extraction": "Walked out of the ultrasound room mid-scan. The wand is still fitted to its wrist.",
 		},
 	},
 }
@@ -110,20 +110,10 @@ const AILMENTS := {
 			{"id": "stitch", "label": "Stitch it in", "item": "suture_kit", "uses": 1, "game": "eye", "variant": "stitch", "site": "eye"},
 		],
 	},
-	# dissection (sweep 3): a strapped monster on a patient table. `monster_only` keeps it out of
-	# roll() and patient_ailments(). The saw and forceps steps play their "skull" / "brain" variants.
-	"dissection": {
-		"name": "Dissection",
-		"code": "DX",
-		"monster_only": true,
-		"steps": [
-			{"id": "open", "label": "Saw open the skull", "item": "bone_saw", "uses": 0, "game": "saw", "variant": "skull", "site": "skull"},
-			{"id": "harvest", "label": "Pull out the brain", "item": "forceps", "uses": 0, "game": "forceps", "variant": "brain", "site": "brain"},
-		],
-	},
-	# GRAFTING part one (docs/GRAFTING.md): the other thing a strapped Hive can have done to it. A
-	# strapped Hive starts as "dissection"; holding the scalpel at the first step makes it this
-	# instead (Dissection.ailment_for). The three steps play the eye minigame's variants.
+	# GRAFTING part one (docs/GRAFTING.md): what a strapped Hive is for. `monster_only` keeps it out
+	# of roll() and patient_ailments(). The three steps play the eye minigame's variants. Dissection
+	# for a brain is gone with the brains (docs/GRAFTING_TRACHEA.md): taking a part out is the only
+	# thing you do to a monster on a table now.
 	"eye_extraction": {
 		"name": "Eyeball Extraction",
 		"code": "EX",
@@ -132,6 +122,34 @@ const AILMENTS := {
 			{"id": "cut", "label": "Cut around the eye", "item": "scalpel", "uses": 0, "game": "eye", "variant": "cut", "site": "eye"},
 			{"id": "scoop", "label": "Scoop the eye out", "item": "eye_spoon", "uses": 0, "game": "eye", "variant": "scoop", "site": "eye"},
 			{"id": "snip", "label": "Snip the optic nerve", "item": "scalpel", "uses": 0, "game": "eye", "variant": "snip", "site": "eye"},
+		],
+	},
+	# GRAFTING part two (docs/GRAFTING_TRACHEA.md): Trachea Extraction on a strapped Sonographer.
+	# The throat is already marked for you: its windpipe glows through the skin. The SECOND cut, the
+	# one that frees the pipe top and bottom, makes it shriek -- a real noise event that can pull
+	# monsters to the OR (Dissection._host_tick's `free` step).
+	"trachea_extraction": {
+		"name": "Trachea Extraction",
+		"code": "TX",
+		"monster_only": true,
+		"steps": [
+			{"id": "open", "label": "Open the throat along the glowing line", "item": "scalpel", "uses": 0, "game": "eye", "variant": "cut", "site": "throat"},
+			{"id": "free", "label": "Cut the windpipe free", "item": "scalpel", "uses": 0, "game": "eye", "variant": "snip", "site": "throat"},
+			{"id": "lift", "label": "Lift the trachea out", "item": "forceps", "uses": 0, "game": "eye", "variant": "scoop", "site": "throat"},
+		],
+	},
+	# GRAFTING part two: Trachea Grafting on a surgeon who strapped themselves to a table, with the
+	# vat holding the trachea going in on that table's stand. Same shape as eye_graft: no botches,
+	# no anesthetic, and they can get up until step 2.
+	"trachea_graft": {
+		"name": "Trachea Grafting",
+		"code": "TG",
+		"player_only": true,
+		"steps": [
+			{"id": "open", "label": "Open the throat", "item": "scalpel", "uses": 0, "game": "eye", "variant": "cut", "site": "throat"},
+			{"id": "lift", "label": "Lift the old trachea out", "item": "forceps", "uses": 0, "game": "eye", "variant": "scoop", "site": "throat"},
+			{"id": "seat", "label": "Seat the new trachea", "item": "forceps", "uses": 0, "game": "eye", "variant": "seat", "site": "throat"},
+			{"id": "stitch", "label": "Stitch the throat closed", "item": "suture_kit", "uses": 1, "game": "eye", "variant": "stitch", "site": "throat"},
 		],
 	},
 }
@@ -144,7 +162,8 @@ const MINIGAME_SCRIPTS := {
 	"saw": "res://scripts/surgery/games/saw.gd",
 	"gauze": "res://scripts/surgery/games/gauze.gd",
 	"stitches": "res://scripts/surgery/games/stitches.gd",
-	"eye": "res://scripts/surgery/games/eye_ops.gd",   # GRAFTING part one: cut / scoop / snip
+	# GRAFTING: cut / scoop / snip / seat / stitch, on an eye or (part two) on a throat.
+	"eye": "res://scripts/surgery/games/eye_ops.gd",
 }
 
 

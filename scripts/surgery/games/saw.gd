@@ -528,8 +528,11 @@ static func self_test() -> Array:
 				var tally := {"n": 0, "v": 0.0, "done": false, "q": 0.0, "flag": false, "reasons": {}}
 				g.botched.connect(func(a, r): tally.n += 1; tally.v += a; tally.reasons[r] = int(tally.reasons.get(r, 0)) + 1)
 				g.finished.connect(func(r): tally.done = true; tally.q = float(r.get("cut_quality", 0.0)); tally.flag = bool(r.get("skull_open", false)) and not r.has("amputated"))
+				# The skull saw has no ailment of its own any more (the brain harvest is gone,
+				# docs/GRAFTING_TRACHEA.md); the self-test drives the variant directly.
 				g.setup({"patient_id": pid, "patient": Procedures.patient(pid), "ailment_id": "dissection",
-					"step": Procedures.step("dissection", 0), "variant": "skull", "shift": 1,
+					"step": {"id": "open", "label": "Saw open the skull", "item": "bone_saw", "uses": 0, "game": "saw", "variant": "skull", "site": "skull"},
+					"variant": "skull", "shift": 1,
 					"difficulty": Procedures.difficulty(1), "flags": {"sedation": sed},
 					"seed": hash("skull" + pid), "body": null, "operator": true})
 				var t2: float = load("res://scripts/surgery/games/gauze.gd")._run_bot(g, skill, float(sed), hash(pid) + int(skill * 100))

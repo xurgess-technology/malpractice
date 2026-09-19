@@ -486,7 +486,7 @@ func _spawn_mg() -> void:
 		"operator": false,
 		"helper_lights": _helper_lights,
 	}
-	for k in ["no_fail", "eye_kind", "eye_kind_in", "eye_radius"]:
+	for k in ["no_fail", "eye_kind", "eye_kind_in", "eye_radius", "part_site"]:
 		if c.flags.has(k):
 			ctx[k] = c.flags[k]
 	mg.setup(ctx)
