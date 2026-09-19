@@ -347,7 +347,8 @@ func set_down_on_stand(p, index: int) -> void:
 # =============================================================================== the lab wall
 
 ## Every machine, right after the level is built: markers for the bench spots. The host also stands
-## the starting vats on the first spots and stocks the scalpel and the eye spoon in the OR's storage.
+## the starting vats on the first spots and stocks the scalpel, the eye spoon and the forceps in
+## the OR's storage.
 func on_level_built(info: Dictionary) -> void:
 	for m in _markers:
 		if is_instance_valid(m):
@@ -378,6 +379,9 @@ func on_level_built(info: Dictionary) -> void:
 			game._spawn_item(KIND, 1, Transform3D(Basis(Vector3.UP, float(sp.get("yaw", 0.0))), sp.position as Vector3), WorldItem.State.LOOSE)
 		game.stock_storage("scalpel", 1)
 		game.stock_storage("eye_spoon", 1)
+		# GRAFTING chunk C: the graft seats the new eye with forceps, and forceps otherwise only turn
+		# up in random drawer units, so one waits here too. The feature is never blocked by a search.
+		game.stock_storage("forceps", 1)
 	_build_stands()
 
 

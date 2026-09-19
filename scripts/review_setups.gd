@@ -188,7 +188,8 @@ static func _items(game: Game) -> void:
 ## GRAFT (docs/GRAFTING.md, chunk C): you are strapped to a free OR table with a vat holding a
 ## Hive's eyeball on its stand, and you are already Dr. Botsworth, standing beside you with the
 ## scalpel, the eye spoon and the suture kit. Aim at the table and press E for each of the four
-## steps; F1 -> "Back to my own body" puts you back in your own head, where you hold E to get up and
+## steps (hold the right tool: 1 scalpel, 2 eye spoon, 3 forceps, 4 suture kit); F1 -> "Back to my
+## own body" puts you back in your own head, where you hold E to get up and
 ## can go and look in the Personnel mirror.
 static func _graft(game: Game) -> void:
 	await _graft_stage(game, "eye_hive", "", false)
@@ -243,8 +244,10 @@ static func _graft_stage(game: Game, vat_kind: String, owner: String, already: b
 	bw.bot_move = Vector2.ZERO
 	for i in bw.slots.size():
 		bw.slots[i] = Player.empty_slot()
+	# The four steps' tools, in the order they are used: 1 scalpel, 2 eye spoon, 3 forceps, 4 suture kit.
 	bw.take_into("scalpel", 1)
 	bw.take_into("eye_spoon", 1)
+	bw.take_into("forceps", 1)
 	bw.take_into("suture_kit", 1)
 	bw.selected = 0
 	bw.flashlight_on = true

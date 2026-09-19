@@ -331,6 +331,10 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 					"step": step, "variant": step.get("variant", ""), "shift": 1,
 					"difficulty": 1.0, "flags": {"sedation": 1.0, "tourniquet": 0.4},
 					"seed": 7 + i, "body": body, "operator": false,
+					# GRAFTING chunk C: the graft's own knobs, so the eye steps build the eye going IN
+					# (the Hive eyeball's shader) and the forceps seat step's tray, nerve and cues here.
+					"no_fail": true, "eye_kind": "eye_surgeon", "eye_kind_in": "eye_hive",
+					"eye_radius": Grafts.EYE_RADIUS,
 				})
 				games.append(mg)
 				await _slice(slice)

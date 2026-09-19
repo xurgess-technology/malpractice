@@ -50,7 +50,63 @@ func _physics_process(delta: float) -> void:
 	t += delta
 
 
+## Every Light3D within `r` of `at`, brightest first: what is actually lighting the work site.
+## The graft read far brighter than the Hive's eye extraction, and this is how it was pinned down.
+func _lights_near(at: Vector3, r := 3.0) -> void:
+	var rows: Array = []
+	for n in get_tree().root.find_children("*", "Light3D", true, false):
+		var l := n as Light3D
+		if not l.is_visible_in_tree() or l.light_energy <= 0.001:
+			continue
+		var d := l.global_position.distance_to(at)
+		if d <= r:
+			rows.append([l.light_energy / maxf(d * d, 0.01), String(l.get_path()), l.light_energy, d])
+	rows.sort_custom(func(a, b): return a[0] > b[0])
+	print("[graftshot] lights within %.1f m of the site:" % r)
+	for row in rows:
+		print("[graftshot]    %s  energy %.2f  at %.2f m" % [row[1], row[2], row[3]])
+
+
+## The Hive's Eyeball Extraction cut, for comparison: the same eye minigame on a strapped monster.
+func _hive_reference() -> void:
+	dev.request("strap_monster", {"kind": "hive", "sedation": 1.0})
+	await _seconds(1.0)
+	var c := {}
+	for cc in game.cases:
+		if String(cc.get("patient_id", "")) == "hive":
+			c = cc
+	if c.is_empty():
+		print("[graftshot] no strapped Hive for the reference shot")
+		return
+	var table := int(c.table)
+	var hyaw: float = game.table_yaw_of(table)
+	var htp: Vector3 = game.table_position(table)
+	_stand(htp + Vector3(0, 0, 1.0).rotated(Vector3.UP, hyaw))
+	for i in me.slots.size():
+		me.slots[i] = Player.empty_slot()
+	game.give_hand(me, "scalpel", 1)
+	me.selected = _slot(me, "scalpel")
+	await _seconds(0.6)
+	game.surgery_bot_skill = 1.0
+	var sys: Node = game.surgery_for_table(table)
+	game._proxy_used(game.table_interact_id(table), me)
+	var ok := await _until(func(): return sys.mg != null and String(sys.mg.get("variant") if sys.mg.get("variant") != null else "") == "cut", 10.0)
+	print("[graftshot] hive extraction cut began=", ok)
+	await _seconds(2.0)
+	await _shot("40_hive_cut_operating")
+	if sys.mg != null:
+		_lights_near(sys.mg.global_position)
+	sys.local_operator_exit()
+	game.surgery_bot_skill = -1.0
+	await _seconds(0.6)
+	dev.request("clear_patient")
+	for i in me.slots.size():
+		me.slots[i] = Player.empty_slot()
+	await _seconds(1.0)
+
+
 func _run() -> void:
+	await _hive_reference()
 	var vats: Node = game.vats
 	var ti: int = game.free_patient_table()
 	var si: int = vats.stand_of_table(ti)
@@ -92,18 +148,27 @@ func _run() -> void:
 	var sys: Node = ps.surgery
 	sys.bot_skill = 1.0
 	var n := 52
-	for step in [["scalpel", "cut"], ["eye_spoon", "scoop"], ["eye_spoon", "seat"], ["suture_kit", "stitch"]]:
+	for step in [["scalpel", "cut"], ["eye_spoon", "scoop"], ["forceps", "grab"], ["suture_kit", "stitch"]]:
 		for i in bw.slots.size():
 			bw.slots[i] = Player.empty_slot()
 		game.give_hand(bw, String(step[0]), 1)
 		bw.selected = _slot(bw, String(step[0]))
 		await _seconds(0.4)
 		game._proxy_used(game.table_interact_id(ti), bw)
-		var ok := await _until(func(): return sys.mg != null and String(sys.mg.get("variant")) == String(step[1]), 10.0)
+		var ok := await _until(func(): return sys.mg != null and String(sys.mg.get("variant") if sys.mg.get("variant") != null else "") == String(step[1]), 10.0)
 		print("[graftshot] step %s began=%s" % [String(step[1]), str(ok)])
-		await _seconds(2.0)
+		await _seconds(1.0 if String(step[1]) == "grab" else 2.0)
 		await _shot("%d_%s_operating" % [n, String(step[1])])
+		if String(step[1]) == "cut" and sys.mg != null:
+			_lights_near(sys.mg.global_position)
 		n += 1
+		if String(step[1]) == "grab":
+			# The forceps step plays out in about four seconds: the eye on the tray, the carry across
+			# and the moment it goes in.
+			await _seconds(1.0)
+			await _shot("56b_grab_carry")
+			await _seconds(1.2)
+			await _shot("56c_grab_seating")
 		# What the patient sees: their own camera, looking up, while the step plays.
 		var cam: Camera3D = me.camera
 		var was: Camera3D = get_viewport().get_camera_3d()
@@ -114,7 +179,7 @@ func _run() -> void:
 		if was != null:
 			was.make_current()
 		var want := String(step[1])
-		await _until(func(): return ps.case.is_empty() or String(sys.mg.get("variant")) != want or bool(sys.mg.get("done")), 90.0)
+		await _until(func(): return ps.case.is_empty() or sys.mg == null or String(sys.mg.get("variant") if sys.mg.get("variant") != null else "") != want or bool(sys.mg.get("done")), 90.0)
 		await _seconds(0.6)
 	await _until(func(): return game.grafts.graft_of(me.peer_id) == "eye_hive", 20.0)
 	print("[graftshot] graft=", game.grafts.graft_of(me.peer_id), " vat=", String(vat.x),
@@ -199,7 +264,10 @@ func _look_at(target: Vector3) -> void:
 
 
 func _shot(name: String) -> void:
-	await RenderingServer.frame_post_draw
+	# A minimized review window redraws only now and then, so waiting on frame_post_draw hands back
+	# a frame from seconds ago (every shot of a step used to show the step before it). Force the
+	# draw, then read the texture in the same call.
+	RenderingServer.force_draw()
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(ProjectSettings.globalize_path("%s/%s.png" % [SHOT_DIR, name]))
 	print("[graftshot] wrote ", name)

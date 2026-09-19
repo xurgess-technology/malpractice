@@ -81,6 +81,13 @@ func on_jolt(_offset: Vector2, _strength: float, _duration: float) -> void:
 	pass
 
 
+## How much of the operating camera's work lamp this step wants (1.0 = the usual amount). A step
+## whose camera sits very close to a bright surface -- the graft's eye steps, 30 cm off a surgeon's
+## pale face -- turns it down so the site does not bleach out.
+func lamp_scale() -> float:
+	return 1.0
+
+
 ## Every machine, every physics frame while the step is on screen.
 func tick(_delta: float) -> void:
 	pass

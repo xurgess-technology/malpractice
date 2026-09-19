@@ -18,7 +18,9 @@ extends RefCounted
 const HumanModel := preload("res://scripts/human/human_model.gd")
 
 const NODE_NAME := "GraftEye"
-## How far the left eye sits from the eyes' site, along the model's left (-X).
+## How far the left eye (Human_Eye_L) sits from the eyes' site, along the model's X. The sign is
+## the one that lands on Human_Eye_L: with the other one the graft appeared in the socket opposite
+## the one the surgery hid and operated on.
 const SIDE := 0.033
 const STITCHES := 7
 
@@ -39,14 +41,9 @@ static func attach(human_root: Node, kind: String, radius := 0.0135) -> Node3D:
 	var old := att.get_node_or_null(NODE_NAME)
 	if old != null:
 		return old as Node3D
-	var bone := skel.find_bone(att.bone_name)
-	var rest := skel.get_bone_global_rest(bone) if bone >= 0 else Transform3D()
-	# In the bone's frame, but with the model's own axes, so the eyeball's pupil (its -Z) faces
-	# the way the model does and the socket offset goes along the model's left.
-	var b := rest.basis.orthonormalized().inverse()
 	var root := Node3D.new()
 	root.name = NODE_NAME
-	root.transform = Transform3D(b, site.transform.origin + b * Vector3(-SIDE, 0.0, 0.0))
+	root.transform = local_offset(skel, att, site)
 	att.add_child(root)
 	_build(root, kind, radius)
 	var eye_l := HumanModel.piece(human_root, "Human_Eye_L")
@@ -56,6 +53,18 @@ static func attach(human_root: Node, kind: String, radius := 0.0135) -> Node3D:
 			(mi as VisualInstance3D).layers = eye_l.layers
 			(mi as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return root
+
+
+## Where the grafted eyeball hangs, in the head BoneAttachment3D's own space: the eyes' site pushed
+## along the model's left by SIDE, in the bone's frame but with the model's own axes (so the pupil,
+## the eyeball's -Z, faces the way the model does). scripts/downed/player_body.gd builds the `eye`
+## work site from this too -- otherwise the socket you operate on and the socket that ends up with
+## the Hive eye in it are opposite eyes, which is exactly what they were.
+static func local_offset(skel: Skeleton3D, att: BoneAttachment3D, site: Node3D) -> Transform3D:
+	var bone := skel.find_bone(att.bone_name)
+	var rest := skel.get_bone_global_rest(bone) if bone >= 0 else Transform3D()
+	var b := rest.basis.orthonormalized().inverse()
+	return Transform3D(b, site.transform.origin + b * Vector3(SIDE, 0.0, 0.0))
 
 
 ## The same thing for a body that hands over its left-eye mesh directly (the player table's

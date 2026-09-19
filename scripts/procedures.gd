@@ -106,7 +106,7 @@ const AILMENTS := {
 		"steps": [
 			{"id": "cut", "label": "Cut around the socket", "item": "scalpel", "uses": 0, "game": "eye", "variant": "cut", "site": "eye"},
 			{"id": "scoop", "label": "Scoop the old eye out", "item": "eye_spoon", "uses": 0, "game": "eye", "variant": "scoop", "site": "eye"},
-			{"id": "seat", "label": "Seat the new eye", "item": "eye_spoon", "uses": 0, "game": "eye", "variant": "seat", "site": "eye"},
+			{"id": "seat", "label": "Seat the new eye with forceps", "item": "forceps", "uses": 0, "game": "eye", "variant": "grab", "site": "eye"},
 			{"id": "stitch", "label": "Stitch it in", "item": "suture_kit", "uses": 1, "game": "eye", "variant": "stitch", "site": "eye"},
 		],
 	},

@@ -149,3 +149,41 @@ Nothing in docs/FAILING_TESTS.md was touched or fixed.
   same hospital and renders it (`tools/gameshot.tscn`, same seed) logs **zero**, so it is the setup
   boot (`prebuild_level` + `begin_shift` + settling frames), not normal play. Harmless as far as the
   picture goes, but it is the shared skeleton's, not this branch's.
+
+---
+
+## Follow-up: `graft-fixes` (slot wt-1, 2026-09-18)
+
+Zach played the graft and asked for four things. All four are on branch `graft-fixes`.
+
+1. **Step 3 is forceps now.** The `seat` variant (the scoop run backwards) is gone; step 3 is
+   "Seat the new eye with forceps", item `forceps`, variant `grab`, and its own game
+   `scripts/grafting/eye_seat.gd` (eye_ops.gd builds it as a child and hands every Minigame call to
+   it, the way `forceps.gd` hands "brain" to `brain_forceps.gd`). The new eye waits on a small tray
+   beside the socket, is picked up with the jaws, swings on its nerve while it is carried and drops
+   back on the tray if you whip the hand about (no botch, just retry), then sinks in under slow
+   steady pressure. Result is still `{"eye_seated": true}`. Forceps are stocked on the OR's storage
+   shelves next to the scalpel and the eye spoon, and the `graft` / `graft_back` review setups give
+   Botsworth all four tools (1 scalpel, 2 eye spoon, 3 forceps, 4 suture kit).
+2. **The body on the table is dead still** during a graft (`player_body.still`): no breath, no
+   Lying clip, no stir jolt. What moved before was the stand-in's own `_process` -- the breathing
+   torso scale, the Lying clip's idle breath on the skeleton and the jolt offset on `rig` -- which
+   moved the head under a work plane that had been measured off frame 0 of that clip.
+3. **The brightness** was the work lamp, not an extra light: the eye steps put the operating camera
+   0.3 m off the site and a surgeon's pale face under the full lamp measured about 3x the mean
+   luminance of the same step on a Hive's dark head. New `Minigame.lamp_scale()`; `eye_ops` returns
+   0.3 for a player. Before/after in `tools/graft_shots/`.
+4. **The Hive eye not showing** was two bugs. `Grafts` remembered what it had attached by part kind
+   alone, so once the body_visual was rebuilt (getting up off the table, the mirror's own body) the
+   graft went with it and was never put back; it now keys on the human model instance and re-attaches
+   whenever the node is missing. And `GraftEye`'s socket offset was on the opposite side from
+   `Human_Eye_L`, so the surgery hid and operated on one eye while the graft appeared in the other:
+   both now come from `GraftEye.local_offset`. Plus a size bump (`Grafts.BODY_EYE_RADIUS`) and a
+   resting ember (`LOCK_IDLE`), since nothing lights your own face in the mirror.
+
+Also: `tools/graftsurgeryshot.gd` takes a Hive Eyeball Extraction reference shot first
+(`40_hive_cut_operating`) and prints every light near the work site; `tools/minigame_lab.gd` can play
+the graft's eye steps (`--game=eye --patient=player --variant=grab --look=or`). Both screenshot
+helpers now call `RenderingServer.force_draw()` before reading the viewport -- a minimized review
+window redraws so rarely that every shot used to be of a frame from seconds earlier (which is why
+the shots in the section above show the wrong step).

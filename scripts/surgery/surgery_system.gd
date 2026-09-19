@@ -786,7 +786,9 @@ func _update_camera(delta: float) -> void:
 	_cam.global_transform = head.interpolate_with(target, e)
 	_cam.fov = lerpf(_head_fov, _last_pose_fov, e)
 	_lamp.visible = e > 0.02
-	_lamp.light_energy = LAMP_ENERGY * e
+	# A step may ask for less of the work lamp (Minigame.lamp_scale).
+	var scale: float = float(mg.lamp_scale()) if mg != null and mg.has_method("lamp_scale") else 1.0
+	_lamp.light_energy = LAMP_ENERGY * e * scale
 	if _cam_dir < 0 and _cam_blend <= 0.0:
 		_cam_dir = 0
 		_cam.current = false

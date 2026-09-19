@@ -124,6 +124,55 @@ func _minigame_checks() -> void:
 		sn.handle_cursor(Vector2(0.0, 0.008), 0, 1.0 / 60.0)
 	_check(sd[0], "and the nerve parts, then the step finishes")
 	sn.free()
+	_grab_checks(script)
+
+
+## GRAFTING chunk C, step 3: the forceps seat game (the `grab` variant, scripts/grafting/eye_seat.gd).
+func _grab_checks(script: GDScript) -> void:
+	var st3: Dictionary = Procedures.step("eye_graft", 2)
+	_check(String(st3.get("item", "")) == "forceps" and String(st3.get("variant", "")) == "grab",
+		"step 3 seats the new eye with forceps ('%s', %s)" % [String(st3.get("label", "")), str(st3.get("item", ""))])
+	var dt := 1.0 / 60.0
+	var g = script.new()
+	var seated := [false]
+	var botches := [0]
+	g.botched.connect(func(_a, _r): botches[0] += 1)
+	g.finished.connect(func(r): seated[0] = bool(r.get("eye_seated", false)))
+	g.setup({"variant": "grab", "no_fail": true, "patient_id": "player", "eye_kind": "eye_surgeon",
+		"eye_kind_in": "eye_hive", "eye_radius": 0.0135, "step": st3, "body": null, "operator": true})
+	var seat = g.get("_seat")
+	_check(seat != null, "the grab variant hands over to its own game")
+	if seat == null:
+		g.free()
+		return
+	var tray: Vector2 = seat.tray_at()
+	# Closing the jaws anywhere but the tray takes nothing.
+	for i in 40:
+		g.handle_cursor(Vector2.ZERO, 1, dt)
+	_check(int(seat.stage) == 0 and not seated[0], "the jaws close on nothing away from the tray")
+	for i in 10:
+		g.handle_cursor(Vector2.ZERO, 0, dt)
+	# Over the tray they take the eye.
+	for i in 90:
+		g.handle_cursor(tray, 0, dt)
+	for i in 20:
+		g.handle_cursor(tray, 1, dt)
+	_check(int(seat.stage) == 1, "over the tray, holding primary picks the new eye up (stage %d)" % int(seat.stage))
+	# Whipping it across shakes it loose back onto the tray, and costs nothing.
+	for i in 30:
+		g.handle_cursor(Vector2(-0.06, -0.05), 1, dt)
+	_check(int(seat.stage) == 0 and int(seat.drops) == 1 and botches[0] == 0,
+		"a whipped hand shakes it loose back onto the tray, and never botches (stage %d, drops %d, botches %d)"
+			% [int(seat.stage), int(seat.drops), botches[0]])
+	# The bot plays the whole step out: pick it up, carry it across, hold it still until it is in.
+	var t := 0.0
+	while t < 25.0 and not seated[0]:
+		t += dt
+		var inp: Dictionary = g.bot_input(t, 1.0)
+		g.handle_cursor(inp.cursor, int(inp.buttons), dt)
+		g.tick(dt)
+	_check(seated[0] and botches[0] == 0, "the bot seats it: 'eye_seated' after %.1f s, %d botches" % [t, botches[0]])
+	g.free()
 
 
 func _run() -> void:
@@ -154,7 +203,8 @@ func _run() -> void:
 	for v in vat_items:
 		all_empty = all_empty and String(v.x) == ""
 	_check(all_empty, "they are empty")
-	_check(game.shelf_count("scalpel") == 1 and game.shelf_count("eye_spoon") == 1, "a scalpel and an eye spoon wait in the OR's storage")
+	_check(game.shelf_count("scalpel") == 1 and game.shelf_count("eye_spoon") == 1 and game.shelf_count("forceps") >= 1,
+		"a scalpel, an eye spoon and forceps wait in the OR's storage (forceps %d)" % game.shelf_count("forceps"))
 	_check(not vats.spot_free(0) and not vats.spot_free(2) and vats.spot_free(3), "spots 0-2 hold vats, 3-5 are free")
 
 	# ---- spoiling, in and out of a vat
@@ -373,8 +423,8 @@ func _graft_checks() -> void:
 ## One whole graft, Botsworth operating. `first` only changes the messages. False on a timeout.
 func _graft_run(bw, ti: int, first: bool) -> bool:
 	var tag := "graft" if first else "swap back"
-	var tools := ["scalpel", "eye_spoon", "eye_spoon", "suture_kit"]
-	var names := ["cut", "scoop", "seat", "stitch"]
+	var tools := ["scalpel", "eye_spoon", "forceps", "suture_kit"]
+	var names := ["cut", "scoop", "grab", "stitch"]
 	var ps: Node = game.player_surgery
 	var sys: Node = ps.surgery
 	for i in tools.size():

@@ -1081,7 +1081,7 @@ func _sc_graft():
 		var ps: Node = game.player_surgery
 		var sys: Node = ps.surgery
 		sys.bot_skill = 1.0   # the player table's own system, with its own stand-in game
-		for step in [["scalpel", "cut"], ["eye_spoon", "scoop"], ["eye_spoon", "seat"], ["suture_kit", "stitch"]]:
+		for step in [["scalpel", "cut"], ["eye_spoon", "scoop"], ["forceps", "grab"], ["suture_kit", "stitch"]]:
 			for i in op.slots.size():
 				op.slots[i] = Player.empty_slot()
 			game.give_hand(op, String(step[0]), 1)
