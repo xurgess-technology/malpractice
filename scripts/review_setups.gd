@@ -23,6 +23,8 @@ const SETUPS := {
 	# Dr. Botsworth, ready to operate. `graft_back` is the same with the graft already done.
 	"graft": {"seed": 4242, "stage": "_graft"},
 	"graft_back": {"seed": 4242, "stage": "_graft_back"},
+	# docs/SONOGRAPHER.md chunk B: make a noise, watch its neck, get pinged, and get away.
+	"sono": {"seed": 4242, "stage": "_sono"},
 }
 
 
@@ -198,6 +200,48 @@ static func _graft(game: Game) -> void:
 ## eyeball, and your own eyeball is the one floating in the vat, waiting to go back in.
 static func _graft_back(game: Game) -> void:
 	await _graft_stage(game, "eye_surgeon", String(game.local_player().player_name), true)
+
+
+## SONOGRAPHER (docs/SONOGRAPHER.md chunk B): a quiet corridor, a Sonographer wandering about 12 m
+## down it and nothing else in the shift. Your hands are full of things to throw, and a row more on
+## the floor behind you. Throw one: the noise pulls it, its neck starts to grow (the neck IS the
+## suspicion meter), and a few noises fill it -- then the charge, the violet fan out of the wand,
+## your screen full of ultrasound grain and a soft squeal while everything goes muffled, and it
+## comes for you. Get behind a corner, stop moving (crouch is silent) and it loses you.
+static func _sono(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	# Nothing else going on: no phone call, no patient, no other monsters.
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	# A long clear run of corridor to stand in, with the monster at the far end of it.
+	var base: Vector3 = game.clock_pos()
+	var spawns: Array = game.level_info.get("monster_spawns", [])
+	if not spawns.is_empty():
+		base = spawns[0]
+	var out := open_direction(game, base + Vector3.UP * 1.2, 16.0)
+	place(game, game._floor_at(base), game._floor_at(base) + out * 6.0 + Vector3.UP * 1.6)
+	# Only one monster in the shift, and it is this one, down the corridor facing away.
+	game._clear_monsters()
+	await tree.physics_frame
+	var at: Vector3 = game._floor_at(base + out * 12.0)
+	var sono = game._add_monster("sonographer", at)
+	sono.rotation.y = atan2(-out.x, -out.z)   # models face -Z: this has it facing away down the corridor
+	# Things to throw: each one makes a noise where it lands, and pulls it there.
+	clear_hands(game)
+	give(game, "placebo_pills", 3)
+	give(game, "gold_watch", 1, 90)
+	game.local_player().selected = 0
+	var side := out.cross(Vector3.UP).normalized()
+	for i in 4:
+		floor_item(game, "desk_phone", game._floor_at(base - out * 1.6) + side * (float(i) - 1.5) * 0.6, 1, 60)
+	p.set_flashlight(true)
+	await tree.physics_frame
+	print("[review] sono: a Sonographer %.0f m down the corridor; throw something, watch its neck" % base.distance_to(at))
+	game.say("Throw something (right click) and watch its neck. When it fills, it pings you.", 9.0)
 
 
 static func _graft_stage(game: Game, vat_kind: String, owner: String, already: bool) -> void:

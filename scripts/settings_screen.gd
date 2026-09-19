@@ -346,6 +346,8 @@ func _build() -> void:
 	left.add_child(_slider_row("master_volume", "Master", 0.0, 1.0, 0.01, _pct))
 	left.add_child(_slider_row("music_volume", "Music", 0.0, 1.0, 0.01, _pct))
 	left.add_child(_slider_row("sfx_volume", "Effects", 0.0, 1.0, 0.01, _pct))
+	# The Sonographer's deafen squeal: capped and ramped already, further back still on SOFT.
+	left.add_child(_choice_row("soft_squeal", "Squeal", [[false, "NORMAL"], [true, "SOFT"]]))
 	left.add_child(_section("DISPLAY"))
 	left.add_child(_choice_row("window_mode", "Window", [
 		["fullscreen", "FULL"], ["borderless", "BORDER"], ["windowed", "WINDOW"]]))

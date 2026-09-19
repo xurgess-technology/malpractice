@@ -16,7 +16,7 @@ extends CharacterBody3D
 enum State { WANDER, CHASE, STUNNED, SEDATED }
 
 ## What the monster is visibly doing. Replicated; drives animation and sound. Append only.
-enum Mode { IDLE, WANDER, LISTEN, RUSH, SEARCH, STALK, STUNNED, RETREAT, SEDATED }
+enum Mode { IDLE, WANDER, LISTEN, RUSH, SEARCH, STALK, STUNNED, RETREAT, SEDATED, CHARGE, ECHO, WAIL }
 
 const SONOGRAPHER := "sonographer"
 const NIGHT_NURSE := "night_nurse"
@@ -54,6 +54,10 @@ var mode: int = Mode.WANDER
 var speed: float = 0.0          ## current ground speed, m/s
 var observed: bool = false      ## Night Nurse: someone is watching it in the light
 var listen_yaw: float = 0.0     ## Sonographer: head turn toward the sound, relative to facing
+## The Sonographer's suspicion meter (0..1: **the neck is the meter**) and its charge (0..1, the
+## throat then the wand lighting). Host authoritative, replicated as `ss` / `sc`.
+var sono_susp: float = 0.0
+var sono_charge: float = 0.0
 var lunge_t: float = 0.0        ## > 0 while the lunge plays
 ## Night Nurse: the peer id of the surgeon she holds by the neck (0 nobody), and how long she has held
 ## them. Host authoritative (report `gp`); every machine counts grab_t itself (nurse_grab.gd).
@@ -93,6 +97,9 @@ var _twitch_timer := 0.0
 var _twitch := Vector3.ZERO
 var _click_timer := 0.0
 var _sono_susp := 0.0          ## the Sonographer's neck: 0 an ordinary neck, 1 fully craned
+var _sono_limit := 1.0         ## headroom above it: 1 open sky, 0 a ceiling right on its head
+var _sono_ceiling := 0.0       ## seconds until the next headroom ray
+var _sono_wail_timer := 0.0
 var _listen_amt := 0.0
 var _lunge_amt := 0.0
 var _stagger := 0.0
@@ -250,6 +257,9 @@ func _physics_process(delta: float) -> void:
 			velocity = Vector3.ZERO
 		elif dragged_by == 0:
 			brain.think(delta)
+			if kind == SONOGRAPHER:
+				sono_susp = float(brain.suspicion)
+				sono_charge = float(brain.charge)
 		if dragged_by != 0:
 			_apply_pin()
 	else:
@@ -832,40 +842,56 @@ func _update_visual(delta: float) -> void:
 
 
 ## The Sonographer's own model (monster/sonographer, sonographer_rig.gd): which clip and how fast, and its
-## look interface. **The neck is the suspicion meter**: an ordinary neck while it wanders, growing while
-## it listens and searches (the longer it has been suspicious, the further), and dropping back to a low
-## run when it rushes. Every machine, from the mode alone, so clients need no extra state.
+## look interface. **The neck is the suspicion meter**: it is the brain's `suspicion`, replicated as `ss`,
+## so a client's neck grows exactly as the host's does. `sc` is the charge (the throat, then the wand).
+## The neck drops back to a low run while it rushes and wails, whatever the meter says.
 func _sono_visual(delta: float) -> void:
 	var sn = model.sono
-	var want := 0.0
+	var want := sono_susp
 	var look := "idle"
 	match mode:
 		Mode.LISTEN:
-			want = 0.8
 			look = "suspicious"
+		Mode.CHARGE:
+			look = "charging"
+			want = 1.0
+		Mode.ECHO:
+			look = "echo"
+			want = 1.0
 		Mode.SEARCH:
-			want = 0.55
 			look = "search"
 		Mode.RUSH:
-			want = 0.1
+			want = minf(want, 0.1)
 			look = "rush"
+		Mode.WAIL:
+			want = minf(want, 0.15)
+			look = "wail"
 		Mode.STUNNED:
+			want = 0.0
 			look = "stagger"
 		Mode.WANDER:
 			look = "wander" if moving else "idle"
-	if lunge_t > 0.0:
+	if lunge_t > 0.0 and mode != Mode.CHARGE and mode != Mode.ECHO:
 		look = "wail"
 	# It rises quickly and sinks slowly, the way the rig eases it.
 	_sono_susp = move_toward(_sono_susp, want, delta * (1.8 if want > _sono_susp else 0.5))
-	model.set_sono_look(_sono_susp, 0.0, look)
+	_sono_ceiling -= delta
+	if _sono_ceiling <= 0.0:
+		_sono_ceiling = 0.25
+		_sono_limit = _headroom()
+	model.set_sono_look(_sono_susp, sono_charge, look, _sono_aim(), _sono_limit)
 	sn.twitch = sn.twitch.lerp(Vector3.ZERO, clampf(delta * 6.0, 0.0, 1.0))
-	if lunge_t > 0.0:
+	if mode == Mode.CHARGE:
+		model.play("charge", 1.0, 0.12)
+	elif mode == Mode.ECHO:
+		model.play("echo", 1.0, 0.05)
+	elif lunge_t > 0.0:
 		model.play("attack", 1.0, 0.05)
 	elif mode == Mode.STUNNED:
 		model.play("stagger", 1.0, 0.05)
-	elif mode == Mode.LISTEN:
+	elif mode == Mode.LISTEN or (mode == Mode.WAIL and not moving):
 		model.play("listen", 1.0, 0.15)
-	elif mode == Mode.RUSH and moving:
+	elif (mode == Mode.RUSH or mode == Mode.WAIL) and moving:
 		model.play("run", clampf(speed / SonoRig.RUSH_SPEED, 0.5, 2.0), 0.15)
 	elif moving:
 		model.play("walk", clampf(speed / SonoRig.WANDER_SPEED, 0.5, 2.2), 0.25)
@@ -873,6 +899,29 @@ func _sono_visual(delta: float) -> void:
 		model.play("search", 1.0, 0.3)
 	else:
 		model.play("idle", 1.0, 0.3)
+
+
+## The ceiling check (docs/SONOGRAPHER.md: "in low places the neck bends instead of stretching").
+## A ray straight up from where the head sits at rest: 1 is open sky above it, 0 a ceiling right on
+## it, and the rig trades the height for reach so the head never goes up through anything. Run on
+## every machine (the world is the same everywhere), a few times a second.
+func _headroom() -> float:
+	if not is_inside_tree():
+		return 1.0
+	var from := global_position + Vector3.UP * (height - 0.2)
+	var q := PhysicsRayQueryParameters3D.create(from, from + Vector3.UP * (SonoRig.CRANE_M + 0.25))
+	q.collision_mask = C.L_WORLD
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return 1.0
+	return clampf((from.distance_to(hit.position) - 0.25) / SonoRig.CRANE_M, 0.0, 1.0)
+
+
+## Where the wand points while it charges and echoes: the way it is facing, turned by listen_yaw
+## toward what it heard. Every machine works it out the same way from the report.
+func _sono_aim() -> Vector3:
+	var yaw := rotation.y + listen_yaw
+	return Vector3(-sin(yaw), 0.0, -cos(yaw))
 
 
 ## The Hive's own model (monster/hive, hive_rig.gd): which clip and how fast, the idle head lolling,
@@ -980,6 +1029,15 @@ func dev_nurse() -> Dictionary:
 	return dv.nurse_settings()
 
 
+## Where the echo comes out of: the wand's tip when there is a model, else about chest height.
+func _echo_from() -> Vector3:
+	if model != null and model.has_method("echo_origin"):
+		var xf: Transform3D = model.echo_origin()
+		if xf.origin != Vector3.ZERO:
+			return xf.origin
+	return global_position + Vector3.UP * 1.15
+
+
 func _update_sound(delta: float) -> void:
 	var viewer: Node = game.viewed_player() if game.has_method("viewed_player") else null
 	var near_viewer: bool = viewer == null or viewer.global_position.distance_to(global_position) < 30.0
@@ -989,6 +1047,17 @@ func _update_sound(delta: float) -> void:
 		if near_viewer:
 			Audio.play("monsters_flesh_hit", global_position + Vector3.UP * 1.2, -1.0, 0.1)
 	if mode != _last_mode:
+		if kind == SONOGRAPHER and near_viewer and (mode == Mode.CHARGE or mode == Mode.ECHO or mode == Mode.RUSH):
+			# The charge is clicks rising into a whine; the echo is a deep sonar ping with scan
+			# noise under it; the rush is a continuous rattling shriek.
+			match mode:
+				Mode.CHARGE:
+					Audio.play("monsters_sono_charge", global_position + Vector3.UP * 1.6, -3.0, 0.04)
+				Mode.ECHO:
+					Audio.play("monsters_sono_ping", _echo_from(), 0.0, 0.05)
+				Mode.RUSH:
+					if _last_mode != Mode.RUSH:
+						Audio.play("monsters_sono_rush", global_position + Vector3.UP * 1.5, -2.0, 0.08)
 		if mode == Mode.LISTEN and near_viewer:
 			Audio.play("monsters_inhale", global_position + Vector3.UP * 1.5, -2.0, 0.08)
 		elif kind == HIVE and mode == Mode.RUSH and _last_mode != Mode.RUSH and near_viewer:
@@ -1034,7 +1103,13 @@ func _update_sound(delta: float) -> void:
 	elif kind == SONOGRAPHER:
 		# A wet step per footfall and dry tongue clicks, both only while it is not listening: when it
 		# stops to listen, the silence is the tell. The clicks come faster the more suspicious it is.
-		if mode != Mode.LISTEN:
+		if mode == Mode.WAIL:
+			# Grunts and wet blows, through the bursts; the listening pauses are quiet.
+			_sono_wail_timer -= delta
+			if _sono_wail_timer <= 0.0 and (moving or lunge_t > 0.0):
+				_sono_wail_timer = _rng.randf_range(0.45, 0.8)
+				Audio.play("monsters_sono_wail", global_position + Vector3.UP * 1.3, -4.0, 0.12)
+		if mode != Mode.LISTEN and mode != Mode.CHARGE and mode != Mode.ECHO:
 			if moving and _sound_timer <= 0.0:
 				_sound_timer = clampf(0.95 - speed * 0.11, 0.26, 0.8) * _rng.randf_range(0.9, 1.1)
 				Audio.play("monsters_sono_step", global_position + Vector3.UP * 0.05, -6.0 if speed < 2.0 else -2.0, 0.1)
@@ -1093,6 +1168,8 @@ func report() -> Dictionary:
 		# Sweep 3: sedated flag, who drags it, hit counter (flinch + sound on every machine).
 		"sd": mode == Mode.SEDATED, "db": dragged_by, "hc": hit_count,
 		"gp": grab_peer,   # the Night Nurse's grab: who she holds
+		# The Sonographer: the suspicion meter its neck shows, and the charge in throat then wand.
+		"ss": snappedf(sono_susp, 1.0 / 64.0), "sc": snappedf(sono_charge, 1.0 / 64.0),
 	}
 
 
@@ -1113,6 +1190,8 @@ func apply_remote(s: Dictionary) -> void:
 		mode = Mode.SEDATED
 	dragged_by = int(s.get("db", 0))
 	hit_count = int(s.get("hc", hit_count))
+	sono_susp = float(s.get("ss", sono_susp))
+	sono_charge = float(s.get("sc", sono_charge))
 	var gp := int(s.get("gp", 0))
 	if gp != grab_peer:
 		grab_peer = gp

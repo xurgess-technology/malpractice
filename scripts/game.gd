@@ -209,6 +209,7 @@ const DissectionScript := preload("res://scripts/dissection/dissection.gd")
 const BrainsScript := preload("res://scripts/brains/brains.gd")
 const VatsScript := preload("res://scripts/grafting/vats.gd")
 const GraftsScript := preload("res://scripts/grafting/grafts.gd")
+var sono_echo: Node = null    # the Sonographer's echo: the fan, the imaging flash, the deafen squeal
 var combat: Node = null       # bone saw swings, anesthetic jabs, dragging and strapping monsters
 var dissection: Node = null   # monster cases on the patient tables: sedation, re-dosing, the brain
 var _step_operator := 0     # host: who finished the step that is finishing the case (only inside surgery_step_done)
@@ -247,6 +248,12 @@ func _ready() -> void:
 	corpses.name = "Corpses"
 	add_child(corpses)
 	corpses.setup(self)
+	# The Sonographer's echo (docs/SONOGRAPHER.md, chunk B): the fan every machine draws, and the
+	# imaging flash and deafen squeal for whoever it caught. Same path everywhere, for its `sn_` event.
+	sono_echo = preload("res://scripts/monsters/sono_echo.gd").new()
+	sono_echo.name = "SonoEcho"
+	add_child(sono_echo)
+	sono_echo.setup(self)
 	# SWEEP 4A HOOK (scanner): the local scan hologram, beam, completion ring and banner.
 	var scan_fx: Node = preload("res://scripts/scan_fx.gd").new()
 	scan_fx.name = "ScanFx"
@@ -847,6 +854,8 @@ func _clear_level() -> void:
 	player_table = {}
 	if downed_view != null:
 		downed_view.reset()
+	if sono_echo != null:
+		sono_echo.reset()   # no fan left hanging in a level that is going away
 
 
 ## Where players start a run and get up after dying: the neutral area outside when the level has
@@ -4485,6 +4494,9 @@ func _event(kind: String, data: Dictionary) -> void:
 				dissection.on_event(kind, data)
 			elif kind.begins_with("br_"):
 				brains.on_event(kind, data)
+			elif kind.begins_with("sn_"):
+				# The Sonographer's echo: the fan, and being imaged and deafened by it.
+				sono_echo.on_event(kind, data)
 			elif kind == "dr_evict":
 				# DOORS HOOK: the host walked me out of a wing that is about to be rebuilt.
 				var me := local_player()
