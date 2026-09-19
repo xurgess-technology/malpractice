@@ -60,10 +60,10 @@ func _run() -> void:
 
 func _data_and_math() -> void:
 	_say("---- loot data and spoil math")
-	for kind in ["brain_hive", "brain_discharged"]:
+	for kind in ["brain_hive", "brain_sonographer"]:
 		_check(Items.is_loot(kind) and Items.is_fragile(kind) and not Items.stacks(kind) and not Items.is_bulky(kind),
 			"%s is fragile, single, one-handed loot" % kind)
-	_check(Brains.base_value("brain_hive") == 150 and Brains.base_value("brain_discharged") == 350, "base values $150 / $350")
+	_check(Brains.base_value("brain_hive") == 150 and Brains.base_value("brain_sonographer") == 350, "base values $150 / $350")
 	var spawned := false
 	for s in [seed_value, 4242, 777, 90210]:
 		for sh in [1, 3]:
@@ -120,14 +120,14 @@ func _items() -> void:
 	game.pickup_item(me, dropped)
 	# A hit: fragile, it cracks (keeps LOOT_CRACK_KEEPS of its value) and still spoils from the same time.
 	me.revive_full()
-	me.take_into("brain_discharged", 1, 300)
-	me.slots[_slot_of("brain_discharged")]["bt"] = game.world_time - 10.0
+	me.take_into("brain_sonographer", 1, 300)
+	me.slots[_slot_of("brain_sonographer")]["bt"] = game.world_time - 10.0
 	var bt1: float = game.world_time - 10.0
 	i = _slot_of("brain_hive")
 	me.slots[i]["bt"] = bt0
 	me.invuln = 0.0
 	game.damage_player(me, 1, "test")
-	var cracked = _newest("brain_discharged")
+	var cracked = _newest("brain_sonographer")
 	_check(me.hands_empty() and cracked != null and int(cracked.value) == maxi(1, roundi(300 * Game.LOOT_CRACK_KEEPS)), "a hit drops the brain and it cracks ($%s)" % (str(cracked.value) if cracked != null else "?"))
 	_check(cracked != null and absf(float(cracked.bt) - bt1) < 0.001, "the cracked brain keeps its spoil clock")
 	# SWEEP 4A HOOK (pharmacy, chunk 3): the furnace pays the spoiled value; selling is throwing.
@@ -135,14 +135,14 @@ func _items() -> void:
 	_clear()
 	await _until(func(): return game.economy.placed(), 5.0)
 	var furn: Node3D = game.economy.furnace
-	me.take_into("brain_discharged", 1, 300)
-	i = _slot_of("brain_discharged")
+	me.take_into("brain_sonographer", 1, 300)
+	i = _slot_of("brain_sonographer")
 	me.slots[i]["bt"] = game.world_time - 135.0
 	me.selected = i
 	await _frames(20)
-	_check(me.slots[_slot_of("brain_discharged")].has("bt"), "a brain in hand keeps its spoil clock (host stamp)")
-	me.slots[_slot_of("brain_discharged")]["bt"] = game.world_time - 135.0
-	var want: int = b.current_value(me.slots[_slot_of("brain_discharged")])
+	_check(me.slots[_slot_of("brain_sonographer")].has("bt"), "a brain in hand keeps its spoil clock (host stamp)")
+	me.slots[_slot_of("brain_sonographer")]["bt"] = game.world_time - 135.0
+	var want: int = b.current_value(me.slots[_slot_of("brain_sonographer")])
 	var m0 := game.money
 	furn.set_hatch(true, false)   # hub rebuild: the hatch over the window starts shut
 	me.teleport(furn.global_position + furn.global_basis.z * 1.1)
@@ -155,9 +155,9 @@ func _items() -> void:
 	me._pitch = me.head.rotation.x
 	await _frames(3)
 	game.drop_selected(me, 1.0)
-	await _until(func(): return not me.holding("brain_discharged"), 3.0)
+	await _until(func(): return not me.holding("brain_sonographer"), 3.0)
 	await _frames(10)
-	_check(absi(game.money - m0 - want) <= 1 and not me.holding("brain_discharged"), "throwing it into the furnace pays the spoiled price, about $%d (got %d)" % [want, game.money - m0])
+	_check(absi(game.money - m0 - want) <= 1 and not me.holding("brain_sonographer"), "throwing it into the furnace pays the spoiled price, about $%d (got %d)" % [want, game.money - m0])
 	# Clean the floor of test brains.
 	for node in game.world_items.values().duplicate():
 		if Brains.is_brain(String(node.kind)):
@@ -190,17 +190,17 @@ func _blender() -> void:
 	await _stand_at_blender()
 	# Spoiling +0.75, rotten +0.5.
 	for e in [[160.0, 0.75], [300.0, 0.5]]:
-		me.take_into("brain_discharged", 1, 350)
-		var j := _slot_of("brain_discharged")
+		me.take_into("brain_sonographer", 1, 350)
+		var j := _slot_of("brain_sonographer")
 		me.slots[j]["bt"] = game.world_time - float(e[0])
 		me.selected = j
-		var before: float = b.points(me.peer_id, "discharged")
+		var before: float = b.points(me.peer_id, "sonographer")
 		me.bot_interact = true
-		await _until(func(): return not me.holding("brain_discharged"), 3.0)
+		await _until(func(): return not me.holding("brain_sonographer"), 3.0)
 		me.bot_interact = false
 		await _frames(2)
-		_check(absf(b.points(me.peer_id, "discharged") - before - float(e[1])) < 0.001, "a brain %d s old adds %.2f" % [int(e[0]), float(e[1])])
-	_check(b.level(me.peer_id, "discharged") == 1, "1.25 points is Echo level 1")
+		_check(absf(b.points(me.peer_id, "sonographer") - before - float(e[1])) < 0.001, "a brain %d s old adds %.2f" % [int(e[0]), float(e[1])])
+	_check(b.level(me.peer_id, "sonographer") == 1, "1.25 points is Echo level 1")
 	b.add_points(me.peer_id, "hive", 9.0)
 	_check(b.points(me.peer_id, "hive") == 3.0 and b.level(me.peer_id, "hive") == Brains.MAX_LEVEL, "points cap at level 3")
 	var ns: Dictionary = b.net_state()
@@ -225,9 +225,9 @@ func _abilities_nothing_and_echo() -> void:
 	for k in [["laptop", 1], ["gauze", 2], ["xray_film", 1]]:
 		var p = game._spawn_item(k[0], k[1], Transform3D(Basis(), here + Vector3(randf_range(-4, 4), 0.3, randf_range(-4, 4))), WorldItem.State.LOOSE)
 		props.append(p)
-	var mon: Node = game._add_monster("discharged", game._floor_at(here + Vector3(6, 0, 0)))
+	var mon: Node = game._add_monster("sonographer", game._floor_at(here + Vector3(6, 0, 0)))
 	await _frames(4)
-	b.add_points(me.peer_id, "discharged", 1.0)
+	b.add_points(me.peer_id, "sonographer", 1.0)
 	_check(b.slot_of(me.peer_id, "echo") == 0, "reaching level 1 puts Echo in the first empty slot")
 	me.bot_ability_slot = b.slot_of(me.peer_id, "echo")
 	var t0 := game.world_time
@@ -250,7 +250,7 @@ func _abilities_nothing_and_echo() -> void:
 	_check(b.last_result == "cooldown", "a second R right away: cooldown (%s)" % b.last_result)
 	await _until(func(): return not b.echo_view.active, 5.0)
 	_check(not b.echo_view.active and b.echo_view.ghosts.is_empty(), "the Echo view ends by itself and frees its outlines")
-	_check(b.cooldown_left(me.peer_id, "discharged") > 10.0, "Echo cooldown about 20 s (%.1f left)" % b.cooldown_left(me.peer_id, "discharged"))
+	_check(b.cooldown_left(me.peer_id, "sonographer") > 10.0, "Echo cooldown about 20 s (%.1f left)" % b.cooldown_left(me.peer_id, "sonographer"))
 	for p in props:
 		game.world_items.erase(p.item_id)
 		p.queue_free()
@@ -263,11 +263,11 @@ func _hive_eyes() -> void:
 	var b: Node = game.brains
 	b.on_reset()
 	me.revive_full()
-	# The stand-in Hive is a Discharged body that hunts by sound: keep it from ending the view by
+	# The stand-in Hive is a Sonographer body that hunts by sound: keep it from ending the view by
 	# hitting me, except where the test hits me on purpose.
 	me.bot_invulnerable = true
 	b.add_points(me.peer_id, "hive", 1.0)
-	b.add_points(me.peer_id, "discharged", 0.5)
+	b.add_points(me.peer_id, "sonographer", 0.5)
 	_check(b.slot_of(me.peer_id, "hive_in") == 0 and b.slot_of(me.peer_id, "echo") == -1, "Hive reached level 1 (0.5 points is not): Hive Eyes took the first slot, Echo has none yet")
 	me.bot_ability_slot = 0
 	me.bot_ability += 1
@@ -365,7 +365,7 @@ func _hive_eyes() -> void:
 	# Both paths at once: each gets its own slot, independent of order.
 	b.on_reset()
 	b.add_points(me.peer_id, "hive", 1.0)
-	b.add_points(me.peer_id, "discharged", 1.0)
+	b.add_points(me.peer_id, "sonographer", 1.0)
 	_check(b.slot_of(me.peer_id, "hive_in") == 0 and b.slot_of(me.peer_id, "echo") == 1, "Hive Eyes and Echo each land in their own slot")
 	game.kill_monster(wi2)
 	game.kill_monster(far)
@@ -389,7 +389,7 @@ func _ability_slots() -> void:
 	b.on_reset()
 	_check(b.slots_for(me.peer_id) == ["", "", "", ""], "a reset clears the slots")
 	b.set_level(me.peer_id, "echo", 2)
-	_check(b.level(me.peer_id, "discharged") == 2 and b.slot_of(me.peer_id, "echo") == 0, "set_level(peer, id, lvl) sets the level and grants the slot directly")
+	_check(b.level(me.peer_id, "sonographer") == 2 and b.slot_of(me.peer_id, "echo") == 0, "set_level(peer, id, lvl) sets the level and grants the slot directly")
 	b.on_reset()
 
 
@@ -399,7 +399,7 @@ func _reset_on_game_over() -> void:
 	b.on_reset()
 	me.revive_full()
 	b.add_points(me.peer_id, "hive", 2.0)
-	b.add_points(me.peer_id, "discharged", 1.0)
+	b.add_points(me.peer_id, "sonographer", 1.0)
 	var wi: Node = b.spawn_hive(game._floor_at(me.global_position + Vector3(0, 0, 6)))
 	await _frames(2)
 	me.bot_ability += 1
@@ -411,7 +411,7 @@ func _reset_on_game_over() -> void:
 	game._end_shift(false, "Test: everyone is out.")
 	var ok := await _until(func(): return game.phase == Game.Phase.LOBBY, 30.0)
 	await _frames(5)
-	_check(ok and b.points(me.peer_id, "hive") == 0.0 and b.points(me.peer_id, "discharged") == 0.0 and b.net_state().p.is_empty(), "after game over every absorbed brain is gone")
+	_check(ok and b.points(me.peer_id, "hive") == 0.0 and b.points(me.peer_id, "sonographer") == 0.0 and b.net_state().p.is_empty(), "after game over every absorbed brain is gone")
 	_check(not me.hive_view and not b.local_hive_active(), "and nobody is left looking through a Hive")
 	if is_instance_valid(wi):
 		game.kill_monster(wi)

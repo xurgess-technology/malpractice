@@ -10,7 +10,7 @@ extends Node
 ## straps, flags), sedation wearing off and 2.5x faster while the saw bites, the local surgeon
 ## operating both steps through the real surgery system with bot_input, the brain's condition never
 ## going up, the brain handed over with condition -> quality, the flatline and the case clearing
-## itself; the Discharged stirring and awake (thrash botches while operated, shrieks as noise);
+## itself; the Sonographer stirring and awake (thrash botches while operated, shrieks as noise);
 ## re-dosing from hands with the tolerance math and vials used (also while someone operates); a
 ## ruined brain; the OR screen's model.
 ##
@@ -64,7 +64,7 @@ func _physics_process(delta: float) -> void:
 
 func _data_checks() -> void:
 	_check(Procedures.patient_ailments() == ["amputation", "gunshot"], "patient_ailments has no dissection (%s)" % str(Procedures.patient_ailments()))
-	_check(Procedures.human_patients() == ["bob", "seal"] and Procedures.monster_patients() == ["discharged", "hive"], "human and monster patients")
+	_check(Procedures.human_patients() == ["bob", "seal"] and Procedures.monster_patients() == ["hive", "sonographer"], "human and monster patients")
 	var monster_rolled := false
 	for s in 400:
 		var r := Procedures.roll(s * 7 + 3, 1 + s % 5)
@@ -212,8 +212,8 @@ func _dev_mode() -> void:
 	await _burn(case_id)
 	_check(game.case_by_id(case_id).is_empty(), "burned in the furnace, the case is gone")
 
-	# ---- the Discharged: stirring, awake, thrashing, shrieking
-	var did: int = dx.dev_strap("discharged", 0.6, table)
+	# ---- the Sonographer: stirring, awake, thrashing, shrieking
+	var did: int = dx.dev_strap("sonographer", 0.6, table)
 	await _frames(3)
 	var d := game.case_by_id(did)
 	_check(not d.is_empty() and DissectionScript.sedation_state(dx.sedation(d)) == "stirring", "0.6 is stirring")
@@ -231,7 +231,7 @@ func _dev_mode() -> void:
 	await _seconds(4.0)
 	_check(float(d.vitals) == v0, "no thrash botches while nobody operates (%.1f)" % float(d.vitals))
 	var tb = game.body_for_table(table)
-	await _check_rig_body(tb, "discharged")
+	await _check_rig_body(tb, "sonographer")
 	_check(tb != null and float(tb.get("_sedation")) < 0.35, "the body gets the awake sedation (%.2f)" % (float(tb.get("_sedation")) if tb != null else -1.0))
 	# Operate while awake: about 1.5 every 3 s from thrashing.
 	game.surgery_bot_skill = -1.0   # hands off: only the thrashing botches
@@ -249,7 +249,7 @@ func _dev_mode() -> void:
 	me.take_into("anesthetic", 3)
 	await _frames(1)
 	var p2 := String(game._table_prompt(me, table))
-	_check(p2.begins_with("Re-dose The Discharged") and p2.contains("sedation"), "holding anesthetic: '%s'" % p2)
+	_check(p2.begins_with("Re-dose The Sonographer") and p2.contains("sedation"), "holding anesthetic: '%s'" % p2)
 	dx.set_sedation(did, 0.2)
 	var before: float = dx.sedation(d)
 	game.hand_step_item(me, table)   # 2026-09-18: a step's tool is used from your hands
@@ -297,8 +297,8 @@ func _check_rig_body(body, kind: String) -> void:
 	await _frames(3)
 	var skel := lying.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
 	var heads: Array = (body as Node).find_children("HeadRoot", "", true, false)
-	if skel.get_node_or_null("HivePoser") != null:
-		# The stylized Hive (hive_rig.gd): its own head shows, fungus and all; the dissection head is
+	if skel.get_node_or_null("HivePoser") != null or skel.get_node_or_null("SonoPoser") != null:
+		# The stylized Hive and Sonographer (hive_rig.gd, sonographer_rig.gd): their own heads show; the dissection head is
 		# built hidden, only to place the sites, and sits at the head bone.
 		var own := lying.find_child("Head", true, false) as Node3D
 		_check(own != null and own.is_visible_in_tree() and heads.size() == 1 and not (heads[0] as Node3D).is_visible_in_tree(),
@@ -383,10 +383,10 @@ func _shots() -> void:
 	var t0 := int(tables[0].index)
 	var t1 := int(tables[1].index) if tables.size() > 1 else t0
 	var wid: int = dx.dev_strap("hive", 1.0, t0)
-	var did: int = dx.dev_strap("discharged", 0.15, t1)
+	var did: int = dx.dev_strap("sonographer", 0.15, t1)
 	await _seconds(1.5)
 	# 01/02: each monster from beside its table.
-	for pair in [[t0, "01_hive_strapped"], [t1, "02_discharged_thrashing"]]:
+	for pair in [[t0, "01_hive_strapped"], [t1, "02_sonographer_thrashing"]]:
 		var tb := int(pair[0])
 		var tp: Vector3 = game.table_position(tb)
 		var yaw: float = game.table_yaw_of(tb)
@@ -446,7 +446,7 @@ func _shots() -> void:
 	await _shot("06_brain_carry")
 	await _until(func(): return String(game.case_by_id(wid).get("state", "")) != "on_table", 30.0)
 	await _seconds(4.0)
-	print("[dissectiontest] shots done (discharged case %d)" % did)
+	print("[dissectiontest] shots done (sonographer case %d)" % did)
 
 
 func _shot(name: String) -> void:

@@ -45,12 +45,12 @@ swapped for a Hive eye, stitched), `hive` (the surgeon's head and kit: charcoal 
 brain, `Fungus` a separate piece; orange eyes, whose glow is in the eye mask: R = the pinpoint, G = the whole ball,
 lit by the material's `Lock` value, 0 wandering and 1 locked on). Hive shots: `hive_front`, `hive_34`, `hive_side`,
 `hive_back`, `hive_top`, `face_hive`, `face_hive_lock`, `hive_dark(_lock)`, `hive_black(_lock)`.
-`sonographer` (the Sonographer: a blind doctor in old tattered whites, tall and thin, the head low on a
-hunched neck and cocked over one ear, the eye sockets scarred flat with a faint seam and no eye pieces at all.
-Big swivelling ears, a violet windpipe behind a see-through pane of throat skin, an ultrasound probe grown
-into the right palm with three runs of cable up the arm, and gel drips, all their own pieces.
-`st_build.add_neck_bones` cuts the neck into a chain of four so it can stretch about 0.6 m: `--shots` renders
-everything twice, at rest and with `set_crane` at full).
+`sonographer` (the Sonographer: a blind doctor in old tattered whites, tall and thin with a slight stoop and
+an ordinary-length neck, the head cocked a little, blank smooth skin where the eyes were and no eye pieces at all.
+Ears grown into the head that swivel, a violet windpipe behind a see-through pane of throat skin, no right
+hand (the arm stops at the wrist and an ultrasound wand is fitted there, no cable), and gel drips, all their own
+pieces. `st_build.add_neck_bones` cuts the neck into a chain of four so it can stretch about 0.9 m: `--shots`
+renders everything twice, at rest and with `set_crane` at full; `--hide=Head,Coat,...` leaves parts out of a shot).
 Sono shots: `sono_front`, `sono_side`, `sono_34`, `sono_back`, `sono_throat(_charge)`, `sono_dark(_charge)`,
 `face_sono`; `set_charge(0..1)` lights the windpipe for the charge shots.
 `--only=sonographer --export` writes `assets/models/monsters/sonographer/sonographer_st.glb` with its own clips

@@ -13,7 +13,7 @@ extends RefCounted
 ##
 ## Origin at the base, front toward -Z, no collision. LootModels.build() calls build().
 
-const KINDS := ["brain_hive", "brain_discharged"]
+const KINDS := ["brain_hive", "brain_sonographer"]
 
 const SHADER := """
 shader_type spatial;
@@ -100,10 +100,10 @@ static var _mats := {}
 static var _meshes := {}
 
 
-## Colours and size per kind: the Hive's brain is ordinary pink-grey; the Discharged's is bigger
+## Colours and size per kind: the Hive's brain is ordinary pink-grey; the Sonographer's is bigger
 ## and paler, with a lilac-grey cast and deeper grooves.
 static func _look(kind: String) -> Dictionary:
-	if kind == "brain_discharged":
+	if kind == "brain_sonographer":
 		return {"flesh": Color(0.74, 0.68, 0.72), "groove": Color(0.3, 0.17, 0.25), "depth": 1.3, "scale": 1.14}
 	return {"flesh": Color(0.82, 0.61, 0.59), "groove": Color(0.4, 0.12, 0.13), "depth": 1.0, "scale": 1.0}
 

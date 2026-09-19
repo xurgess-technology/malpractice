@@ -79,7 +79,7 @@ func _physics_process(delta: float) -> void:
 
 func _run() -> void:
 	cb.break_chance = 0.0
-	# ---- 01 / 02: the swing, first person, at a Discharged
+	# ---- 01 / 02: the swing, first person, at a Sonographer
 	var m := await _monster(o + Vector3(15.0, 0, 12.5))
 	_give("bone_saw", 1)
 	_stand(o + Vector3(15.0, 0, 14.6), 0.0)
@@ -205,7 +205,7 @@ func _run() -> void:
 
 
 func _monster(pos: Vector3) -> Node:
-	var m = game._add_monster("discharged", game._floor_at(pos))
+	var m = game._add_monster("sonographer", game._floor_at(pos))
 	await _frames(3)
 	m.mode = MonsterScript.Mode.IDLE
 	m.brain.timer = 999.0

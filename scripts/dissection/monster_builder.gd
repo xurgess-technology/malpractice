@@ -1,5 +1,5 @@
 extends RefCounted
-## A strapped monster on a patient table: the PatientBody builder for `hive` and `discharged`
+## A strapped monster on a patient table: the PatientBody builder for `hive` and `sonographer`
 ## (PatientBody.create dispatches here). Same builder interface as scripts/patients/*_builder.gd:
 ## build(b), animate(b, jolt, env, fidget, twitch, t), set_limb_removed(b, removed),
 ## make_severed_limb(b, parent), plus skull_cap_rest(b) for the saw's skull variant.
@@ -35,11 +35,11 @@ const LOOKS := {
 		"gown": Color(0.34, 0.56, 0.6), "gown_dark": Color(0.28, 0.32, 0.2), "eyeless": false,
 		"ear": 1.0, "brain_scale": 1.0,
 	},
-	"discharged": {
-		"length": 1.96, "head": Vector3(0.145, 0.12, 0.104), "width": 0.9, "thin": 0.82,
-		"skin": Color(0.58, 0.56, 0.55), "scalp": Color(0.45, 0.43, 0.42), "hair": 0.0,
-		"gown": Color(0.52, 0.5, 0.4), "gown_dark": Color(0.26, 0.2, 0.14), "eyeless": true,
-		"ear": 1.45, "brain_scale": 1.0,
+	"sonographer": {
+		"length": 1.82, "head": Vector3(0.145, 0.12, 0.104), "width": 0.9, "thin": 0.82,
+		"skin": Color(0.78, 0.63, 0.65), "scalp": Color(0.78, 0.63, 0.65), "hair": 0.0,
+		"gown": Color(0.86, 0.85, 0.78), "gown_dark": Color(0.36, 0.35, 0.33), "eyeless": true,
+		"ear": 1.0, "brain_scale": 1.0,
 	},
 }
 
@@ -59,7 +59,11 @@ static func build(b) -> bool:
 
 	var lying: Node3D = _make_lying(id)
 	var skel: Skeleton3D = null
-	var st_poser: Node = lying.find_child("HivePoser", true, false) if lying != null else null
+	var st_poser: Node = null
+	if lying != null:
+		st_poser = lying.find_child("HivePoser", true, false)
+		if st_poser == null:
+			st_poser = lying.find_child("SonoPoser", true, false)
 	if st_poser != null:
 		_build_st(b, lying, st_poser.get_parent() as Skeleton3D, seed_v)
 		parts["rng"] = RandomNumberGenerator.new()
@@ -169,7 +173,7 @@ static func _build_rig(b, lying: Node3D, skel: Skeleton3D, seed_v: int) -> void:
 	_sites(b, head, head_c, hr, hd, Transform3D(Basis(), inj + Vector3(0, 0.01, 0)), 0.24)
 
 
-## The stylized Hive (hive_rig.gd): its own body lying straight, strapped down, the fungus in its open
+## The stylized Hive (hive_rig.gd) and Sonographer (sonographer_rig.gd): their own bodies lying straight, strapped down, the fungus in its open
 ## skull showing. There is no brain to take out (the fungus replaced it; harvest waits on the grafting
 ## redesign), so the dissection head that opens is built but kept hidden: it only places the skull and
 ## brain sites where the head is, so the saw and forceps steps still run.
@@ -183,6 +187,8 @@ static func _build_st(b, lying: Node3D, skel: Skeleton3D, seed_v: int) -> void:
 	parts["lying"] = lying
 	parts["lying_home"] = lying.position
 	var poser := skel.get_node_or_null("HivePoser")
+	if poser == null:
+		poser = skel.get_node_or_null("SonoPoser")
 	if poser != null:
 		(poser.get("cfg") as Dictionary)["lying_spread"] = 5.0
 	var thrash := StrapThrash.new()
@@ -418,7 +424,7 @@ static func _face(head: Node3D, hr: Vector3, lk: Dictionary, seed_v: int) -> Dic
 	Kit.add_mesh(jaw, Kit.sphere(1.0, 12, 6), dark, Transform3D(Basis().scaled(Vector3(0.008, 0.004, 0.026)), Vector3.ZERO), "Mouth")
 	Kit.add_mesh(jaw, Kit.box(Vector3(0.004, 0.003, 0.03)), Kit.mat("mb_teeth", Color(0.62, 0.58, 0.42), 0.6), Transform3D(Basis(), Vector3(-0.004, 0.002, 0)), "Teeth")
 	out["jaw"] = jaw
-	# Ears: clear ones, larger than normal on the Discharged, with a dark hollow.
+	# Ears: clear ones, with a dark hollow.
 	var ek: float = lk.ear
 	var ear_mat := Kit.mat("mb_ear_%s" % str(skin), skin * 0.88, 0.75)
 	for sz in [-1.0, 1.0]:
@@ -519,12 +525,8 @@ static func _primitive_body(b, rig: Node3D, lk: Dictionary, d: Dictionary, seed_
 				Transform3D(Basis(Vector3(0, 0, 1), -0.35), Vector3(0.03, -0.01, (float(f) - 1.5) * 0.014)), "Finger")
 		b.parts["arm_%s" % ("l" if side > 0 else "r")] = arm
 		b.parts["fingers_%s" % ("l" if side > 0 else "r")] = fingers
-	# The Hive's wristband; the Discharged's IV line taped to the forearm.
-	if String(b.patient_id) == "discharged":
-		var arm_n: Node3D = b.parts["arm_r"]
-		Kit.add_mesh(arm_n, Kit.box(Vector3(0.05, 0.004, 0.03)), Kit.mat("mb_tape", Color(0.85, 0.82, 0.7), 0.9), Transform3D(Basis(), Vector3(0.45 * s, 0.02, 0)), "Tape")
-		Kit.add_mesh(arm_n, Kit.cyl(0.003, 0.003, 0.35, 6), Kit.mat("mb_tube", Color(0.75, 0.8, 0.78), 0.3), Transform3D(Basis(Vector3(0, 0, 1), PI * 0.5).rotated(Vector3.UP, 0.35), Vector3(0.62 * s, 0.022, -0.06)), "Tube")
-	else:
+	# The Hive's wristband.
+	if String(b.patient_id) != "sonographer":
 		var arm_n2: Node3D = b.parts["arm_l"]
 		Kit.add_mesh(arm_n2, Kit.cyl(0.035 * w, 0.035 * w, 0.02, 12, false), Kit.mat("mb_band", Color(0.9, 0.9, 0.86), 0.7), Transform3D(Basis(Vector3(0, 0, 1), PI * 0.5), Vector3(0.56 * s, -0.022, 0)), "Wristband")
 

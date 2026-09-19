@@ -307,10 +307,10 @@ func _run_scenarios() -> void:
 
 
 func _scenario_hearing() -> void:
-	print("[monster_lab] --- 1. the Discharged hears ---")
+	print("[monster_lab] --- 1. the Sonographer hears ---")
 	set_all_lights(false)
 	place_player(cor(60.0), cor(0.0), false)
-	var d: Node = spawn("discharged", cor(10.0), -PI * 0.5)
+	var d: Node = spawn("sonographer", cor(10.0), -PI * 0.5)
 	await wait(0.3)
 
 	# Far: a sprint-loud noise 30 m away.
@@ -363,7 +363,7 @@ func _scenario_hearing() -> void:
 
 	# Walk-loud noise: heard at 4 m, not at 7 m.
 	await clear_monsters()
-	d = spawn("discharged", cor(10.0), -PI * 0.5)
+	d = spawn("sonographer", cor(10.0), -PI * 0.5)
 	await wait(0.2)
 	game.emit_noise(cor(17.0), 0.25, "footstep")
 	await wait(0.2)
@@ -378,7 +378,7 @@ func _scenario_hearing() -> void:
 func _scenario_dark_still() -> void:
 	print("[monster_lab] --- 2. standing still in the dark ---")
 	set_all_lights(false)
-	var d: Node = spawn("discharged", cor(8.0), -PI * 0.5)
+	var d: Node = spawn("sonographer", cor(8.0), -PI * 0.5)
 	# A surgeon 6 m down the corridor, dead still, even shining a light right at it.
 	place_player(cor(14.0, 0.8), cor(8.0) + Vector3.UP * 1.2, true)
 	var hunted := false
@@ -500,7 +500,7 @@ func _scenario_contact() -> void:
 	print("[monster_lab] --- 4. contact ---")
 	set_all_lights(false)
 	place_player(cor(14.0), cor(30.0) + Vector3.UP * 1.5, false)
-	var d: Node = spawn("discharged", cor(9.0), -PI * 0.5)
+	var d: Node = spawn("sonographer", cor(9.0), -PI * 0.5)
 	await wait(0.2)
 	game.emit_noise(p1.global_position, 0.8, "footstep")
 	var lunged := false
@@ -510,7 +510,7 @@ func _scenario_contact() -> void:
 			lunged = true
 		if not game.hits.is_empty():
 			break
-	check("the Discharged rushes the noise and hits the player standing there for 1", game.hits.size() == 1 and game.hits[0].damage == 1 and p1.hp == 2, "hits=%s" % [game.hits])
+	check("the Sonographer rushes the noise and hits the player standing there for 1", game.hits.size() == 1 and game.hits[0].damage == 1 and p1.hp == 2, "hits=%s" % [game.hits])
 	check("it lunges before contact", lunged)
 	check("after the hit it retreats and is calm", d.mode == Modes.Mode.RETREAT and d.calm > 0.0, "mode=%d calm=%.1f" % [d.mode, d.calm])
 	var at_hit: Vector3 = d.global_position
@@ -532,7 +532,7 @@ func _scenario_contact() -> void:
 	d.brain.shoved(Vector3.RIGHT)
 	var st: Vector3 = d.global_position
 	await wait(1.8)
-	check("a shove stuns the Discharged for ~2 s", d.mode == Modes.Mode.STUNNED and d.global_position.distance_to(st) < 0.05)
+	check("a shove stuns the Sonographer for ~2 s", d.mode == Modes.Mode.STUNNED and d.global_position.distance_to(st) < 0.05)
 	await wait(0.4)
 	check("then it recovers", d.mode != Modes.Mode.STUNNED)
 	await clear_monsters()
@@ -595,7 +595,7 @@ func _scenario_roster() -> void:
 		var line := "  shift %d:" % shift
 		for pc in range(1, 5):
 			var r: Array[String] = MonsterScript.roster(shift, pc)
-			var dd := r.count("discharged")
+			var dd := r.count("sonographer")
 			var nn := r.count("night_nurse")
 			var ww := r.count("hive")
 			line += "  %dp D%d N%d W%d" % [pc, dd, nn, ww]
@@ -607,10 +607,10 @@ func _scenario_roster() -> void:
 				ok = false
 		print("[monster_lab]", line)
 	var s1: Array[String] = MonsterScript.roster(1, 1)
-	check("shift 1 solo is one Discharged and Hives", s1.count("discharged") == 1 and s1.count("night_nurse") == 0 and s1.count("hive") == 4, str(s1))
+	check("shift 1 solo is one Sonographer and Hives", s1.count("sonographer") == 1 and s1.count("night_nurse") == 0 and s1.count("hive") == 4, str(s1))
 	check("roster rules hold for shifts 1-6, 1-4 players (cap 5 + Hive cap 8, nurse from shift 2, Hives grow)", ok)
 	check("the Hive cap is reached late (shift 6, 4 players: %d)" % MonsterScript.roster(6, 4).count("hive"), MonsterScript.roster(6, 4).count("hive") == MonsterScript.MAX_HIVES)
-	check("capturable: hive, discharged; not the Night Nurse", MonsterScript.is_capturable("hive") and MonsterScript.is_capturable("discharged") and not MonsterScript.is_capturable("night_nurse"))
+	check("capturable: hive, sonographer; not the Night Nurse", MonsterScript.is_capturable("hive") and MonsterScript.is_capturable("sonographer") and not MonsterScript.is_capturable("night_nurse"))
 
 
 ## A client copy fed only report() must animate the same state.
@@ -626,8 +626,8 @@ func _scenario_client() -> void:
 	var client_n: Node = MonsterScript.new_monster(999, "night_nurse", cor(20.0, 1.0))
 	add_child(client_n)
 	client_n.game = client_game
-	var host_d: Node = spawn("discharged", cor(30.0), -PI * 0.5)
-	var client_d: Node = MonsterScript.new_monster(998, "discharged", cor(30.0, 1.0))
+	var host_d: Node = spawn("sonographer", cor(30.0), -PI * 0.5)
+	var client_d: Node = MonsterScript.new_monster(998, "sonographer", cor(30.0, 1.0))
 	add_child(client_d)
 	client_d.game = client_game
 	await wait(0.3)
@@ -652,7 +652,7 @@ func _scenario_client() -> void:
 	for i in 30:
 		await get_tree().physics_frame
 		client_d.apply_remote(host_d.report())
-	check("client Discharged shows the listen tilt (listen %.2f)" % client_d.model.shaper.listen, client_d.mode == Modes.Mode.LISTEN and client_d.model.shaper.listen > 0.5)
+	check("client Sonographer shows the listen tilt (listen %.2f)" % client_d.model.shaper.listen, client_d.mode == Modes.Mode.LISTEN and client_d.model.shaper.listen > 0.5)
 	client_n.queue_free()
 	client_d.queue_free()
 	client_game.queue_free()
@@ -763,7 +763,7 @@ func _scenario_hive() -> void:
 	var build_ms := float(Time.get_ticks_usec() - tb) / 1000.0
 	built.free()
 	var others := ""
-	for k in ["discharged", "night_nurse"]:
+	for k in ["sonographer", "night_nurse"]:
 		var tk := Time.get_ticks_usec()
 		var o: Node = MonsterScript.new_monster(991, k, cor(40.0))
 		others += " %s %.1f ms" % [k, float(Time.get_ticks_usec() - tk) / 1000.0]
@@ -799,10 +799,10 @@ func _scenario_combat() -> void:
 	place_player(cor(40.0), cor(0.0) + Vector3.UP * 1.5, false)
 	p1.invuln = 99.0
 	var w: Node = spawn("hive", cor(10.0), -PI * 0.5)
-	var d: Node = spawn("discharged", cor(20.0), -PI * 0.5)
+	var d: Node = spawn("sonographer", cor(20.0), -PI * 0.5)
 	var n: Node = spawn("night_nurse", cor(30.0), -PI * 0.5)
 	await wait(0.2)
-	check("hp: hive 2, discharged 4, night_nurse 0", w.hp == 2 and w.max_hp == 2 and d.hp == 4 and d.max_hp == 4 and n.hp == 0 and n.max_hp == 0)
+	check("hp: hive 2, sonographer 4, night_nurse 0", w.hp == 2 and w.max_hp == 2 and d.hp == 4 and d.max_hp == 4 and n.hp == 0 and n.max_hp == 0)
 	check("can_be_hurt: not the Night Nurse", w.can_be_hurt() and d.can_be_hurt() and not n.can_be_hurt())
 	var before: Vector3 = w.global_position
 	var r1: String = w.take_hit(Vector3.RIGHT, 1, "saw:lab")
@@ -815,7 +815,7 @@ func _scenario_combat() -> void:
 	var results_d: Array = []
 	for i in 4:
 		results_d.append(d.take_hit(Vector3.RIGHT, 1, "saw:lab"))
-	check("the Discharged takes 3 staggers, the 4th hit kills (%s)" % str(results_d), results_d == ["stagger", "stagger", "stagger", "killed"])
+	check("the Sonographer takes 3 staggers, the 4th hit kills (%s)" % str(results_d), results_d == ["stagger", "stagger", "stagger", "killed"])
 	var rn: String = n.take_hit(Vector3.RIGHT, 5, "saw:lab")
 	check("the Night Nurse is immune (%s), hp unchanged" % rn, rn == "immune" and n.hp == 0 and n.hit_count == 0)
 	n.shoved(Vector3.RIGHT)
@@ -850,13 +850,13 @@ func _scenario_combat() -> void:
 	check("and stands up again (rot %.2f)" % w.model.rotation.x, w.model.rotation.x < 0.2)
 	p1.invuln = 99.0
 
-	# wake() by hand, and the Discharged.
+	# wake() by hand, and the Sonographer.
 	await clear_monsters()
 	place_player(cor(30.0), cor(0.0) + Vector3.UP * 1.5, false)
-	d = spawn("discharged", cor(10.0), -PI * 0.5)
+	d = spawn("sonographer", cor(10.0), -PI * 0.5)
 	await wait(0.1)
 	d.shoved(Vector3.LEFT)
-	check("the Discharged: shove then sedate", d.can_sedate() and d.sedate(60.0) and d.is_sedated())
+	check("the Sonographer: shove then sedate", d.can_sedate() and d.sedate(60.0) and d.is_sedated())
 	game.emit_noise(d.global_position + Vector3(2, 0, 0), 1.0, "glass")
 	await wait(0.5)
 	check("sedated, it does not hear breaking glass", d.is_sedated() and d.mode == Modes.Mode.SEDATED)
@@ -921,14 +921,17 @@ func _scenario_drag_and_lying() -> void:
 	p1.invuln = 99.0
 
 	# make_lying: a still copy along X, head toward -X, origin at the middle of the back.
-	for k in ["hive", "discharged"]:
+	for k in ["hive", "sonographer"]:
 		var copy: Node3D = MonsterScript.make_lying(k)
 		copy.position = cor(20.0) + Vector3.UP * 1.0
 		add_child(copy)
 		await wait(0.2)
 		var box := AABB()
 		var first := true
-		for mi in copy.find_children("*", "MeshInstance3D", true, false):
+		# The stylized bodies (the Hive, the Sonographer) are all skinned; their loose pieces (ears, the
+		# wand, gel) are small and say nothing about the body's length, so read the bones instead.
+		var stylized := copy.find_child("HivePoser", true, false) != null or copy.find_child("SonoPoser", true, false) != null
+		for mi in ([] if stylized else copy.find_children("*", "MeshInstance3D", true, false)):
 			if not (mi as MeshInstance3D).is_visible_in_tree() or (mi as MeshInstance3D).skin != null or mi.get_parent() is Skeleton3D and String(mi.name).ends_with("-mesh"):
 				continue   # skinned rig meshes report their rest-pose box (A-pose arms)
 			var b: AABB = (mi as MeshInstance3D).global_transform * (mi as MeshInstance3D).get_aabb()
@@ -1025,9 +1028,9 @@ func _run_shots() -> void:
 	p1.camera.current = true
 	game.host = false   # monsters are posed through apply_remote, exactly like a client
 	var list := [
-		["discharged_4m", _shot_discharged.bind(4.0, false)],
-		["discharged_1_5m", _shot_discharged.bind(1.5, false)],
-		["discharged_listen", _shot_discharged.bind(3.0, true)],
+		["sonographer_4m", _shot_sonographer.bind(4.0, false)],
+		["sonographer_1_5m", _shot_sonographer.bind(1.5, false)],
+		["sonographer_listen", _shot_sonographer.bind(3.0, true)],
 		["nurse_4m", _shot_nurse.bind(4.0)],
 		["nurse_1_5m", _shot_nurse.bind(1.5)],
 		["nurse_door", _shot_nurse_door],
@@ -1050,10 +1053,10 @@ func _run_shots() -> void:
 		["hive_sees_you", _shot_hive_rush],
 		["hive_group", _shot_hive_group],
 		["hive_face_lock", _shot_hive_face_lock],
-		["discharged_head", _shot_head.bind("discharged", false, 0.8, 0.2)],
-		["discharged_side", _shot_head.bind("discharged", false, 0.7, 1.35)],
-		["discharged_ears_listen", _shot_head.bind("discharged", true, 0.8, 0.5)],
-		["discharged_height", _shot_height],
+		["sonographer_head", _shot_head.bind("sonographer", false, 0.8, 0.2)],
+		["sonographer_side", _shot_head.bind("sonographer", false, 0.7, 1.35)],
+		["sonographer_ears_listen", _shot_head.bind("sonographer", true, 0.8, 0.5)],
+		["sonographer_height", _shot_height],
 		["sedated", _shot_sedated],
 		["lying_copies", _shot_lying],
 		# the Sonographer: the model only (sono-brain builds the hunting), driven by hand
@@ -1099,10 +1102,10 @@ func _pose(m: Node, pos: Vector3, yaw: float, mode: int, moving: bool, spd: floa
 	m.apply_remote(r)
 
 
-func _shot_discharged(dist: float, listen: bool) -> void:
+func _shot_sonographer(dist: float, listen: bool) -> void:
 	if dist_override > 0.0:
 		dist = dist_override
-	var d: Node = spawn("discharged", cor(20.0, -0.3), PI * 0.5)
+	var d: Node = spawn("sonographer", cor(20.0, -0.3), PI * 0.5)
 	# Facing the camera, which stands `dist` metres east of it.
 	var pos := cor(20.0, -0.3)
 	var yaw := -PI * 0.5
@@ -1319,7 +1322,7 @@ func _shot_hive_group() -> void:
 
 ## A head close-up: the camera `dist` metres from the face, `view` radians around from straight
 ## in front (positive: toward the monster's left), eye level with the head. `listen`: the
-## Discharged listens to a sound on its left.
+## Sonographer listens to a sound on its left.
 func _shot_head(kind: String, listen: bool, dist: float, view: float) -> void:
 	var pos := cor(21.0, -0.3)
 	var m: Node = spawn(kind, pos, -PI * 0.5)
@@ -1349,8 +1352,8 @@ func _shot_head(kind: String, listen: bool, dist: float, view: float) -> void:
 
 
 func _shot_height() -> void:
-	# Left to right: the Discharged, a surgeon, a Hive, side by side across the corridor.
-	var d: Node = spawn("discharged", cor(21.0, -1.0), -PI * 0.5)
+	# Left to right: the Sonographer, a surgeon, a Hive, side by side across the corridor.
+	var d: Node = spawn("sonographer", cor(21.0, -1.0), -PI * 0.5)
 	_pose(d, cor(21.0, -1.0), -PI * 0.5, Modes.Mode.IDLE, false, 0.0)
 	var surgeon: Node = PlayerScript.new_player(2, "Surgeon", false)
 	game.add_child(surgeon)
@@ -1364,7 +1367,7 @@ func _shot_height() -> void:
 	place_player(cor(27.5, 0.0), cor(21.0, 0.0) + Vector3.UP * 1.1, true)
 	await wait(1.0)
 	var head: Node3D = d.model.find_child("Head", true, false)
-	print("[monster_lab] Discharged head bone at %.2f m (top of skull about %.2f)" % [head.global_position.y, head.global_position.y + 0.25])
+	print("[monster_lab] Sonographer head bone at %.2f m (top of skull about %.2f)" % [head.global_position.y, head.global_position.y + 0.25])
 	var wh: Node3D = w.model.find_child("Head", true, false)
 	print("[monster_lab] Hive head bone at %.2f m (top of skull about %.2f)" % [wh.global_position.y, wh.global_position.y + 0.22])
 
@@ -1372,7 +1375,7 @@ func _shot_height() -> void:
 func _shot_sedated() -> void:
 	var pos := cor(21.0, -0.5)
 	var w: Node = spawn("hive", pos, PI * 0.5 + 0.3)
-	var d: Node = spawn("discharged", cor(18.0, 0.6), -PI * 0.5 - 0.2)
+	var d: Node = spawn("sonographer", cor(18.0, 0.6), -PI * 0.5 - 0.2)
 	for f in 120:
 		await get_tree().physics_frame
 		w.apply_remote({"pos": pos, "y": PI * 0.5 + 0.3, "md": Modes.Mode.SEDATED, "sd": true, "mv": false, "sp": 0.0})
@@ -1386,7 +1389,7 @@ func _shot_lying() -> void:
 	a.position = cor(21.0, -0.7) + Vector3.UP * 0.9
 	add_child(a)
 	a.add_to_group("monster")
-	var b: Node3D = MonsterScript.make_lying("discharged")
+	var b: Node3D = MonsterScript.make_lying("sonographer")
 	b.position = cor(21.0, 0.7) + Vector3.UP * 0.9
 	add_child(b)
 	b.add_to_group("monster")
@@ -1761,7 +1764,7 @@ func _shot_sono(dist: float, view: float, clip: String, crane: float, chg: float
 	if model.anim != null and clip in ["charge", "echo", "stagger", "attack"]:
 		# these are one-shot: hold them where they land
 		model.anim.speed_scale = 0.0
-	var aim := pos + Vector3.UP * (aim_y if aim_y > 0.0 else 1.25 + 0.45 * crane)
+	var aim := pos + Vector3.UP * (aim_y if aim_y > 0.0 else 1.30 + 0.70 * crane)
 	# `view` turns the camera round it: 0 is face on, PI/2 its side, PI behind. The corridor is only
 	# two tiles wide, so keep views near 0 or PI at anything past arm's length. The watcher stands on
 	# the floor like a player, so the eye is always at eye height.
@@ -1779,7 +1782,7 @@ func _shot_sono(dist: float, view: float, clip: String, crane: float, chg: float
 
 
 ## The lying copy the dissection table gets, built the way the game builds it: flat on its back, the
-## neck back at rest length, the probe hand at its side.
+## neck back at rest length, the wand arm at its side.
 func _shot_sono_lying() -> void:
 	if _sono_holder != null:
 		_sono_holder.queue_free()

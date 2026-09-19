@@ -90,7 +90,7 @@ to ask him between chunks.** Report once at the end. Only stop early if a chunk 
 
 ### 1a. Controls
 - **Crouch (Ctrl):** hold to crouch. Crouching lowers the camera and collision height and slows
-  movement. **Footsteps make no sound and no noise events**, so the Discharged can't hear a
+  movement. **Footsteps make no sound and no noise events**, so the Sonographer can't hear a
   crouching player walk. It has a matching third-person pose (done in `body_poser.gd`) and
   replicates. Don't let a player stand up under a low ceiling.
 - **Jump (Space):** a small, grounded jump. Nothing floaty. Keep the dev room's Space

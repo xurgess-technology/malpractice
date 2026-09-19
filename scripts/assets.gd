@@ -152,14 +152,14 @@ const MODELS := {
 		"note": "The Hive, made for Malpractice with Blender scripts (art/stylized). No third-party licence.",
 	},
 	# The Sonographer (2026-09-18): the stylized kit (art/stylized, variant `sonographer`), about
-	# 2.1 m at rest and 2.7 m craned, feet at y 0, facing +Z. A standalone model: no cart. On the human
+	# 1.8 m at rest and 2.7 m craned, feet at y 0, facing +Z. A standalone model: no cart. On the human
 	# skeleton except for its neck, which is a chain of four bones (`neck`, `neck2`, `neck3`, `neck4`)
 	# so it can stretch; the game drives that stretch from suspicion. Blind: the sockets are scarred
-	# flat and there are no eye pieces. Its big swivelling ears (Human_Ear_L / _R), its glowing
-	# windpipe (Human_Throat) behind the see-through skin of its throat (Human_ThroatSkin), the
-	# ultrasound probe grown into its right hand (Human_Probe), the three runs of cable up that arm
-	# (Human_Cable_A/B/C) and the gel drips (Human_Gel_*) are all their own pieces; Site_ear_L/_R,
-	# Site_throat, Site_cable and Site_probe say where things go.
+	# flat and there are no eye pieces. Its ears (Human_Ear_L / _R, ordinary ears grown into the head
+	# that swivel), its glowing windpipe (Human_Throat) behind the see-through skin of its throat
+	# (Human_ThroatSkin), the ultrasound wand fitted to its cut right wrist (Human_Probe) and the gel
+	# drips (Human_Gel_*) are all their own pieces; Site_ear_L/_R, Site_throat, Site_mouth and
+	# Site_probe say where things go. It has no right hand and no cable.
 	# No root motion. scripts/monsters/sonographer_rig.gd.
 	"monster/sonographer": {
 		"path": "res://assets/models/monsters/sonographer/sonographer_st.glb",

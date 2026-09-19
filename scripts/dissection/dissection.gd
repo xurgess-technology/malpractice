@@ -2,7 +2,7 @@ extends Node
 ## dissection (sweep 3): strapped monsters on the patient tables. See docs/SWEEP3.md ("Dissection")
 ## and docs/CONTRACTS.md ("Dissection").
 ##
-## A monster case is a normal game case with `monster: true`, `patient_id` hive | discharged and
+## A monster case is a normal game case with `monster: true`, `patient_id` hive | sonographer and
 ## `ailment_id` "dissection" (Procedures). The surgery systems operate it like any patient; this
 ## node adds what only a monster has, all host authoritative:
 ##
@@ -32,11 +32,11 @@ const SHRIEK_NOISE := 0.7
 const SHRIEK_EVERY := Vector2(3.5, 6.5)
 const REMOVE_AFTER := 6.0
 const FLAG_STEP := 0.05
-const BRAIN_KINDS := {"hive": "brain_hive", "discharged": "brain_discharged"}
+const BRAIN_KINDS := {"hive": "brain_hive", "sonographer": "brain_sonographer"}
 const LootTable := preload("res://scripts/economy/loot_table.gd")
 ## Fallback when the brains system has no spawn_brain: a plain loot item worth this much at quality 1.
 const FALLBACK_KIND := "gold_watch"
-const FALLBACK_VALUE := {"hive": 150, "discharged": 350}
+const FALLBACK_VALUE := {"hive": 150, "sonographer": 350}
 
 var game: Node = null
 

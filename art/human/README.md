@@ -219,7 +219,7 @@ the arms at the sides, inside a 1.1 m table. `Crawl` is a prone pull with the ch
 head up. None of them self-intersect badly; the gown does not drape when lying (it keeps its
 standing shape a few centimetres above the belly).
 
-## Deriving the Hive and the Discharged
+## Deriving the Hive and the Sonographer
 
 - Start from `hu_params.py`: a new entry (or a new `outfit`) covers most changes, and the whole
   pipeline (skin, rig, clips, bake, GLB, sites JSON) comes for free. Keep the skeleton: the clips,
@@ -230,7 +230,7 @@ standing shape a few centimetres above the belly).
   as the Nurse's drag was. Filmed eyes, jowls and an open mouth are head features in
   `hu_body._head_feats` plus the eye material. The forearm split and the UV2 arc length work for
   any missing or rotting limb.
-- **Discharged (2.1 m, eyeless, large ears)**: `height` 2.1, `head_scale`, `ears` above 1. For
+- **Sonographer (2.1 m, eyeless, large ears)**: `height` 2.1, `head_scale`, `ears` above 1. For
   sealed, stitched sockets skip `build_eyes` and replace the socket carve with a sunken seam (a head
   feature) and a stitch texture. The dissection head stays the separate openable mesh in
   `scripts/dissection/monster_head.gd`; `Site_eyes` and the `head` bone give its placement.

@@ -74,7 +74,7 @@ func _brain_shots() -> void:
 	var bl: Node3D = b.blender
 	var room_c := _break_room_centre()
 	var base: Vector3 = game._floor_at(room_c)
-	var row := [["brain_hive", 0.0], ["brain_hive", 150.0], ["brain_hive", 260.0], ["brain_discharged", 0.0], ["brain_discharged", 260.0]]
+	var row := [["brain_hive", 0.0], ["brain_hive", 150.0], ["brain_hive", 260.0], ["brain_sonographer", 0.0], ["brain_sonographer", 260.0]]
 	var placed := []
 	for i in row.size():
 		var it: Node = b.spawn_brain(row[i][0], 1.0, base + Vector3((i - 2) * 0.24, 0.2, 0.0))
@@ -97,7 +97,7 @@ func _brain_shots() -> void:
 	await _shot("02_brains_closeup_flashlight_fresh_spoiling")
 	_free_cam(base + Vector3(0.3, 0.32, 0.4), base + Vector3(0.36, 0.05, 0.0), 45.0)
 	await _frames(10)
-	await _shot("03_brains_closeup_flashlight_discharged_fresh_rotten")
+	await _shot("03_brains_closeup_flashlight_sonographer_fresh_rotten")
 	_end_free_cam()
 	for it in placed:
 		if is_instance_valid(it):
@@ -121,7 +121,7 @@ func _blender_shots() -> void:
 	var bl: Node3D = b.blender
 	var front: Vector3 = bl.global_position + bl.global_transform.basis.z * 1.3
 	_clear()
-	bot.take_into("brain_discharged", 1, 350)
+	bot.take_into("brain_sonographer", 1, 350)
 	bot.slots[0]["bt"] = game.world_time
 	bot.selected = 0
 	_look_from(Vector3(front.x, bl.global_position.y, front.z), bl.global_position + Vector3.UP * 0.15)
@@ -141,7 +141,7 @@ func _blender_shots() -> void:
 	await _frames(8)
 	await _shot("08_blender_blending_closeup")
 	_end_free_cam()
-	await _until(func(): return not bot.holding("brain_discharged"), 3.0)
+	await _until(func(): return not bot.holding("brain_sonographer"), 3.0)
 	bot.bot_interact = false
 	bot.bot_aim_id = ""
 	await _frames(20)
@@ -186,12 +186,12 @@ func _echo_shots() -> void:
 	var stand: Vector3 = game._floor_at(best)
 	var map := get_viewport().world_3d.navigation_map
 	stand = NavigationServer3D.map_get_closest_point(map, stand + Vector3(2.0, 0, 0))
-	# Company: a Discharged and a Hive stand-in behind walls, and a teammate dummy.
+	# Company: a Sonographer and a Hive stand-in behind walls, and a teammate dummy.
 	var yaw := _open_direction(stand)
 	var dirv := Vector3(-sin(yaw), 0, -cos(yaw))
 	var side := Vector3(cos(yaw), 0, -sin(yaw))
 	# In front but off to the sides, where walls are likely to hide them.
-	var m1: Node = game._add_monster("discharged", NavigationServer3D.map_get_closest_point(map, stand + dirv * 9.0 + side * 5.0))
+	var m1: Node = game._add_monster("sonographer", NavigationServer3D.map_get_closest_point(map, stand + dirv * 9.0 + side * 5.0))
 	var m2: Node = b.spawn_hive(NavigationServer3D.map_get_closest_point(map, stand + dirv * 7.0 - side * 5.0))
 	var mate := _dummy(NavigationServer3D.map_get_closest_point(map, stand + dirv * 12.0 - side * 1.0))
 	_look_from(stand, stand + dirv * 6.0 + Vector3.UP * 1.2)
@@ -200,7 +200,7 @@ func _echo_shots() -> void:
 		if m != null:
 			m.set_physics_process(false)
 	await _shot("12_echo_before")
-	b.add_points(bot.peer_id, "discharged", 2.0)
+	b.add_points(bot.peer_id, "sonographer", 2.0)
 	bot.bot_ability += 1
 	await _frames(20)
 	await _shot("13_echo_wave")

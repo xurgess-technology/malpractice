@@ -316,9 +316,6 @@ ALLOWED = {
     'Coat': ['hips', 'spine', 'chest', 'upperchest', 'shoulder.L', 'shoulder.R', 'upperarm.L', 'upperarm.R', 'thigh.L', 'thigh.R'],
     'Shirt': ['hips', 'spine', 'chest', 'upperchest', 'shoulder.L', 'shoulder.R', 'upperarm.L', 'upperarm.R', 'forearm.L', 'forearm.R'],
     'Tie': ['chest', 'upperchest'],
-    'Cable_A': ['neck', 'upperchest', 'shoulder.R', 'upperarm.R'],
-    'Cable_B': ['upperarm.R', 'forearm.R'],
-    'Cable_C': ['forearm.R', 'hand.R'],
     'Top': ['hips', 'spine', 'chest', 'upperchest', 'shoulder.L', 'shoulder.R', 'upperarm.L', 'upperarm.R', 'forearm.L', 'forearm.R'],
     'Gown': ['hips', 'spine', 'chest', 'upperchest', 'shoulder.L', 'shoulder.R', 'upperarm.L', 'upperarm.R'],
     'Pants': ['hips', 'thigh.L', 'thigh.R', 'shin.L', 'shin.R'],
@@ -437,7 +434,8 @@ def assign_weights(ob, part, sk, arm):
             # them apart stretches the neck and pulls the windpipe's rings apart with it
             names = list(st_char.NECK_CHAIN)
             edges = [zn + (zh - zn) * i / len(names) for i in range(len(names) + 1)]
-            w_head = st_char.smooth01((z - (zh - 0.055)) / 0.030)
+            # the head takes over just under the chin, so the jaw never stretches with the neck
+            w_head = st_char.smooth01((z - (zh - 0.068)) / 0.026)
             rest = 1.0 - w_head
             for i, n in enumerate(names):
                 lo, hi = edges[i], edges[i + 1]
@@ -536,15 +534,16 @@ def pose_sono(rig):
 
 
 def set_crane(c, amount):
-    """Stretch the neck chain for a render. The game does this every frame in code
-    (scripts/monsters/sonographer_rig.gd); here it is just so the review can see it craned."""
+    """Stretch the neck chain for a render, the way the game does every frame in code
+    (scripts/monsters/sonographer_rig.gd): the bottom bone stays on the collarbones and the three above
+    it share the stretch. It is here so the review can see it craned."""
     arm = c['arm']
-    per = st_char.CRANE_M * amount / 4.0
-    for b in st_sono_clips.NECK:
+    share = st_sono_clips.SHARE
+    for i, b in enumerate(st_sono_clips.NECK):
         pb = arm.pose.bones.get(b)
         if pb is None:
             continue
-        pb.location = (0.0, per, 0.0)
+        pb.location = (0.0, 0.0 if i == 0 else st_char.CRANE_M * amount * share[i] / (1.0 - share[0]), 0.0)
     bpy.context.view_layer.update()
 
 
@@ -877,6 +876,12 @@ def main():
     for name in ONLY:
         chars[name] = build_variant(name, layout[name])
     studio()
+    # --hide=Head,Coat,...: leave those parts out of the renders (to look at what is behind them)
+    for h in [x for x in arg('hide', '').split(',') if x]:
+        for c in chars.values():
+            for ob in c['obs']:
+                if ob.name.endswith('_' + h):
+                    ob.hide_render = True
     bpy.context.view_layer.update()
     for nm, c in chars.items():
         # which way the posed head faces, in armature axes: the Sonographer's must point the way it
@@ -1011,7 +1016,7 @@ def main():
                     clear(L + [cam])
             if want('sono_throat' + sfx):
                 # the neck and the window in it, from the front and a little below
-                nz = 0.5 * (c['body'].J['neck'].z + c['body'].HC.z) + 0.30 * crane
+                nz = 0.5 * (c["body"].J["neck"].z + c["body"].HC.z) + 0.45 * crane
                 tgt = (x0, 0.0, nz)
                 L = std_lights(tgt, 0.3)
                 cam = camera((x0 + 0.10, -0.95, nz - 0.10), tgt, 85)
@@ -1020,7 +1025,7 @@ def main():
             if want('sono_dark' + sfx):
                 # the game's look: near dark, a teal ambient, a warm flashlight from the viewer
                 bpy.context.scene.world.node_tree.nodes['Background'].inputs['Color'].default_value = (0.004, 0.012, 0.012, 1)
-                tgt = (x0, 0, 1.45 + 0.3 * crane)
+                tgt = (x0, 0, 1.45 + 0.45 * crane)
                 cam = camera((x0 + 0.3, -3.6, 1.75), tgt, 32)
                 fl = add_light('SPOT', (x0 + 0.5, -3.5, 1.62), tgt, 700, (1.0, 0.82, 0.58), 0.05, 'Flash', spot=(40, 0.6))
                 amb = add_light('AREA', (x0, 0, 3.6), (x0, 0, 0), 40, (0.35, 0.8, 0.75), 4.0, 'Amb')
@@ -1028,13 +1033,21 @@ def main():
                 clear([cam, fl, amb])
                 bpy.context.scene.world.node_tree.nodes['Background'].inputs['Color'].default_value = (0.02, 0.025, 0.03, 1)
             if want('sono_probe' + sfx) and not crane:
-                # the wand grown into the right palm and the cable running up the arm
-                sk = st_char.Skel(c['body'])
-                tip = st_char.probe_tip(sk)
-                tgt = tuple(tip + np.array([0.0, 0.0, 0.06]))
-                L = std_lights(tgt, 0.3)
-                cam = camera(tuple(tip + np.array([-0.22, -0.52, 0.22])), tgt, 70)
+                # the wand fitted to the cut wrist, from the front and a little above
+                arm = c['arm']
+                wr = arm.matrix_world @ arm.pose.bones['hand.R'].head
+                el = arm.matrix_world @ arm.pose.bones['forearm.R'].head
+                tip = wr + (wr - el).normalized() * 0.11
+                L = std_lights(tuple(tip), 0.3)
+                cam = camera(tip + Vector((-0.10, -0.62, 0.16)), tip, 70)
                 render('sono_probe', (1000, 1000))
+                clear(L + [cam])
+            if want('sono_shoulders' + sfx):
+                # the neck, collar and shoulders from the front and a little above
+                tgt = (x0, 0.0, 1.50 + 0.28 * crane)
+                L = std_lights(tgt, 0.4)
+                cam = camera((x0 + 0.55, -1.55, 1.62 + 0.28 * crane), tgt, 60)
+                render('sono_shoulders' + sfx, (1000, 1000))
                 clear(L + [cam])
         set_crane(c, 0.0)
         set_charge(0.0)

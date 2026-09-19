@@ -28,6 +28,6 @@ grafting design that used to be here was dropped on 2026-09-18; grafting starts 
   chat, classes, progression.
 - **Polish:** gown clipping, infection styles, balance, a flashlight for teammates.
 - **Placebo ideas that were discussed but not specced:** silly stacking tiers, and a bottle
-  rattle the Discharged can hear.
+  rattle the Sonographer can hear.
 - **Open bugs** stay in `docs/KNOWN_ISSUES.md`. The Steam backend has never been tested against a
   real Steam client.
