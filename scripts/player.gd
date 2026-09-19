@@ -237,6 +237,10 @@ func view_local() -> bool:
 	return is_local or possessed_local
 ## DEV HOOK: seconds left knocked down (no moving). Wave 3's downed state replaces this.
 var stun: float = 0.0
+## TRINKETS chunk B: how much faster this player sprints (the EpiPen's 2x for ten seconds).
+## scripts/trinkets/trinkets.gd pushes it onto every player every physics frame from replicated
+## state, so this is never written anywhere else.
+var sprint_mult: float = 1.0
 ## DEV HOOK: flying through walls (dev panel).
 var noclip: bool = false
 
@@ -323,6 +327,9 @@ var _bot_charging := false
 var _charging_with := ""      # "shove" (Q) or "use" (left mouse): the button charging a shove here
 var _jab_prompt := ""
 var _jab_prompt_t := 0.0
+## TRINKETS chunk B: the same throttled crosshair line for a held trinket.
+var _trinket_prompt := ""
+var _trinket_prompt_t := 0.0
 
 var _shove_seen: int = 0
 var _drop_seen: int = 0
@@ -769,6 +776,8 @@ func _local_step(delta: float) -> void:
 			_bot_use_seen = bot_use
 			if not diving and g != null and g.combat != null and g.combat.is_usable(selected_stack().kind):
 				g.combat.local_try_use(self)
+			elif not diving and g != null and g.trinkets != null:
+				g.trinkets.local_try_use(self)   # TRINKETS chunk B: bots and tests use trinkets too
 		# HANDS HOOK: bot_charge true holds the shove, false lets it go.
 		if bot_charge != _bot_charging and g != null and g.combat != null:
 			_bot_charging = bot_charge
@@ -974,8 +983,12 @@ func _local_step(delta: float) -> void:
 	_apply_crouch(delta)
 	sprinting = moving and can_move and want_sprint and stamina > 0.0 and not downed and not crouching and carrying == 0 and dragging_monster < 0 and not winding and not diving
 	stamina = clampf(stamina + (-delta / 4.5 if sprinting else (0.0 if diving else delta / 5.0)), 0.0, 1.0)
+	# TRINKETS chunk B: the EpiPen doubles the sprint, and holds stamina up for its ten seconds --
+	# without that the boost would run out of breath after four.
+	if sprint_mult > 1.0:
+		stamina = 1.0
 
-	var speed: float = 0.0 if operating else (C.SPRINT_SPEED if sprinting else C.WALK_SPEED)
+	var speed: float = 0.0 if operating else ((C.SPRINT_SPEED * sprint_mult) if sprinting else C.WALK_SPEED)
 	# Downed hook: crawling is slow; a teammate over your shoulder slows you down.
 	if downed:
 		speed = CRAWL_SPEED
@@ -1071,6 +1084,8 @@ func _local_step(delta: float) -> void:
 			if Input.is_action_just_pressed("use") and not gun_out and not downed and carrying == 0 and dragging_monster < 0 and not diving and not scan_holding:
 				if g.combat.is_usable(selected_stack().kind):
 					g.combat.local_try_use(self)
+				elif g.trinkets != null and g.trinkets.local_try_use(self):
+					pass   # TRINKETS chunk B: a trinket does its own job instead of shoving
 				elif _charging_with == "" and g.combat.local_shove_begin(self):
 					_charging_with = "use"
 			if _charging_with != "" and not Input.is_action_pressed(_charging_with):
@@ -1389,6 +1404,18 @@ func _update_aim() -> void:
 	else:
 		_jab_prompt = ""
 		_jab_prompt_t = 0.0
+	# TRINKETS chunk B: holding a trinket, the crosshair says what left mouse would do with it
+	# (clip the pulse oximeter on, bonk, shock someone awake). Same few-Hz throttle as the jab.
+	if aim_prompt == "" and alive and not downed and game != null and game.trinkets != null \
+			and game.trinkets.is_usable(String(selected_stack().kind)):
+		_trinket_prompt_t -= get_physics_process_delta_time()
+		if _trinket_prompt_t <= 0.0:
+			_trinket_prompt_t = 0.1
+			_trinket_prompt = game.trinkets.use_prompt(self)
+		aim_prompt = _trinket_prompt
+	else:
+		_trinket_prompt = ""
+		_trinket_prompt_t = 0.0
 	# AFFORDANCE HOOK: only the local player ever sees their own highlight (a bot's aim is a host
 	# decision, not something drawn to anyone's screen -- unless a human is driving that bot).
 	if view_local():
@@ -2098,6 +2125,16 @@ func take_hit(dmg: int, knock: Vector3) -> void:
 func apply_knock(knock: Vector3) -> void:
 	_knock = knock
 	velocity += knock * 0.5
+
+
+## TRINKETS chunk B: the reflex hammer. This view snaps 180 degrees where it stands. Called on the
+## machine that owns this player's camera (game._event "tk_spin"), and on the host for its copy.
+func spin_view() -> void:
+	_yaw = wrapf(_yaw + PI, -PI, PI)
+	rotation.y = _yaw
+	bot_yaw = _yaw
+	if view_local() and fx != null and fx.has_method("add_shake"):
+		fx.add_shake(0.5, 0.2)
 
 
 func flinch() -> void:

@@ -209,12 +209,14 @@ const DissectionScript := preload("res://scripts/dissection/dissection.gd")
 const BrainsScript := preload("res://scripts/brains/brains.gd")
 const VatsScript := preload("res://scripts/grafting/vats.gd")
 const GraftsScript := preload("res://scripts/grafting/grafts.gd")
+const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
 var combat: Node = null       # bone saw swings, anesthetic jabs, dragging and strapping monsters
 var dissection: Node = null   # monster cases on the patient tables: sedation, re-dosing, the brain
 var _step_operator := 0     # host: who finished the step that is finishing the case (only inside surgery_step_done)
 var vats: Node = null         # GRAFTING part one: specimen vats, eye spoilage (scripts/grafting/vats.gd)
 var grafts: Node = null       # GRAFTING chunk C: Eyeball Grafting on a strapped surgeon (scripts/grafting/grafts.gd)
 var brains: Node = null       # brain spoilage, the blender, per-player upgrades, Echo and Hive Eyes
+var trinkets: Node = null     # TRINKETS chunk B: what the six trinkets do (scripts/trinkets/trinkets.gd)
 # POCKETS HOOK: pocket spaces (the Factory, the Restaurant), their seams and crossings.
 const PocketSpacesScript := preload("res://scripts/level/pockets/pocket_spaces.gd")
 var pockets: Node = null
@@ -301,6 +303,11 @@ func _ready() -> void:
 	grafts.name = "Grafts"
 	add_child(grafts)
 	grafts.setup(self)
+	# TRINKETS chunk B: what the six trinkets do. Same path on every machine.
+	trinkets = TrinketsScript.new()
+	trinkets.name = "Trinkets"
+	add_child(trinkets)
+	trinkets.setup(self)
 	# POCKETS HOOK: after Entities, so crossings see this frame's movement. Same path everywhere.
 	pockets = PocketSpacesScript.new()
 	pockets.name = "Pockets"
@@ -1444,6 +1451,8 @@ func pickup_item(p: Node, it: Node) -> void:
 		p.slots[i]["bt"] = float(it.bt)   # SWEEP 3 HOOK (brains): the spoil clock travels with it
 	if String(it.x) != "":
 		p.slots[i]["x"] = String(it.x)   # GRAFTING part one: an eye's owner, a vat's contents
+		if String(it.x) == TrinketsScript.USED_MARK:
+			p.slots[i]["used"] = true   # TRINKETS chunk B: a spent trinket stays spent, and greyed
 	var pos: Vector3 = it.global_position
 	mark_db(String(it.kind), "sighted", p)   # wall terminal: an item this player has held shows in their database
 	world_items.erase(it.item_id)
@@ -1743,6 +1752,8 @@ func reset_money() -> void:
 		brains.on_reset()   # SWEEP 3 HOOK: absorbed brains go with the money
 	if grafts != null:
 		grafts.on_reset()   # GRAFTING chunk C: a graft lasts the run, and goes with a game over
+	if trinkets != null:
+		trinkets.on_reset()   # TRINKETS chunk B: rings, tags and boosts go with the run
 
 
 ## SWEEP 4A HOOK (pharmacy, chunk 3): the flat price of one bottle of placebo pills. Never
@@ -2356,6 +2367,7 @@ func _physics_process(delta: float) -> void:
 	combat.physics_tick(delta)
 	dissection.physics_tick(delta)
 	brains.physics_tick(delta)
+	trinkets.physics_tick(delta)   # TRINKETS chunk B: rings, heartbeats, the EpiPen's boost
 	doors.physics_tick(delta)   # DOORS HOOK: every machine; the host decides, clients animate
 
 	_update_danger()
@@ -3418,8 +3430,13 @@ func player_shoved(p: Node, charge: float = -1.0) -> void:
 func player_used(p: Node) -> void:
 	if not is_host():
 		return
-	if String(p.selected_stack().kind) == "placebo_pills":
+	var kind := String(p.selected_stack().kind)
+	if kind == "placebo_pills":
 		eat_pill(p)
+		return
+	# TRINKETS chunk B: the six trinkets do their own job instead of winding up a strike.
+	if trinkets != null and trinkets.is_usable(kind):
+		trinkets.use(p)
 		return
 	if combat != null:
 		combat.use(p)
@@ -4012,6 +4029,7 @@ func _global_fields() -> Dictionary:
 		# SWEEP 3 HOOK: small dictionaries of quantized values only (see docs/SWEEP3.md)
 		"cb": combat.net_state(), "dx": dissection.net_state(), "br": brains.net_state(),
 		"gf": grafts.net_state(),   # GRAFTING chunk C: who has a grafted part
+		"tk": trinkets.net_state(),   # TRINKETS chunk B: rings, laptop screens, tagged monsters, EpiPens
 	}
 	# loop: the cases, one field per case so a vitals tick resends a float, not every case:
 	# "cs" the ids in order, "c.<id>" the case without vitals, "v.<id>" its vitals.
@@ -4254,6 +4272,7 @@ func _apply_state(state: Dictionary, msg: Dictionary, keyframe: bool) -> void:
 	dissection.apply_net_state(g.get("dx", {}))
 	brains.apply_net_state(g.get("br", {}))
 	grafts.apply_net_state(g.get("gf", {}))   # GRAFTING chunk C
+	trinkets.apply_net_state(g.get("tk", {}))   # TRINKETS chunk B
 	var new_tools := bool(g.get("dt", dev_tools))   # DEV HOOK
 	if new_tools != dev_tools:
 		dev_tools = new_tools
@@ -4485,6 +4504,8 @@ func _event(kind: String, data: Dictionary) -> void:
 				dissection.on_event(kind, data)
 			elif kind.begins_with("br_"):
 				brains.on_event(kind, data)
+			elif kind.begins_with("tk_"):
+				trinkets.on_event(kind, data)   # TRINKETS chunk B: the reflex hammer's view snap
 			elif kind == "dr_evict":
 				# DOORS HOOK: the host walked me out of a wing that is about to be rebuilt.
 				var me := local_player()

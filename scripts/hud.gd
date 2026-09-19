@@ -94,6 +94,7 @@ func _draw() -> void:
 		_draw_scan_ring(w, h, me)   # SWEEP 4A HOOK (scanner)
 		_draw_scan_banner(w, h)
 		_draw_ability_card(w, h)
+		_draw_laptop_map(w, h, me)   # TRINKETS chunk B
 	if me != null and not in_surgery:
 		_draw_money(w, h, me)
 	if me != null and not me.alive:
@@ -436,6 +437,80 @@ func _draw_slot(r: Rect2, kind: String, s: Dictionary, keys: String, sel: bool, 
 		pb.set_corner_radius_all(6)
 		draw_style_box(pb, pill)
 		_text(Vector2(pill.position.x + 4.5, pill.end.y - 3.5), label, 13, Color("ffffff"))
+
+
+## TRINKETS chunk B (docs/ITEMS_AND_ICONS.md): the laptop's one charge. For a few seconds a plan of
+## the Trinkets.MAP_RANGE metres around you, north up, with the hospital's floor tiles in a dim
+## green, you as an arrow in the middle and a blip for every surgery item within range. It is a bad
+## screen on a dying laptop, so it scans, flickers and goes out.
+const MAP_PX := 268.0
+const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
+## mapgen.gd's walkable tile characters (its own WALKABLE_CHARS; repeated here so the HUD does not
+## preload the whole generator to draw a floor).
+const MAP_FLOOR_CHARS := ".+,PTM"
+
+
+func _draw_laptop_map(w: float, _h: float, me) -> void:
+	if game == null or game.trinkets == null:
+		return
+	var left: float = game.trinkets.map_left(me)
+	if left <= 0.0:
+		return
+	drawn.append("laptop_map")
+	var range_m: float = TrinketsScript.MAP_RANGE
+	var total: float = TrinketsScript.MAP_SECONDS
+	# Powering up and dying: a quick wipe in, a stutter out.
+	var k: float = clampf((total - left) / 0.35, 0.0, 1.0) * clampf(left / 0.5, 0.0, 1.0)
+	var flicker: float = 0.88 + 0.12 * sin(_t * 31.0) * clampf(1.0 - left / 1.5, 0.0, 1.0)
+	var a := k * flicker
+	if a <= 0.01:
+		return
+	var r := Rect2(w - MAP_PX - 26.0, 26.0, MAP_PX, MAP_PX)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.07, 0.05, 0.9 * a)
+	sb.border_color = Color("7de0a0", 0.75 * a)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(6)
+	draw_style_box(sb, r)
+	var c := r.get_center()
+	var ppm := (MAP_PX * 0.5) / range_m          # pixels per metre
+	var here: Vector3 = me.global_position
+	# The floor plan, from the level's tile rows (mapgen.gd's legend; "#" and "=" are solid).
+	var rows: Array = game.level_info.get("rows", [])
+	if not rows.is_empty():
+		var t0 := C.world_to_tile(here - Vector3(range_m, 0, range_m))
+		var t1 := C.world_to_tile(here + Vector3(range_m, 0, range_m))
+		var cell := C.TILE * ppm
+		for ty in range(maxi(0, t0.y), mini(rows.size(), t1.y + 1)):
+			var row: String = rows[ty]
+			for tx in range(maxi(0, t0.x), mini(row.length(), t1.x + 1)):
+				if not MAP_FLOOR_CHARS.contains(row[tx]):
+					continue
+				var wp := C.tile_to_world(tx, ty)
+				var d := Vector2(wp.x - here.x, wp.z - here.z)
+				if d.length() > range_m:
+					continue
+				draw_rect(Rect2(c + d * ppm - Vector2(cell, cell) * 0.5, Vector2(cell, cell)),
+					Color(0.35, 0.85, 0.5, 0.20 * a))
+	# The range ring and the sweep.
+	draw_arc(c, MAP_PX * 0.5 - 4.0, 0.0, TAU, 48, Color("7de0a0", 0.35 * a), 1.0)
+	var sweep := fmod(_t * 1.6, TAU)
+	draw_line(c, c + Vector2(sin(sweep), -cos(sweep)) * (MAP_PX * 0.5 - 5.0), Color("7de0a0", 0.28 * a), 1.0)
+	# Surgery items within range.
+	for pos in (game.trinkets.map_blips(me) as Array):
+		var d2 := Vector2(pos.x - here.x, pos.z - here.z) * ppm
+		if d2.length() > MAP_PX * 0.5 - 6.0:
+			continue
+		var pulse := 0.65 + 0.35 * sin(_t * 5.0 + d2.length() * 0.1)
+		draw_circle(c + d2, 5.0, Color("6fd0ff", 0.22 * a))
+		draw_circle(c + d2, 2.4, Color("cfeeff", pulse * a))
+	# You, in the middle, pointing where you look.
+	var yaw: float = me.rotation.y
+	var f := Vector2(-sin(yaw), -cos(yaw))
+	var s2 := Vector2(-f.y, f.x)
+	draw_colored_polygon(PackedVector2Array([c + f * 8.0, c - f * 5.0 + s2 * 5.0, c - f * 5.0 - s2 * 5.0]),
+		Color("ffffff", 0.9 * a))
+	_text(Vector2(r.position.x + 8, r.end.y - 8), "%.0f m  ·  %.1f s" % [range_m, left], 12, Color("7de0a0", 0.8 * a))
 
 
 ## A small four-point sparkle.

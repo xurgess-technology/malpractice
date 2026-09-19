@@ -235,6 +235,19 @@ func _stuck(delta: float, window: float) -> bool:
 	return moved < 0.3
 
 
+## TRINKETS chunk B (the reflex hammer): Monster.spin_around has just turned it 180 degrees. It has
+## lost you: it forgets its target and stands looking around where it now faces, so the next sight
+## check (its cone pointing the other way) does not simply find you again.
+func spun_around() -> void:
+	seeing = false
+	target_id = 0
+	lost_t = LOST_WALK
+	wander_goal = null
+	if m.mode != M.Mode.STUNNED and m.mode != M.Mode.RETREAT and m.mode != M.Mode.SEDATED:
+		_start_search()
+	sight_timer = SIGHT_INTERVAL
+
+
 ## Deaf: a noise means nothing. Something certain (the game says so: a needle that did not
 ## take) turns it toward that spot, and it comes to look.
 func alert_to(pos: Vector3) -> void:

@@ -23,6 +23,9 @@ const SETUPS := {
 	# Dr. Botsworth, ready to operate. `graft_back` is the same with the graft already done.
 	"graft": {"seed": 4242, "stage": "_graft"},
 	"graft_back": {"seed": 4242, "stage": "_graft_back"},
+	# TRINKETS chunk B (docs/ITEMS_AND_ICONS.md): all six in hand, a Hive to tag and bonk, and a
+	# teammate lying down for the defibrillator.
+	"trinkets": {"seed": 4242, "stage": "_trinkets"},
 }
 
 
@@ -183,6 +186,63 @@ static func _items(game: Game) -> void:
 		floor_item(game, row[i], base + out * 2.0 + side * (float(i) - 2.0) * 0.55, 1, 100)
 	print("[review] items: standing among %d loot stacks; trinkets on the floor ahead, an EpiPen in hand" % best_n)
 
+
+
+## TRINKETS (docs/ITEMS_AND_ICONS.md, chunk B): the open floor beyond the OR with all six trinkets
+## to hand. Two are in your hands (the pulse oximeter and the reflex hammer, the two reusable ones)
+## and the other four lie in a row in front of you, which leaves the two free slots the bulky
+## defibrillator needs. A Hive stands a few metres away, calm for the first few seconds, to shove,
+## tag, bonk and run from; a teammate (a dev dummy, so it works solo; with `-Count 2` the other
+## window is a real surgeon) lies downed beside you for the defibrillator. Nothing else is going
+## on: no phone call, no patient, no other monsters.
+static func _trinkets(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("monsters_off", {"on": true})   # only the one staged below
+	game.dev.request("clear_patient")
+	# Standing in the open beyond the OR table, looking away from it down the longest clear line.
+	var t: Vector3 = game.table_pos()
+	var base: Vector3 = game._floor_at(t + Vector3(0.0, 0.0, 4.2))
+	var out := open_direction(game, base + Vector3.UP * 1.2, 7.0)
+	var side := out.cross(Vector3.UP).normalized()
+	place(game, base, base + out * 5.0 + Vector3(0, 0.2, 0))
+	clear_hands(game)
+	give(game, "pulse_oximeter", 1, 40)
+	give(game, "reflex_hammer", 1, 20)
+	p.selected = 0
+	p.flashlight_on = true
+	var row := ["desk_phone", "laptop", "epipen", "defibrillator"]
+	var value := [20, 80, 30, 120]
+	for i in row.size():
+		floor_item(game, row[i], base + out * 3.0 + side * (float(i) - 2.2) * 0.6, 1, value[i])
+	await tree.physics_frame
+	# A Hive, out in front. It is calm for a few seconds so it does not walk straight over and
+	# knock everything out of your hands before you have looked at any of it.
+	var m = game._add_monster("hive", game._floor_at(base + out * 7.0 - side * 0.6))
+	if m != null:
+		m.calm = 12.0
+		if m.brain != null and "home" in m.brain:
+			m.brain.home = m.global_position
+			m.brain.timer = 12.0
+			m.mode = Monster.Mode.IDLE
+	# A teammate on the floor beside you, waiting for the paddles. A dummy, not a bot: it has no
+	# brain of its own, so it stays exactly where it is put and stays down.
+	var bot_id: int = game.dev.spawn_bot("dummy", p, "Nurse Pratt", game._floor_at(base + out * 3.4 + side * 1.9))
+	var downed := false
+	for i in 10:
+		await tree.physics_frame
+	for q in game.players.values():
+		if q != null and is_instance_valid(q) and String(q.player_name) == "Nurse Pratt":
+			q.bot_move = Vector2.ZERO
+			game.knock_down_player(q, "dev:setup")
+			downed = q.downed
+	print("[review] trinkets: hive=%s downed mate=%s (bot %d)" % [str(m != null), str(downed), bot_id])
+	game.say("Pulse oximeter and reflex hammer in hand; phone, laptop, EpiPen and defibrillator on the floor. The Hive is yours to experiment on.", 10.0)
 
 
 ## GRAFT (docs/GRAFTING.md, chunk C): you are strapped to a free OR table with a vat holding a

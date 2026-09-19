@@ -78,7 +78,7 @@ All items are physical 3D objects: on shelves, in containers, in hands, on the O
 | Tourniquet | AM | no | red trauma bags (corridors, nurse stations); sometimes dropped |
 | Bone saw | AM | no | pegboards (maintenance, storage); sometimes leaning on a gurney |
 
-- **Loot** is what you find to sell at the furnace: five plain kinds (pill bottle, X-ray film, heart monitor, gold watch, portable ultrasound) and six trinkets (desk phone, laptop, defibrillator, reflex hammer, EpiPen, pulse oximeter), which sell too but are rarer and are meant to do one thing each (their jobs come later; see docs/ITEMS_AND_ICONS.md). Loot is scarce: 15 to 20 stacks a shift, about $1,000 in all, so most rooms hold nothing and a harvested brain is a real share of a shift's pay. Anything that isn't bulky can turn up in a container too.
+- **Loot** is what you find to sell at the furnace: five plain kinds (pill bottle, X-ray film, heart monitor, gold watch, portable ultrasound) and six trinkets (desk phone, laptop, defibrillator, reflex hammer, EpiPen, pulse oximeter), which sell too but are rarer and each also do one thing (see **Trinkets** below). Loot is scarce: 15 to 20 stacks a shift, about $1,000 in all, so most rooms hold nothing and a harvested brain is a real share of a shift's pay. Anything that isn't bulky can turn up in a container too.
 - **Aim and press E** for everything: take items, open and close containers, put things on the OR's storage shelves, clock in, revive, operate.
 - **Two hands.** A batch fills one hand; picking up more of the same consumable merges into it. 1, 2 or the mouse wheel switch hands; G sets the selected stack down gently.
 - **Getting hit or shoved** drops both hands; fragile stacks lose about a third, never all of it.
@@ -88,7 +88,23 @@ All items are physical 3D objects: on shelves, in containers, in hands, on the O
 - **Charged throw**: hold the drop key to charge a throw, release to fire it (a quick tap still just drops). Used to sell loot into the crematorium furnace and to throw placebo pills.
 - **Placebo pills**: a $15 bottle of 10, sold only at the pharmacy, does nothing mechanically and burns for $0. Swallow one from the bottle, or throw one at a teammate (a warm, cozy screen effect and a line only they see) or at a patient/monster (the line floats above them in quotes for everyone nearby; an OR patient's monitor shows a hopeful green blip, vitals unchanged). A miss just leaves it on the floor as a pickup.
 - **Rocket boots**: $100 a pair, sold only at the pharmacy. Worn, not carried: taking a pair puts them on (hands stay free), one pair each, kept through death until a new run. Hold crouch through a sprint-dive and they light: you fly straight ahead, level and fast, on a second bar under stamina (fuel, about 1.5 s of burn, refilling on the ground). Let go and you drop into the normal dive landing. Fly head first into a wall and you faceplant: the burn stops, you bounce back and drop, and it costs a heart.
-- **TODO**: the shopping cart, more item types (defibrillator, sedative dart, batteries, keys).
+- **TODO**: the shopping cart, more item types (sedative dart, batteries, keys).
+
+### Trinkets
+
+Six pieces of loot that sell like any other, but each does one thing, so picking one up is always a
+question: use it or sell it? They are rarer than plain loot (three to five in a shift). Left mouse
+uses the one in your hand. **A one-use trinket, once spent, is greyed with a crack across its icon
+and sells for a few dollars of scrap** — never nothing.
+
+| Trinket | What it does | After |
+| --- | --- | --- |
+| **Desk phone** | Set it down and it rings loudly for about 10 s: a decoy that pulls anything with ears (and turns the deaf Hives nearby toward it). Pick it up and do it again. **Every time you pull it out there is about a 12% chance it goes off in your hands.** | Reusable |
+| **Laptop** | Open it for about six seconds of a plan of the 25 m around you, with a blip for every surgery item in range. Then the battery dies. | Scrap |
+| **Defibrillator** | Aim at a downed teammate and they come straight back up **where they lie** — no carrying them to a table. Bulky (two hand slots), and very loud: a real noise event. | Scrap |
+| **Pulse oximeter** | In the same window as the sedative jab (a monster stunned by a shove), clip it on **instead of** sedating. The monster gets up and carries on, and from then on **the whole team hears its heartbeat**, positional and through walls: slow while it wanders, faster when it is suspicious, racing when it hunts. You get the pulse oximeter back, on the floor, when that monster is caught or killed. The Night Nurse can't be tagged. | Reusable |
+| **Reflex hammer** | Bonk anyone in reach and **they instantly spin 180°**. A teammate's camera snaps round. A Hive loses sight of you and starts searching the wrong way. The Night Nurse has no reflexes and ignores it. Short cooldown. | Reusable |
+| **EpiPen** | Jab yourself or a teammate: double sprint speed, and no getting out of breath, for 10 s — then a 3 s collapse where you stand. | Scrap |
 
 ## The database terminal
 

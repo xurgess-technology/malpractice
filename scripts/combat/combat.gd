@@ -902,6 +902,8 @@ func on_event(kind: String, data: Dictionary) -> void:
 
 ## Host: every monster is about to be freed (clock-out, new level).
 func on_monsters_cleared() -> void:
+	if game != null and game.get("trinkets") != null:
+		game.trinkets.on_monsters_cleared()   # TRINKETS chunk B: tags die with the level
 	if game != null:
 		for p in game.players.values():
 			if is_instance_valid(p) and "dragging_monster" in p:
@@ -919,6 +921,10 @@ func on_monsters_cleared() -> void:
 func on_monster_removed(m: Node) -> void:
 	if m == null:
 		return
+	# TRINKETS chunk B: a tagged monster is caught or killed, so the pulse oximeter comes off it.
+	# Both paths (game.kill_monster and _remove_monster_quietly) come through here.
+	if game != null and game.get("trinkets") != null:
+		game.trinkets.on_monster_removed(m)
 	var id: int = m.monster_id
 	if game != null:
 		for p in game.players.values():

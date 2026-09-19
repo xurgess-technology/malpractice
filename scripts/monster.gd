@@ -390,6 +390,22 @@ func wake() -> void:
 		game.monster_hit_player(self, dragger)
 
 
+## TRINKETS chunk B (the reflex hammer): host. It spins right round on the spot and loses whatever
+## it was looking at. The Night Nurse has no reflexes and is never sent here. A brain may add
+## `spun_around()` to decide what it does next (the Hive gives up and searches where it now faces);
+## without one, the turn alone is the effect.
+func spin_around() -> void:
+	if game != null and not game.is_host():
+		return
+	if mode == Mode.SEDATED or grab_peer != 0:
+		return
+	rotation.y = wrapf(rotation.y + PI, -PI, PI)
+	_target_yaw = rotation.y
+	_repath = 0.0
+	if brain != null and brain.has_method("spun_around"):
+		brain.spun_around()
+
+
 ## Every machine: where its eyes are and which way they look (-Z forward), following the
 ## animated head (for a camera riding a Hive). Falls back to a fixed height on the body.
 func eye_transform() -> Transform3D:
