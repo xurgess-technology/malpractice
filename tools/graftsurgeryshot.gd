@@ -127,6 +127,15 @@ func _run() -> void:
 	_look_at(tp + Vector3(0, 1.0, 0))
 	await _seconds(1.0)
 	await _shot("51_table_and_stand")
+	# ---- 70/71: the table itself, from the side and three-quarter on, with the room around it
+	_stand(tp + tb * Vector3(0.0, 0.0, 2.4))
+	_look_at(tp + Vector3(0, 0.85, 0))
+	await _seconds(1.0)
+	await _shot("70_table_side")
+	_stand(tp + tb * Vector3(2.0, 0.0, 2.0))
+	_look_at(tp + Vector3(0, 0.85, 0))
+	await _seconds(1.0)
+	await _shot("71_table_three_quarter")
 
 	# ---- strapped down, Dr. Botsworth operating
 	me.teleport(game._floor_at(tp + tb * Vector3(0, 0, 1.2)))
@@ -134,6 +143,22 @@ func _run() -> void:
 	game.strap_in(me, ti)
 	await _seconds(0.8)
 	print("[graftshot] strapped=", me.strapped(), " table=", game.player_table.get("index", -1))
+	# ---- 72: the body on the table from a standing player's eyes, beside it
+	var fc0: Camera3D = main.dev_panel.free_cam
+	fc0.start(game)
+	fc0.set("flying", false)
+	me.dev_input_held = false
+	fc0.global_position = tp + tb * Vector3(0.55, C.EYE_H, 1.25)
+	fc0.look_at(tp + tb * Vector3(-0.25, 0.97, 0.0), Vector3.UP)
+	fc0.fov = 70.0
+	await _seconds(1.0)
+	await _shot("72_patient_on_table")
+	fc0.global_position = tp + tb * Vector3(-1.5, C.EYE_H, 1.1)
+	fc0.look_at(tp + tb * Vector3(-0.4, 0.97, 0.1), Vector3.UP)
+	await _seconds(0.5)
+	await _shot("73_patient_head_end")
+	fc0.stop()
+	await _seconds(0.5)
 	dev.control_botsworth()
 	await _seconds(0.8)
 	bw = dev.possessed_player()
@@ -166,9 +191,11 @@ func _run() -> void:
 		if String(step[1]) == "grab":
 			# The forceps step plays out in about four seconds: the eye on the tray, the carry across
 			# and the moment it goes in.
-			await _seconds(1.0)
+			await _until(func(): return _seat_stage(sys) >= 1, 20.0)
+			await _seconds(0.7)
 			await _shot("56b_grab_carry")
-			await _seconds(1.2)
+			await _until(func(): return _seat_stage(sys) >= 2, 30.0)
+			await _seconds(0.9)
 			await _shot("56c_grab_seating")
 			_still_probe(ps, "seat")
 			await _until(func(): return sys.mg == null or bool(sys.mg.get("done")), 20.0)
@@ -305,6 +332,14 @@ func _process(_d: float) -> void:
 		me.hive_view = true
 	elif me != null and me.hive_view and not _hive_hold:
 		me.hive_view = false
+
+
+## The forceps seat step's stage (0 tray, 1 carried, 2 seating, 3 settling, 4 done), -1 for none.
+func _seat_stage(sys: Node) -> int:
+	if sys.mg == null:
+		return -1
+	var seat = sys.mg.get("_seat")
+	return int(seat.get("stage")) if seat != null else -1
 
 
 ## The table body holding still: where its eyes' site is in the world, and where the operating view

@@ -22,8 +22,14 @@ extends Node3D
 enum Stage { TRAY, HELD, SEATING, SETTLE, DONE }
 
 ## Where the tray sits on the work plane, in metres from the socket (plane +X runs down the body).
-const TRAY_AT := Vector2(0.050, 0.006)
-const TRAY_HALF := Vector2(0.018, 0.015)
+## 2026-09-19: the tray stands on the table top beside the patient's head, on the same side of them
+## as the socket, so the eye never has to be dragged across the face. It used to sit on the work
+## plane itself, level with the eyes, half buried in the cheek and the shoulder. Its height comes
+## from the body on the table (`_tray_y`), so it rests on the steel whatever the table is.
+const TRAY_AT := Vector2(-0.04, -0.18)
+const TRAY_HALF := Vector2(0.055, 0.042)
+## How far below the eyes the table top is, when there is no body to measure (the minigame lab).
+const TRAY_Y_FALLBACK := -0.12
 const TIP_TAU := 0.05
 const TIP_SPEED := 0.30          # m/s the tips can follow the hand
 const GRAB_R := 0.014            # tips this close to the eye on the tray can close on it
@@ -34,6 +40,9 @@ const SWING_TAU := 0.13          # how far the eye lags behind the tips on its n
 const SLACK_DROP := 0.021        # that far behind and it shakes out of the jaws
 const CARRY_MAX_SPEED := 0.19    # m/s: faster than this and it shakes loose too
 const SEAT_R := 0.010            # the eye this close to the socket's centre starts going in
+## How far off the tray the eye is fully lifted to carrying height (it rises off the steel instead
+## of snapping up to the socket's plane the moment the jaws close).
+const LIFT_OVER := 0.07
 const SEAT_LEAVE := 0.013        # the hand this far off the socket while seating lifts it back out
 const SEAT_SECONDS := 2.0        # of slow, steady pressure to slide it home
 const SEAT_MAX_SPEED := 0.030    # hand faster than this while pushing and it stalls instead
@@ -85,6 +94,12 @@ var _settled := false
 var _b_t := -1.0
 var _b_cursor := Vector2(0.056, 0.055)
 
+## The table top in work-plane metres (negative: it is below the eyes). Measured off the body on the
+## table, whose own origin is the table top (player_surgery.apply_locally puts it there).
+var _tray_y := TRAY_Y_FALLBACK
+var _measured := false
+var _tray: Node3D
+
 
 func setup(owner, context: Dictionary, kind: String, radius: float) -> void:
 	owner_mg = owner
@@ -96,7 +111,25 @@ func setup(owner, context: Dictionary, kind: String, radius: float) -> void:
 	_b_cursor = tip
 	_vis_tip = tip
 	_vis_eye = eye
+	_measure_table()
 	_build()
+
+
+## Where the table top is, under the work plane: the body on it sits with its origin on the steel.
+## Returns true once it has a real measurement (setup can run before the work plane is placed, so
+## tick keeps asking until it does and then moves the tray onto the steel).
+func _measure_table() -> bool:
+	var body = ctx.get("body")
+	if body == null or not is_instance_valid(body) or not is_inside_tree():
+		return false
+	var y := to_local((body as Node3D).global_position).y
+	if y > -0.02 or y < -0.5:
+		return false
+	_tray_y = y
+	_measured = true
+	if _tray != null:
+		_tray.position = _p3(TRAY_AT, _tray_y)
+	return true
 
 
 # =============================================================================== contract
@@ -107,7 +140,8 @@ func tray_at() -> Vector2:
 
 
 func plane_extent() -> Vector2:
-	return Vector2(TRAY_AT.x + TRAY_HALF.x + 0.02, 0.06)
+	return Vector2(maxf(TRAY_AT.x + TRAY_HALF.x, 0.085) + 0.02,
+			absf(TRAY_AT.y) + TRAY_HALF.y + 0.03)
 
 
 func camera_pose() -> Dictionary:
@@ -307,27 +341,28 @@ func _build() -> void:
 	steel.albedo_color = Color(0.78, 0.8, 0.83)
 	steel.metallic = 0.4
 	steel.roughness = 0.35
-	# The tray the new eye waits on. Darker steel than the tool: at this range a bright one under the
-	# work lamp is a white card with an eye on it.
+	# The tray the new eye waits on: a shallow steel dish standing on the table top, a shade brighter
+	# than the table under it so it reads as a dish and not a hole cut in the steel.
 	var tray_steel := StandardMaterial3D.new()
-	tray_steel.albedo_color = Color(0.42, 0.45, 0.48)
-	tray_steel.metallic = 0.55
-	tray_steel.roughness = 0.42
+	tray_steel.albedo_color = Color(0.66, 0.69, 0.72)
+	tray_steel.metallic = 0.5
+	tray_steel.roughness = 0.38
 	var tray := Node3D.new()
 	tray.name = "EyeTray"
-	tray.position = _p3(TRAY_AT, 0.0)
+	tray.position = _p3(TRAY_AT, _tray_y)
+	_tray = tray
 	add_child(tray)
 	var base := MeshInstance3D.new()
 	var bb := BoxMesh.new()
-	bb.size = Vector3(TRAY_HALF.x * 2.0, 0.003, TRAY_HALF.y * 2.0)
+	bb.size = Vector3(TRAY_HALF.x * 2.0, 0.004, TRAY_HALF.y * 2.0)
 	base.mesh = bb
 	base.material_override = tray_steel
-	base.position = Vector3(0, 0.0015, 0)
+	base.position = Vector3(0, 0.002, 0)
 	tray.add_child(base)
-	for side in [[Vector3(TRAY_HALF.x, 0.007, 0), Vector3(0.003, 0.012, TRAY_HALF.y * 2.0)],
-			[Vector3(-TRAY_HALF.x, 0.007, 0), Vector3(0.003, 0.012, TRAY_HALF.y * 2.0)],
-			[Vector3(0, 0.007, TRAY_HALF.y), Vector3(TRAY_HALF.x * 2.0, 0.012, 0.003)],
-			[Vector3(0, 0.007, -TRAY_HALF.y), Vector3(TRAY_HALF.x * 2.0, 0.012, 0.003)]]:
+	for side in [[Vector3(TRAY_HALF.x, 0.011, 0), Vector3(0.004, 0.022, TRAY_HALF.y * 2.0)],
+			[Vector3(-TRAY_HALF.x, 0.011, 0), Vector3(0.004, 0.022, TRAY_HALF.y * 2.0)],
+			[Vector3(0, 0.011, TRAY_HALF.y), Vector3(TRAY_HALF.x * 2.0, 0.022, 0.004)],
+			[Vector3(0, 0.011, -TRAY_HALF.y), Vector3(TRAY_HALF.x * 2.0, 0.022, 0.004)]]:
 		var wall := MeshInstance3D.new()
 		var wb := BoxMesh.new()
 		wb.size = side[1]
@@ -414,6 +449,8 @@ func _make_forceps(steel: StandardMaterial3D) -> Node3D:
 func tick(delta: float) -> void:
 	if not _built:
 		return
+	if not _measured:
+		_measure_table()
 	_cue_t += delta
 	var operator := bool(ctx.get("operator", false))
 	var k := 1.0 if operator else 1.0 - exp(-delta * 18.0)
@@ -422,9 +459,11 @@ func tick(delta: float) -> void:
 	_vis_sink = lerpf(_vis_sink, sink, k)
 
 	var held := stage == Stage.HELD or stage == Stage.SEATING
-	# The eye: resting in the tray, hanging under the jaws, or sinking into the socket.
-	var rest_y := 0.004 + eye_r
-	var hang_y := eye_r + 0.012
+	# The eye: resting in the tray on the table, hanging under the jaws, or sinking into the socket.
+	# Away from the tray it rides at carrying height; over it, down on the steel (LIFT_OVER).
+	var lift_k := clampf(_vis_eye.distance_to(TRAY_AT) / LIFT_OVER, 0.0, 1.0)
+	var rest_y := _tray_y + 0.007 + eye_r
+	var hang_y := lerpf(rest_y + 0.012, eye_r + 0.012, smoothstep(0.0, 1.0, lift_k))
 	# Home is the socket's own centre: the work plane's origin on a surgeon is the eye's centre
 	# (player_body.gd's `eye` site, from GraftEye.local_offset), where the graft ends up. It used to
 	# sink 0.45 of a radius further, into the face.
@@ -455,7 +494,7 @@ func tick(delta: float) -> void:
 	_tray_ring.visible = on_tray
 	if on_tray:
 		var sc := (eye_r * 1.5) if near else (eye_r * 1.2 + 0.004 * fmod(_cue_t * 0.9, 1.0))
-		_tray_ring.position = _p3(TRAY_AT, rest_y + eye_r * 0.6)
+		_tray_ring.position = _p3(TRAY_AT, _tray_y + 0.007 + eye_r * 1.6)
 		_tray_ring.scale = Vector3(sc, sc * 0.3, sc)
 		_tray_ring_mat.albedo_color = Color(0.25, 1.0, 0.45, 0.9) if near \
 			else Color(1.0, 0.95, 0.8, 0.75 * (1.0 - fmod(_cue_t * 0.9, 1.0)))
@@ -468,7 +507,7 @@ func tick(delta: float) -> void:
 		_socket_ring_mat.albedo_color = Color(0.25, 1.0, 0.45, 0.9 if over else 0.5)
 
 	# The forceps.
-	_vis_y = lerpf(_vis_y, _tool_y(), 1.0 - exp(-delta * 14.0))
+	_vis_y = lerpf(_vis_y, _tool_y(), 1.0 - exp(-delta * 10.0))
 	_tool.position = _p3(_vis_tip, _vis_y)
 	_tool.basis = Basis(Vector3.UP, 0.5) * Basis(Vector3.RIGHT, deg_to_rad(20.0))
 	var gap := lerpf(0.0055, 0.0008, clampf(jaw, 0.0, 1.0))
@@ -489,16 +528,19 @@ func tick(delta: float) -> void:
 		_sfx("surgery_forceps_squelch", -5.0)
 
 
+## The forceps' tips: over the socket they work at the plane, over the tray they dip to the steel.
 func _tool_y() -> float:
+	var over_tray := _tray_y + 0.007 + eye_r * 2.0 + 0.012
+	var k := smoothstep(0.0, 1.0, clampf(_vis_tip.distance_to(TRAY_AT) / LIFT_OVER, 0.0, 1.0))
 	match stage:
 		Stage.HELD:
-			return eye_r * 2.0 + 0.014
+			return lerpf(over_tray, eye_r * 2.0 + 0.014, k)
 		Stage.SEATING:
 			return lerpf(eye_r * 2.0 + 0.014, eye_r + 0.008, smoothstep(0.0, 1.0, _vis_sink))
 		Stage.SETTLE, Stage.DONE:
 			return 0.03
 		_:
-			return (eye_r * 2.0 + 0.012) if _vis_tip.distance_to(TRAY_AT) < GRAB_R * 1.6 else 0.032
+			return lerpf(over_tray, 0.032, k)
 
 
 func _place_cyl(mi: MeshInstance3D, from: Vector3, to: Vector3, r: float) -> void:

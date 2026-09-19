@@ -2248,7 +2248,11 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
   onto the tray -- then hold it over the socket and it sinks in under slow, steady pressure, turning so
   the pupil ends up facing out. A soft settle finishes it: `{"eye_seated": true}`, unchanged for the
   case. Nothing here botches and a dropped eye costs nothing. ctx knobs `no_fail`, `eye_kind`,
-  `eye_kind_in`, `eye_radius`.
+  `eye_kind_in`, `eye_radius`. The tray stands on the **table top** beside the head, on the same side of
+  the patient as the socket (`TRAY_AT`, and `_tray_y` measured off the body on the table, whose own
+  origin is the steel), so nothing is dragged over the face; every graft step shares
+  `eye_ops.base_camera_pose()`, which pulls back for a player so the tray and the socket are in the
+  same shot and the face never shifts between steps.
 - **The body holds still.** `player_body.set_ailment("eye_graft")` sets `still`: no breath, no idle
   Lying clip, no stir jolt, for as long as the graft is on the table. The site markers were measured
   off frame 0 of that clip, so it is also the only pose where the eye really is where the work plane

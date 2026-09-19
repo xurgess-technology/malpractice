@@ -204,3 +204,16 @@ the shots in the section above show the wrong step).
 4. **The bright yellow face after getting up** is not the graft: it is the Personnel mirror's bulb
    glow (entrance.gd, a warm OmniLight at head height in front of the glass), 17 cm from your face
    when you stand at the mirror. With it off, the face goes dark (`67f_face_no_room_lights_near`).
+
+### Third round (the table, and the tray on it)
+
+- **The OR table is new** (`piece_defs.or_table`, `piece_factory`): a stainless prep table, 2.4 x 1.1
+  on the floor with a 2.4 x 1.1 top at 0.945 (`Game.OR_TABLE_TOP`, unchanged), four square legs, a
+  brace near the floor, leveling feet, a drawer under the head end and hooks under the near lip. It
+  replaces the 2.2 x 0.7 pedestal one. The size came from what has to fit: a 1.8 m patient down the
+  middle with a clear strip of steel either side for the tray, and the OR's own row -- the tables sit
+  3.6 to 3.75 m apart on tile row 7 (TILE 1.5), so the footprint still claims exactly the tiles it
+  did (`Defs.blocked_tiles`), the anesthesia carts and the vat stands still clear it, and there is
+  1.7 m of walkway to the wall behind it.
+- **The tray** in the seat step now stands on that top beside the head instead of floating on the
+  work plane over the face (see the seat step in CONTRACTS).

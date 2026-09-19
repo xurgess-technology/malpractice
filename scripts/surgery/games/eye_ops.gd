@@ -203,7 +203,11 @@ func camera_pose() -> Dictionary:
 
 
 ## The view every graft step shares (the seat step asks for it too), so the face stays put.
+## A graft is on a player: pulled back a little further than the Hive's extraction, because the seat
+## step's tray stands on the table beside the head and has to be in the same shot as the socket.
 func base_camera_pose() -> Dictionary:
+	if String(ctx.get("patient_id", "")) == "player":
+		return {"height": 0.40, "back": 0.06, "fov": 54.0}
 	return {"height": 0.3, "back": 0.06, "fov": 48.0}
 
 
