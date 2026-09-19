@@ -132,6 +132,9 @@ const AILMENTS := {
 			{"id": "cut", "label": "Cut around the eye", "item": "scalpel", "uses": 0, "game": "eye", "variant": "cut", "site": "eye"},
 			{"id": "scoop", "label": "Scoop the eye out", "item": "eye_spoon", "uses": 0, "game": "eye", "variant": "scoop", "site": "eye"},
 			{"id": "snip", "label": "Snip the optic nerve", "item": "scalpel", "uses": 0, "game": "eye", "variant": "snip", "site": "eye"},
+			# 2026-09-19: and it goes straight into the specimen vat standing on the table, with the
+			# forceps -- the seat step's game the other way round (scripts/grafting/eye_seat.gd).
+			{"id": "vat", "label": "Put the eye in the vat", "item": "forceps", "uses": 0, "game": "eye", "variant": "place", "site": "eye"},
 		],
 	},
 }

@@ -420,7 +420,22 @@ func hud_state() -> Dictionary:
 		Stage.DONE:
 			hint = "Brain out."
 	return {"title": String(ctx.get("step", {}).get("label", "Pull out the brain")), "hint": hint,
-		"progress": owner_mg.progress, "gauges": []}
+		"progress": owner_mg.progress, "gauges": [], "keys": keys()}
+
+
+func keys() -> Array:
+	match stage:
+		Stage.CORDS:
+			return [["Mouse", "to a nerve's ring"], ["Hold LMB", "clamp and ease it free"]]
+		Stage.GRIP:
+			return [["Hold LMB", "take hold of the brain"]]
+		Stage.LIFT:
+			return [["Hold LMB", "keep hold"], ["Mouse", "lift it straight out"]]
+		Stage.CARRY:
+			return [["Mouse", "over the tray"], ["Let go", "drop it in"]]
+		Stage.LOOSE:
+			return [["Hold LMB", "pick it back up"]]
+	return []
 
 
 func net_state() -> Dictionary:

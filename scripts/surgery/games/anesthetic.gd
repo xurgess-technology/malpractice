@@ -238,7 +238,16 @@ func hud_state() -> Dictionary:
 		Stage.DONE:
 			hint = "Sedated." if sedation >= 0.75 and sedation <= 1.25 else \
 				("Underdosed: expect the patient to stir." if sedation < 0.75 else "Overdosed.")
-	return {"title": title, "hint": hint, "progress": progress, "gauges": []}
+	return {"title": title, "hint": hint, "progress": progress, "gauges": [], "keys": keys()}
+
+
+func keys() -> Array:
+	match stage:
+		Stage.FIND:
+			return [["Mouse", "move the needle"], ["Hold LMB", "inject"]]
+		Stage.INJECT:
+			return [["Hold LMB", "keep pushing"], ["Let go", "withdraw the needle"]]
+	return []
 
 
 func net_state() -> Dictionary:

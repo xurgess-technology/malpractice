@@ -148,8 +148,9 @@ func setup(context: Dictionary) -> void:
 		eye_kind = String(ctx.get("eye_kind_in", eye_kind))
 	eye_r = float(ctx.get("eye_radius", eye_r))
 	ring_r = eye_r + RING_GAP
-	if variant == "grab":
-		# The body's own eye is hidden while this step draws the one it is putting in.
+	if variant == "grab" or variant == "place":
+		# The forceps step draws the eye it is moving, so the body's own is hidden while it plays:
+		# `grab` puts a new one in, `place` (the extraction's last step) takes the loose one to a vat.
 		_hide_body_eye(true)
 		_add_rim()
 		_seat = SeatScript.new()
@@ -202,12 +203,14 @@ func camera_pose() -> Dictionary:
 	return base_camera_pose()
 
 
-## The view every graft step shares (the seat step asks for it too), so the face stays put.
-## A graft is on a player: pulled back a little further than the Hive's extraction, because the seat
-## step's tray stands on the table beside the head and has to be in the same shot as the socket.
+## The view the graft's steps share (the forceps step asks for it too), so the face never shifts
+## between them. Pulled back, and leaning a touch over the patient rather than away from them,
+## because the specimen vat stands on the table beside the head and has to be in the same shot as
+## the socket. The Hive's extraction keeps the tight view for its first three steps; its last one is
+## the forceps step, which needs the vat.
 func base_camera_pose() -> Dictionary:
-	if String(ctx.get("patient_id", "")) == "player":
-		return {"height": 0.40, "back": 0.06, "fov": 54.0}
+	if _seat != null or String(ctx.get("patient_id", "")) == "player":
+		return {"height": 0.45, "back": -0.04, "fov": 54.0}
 	return {"height": 0.3, "back": 0.06, "fov": 48.0}
 
 
@@ -380,7 +383,21 @@ func hud_state() -> Dictionary:
 				hint = "Hold W to pull the eye up. When the nerve shows, aim the scalpel at it and click."
 			"stitch":
 				hint = "Click to set the needle on the cut, then trace it round. The socket closes behind you." if not down else "Trace the cut. Not too fast."
-	return {"title": String(ctx.get("step", {}).get("label", "")), "hint": hint, "progress": progress, "gauges": []}
+	return {"title": String(ctx.get("step", {}).get("label", "")), "hint": hint, "progress": progress,
+		"gauges": [], "keys": keys()}
+
+
+## What the buttons do in this variant, right now.
+func keys() -> Array:
+	if _seat != null:
+		return _seat.keys()
+	match variant:
+		"snip":
+			return [["Hold W", "pull the eye up"], ["Mouse", "aim at the nerve"], ["Click", "snip it"]]
+		"scoop":
+			return [["Click", "lower the spoon"], ["Mouse", "circle the socket"]] if not down 				else [["Mouse", "circle it slowly"], ["Click", "lift the spoon"]]
+		_:
+			return [["Click", "lower the tool"], ["Mouse", "trace the marking"]] if not down 				else [["Mouse", "trace it slowly"], ["Click", "lift the tool"]]
 
 
 func net_state() -> Dictionary:

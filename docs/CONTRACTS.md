@@ -352,6 +352,14 @@ stitches, should too):
 
 - `hud_state()` returns `gauges: []` and one short `hint` line. No step uses `cross_section`
   any more (the HUD still draws it if given).
+- **`hud_state()` also returns `keys`** (2026-09-19): `[[key, what it does], ...]`, the controls
+  line the surgery HUD draws under the hint, in the panel's teal. Two or three pairs of a couple of
+  words each, and they change with the stage, so the strip always says what to do NOW ("HOLD S
+  lower them | HOLD LMB close the jaws"). Override `Minigame.keys()` per stage; `E / Esc: step away`
+  is drawn by the HUD itself. Inputs a step can read: the cursor, `BUTTON_PRIMARY` (left click),
+  `BUTTON_SECONDARY` (right), `BUTTON_UP` (**W**) and `BUTTON_DOWN` (**S**) -- W and S are the
+  raise / lower pair (the eye steps' pull and the forceps' depth), never the mouse going "past" a
+  point. Bots set the same bits in `bot_input`'s `buttons`.
 - Colour language in the world: **green** = right / holds / grab it now (tourniquet strap and
   pulse probe, gauze path ring and trail, saw guide, forceps reach ring and exit glow);
   **amber** = works but weak (loose wrap, short saw pass, strap too high); **red** = a mistake is
@@ -2181,9 +2189,12 @@ game.vats: item_used(p, item) / hand_put(p) / take_out(p, aim_id) / set_down(p, 
   `spots.vat_benches`, `hospital_builder` turns them into `level_info.vat_spots`. On level build the
   host stands three empty vats on the first three spots and stocks a scalpel, an eye spoon and forceps on the
   OR's storage shelves (neither is in `_shift_item_ids`, so they last the run; a new run resets).
-- **Eyeball Extraction** is the ailment `eye_extraction` (monster-only; steps scalpel "cut", eye spoon
-  "scoop", scalpel "snip", all `game: "eye"` = `surgery/games/eye_ops.gd`, site `eye` on the Hive's left
-  eyeball). A strapped Hive stays `dissection` until its first step: `Dissection.ailment_for(case, p)`
+- **Eyeball Extraction** is the ailment `eye_extraction` (monster-only; steps scalpel "cut", eye
+  spoon "scoop", scalpel "snip" and, since 2026-09-19, forceps "place" -- lifting the cut-free eye
+  into the specimen vat standing on the table, `{"eye_in_vat": true}` -- all `game: "eye"` =
+  `surgery/games/eye_ops.gd`, site `eye` on the Hive's left eyeball). `dissection._finish_eye` puts
+  the eye in that vat when the flag is set, and only falls back to the operator's hand (or the floor
+  by the head) when there is no vat to put it in. A strapped Hive stays `dissection` until its first step: `Dissection.ailment_for(case, p)`
   gives `eye_extraction` when p holds the scalpel, `dissection` for the bone saw (host: `_pick_ailment`
   in `table_used`; `SurgerySystem._step_for` for the prompt everywhere). The body keeps its key across
   the switch. Results `eye_cut`, `eye_out` (the socket empties), `eye_removed` (the Hive flatlines);
@@ -2193,7 +2204,7 @@ game.vats: item_used(p, item) / hand_put(p) / take_out(p, aim_id) / set_down(p, 
 - **The eye minigames** (`eye_ops.gd`, reusable by the graft): cut = the saw-style violet marking ringed round the eye, left click lowers the scalpel, trace it and the cut opens along it, too fast or off the eye slips it out (click to lower again, cut kept, no damage); scoop = spoon on the cursor, click into the socket, circle it slowly (two turns), too fast slips; snip = eye resting over the socket seen from low, hold **W** (`Minigame.BUTTON_UP`, new bit in `buttons`) to pull it up and reveal the nerve, then click the nerve. ctx knobs: `no_fail` (never botches), `eye_kind`, `eye_radius`. Only a nick of the eyeball and a missed slice botch.
 - Tests: `tools/grafttest.tscn` (headless).
 
-### Grafting part one: the vat stands and Eyeball Grafting (docs/GRAFTING.md, chunk C, 2026-09-18)
+### Grafting part one: the vat on the table and Eyeball Grafting (docs/GRAFTING.md, chunk C, 2026-09-18)
 
 `scripts/grafting/grafts.gd` (`Grafts`, `game.grafts`, child "Grafts" of Game, every machine) and
 `scripts/grafting/graft_eye.gd` (`GraftEye`, statics: the grafted eyeball on a body).
@@ -2204,10 +2215,10 @@ works on a *part kind*, never on eyes as such, so part two's trachea (docs/GRAFT
 be added through `Eyes.KINDS` / `NOUN` and `Grafts.PART_ABILITY` without a rewrite.
 
 ```gdscript
-# the stands (vats.gd): one beside every patient table, built with the level on every machine
-Vats.stands            # [{position (the tray top), yaw, table: table index}], STAND_TOP 0.92
-Vats.build_stand(root) / stand_free(i) / stand_prompt(p, i) / set_down_on_stand(p, i)
-Vats.vat_on_stand(table_index) -> WorldItem / stand_of_table(ti) / nearest_stand(pos, within)
+# where a vat stands on each patient table (vats.gd), worked out with the level on every machine
+Vats.places            # [{position (on the table top), yaw, table: table index}], TABLE_VAT_OFFSET
+Vats.place_free(i) / place_prompt(p, i) / set_down_on_table(p, i)
+Vats.vat_on_table(table_index) -> WorldItem / place_of_table(ti) / nearest_place(pos, within)
 # the graft (grafts.gd)
 game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field "gf"
            table_prompt(q) / empty_table_prompt(q, ti)   # the offer and its refusals
@@ -2215,10 +2226,11 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
            local_lock() -> float             # -1 no graft, else how lit the eye is (the HUD tint)
 ```
 
-- **The stand.** A small steel stand beside each patient table, on the first of `STAND_OFFSETS`
-  clear of the level (identical on every machine). E with a carried vat sets it down there
-  (aim id `vatstand_<i>`, armed only while you carry one); picking it back up is the ordinary
-  world-item pickup. The stand holds a vat only for as long as someone leaves it there.
+- **The vat's place** is on the patient table's own steel, beside where the head goes and on the
+  side the eye steps work (`TABLE_VAT_OFFSET`, `Game.OR_TABLE_TOP`). E with a carried vat stands it
+  there (aim id `vattable_<i>`, armed only while you carry one); picking it back up is the ordinary
+  world-item pickup, and the place holds a vat only for as long as someone leaves it there.
+  2026-09-19: this replaced the little steel stand that used to sit beside each table.
 - **The case.** `Procedures.AILMENTS.eye_graft` ("Eyeball Grafting", `player_only`), four steps, all
   `game: "eye"`, site `eye`: scalpel `cut`, eye spoon `scoop`, **forceps `grab`**, suture kit `stitch`.
   It runs through `scripts/downed/player_surgery.gd`, which already stands in as a game for the
@@ -2227,32 +2239,36 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
   eye_radius}`, which `surgery_system._spawn_mg` copies into the minigame's ctx. **No botching.**
 - **The offer** hangs off the table's existing prompt: `_table_prompt` -> `player_surgery.operate_
   prompt` -> `grafts.table_prompt` while somebody lies strapped there with no case. The refusals are
-  "!No vat on the stand beside the table.", "!The vat on the stand is empty.", "!X's eyeball is
+  "!No vat on the table.", "!The vat on the table is empty.", "!X's eyeball is
   spoiled.", "!X already has one.", "!X has two normal eyes.", "!You cannot operate on yourself." and
-  "!Hold the scalpel to start the graft."; a free table with a loaded vat on its stand says
+  "!Hold the scalpel to start the graft."; a free table with a loaded vat on it says
   "!Nobody is strapped to this table." to someone holding a scalpel, an eye spoon or the forceps. The case is
   created by the first `begin` (`player_surgery.start_graft`).
-- **The swap.** The `scoop` step's result (`eye_out`) is the moment it happens: the eye that was in
-  the socket is packed into the vat on the stand (fresh, age 0) and the eye that was in the vat is
-  now the one going in. So a graft is always a swap and never an empty socket.
+- **The swap.** The `grab` step's result (`eye_seated`) is the moment it happens: the forceps have
+  just lifted the new eye out of the vat, so the eye that was in the socket is packed into the vat
+  they emptied (fresh, age 0). So a graft is always a swap and never an empty socket. (Until
+  2026-09-19 it happened at the `scoop`, which left you reaching into a vat that already held your
+  own eye.)
 - **Committed after the scoop.** `game.get_up_block` asks `player_surgery.graft_commit_block`, which
   refuses ("Not with your eye out.") from step 2 on. Before that the surgeon can hold E and go, which
   clears the case.
-- **The eye minigames** gained two variants (`eye_ops.gd`): `stitch` is the cut's rules run over an
-  already-open wound (it closes behind the needle and stitch marks appear, result `eye_stitched`), and
-  `grab` -- "Seat the new eye with forceps" -- is its own game, `scripts/grafting/eye_seat.gd`, which
-  `eye_ops.gd` builds as a child and hands every Minigame call to (the shape `forceps.gd` uses for
-  `brain_forceps.gd`). The new eye (`eye_kind_in`) lies on a small tray beside the empty socket: hold
-  primary over it to close the jaws (a ring says when they are close enough), carry it across -- it
-  hangs on its nerve and lags, and moving too fast or running too far ahead of it shakes it loose back
-  onto the tray -- then hold it over the socket and it sinks in under slow, steady pressure, turning so
-  the pupil ends up facing out. A soft settle finishes it: `{"eye_seated": true}`, unchanged for the
-  case. Nothing here botches and a dropped eye costs nothing. ctx knobs `no_fail`, `eye_kind`,
-  `eye_kind_in`, `eye_radius`. The tray stands on the **table top** beside the head, on the same side of
-  the patient as the socket (`TRAY_AT`, and `_tray_y` measured off the body on the table, whose own
-  origin is the steel), so nothing is dragged over the face; every graft step shares
-  `eye_ops.base_camera_pose()`, which pulls back for a player so the tray and the socket are in the
-  same shot and the face never shifts between steps.
+- **The eye minigames** gained three variants (`eye_ops.gd`): `stitch` is the cut's rules run over an
+  already-open wound (it closes behind the needle and stitch marks appear, result `eye_stitched`),
+  and `grab` / `place` are one game, `scripts/grafting/eye_seat.gd`, which `eye_ops.gd` builds as a
+  child and hands every Minigame call to (the shape `forceps.gd` uses for `brain_forceps.gd`). It is
+  one trip with the forceps, run in either direction:
+  `grab` (the graft's step 3) takes the new eye (`eye_kind_in`) out of the specimen vat standing on
+  the table and seats it in the socket, `{"eye_seated": true}`; `place` (the extraction's step 4)
+  takes the cut-free eye out of the socket and drops it in the vat, `{"eye_in_vat": true}`.
+  Hold **S** to lower the forceps onto the eye (into the fluid, or into the socket), hold primary to
+  close the jaws on the nerve, **W** to lift it clear, carry it across -- it hangs on its nerve and
+  lags, and moving too fast, or leaving without lifting it clear, shakes it loose back where it came
+  from -- then hold S over the target and it goes in under slow, steady pressure, turning so a
+  seated pupil faces out. Nothing here botches and a dropped eye costs nothing. ctx knobs `no_fail`,
+  `eye_kind`, `eye_kind_in`, `eye_radius`, and `vat` (the real `specimen_vat` on the table, which
+  `surgery_system` looks up per machine: the game draws its own open copy where that one stands and
+  hides the real one while the step runs). Every graft step shares `eye_ops.base_camera_pose()`, so
+  the face never shifts between them and the vat is in the same shot as the socket.
 - **The body holds still.** `player_body.set_ailment("eye_graft")` sets `still`: no breath, no idle
   Lying clip, no stir jolt, for as long as the graft is on the table. The site markers were measured
   off frame 0 of that clip, so it is also the only pose where the eye really is where the work plane

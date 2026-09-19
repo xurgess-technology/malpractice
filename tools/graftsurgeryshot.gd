@@ -96,7 +96,55 @@ func _hive_reference() -> void:
 	await _shot("40_hive_cut_operating")
 	if sys.mg != null:
 		_lights_near(sys.mg.global_position)
-	sys.local_operator_exit()
+	# 2026-09-19: the whole extraction, for the new last step -- the eye into the vat on the table.
+	var hv: int = game.vats.place_of_table(table)
+	var hive_vat: Node = null
+	if hv >= 0:
+		hive_vat = game._spawn_item("specimen_vat", 1,
+			Transform3D(Basis(Vector3.UP, hyaw), game.vats.places[hv].position as Vector3), WorldItem.State.LOOSE)
+	await _shot("41_hive_vat_on_table")
+	var n := 42
+	for step in [["eye_spoon", "scoop", 1], ["scalpel", "snip", 2], ["forceps", "place", 3]]:
+		for i in me.slots.size():
+			me.slots[i] = Player.empty_slot()
+		game.give_hand(me, String(step[0]), 1)
+		me.selected = _slot(me, String(step[0]))
+		_stand(htp + Vector3(0, 0, 1.0).rotated(Vector3.UP, hyaw))   # the bot drifts between steps
+		_look_at(htp + Vector3(0, 1.0, 0))
+		game.dissection.set_sedation(int(c.id), 1.0)   # a woken Hive thrashes the operator off
+		await _seconds(0.6)
+		game._proxy_used(game.table_interact_id(table), me)
+		var began := await _until(func(): return sys.mg != null and String(sys.mg.get("variant") if sys.mg.get("variant") != null else "") == String(step[1]), 10.0)
+		print("[graftshot] hive step %s began=%s (case step %d, prompt '%s')"
+			% [String(step[1]), str(began), int(game.case_on_table(table).get("step_index", -1)),
+				String(game._table_prompt(me, table))])
+		if String(step[1]) == "place":
+			await _until(func(): return _seat_stage(sys) >= 1, 30.0)
+			await _seconds(0.5)
+			await _shot("44_hive_eye_lifted_out")
+			await _until(func(): return _seat_stage(sys) >= 2, 30.0)
+			await _seconds(0.8)
+			await _shot("45_hive_eye_into_the_vat")
+		else:
+			await _seconds(2.0)
+			await _shot("%d_hive_%s" % [n, String(step[1])])
+		n += 1
+		# Keep it sedated and keep operating: a shot's pause is long enough for a Hive to come round.
+		var end := t + 90.0
+		while t < end and int(game.case_on_table(table).get("step_index", -1)) == int(step[2]):
+			game.dissection.set_sedation(int(c.id), 1.0)
+			if not sys.is_local_operating():
+				game._proxy_used(game.table_interact_id(table), me)
+			await _seconds(0.5)
+		await _seconds(0.8)
+	print("[graftshot] hive vat holds: ", String(hive_vat.x) if hive_vat != null and is_instance_valid(hive_vat) else "no vat")
+	await _seconds(1.0)
+	await _shot("46_hive_done")
+	if hive_vat != null and is_instance_valid(hive_vat):
+		game.world_items.erase(hive_vat.item_id)
+		hive_vat.queue_free()
+	if sys.mg != null:
+		sys.local_operator_exit()
 	game.surgery_bot_skill = -1.0
 	await _seconds(0.6)
 	dev.request("clear_patient")
@@ -109,12 +157,12 @@ func _run() -> void:
 	await _hive_reference()
 	var vats: Node = game.vats
 	var ti: int = game.free_patient_table()
-	var si: int = vats.stand_of_table(ti)
+	var si: int = vats.place_of_table(ti)
 	var yaw: float = game.table_yaw_of(ti)
 	var tb := Basis(Vector3.UP, yaw)
 	var tp: Vector3 = game.table_position(ti)
 	# ---- 50: the stand beside the table, with a vat on it
-	var stand_at: Vector3 = vats.stands[si].position
+	var stand_at: Vector3 = vats.places[si].position
 	var vat: Node = game._spawn_item("specimen_vat", 1, Transform3D(tb, stand_at), WorldItem.State.LOOSE)
 	vat.x = Eyes.pack("eye_hive", "", 0.0, 120)
 	me.flashlight_on = true

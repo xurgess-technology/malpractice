@@ -436,7 +436,16 @@ func _finish_eye(c: Dictionary, won: bool, table: int, at: Vector3, pname: Strin
 	var who = game.players.get(last_operator) if last_operator != 0 else null
 	var node: Node = null
 	var given := false
-	if who != null and is_instance_valid(who) and who.alive:
+	# 2026-09-19: the last step puts the eye in the vat on the table with the forceps, so that is
+	# where it ends up ({"eye_in_vat": true} in the case's flags). Only if there is no vat to put it
+	# in does it go the old way: into the operator's hand, or on the floor by the head.
+	if bool((c.get("flags", {}) as Dictionary).get("eye_in_vat", false)):
+		var vat = game.vats.vat_on_table(table) if game.get("vats") != null else null
+		if vat != null and is_instance_valid(vat) and String(vat.x) == "":
+			vat.x = Eyes.pack("eye_hive", "", 0.0, value)
+			given = true
+			node = vat
+	if not given and who != null and is_instance_valid(who) and who.alive:
 		var i: int = who.take_into("eye_hive", 1, value)
 		if i >= 0:
 			who.selected = i
@@ -451,7 +460,10 @@ func _finish_eye(c: Dictionary, won: bool, table: int, at: Vector3, pname: Strin
 	_fx_flatline(table)
 	game._broadcast("dx_flatline", {"tb": table})
 	game._sound("flatline", at)
-	game.say("Eye out, condition %d%%. %s is dead. Put it in a vat before it spoils." % [roundi(cond), pname], 5.0)
+	if bool((c.get("flags", {}) as Dictionary).get("eye_in_vat", false)) and node != null:
+		game.say("Eye out, condition %d%%, and in the vat. %s is dead." % [roundi(cond), pname], 5.0)
+	else:
+		game.say("Eye out, condition %d%%. %s is dead. Put it in a vat before it spoils." % [roundi(cond), pname], 5.0)
 
 
 func _base_value(kind: String) -> int:

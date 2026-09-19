@@ -44,6 +44,8 @@ const BUTTON_SECONDARY := 2
 ## The forward key (W) held, for steps that use it (the eye steps' "pull the eyeball up"). Bots set it in
 ## bot_input's `buttons` too.
 const BUTTON_UP := 4
+## The back key (S) held: the other half of a raise / lower pair (the forceps steps). Bots set it too.
+const BUTTON_DOWN := 8
 
 ## Render layer 20, reserved for a minigame's own props (tools, straps, raised wound models).
 ## Every decal, the patient's and the minigames', projects only onto layer 1 (cull_mask = 1),
@@ -96,8 +98,17 @@ func tick(_delta: float) -> void:
 ## What the HUD should show for this step:
 ##   title: String, hint: String, progress: float 0..1
 ##   gauges: Array of {label, value, min, max, good_min, good_max}
+##   keys: Array of [key, what it does] pairs, e.g. [["Hold LMB", "close the jaws"], ["W / S", "raise / lower"]]
+##     -- the controls line under the hint (surgery_hud). Short: two or three pairs, a couple of words
+##     each, and they change with the stage so they always say what to do NOW.
 func hud_state() -> Dictionary:
-	return {"title": String(ctx.get("step", {}).get("label", "")), "hint": "", "progress": progress, "gauges": []}
+	return {"title": String(ctx.get("step", {}).get("label", "")), "hint": "", "progress": progress,
+		"gauges": [], "keys": keys()}
+
+
+## The controls this step wants shown right now. Override per stage.
+func keys() -> Array:
+	return []
 
 
 ## Small dictionary describing what spectators need to draw (tool position, stage).

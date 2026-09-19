@@ -218,12 +218,12 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	shelf.add_child(ptable)
 	ptable.position = Vector3(0.0, -1.4, -2.2)
 	ptable.scale = Vector3.ONE * 0.5
-	# GRAFTING chunk C: the vat stand that sits beside every OR table.
-	var vstand := Node3D.new()
-	Vats.build_stand(vstand)
-	shelf.add_child(vstand)
-	vstand.position = Vector3(0.6, -1.4, -2.2)
-	vstand.scale = Vector3.ONE * 0.5
+	# GRAFTING chunk C: the specimen vat that stands on every OR table (the eye steps reach into it).
+	var vat := Node3D.new()
+	Vats.build_model(vat)
+	shelf.add_child(vat)
+	vat.position = Vector3(0.6, -1.4, -2.2)
+	vat.scale = Vector3.ONE * 0.5
 	_inert(shelf)
 	_report(progress, "staff", HumanModelScript.SURGEONS.size())
 	await _frame(slice)

@@ -485,6 +485,9 @@ func _spawn_mg() -> void:
 		"body": body,
 		"operator": false,
 		"helper_lights": _helper_lights,
+		# GRAFTING: the specimen vat standing on this table, for the forceps steps that take an eye
+		# out of it or put one in. Every machine looks it up for itself; null when there is none.
+		"vat": _table_vat(),
 	}
 	for k in ["no_fail", "eye_kind", "eye_kind_in", "eye_radius"]:
 		if c.flags.has(k):
@@ -492,6 +495,25 @@ func _spawn_mg() -> void:
 	mg.setup(ctx)
 	if _mg_state_key == mg_key and not _mg_state.is_empty():
 		mg.apply_net_state(_mg_state)
+
+
+## The vat standing on this table, or null (GRAFTING: the eye's forceps steps reach into it).
+## The player table runs through a stand-in game (scripts/downed/player_surgery.gd) with the real
+## Game behind it and no table index of its own, so ask that one about the table the patient is on.
+func _table_vat():
+	var g = game
+	if g == null:
+		return null
+	var ti := table_index
+	if g.get("vats") == null and g.get("game") != null:
+		g = g.game
+		var pt = g.get("player_table")
+		if pt is Dictionary and not (pt as Dictionary).is_empty():
+			ti = int((pt as Dictionary).get("index", ti))
+	var v = g.get("vats")
+	if v == null or not is_instance_valid(v) or not v.has_method("vat_on_table"):
+		return null
+	return v.vat_on_table(ti)
 
 
 ## Teammates' flashlights for the minigame (ctx.helper_lights): every living player's light that is
@@ -633,6 +655,8 @@ func _drive(delta: float) -> void:
 			buttons |= MinigameBase.BUTTON_SECONDARY
 		if Input.is_action_pressed("move_forward"):
 			buttons |= MinigameBase.BUTTON_UP
+		if Input.is_action_pressed("move_back"):
+			buttons |= MinigameBase.BUTTON_DOWN
 	var c := _cursor + _stir_tick(delta)
 	var ext: Vector2 = mg.plane_extent()
 	c = Vector2(clampf(c.x, -ext.x, ext.x), clampf(c.y, -ext.y, ext.y))

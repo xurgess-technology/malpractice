@@ -217,3 +217,22 @@ the shots in the section above show the wrong step).
   1.7 m of walkway to the wall behind it.
 - **The tray** in the seat step now stands on that top beside the head instead of floating on the
   work plane over the face (see the seat step in CONTRACTS).
+
+### Fourth round (the vat is the centre of it)
+
+- **No tray.** The `grab` step takes the new eye out of the **specimen vat standing on the table**
+  (`ctx.vat`, hidden while the step draws its own open copy of it where the real one stands). A
+  dropped eye falls back into the vat.
+- **Raise and lower are keys.** `Minigame.BUTTON_DOWN` (S) joins `BUTTON_UP` (W) -- hold S to lower
+  the forceps into the vat or the socket, W to lift the eye clear. Nothing dives because the mouse
+  went past a point any more.
+- **Every step says what the buttons do.** `hud_state()["keys"]` -> `[[key, what], ...]`, drawn by
+  `surgery_hud` as a third line in the strip; every minigame fills it in per stage.
+- **The extraction has a fourth step**, "Put the eye in the vat" (forceps, variant `place`): the
+  same game run the other way, and `dissection._finish_eye` puts the eye in that vat instead of the
+  operator's hand.
+- **The vat stand is gone.** `Vats.places` / `vat_on_table` / `place_of_table` /
+  `set_down_on_table`, one spot per table at `TABLE_VAT_OFFSET` on the table top beside the head.
+- The swap moved from the scoop to the seat, so you never reach into a vat that already holds the
+  eye that just came out.
+- Review setup `--setup=eyes` stages both procedures at once.
