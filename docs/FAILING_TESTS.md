@@ -64,6 +64,14 @@ How to run things is at the bottom of this file.
 
 ---
 
+## 5. nettest `brains`: the client never gets a hive view
+
+- **Command:** `godot --headless --path . --fixed-fps 60 --script tools/nettest_run.gd -- --only=brains`
+- **Result:** `FAIL`, "timed out after 200 s waiting for the client's hive view and echo (hive false echo false)"; the client logs `Invalid access to property or key 'hive_view' on a base object of type 'Nil'` repeatedly (`tools/nettest.gd` around line 876).
+- **Noticed 2026-09-19** while merging `sono-brain`; it fails the same on `main` at `56d6b6f`, before that merge. Likely from the 0.7.1 eyeball changes, not confirmed. The other 21 scenarios pass.
+
+---
+
 ## Running the tests
 
 The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe`

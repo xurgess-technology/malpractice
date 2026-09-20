@@ -5,6 +5,12 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-19 (0.7.x)**
 
+- **0.7.2**: THE SONOGRAPHER HUNTS 🩺👂
+    - Added: Quiet noises make the Sonographer suspicious and his neck stretches as it fills, so you can see how close he is to echoing. A loud noise sends him straight to the spot.
+    - Added: A full neck charges, then fires an echo: a fan of ultrasound out of the wand. Walls and closed doors block it, and later shifts and deeper wings sweep it wider.
+    - Added: Everyone the echo catches is imaged (scan grain over the screen) and deafened by a short squeal with the game muffled under it. There's a Squeal NORMAL/SOFT setting.
+    - Added: He rushes the nearest player he imaged and wails on them, stopping to listen now and then so you can slip away. He follows sound, so going quiet for a few seconds loses him, and a shove gets him off you.
+    - Added: New sounds for his charge, echo, squeal, rush and wail.
 - **0.7.1**: ONE WAY TO HANDLE AN EYEBALL 👁️🫙
     - Changed: An eyeball is picked up and put down the same way everywhere: hold left click on it, drag it where it goes, let go. It can't be dropped, fumbled or lost, and letting go anywhere else puts it back for free.
     - Added: The Hive's extraction ends with carrying its eye to a specimen vat, so the eye never touches the floor.
