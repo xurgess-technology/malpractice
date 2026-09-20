@@ -85,8 +85,8 @@ func _data_checks() -> void:
 	_check(st.size() == 3
 		and st[0].item == "scalpel" and st[0].game == "eye" and st[0].variant == "cut" and st[0].site == "throat"
 		and st[1].item == "scalpel" and st[1].game == "eye" and st[1].variant == "snip" and st[1].site == "throat"
-		and st[2].item == "forceps" and st[2].game == "eye" and st[2].variant == "scoop" and st[2].site == "throat",
-		"trachea extraction steps: scalpel open, scalpel free, forceps lift (%s)" % str(st))
+		and st[2].item == "forceps" and st[2].game == "eye" and st[2].variant == "place" and st[2].site == "throat",
+		"trachea extraction steps: scalpel open, scalpel free, forceps into the vat (%s)" % str(st))
 	_check(int(DissectionScript.FREE_STEP) == 1 and st.size() > 1 and String(st[1].id) == "free", "the freeing cut is step %d" % int(DissectionScript.FREE_STEP))
 	_check(Procedures.is_monster_only("trachea_extraction") and Procedures.ailment("trachea_extraction").get("monster_only", false), "trachea_extraction is monster_only")
 	_check(Procedures.is_monster_only("eye_extraction") and not Procedures.patient_ailments().has("eye_extraction"), "eye_extraction is monster_only too")
@@ -206,14 +206,14 @@ func _dev_mode() -> void:
 			heard = true
 	_check(heard, "the shriek is a real noise event monsters can hear (%d recent noises)" % game.recent_noises(5.0).size())
 
-	# ---- step 3: lift the trachea out, and the case is won
+	# ---- step 3: carry the trachea to the vat on the table, and the case is won
 	await _seconds(0.5)
 	game.hand_step_item(me, table)
 	game._proxy_used(game.table_interact_id(table), me)
-	var began3 := await _until(func(): return sys.is_local_operating() and sys.mg != null and String(sys.mg.get("variant")) == "scoop", 5.0)
-	_check(began3, "then the forceps lift (variant scoop)")
-	var ok3 := await _until(func(): return String(c.get("state", "")) != "on_table", 60.0)
-	_check(ok3 and String(c.state) == "stable" and bool(c.flags.get("eye_out", false)), "the lift wins the case (state %s, flags %s)" % [String(c.get("state", "")), str(c.flags)])
+	var began3 := await _until(func(): return sys.is_local_operating() and sys.mg != null and String(sys.mg.get("variant")) == "place", 5.0)
+	_check(began3, "then the forceps step that puts the trachea in the vat (variant place)")
+	var ok3 := await _until(func(): return String(c.get("state", "")) != "on_table", 90.0)
+	_check(ok3 and String(c.state) == "stable" and bool(c.flags.get("part_in_vat", false)), "the vat step wins the case (state %s, flags %s)" % [String(c.get("state", "")), str(c.flags)])
 	var lp: Dictionary = dx.last_part
 	_check(not lp.is_empty() and String(lp.kind) == "trachea_sonographer" and absf(float(lp.quality) - cond_before / 100.0) < 0.011,
 		"the trachea is handed over: %s quality %.2f (condition %.1f)" % [str(lp.get("kind", "")), float(lp.get("quality", -1.0)), cond_before])
@@ -221,7 +221,7 @@ func _dev_mode() -> void:
 	for i in me.slots.size():
 		if String(me.slots[i].kind) == "trachea_sonographer":
 			in_hand = i
-	_check(in_hand >= 0, "it came out in the operator's hand (peer %d)" % int(lp.get("peer", 0)))
+	_check(in_hand >= 0, "it came out in the operator's hand, there being no vat on the table (peer %d)" % int(lp.get("peer", 0)))
 	var want_value := maxi(1, roundi(160.0 * clampf(cond_before / 100.0, 0.0, 1.0)))
 	_check(in_hand >= 0 and me.slots[in_hand].has("bt") and absi(int(me.slots[in_hand].get("v", 0)) - want_value) <= 1,
 		"a live trachea with a spoil clock, worth %d at %.0f%% (%d)" % [want_value, cond_before, int(me.slots[in_hand].get("v", 0)) if in_hand >= 0 else -1])

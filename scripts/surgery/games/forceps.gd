@@ -638,7 +638,19 @@ func hud_state() -> Dictionary:
 		"hint": hint,
 		"progress": progress,
 		"gauges": [],
+		"keys": keys(),
 	}
+
+
+func keys() -> Array:
+	match _d_stage:
+		Stage.OUTSIDE, Stage.SEEK:
+			return [["Mouse", "steer the tips down the channel"]]
+		Stage.AT_BULLET:
+			return [["Hold LMB", "grab the bullet"]]
+		Stage.GRIPPED:
+			return [["Hold LMB", "keep hold"], ["Mouse", "draw it back out"]]
+	return []
 
 
 func net_state() -> Dictionary:

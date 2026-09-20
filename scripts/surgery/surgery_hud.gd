@@ -60,8 +60,9 @@ class _Canvas extends Control:
 	func _draw_operator(font: Font, w: float, h: float, st: Dictionary, game) -> void:
 		drawn.append("operator")
 		var xs: Dictionary = st.get("cross_section", {})
+		var keys: Array = st.get("keys", [])
 		var pw := minf(620.0, w - 40.0)
-		var ph := 48.0
+		var ph := 48.0 if keys.is_empty() else 68.0
 		var x := w * 0.5 - pw * 0.5
 		var y := h - ph - 16.0
 		draw_rect(Rect2(x, y, pw, ph), Color(0, 0, 0, 0.42))
@@ -85,10 +86,39 @@ class _Canvas extends Control:
 		var ew := font.get_string_size(esc, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
 		draw_string(font, Vector2(x + 14, y + 38), hint, HORIZONTAL_ALIGNMENT_LEFT, pw - ew - 44, 13, hint_col)
 		draw_string(font, Vector2(x + pw - ew - 14, y + 38), esc, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.6, 0.6, 0.6, 0.7))
+		# The controls line: what each button does right now, in this step, at this stage.
+		if not keys.is_empty():
+			drawn.append("keys")
+			_draw_keys(font, x + 14, y + 58, pw - 28, keys)
 		if not xs.is_empty():
 			drawn.append("cross_section")
 			draw_rect(Rect2(x, y - 30, pw, 26), Color(0, 0, 0, 0.42))
 			_cross_section(font, x + 14, y - 30, pw - 28, xs)
+
+	## One row of "KEY what it does" pairs: the key in the panel's teal, what it does in grey, with a
+	## thin separator between pairs. Pairs that do not fit are dropped rather than wrapped.
+	func _draw_keys(font: Font, x: float, y: float, bw: float, keys: Array) -> void:
+		var key_col := Color(0.36, 0.88, 0.82, 0.95)
+		var txt_col := Color(0.72, 0.75, 0.78, 0.85)
+		var dot_col := Color(0.55, 0.58, 0.6, 0.5)
+		var cx := x
+		for i in keys.size():
+			var pair = keys[i]
+			if not (pair is Array) or (pair as Array).size() < 2:
+				continue
+			var k := String(pair[0]).to_upper()
+			var what := String(pair[1])
+			var kw := font.get_string_size(k, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+			var ww := font.get_string_size(what, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+			if cx - x + kw + ww + 30.0 > bw:
+				return
+			draw_string(font, Vector2(cx, y), k, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, key_col)
+			draw_string(font, Vector2(cx + kw + 7, y), what, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, txt_col)
+			cx += kw + ww + 13.0
+			if i < keys.size() - 1:
+				draw_string(font, Vector2(cx, y), "|", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, dot_col)
+				cx += 12.0
+
 
 	## The case being operated on: the system's own when it has one (per-table surgery, `loop`),
 	## else game.case.

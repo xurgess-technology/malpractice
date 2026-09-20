@@ -246,7 +246,7 @@ func surgery_step_done(result: Dictionary, operator_peer: int = 0) -> void:
 	case.step_index = int(case.step_index) + 1
 	apply_locally()
 	game._sound("step_done", table_pos())
-	game.grafts.on_step(case, result)   # GRAFTING chunk C: the scoop drops the old eye in the vat
+	game.grafts.on_step(case, result)   # GRAFTING chunk C: the seat drops the old part in the vat
 	var next := Procedures.step(String(case.ailment_id), int(case.step_index))
 	if next.is_empty():
 		if is_graft():

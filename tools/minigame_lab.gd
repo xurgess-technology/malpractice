@@ -64,6 +64,7 @@ var botch_count := 0
 var result: Dictionary = {}
 var finished_at := -1.0
 var _shot_taken := false
+var _shot_written := false
 var _hud: Label
 
 
@@ -105,6 +106,8 @@ func _ready() -> void:
 		if game_id == "stitches":   # downed (sweep 2 wave 3): a downed surgeon on the player table
 			ailment_id = "stitches"
 			patient_id = "player"
+		if game_id == "eye" and patient_id == "player":   # GRAFTING chunk C: the graft on a surgeon
+			ailment_id = "eye_graft"
 	var step := _find_step()
 	if variant == "" and step.has("variant"):
 		variant = step.variant
@@ -148,6 +151,13 @@ func _ready() -> void:
 		"shift": 1, "difficulty": Procedures.difficulty(1), "flags": flags,
 		"seed": seed_value if seed_value >= 0 else hash(game_id + patient_id), "body": body, "operator": true,
 	}
+	if ailment_id == "eye_graft":
+		# GRAFTING chunk C: the knobs grafts.gd puts in the case's flags, so the lab plays the eye
+		# steps the way the graft does (no botches, a Hive eyeball going in, a surgeon's radius).
+		mg_ctx["no_fail"] = true
+		mg_ctx["eye_kind"] = "eye_surgeon"
+		mg_ctx["eye_kind_in"] = "eye_hive"
+		mg_ctx["eye_radius"] = Grafts.EYE_RADIUS
 	if teammate_light != "":
 		_add_teammate_light()
 		if teammate_light != "nohelp":
@@ -286,7 +296,9 @@ func _physics_process(delta: float) -> void:
 
 	if shot_path != "" and not _shot_taken and ((shot_at >= 0.0 and t >= shot_at) or (shot_at < 0.0 and finished_at >= 0.0 and t >= finished_at + 0.4)):
 		_take_shot()
-	var over := t >= seconds or (finished_at >= 0.0 and t >= finished_at + 0.6 and (shot_path == "" or _shot_taken))
+	# A minimized window barely redraws, so a shot can sit waiting on frame_post_draw: give it a
+	# couple of seconds and then quit anyway rather than hanging.
+	var over := (t >= seconds or (finished_at >= 0.0 and t >= finished_at + 0.6)) and (shot_path == "" or _shot_written or t >= seconds + 2.0)
 	if over:
 		print("[lab] ------------------------------------------")
 		print("[lab] result=%s finished_at=%.1f botches=%d vitals_cost=%.1f progress=%.2f flags=%s" % [
@@ -354,8 +366,13 @@ func _draw_hud() -> void:
 func _take_shot() -> void:
 	_shot_taken = true
 	if DisplayServer.get_name() == "headless":
+		_shot_written = true
 		return
+	# Force the draw first: a minimized review window redraws only now and then, so without this the
+	# texture is either black (never drawn) or a frame from seconds ago.
+	RenderingServer.force_draw()
 	var img := get_viewport().get_texture().get_image()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(shot_path.get_base_dir()))
 	img.save_png(ProjectSettings.globalize_path(shot_path))
+	_shot_written = true
 	print("[lab] wrote ", shot_path)

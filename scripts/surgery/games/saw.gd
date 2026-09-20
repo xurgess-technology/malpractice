@@ -453,7 +453,13 @@ func hud_state() -> Dictionary:
 			hint = "Bone. Steady strokes, don't rush it."
 		else:
 			hint = "That's biting. Keep going."
-	return {"title": title, "hint": hint, "progress": progress, "gauges": []}
+	return {"title": title, "hint": hint, "progress": progress, "gauges": [], "keys": keys()}
+
+
+func keys() -> Array:
+	if done or depth >= 1.0:
+		return []
+	return [["Hold LMB", "saw"], ["Mouse", "back and forth on the line"]]
 
 
 func net_state() -> Dictionary:

@@ -419,7 +419,16 @@ func hud_state() -> Dictionary:
 				hint = "Keep circling the same way."
 		Stage.DONE:
 			hint = "Dressed."
-	return {"title": title, "hint": hint, "progress": progress, "gauges": []}
+	return {"title": title, "hint": hint, "progress": progress, "gauges": [], "keys": keys()}
+
+
+func keys() -> Array:
+	match stage:
+		Stage.PACK:
+			return [["Mouse", "over the wound"], ["Hold LMB", "press the gauze in"]]
+		Stage.WRAP:
+			return [["Hold LMB", "circle the roll"], ["Mouse", "in or out to set the pull"]]
+	return []
 
 
 func net_state() -> Dictionary:

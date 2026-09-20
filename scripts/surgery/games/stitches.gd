@@ -291,7 +291,13 @@ func hud_state() -> Dictionary:
 		hint = "Now across the gash: click the other ring to pull it tight."
 	else:
 		hint = "Stitch %d of %d: green ring, then across." % [stitch + 1, N_STITCHES]
-	return {"title": title, "hint": hint, "progress": progress, "gauges": []}
+	return {"title": title, "hint": hint, "progress": progress, "gauges": [], "keys": keys()}
+
+
+func keys() -> Array:
+	if stage == Stage.DONE:
+		return []
+	return [["Mouse", "aim at the green ring"], ["Click", "needle in, then across"]]
 
 
 func net_state() -> Dictionary:

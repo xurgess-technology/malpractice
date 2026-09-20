@@ -149,3 +149,113 @@ Nothing in docs/FAILING_TESTS.md was touched or fixed.
   same hospital and renders it (`tools/gameshot.tscn`, same seed) logs **zero**, so it is the setup
   boot (`prebuild_level` + `begin_shift` + settling frames), not normal play. Harmless as far as the
   picture goes, but it is the shared skeleton's, not this branch's.
+
+---
+
+## Follow-up: `graft-fixes` (slot wt-1, 2026-09-18)
+
+Zach played the graft and asked for four things. All four are on branch `graft-fixes`.
+
+1. **Step 3 is forceps now.** The `seat` variant (the scoop run backwards) is gone; step 3 is
+   "Seat the new eye with forceps", item `forceps`, variant `grab`, and its own game
+   `scripts/grafting/eye_seat.gd` (eye_ops.gd builds it as a child and hands every Minigame call to
+   it, the way `forceps.gd` hands "brain" to `brain_forceps.gd`). The new eye waits on a small tray
+   beside the socket, is picked up with the jaws, swings on its nerve while it is carried and drops
+   back on the tray if you whip the hand about (no botch, just retry), then sinks in under slow
+   steady pressure. Result is still `{"eye_seated": true}`. Forceps are stocked on the OR's storage
+   shelves next to the scalpel and the eye spoon, and the `graft` / `graft_back` review setups give
+   Botsworth all four tools (1 scalpel, 2 eye spoon, 3 forceps, 4 suture kit).
+2. **The body on the table is dead still** during a graft (`player_body.still`): no breath, no
+   Lying clip, no stir jolt. What moved before was the stand-in's own `_process` -- the breathing
+   torso scale, the Lying clip's idle breath on the skeleton and the jolt offset on `rig` -- which
+   moved the head under a work plane that had been measured off frame 0 of that clip.
+3. **The brightness** was the work lamp, not an extra light: the eye steps put the operating camera
+   0.3 m off the site and a surgeon's pale face under the full lamp measured about 3x the mean
+   luminance of the same step on a Hive's dark head. New `Minigame.lamp_scale()`; `eye_ops` returns
+   0.3 for a player. Before/after in `tools/graft_shots/`.
+4. **The Hive eye not showing** was two bugs. `Grafts` remembered what it had attached by part kind
+   alone, so once the body_visual was rebuilt (getting up off the table, the mirror's own body) the
+   graft went with it and was never put back; it now keys on the human model instance and re-attaches
+   whenever the node is missing. And `GraftEye`'s socket offset was on the opposite side from
+   `Human_Eye_L`, so the surgery hid and operated on one eye while the graft appeared in the other:
+   both now come from `GraftEye.local_offset`. Plus a size bump (`Grafts.BODY_EYE_RADIUS`) and a
+   resting ember (`LOCK_IDLE`), since nothing lights your own face in the mirror.
+
+Also: `tools/graftsurgeryshot.gd` takes a Hive Eyeball Extraction reference shot first
+(`40_hive_cut_operating`) and prints every light near the work site; `tools/minigame_lab.gd` can play
+the graft's eye steps (`--game=eye --patient=player --variant=grab --look=or`). Both screenshot
+helpers now call `RenderingServer.force_draw()` before reading the viewport -- a minimized review
+window redraws so rarely that every shot used to be of a frame from seconds earlier (which is why
+the shots in the section above show the wrong step).
+
+### Second round (Zach's notes on the screenshots)
+
+1. **The red disc** was the grafted eye facing into the skull. `GraftEye.local_offset` gave it the
+   skeleton's axes, whose front is +Z (glTF), but the eyeball's pupil is its -Z: everyone saw the
+   back of the ball, lit all over by `LOCK_IDLE`. It is turned half round now. The earlier "size
+   bump" was making up for this and is gone: the graft is `Human_Eye_L`'s own size and centre
+   (`GraftEye.RADIUS` 0.0147, `SIDE` 0.035), so it sits in the socket instead of through the lids.
+2. **The head moving between steps** was the camera, not the body: the forceps step asked for its own
+   pulled-back view. It uses `eye_ops.base_camera_pose()` like the others now.
+   `graftsurgeryshot` logs the eyes' site and where it lands on screen at every step: identical
+   (800, 566) from the cut to the stitch.
+3. **The eye sunk into the face** during the seat step: `eye_seat` put the seated eye 0.45 of a
+   radius below the work plane, whose origin on a surgeon is already the eye's centre. Home is 0 now.
+4. **The bright yellow face after getting up** is not the graft: it is the Personnel mirror's bulb
+   glow (entrance.gd, a warm OmniLight at head height in front of the glass), 17 cm from your face
+   when you stand at the mirror. With it off, the face goes dark (`67f_face_no_room_lights_near`).
+
+### Third round (the table, and the tray on it)
+
+- **The OR table is new** (`piece_defs.or_table`, `piece_factory`): a stainless prep table, 2.4 x 1.1
+  on the floor with a 2.4 x 1.1 top at 0.945 (`Game.OR_TABLE_TOP`, unchanged), four square legs, a
+  brace near the floor, leveling feet, a drawer under the head end and hooks under the near lip. It
+  replaces the 2.2 x 0.7 pedestal one. The size came from what has to fit: a 1.8 m patient down the
+  middle with a clear strip of steel either side for the tray, and the OR's own row -- the tables sit
+  3.6 to 3.75 m apart on tile row 7 (TILE 1.5), so the footprint still claims exactly the tiles it
+  did (`Defs.blocked_tiles`), the anesthesia carts and the vat stands still clear it, and there is
+  1.7 m of walkway to the wall behind it.
+- **The tray** in the seat step now stands on that top beside the head instead of floating on the
+  work plane over the face (see the seat step in CONTRACTS).
+
+### Fourth round (the vat is the centre of it)
+
+- **No tray.** The `grab` step takes the new eye out of the **specimen vat standing on the table**
+  (`ctx.vat`, hidden while the step draws its own open copy of it where the real one stands). A
+  dropped eye falls back into the vat.
+- **Raise and lower are keys.** `Minigame.BUTTON_DOWN` (S) joins `BUTTON_UP` (W) -- hold S to lower
+  the forceps into the vat or the socket, W to lift the eye clear. Nothing dives because the mouse
+  went past a point any more.
+- **Every step says what the buttons do.** `hud_state()["keys"]` -> `[[key, what], ...]`, drawn by
+  `surgery_hud` as a third line in the strip; every minigame fills it in per stage.
+- **The extraction has a fourth step**, "Put the eye in the vat" (forceps, variant `place`): the
+  same game run the other way, and `dissection._finish_eye` puts the eye in that vat instead of the
+  operator's hand.
+- **The vat stand is gone.** `Vats.places` / `vat_on_table` / `place_of_table` /
+  `set_down_on_table`, one spot per table at `TABLE_VAT_OFFSET` on the table top beside the head.
+- The swap moved from the scoop to the seat, so you never reach into a vat that already holds the
+  eye that just came out.
+- Review setup `--setup=eyes` stages both procedures at once.
+
+### Fifth round (the extraction's last step was too hard)
+
+Zach: "I cant figure out how to get the eye from the hive to the jar, its too complicated." The
+`place` variant asked for five things in a row (lower, grab, lift clear, carry under a speed limit,
+lower in) for what should be "pick it up, drop it in the jar". It is now: hold left click near the
+loose eye, drag, let go over the vat. No W, no S (the forceps raise and lower themselves), no speed
+limit, no slack drop -- the step cannot be lost -- and letting go anywhere else just puts the eye
+back in the socket. The vat's ring is up from the first frame and 2.6x bigger, and the hint says
+what to do in one line. `grab` (the graft) still has all its careful work; only `place` changed.
+The snip's camera is raised (0.22 / 0.20 / 50) so the extraction's steps sit closer together; it
+stays side-on because the nerve shows under the lifted eye and a view from straight above would
+have the eye covering it.
+
+### Sixth round (one way to handle an eyeball)
+
+Zach: "make the new way of handling the eyeball true of the grafting surgery too". The graft's seat
+step is the same grab-and-drag as the extraction's now, and `eye_seat.gd` has one set of rules with
+`mode` only choosing where the eye comes from and where it goes. Gone from the step, and from the
+file: the depth input and `Minigame.BUTTON_DOWN` (S; W stays for the snip's pull), `DEEP_ENOUGH` /
+`LIFT_CLEAR` and the lift-clear drop, `CARRY_MAX_SPEED` and the slack drop, `SEAT_MAX_SPEED` and
+the steady-pressure push, the `_speed` tracking and the jolt reaction (nothing is left to shake
+loose). What is left: hold left click near the eye, drag, let go over the ring.

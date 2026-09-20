@@ -22,8 +22,9 @@ removed. Grafting is the only way to get an ability.
 1. **Catch a Sonographer** and strap it to an OR table (shove, jab, drag, strap).
 2. **Trachea Extraction** on the Sonographer. The trachea comes out in the operator's hand.
 3. **Put it in a vat.** A vat holds one body part: an eyeball or a trachea. Outside a vat it
-   spoils.
-4. **A surgeon straps themselves** to the player table, and the vat goes on the graft stand.
+   spoils. The extraction's last step does it: the forceps carry the trachea to the vat standing on
+   the table (hold, drag, let go, the same way as the Hive's eye).
+4. **A surgeon straps themselves** to the player table, and the vat stands on it.
 5. **Another player runs Trachea Grafting.** The surgeon's own trachea goes into the vat and the
    Sonographer's goes in.
 6. The surgeon now has **Echo, level 1**. Their throat glows low normally and bright while Echo
@@ -44,15 +45,16 @@ removed. Grafting is the only way to get an ability.
 
 - **Extraction steps (on a Sonographer):** 1. Scalpel: open the throat along the glowing line.
   2. Scalpel: cut the windpipe free, top and bottom. **The last cut makes it shriek**: a real loud
-  noise event that can pull monsters to the OR. 3. Forceps: lift it out. The usual monster-table
-  rules apply (sedation wears off, stirring shakes the hand, botches damage the part; enough damage
-  shreds it). The Sonographer dies on the table.
-- **Graft steps (on a surgeon):** 1. Scalpel: open the throat. 2. Forceps: lift the old trachea
-  out (it drops into the vat, and the vat's trachea comes up onto the stand). 3. Forceps: seat the
-  new one. 4. Suture kit: stitch the throat closed. No botches, the surgeon is awake, and they can
-  get up until step 2, as in part one.
+  noise event that can pull monsters to the OR. 3. Forceps: carry it to the vat on the table. The
+  usual monster-table rules apply (sedation wears off, stirring shakes the hand, botches damage the
+  part; enough damage shreds it). The Sonographer dies on the table.
+- **Graft steps (on a surgeon):** 1. Scalpel: open the throat. 2. Scalpel: cut the old windpipe
+  free. 3. Forceps: take the new trachea out of the vat and seat it (the old one goes into the vat).
+  4. Suture kit: stitch the throat closed. No botches, the surgeon is awake, and they can get up
+  until step 2 is done, as in part one. (2026-09-19: reworked to the eye graft's shape, after 0.7.1
+  put the vat on the table and made forceps handling one grab-and-drag.)
 - **A surgeon can have both grafts,** an eye and a trachea: different sites, different abilities,
-  each at level 1. Refusals work as in part one ("already has one", no vat on the stand, spoiled,
+  each at level 1. Refusals work as in part one ("already has one", no vat on the table, spoiled,
   nobody strapped down), and a vat holding an eyeball can't be used for a trachea graft.
 - **The grafted surgeon's look:** see-through skin down the front of the throat with the violet
   windpipe glowing through it, matching the Sonographer's throat and the Echolocation icon

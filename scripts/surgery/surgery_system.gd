@@ -485,6 +485,9 @@ func _spawn_mg() -> void:
 		"body": body,
 		"operator": false,
 		"helper_lights": _helper_lights,
+		# GRAFTING: the specimen vat standing on this table, for the forceps steps that take an eye
+		# out of it or put one in. Every machine looks it up for itself; null when there is none.
+		"vat": _table_vat(),
 	}
 	for k in ["no_fail", "eye_kind", "eye_kind_in", "eye_radius", "part_site"]:
 		if c.flags.has(k):
@@ -492,6 +495,25 @@ func _spawn_mg() -> void:
 	mg.setup(ctx)
 	if _mg_state_key == mg_key and not _mg_state.is_empty():
 		mg.apply_net_state(_mg_state)
+
+
+## The vat standing on this table, or null (GRAFTING: the eye's forceps steps reach into it).
+## The player table runs through a stand-in game (scripts/downed/player_surgery.gd) with the real
+## Game behind it and no table index of its own, so ask that one about the table the patient is on.
+func _table_vat():
+	var g = game
+	if g == null:
+		return null
+	var ti := table_index
+	if g.get("vats") == null and g.get("game") != null:
+		g = g.game
+		var pt = g.get("player_table")
+		if pt is Dictionary and not (pt as Dictionary).is_empty():
+			ti = int((pt as Dictionary).get("index", ti))
+	var v = g.get("vats")
+	if v == null or not is_instance_valid(v) or not v.has_method("vat_on_table"):
+		return null
+	return v.vat_on_table(ti)
 
 
 ## Teammates' flashlights for the minigame (ctx.helper_lights): every living player's light that is
@@ -786,7 +808,9 @@ func _update_camera(delta: float) -> void:
 	_cam.global_transform = head.interpolate_with(target, e)
 	_cam.fov = lerpf(_head_fov, _last_pose_fov, e)
 	_lamp.visible = e > 0.02
-	_lamp.light_energy = LAMP_ENERGY * e
+	# A step may ask for less of the work lamp (Minigame.lamp_scale).
+	var scale: float = float(mg.lamp_scale()) if mg != null and mg.has_method("lamp_scale") else 1.0
+	_lamp.light_energy = LAMP_ENERGY * e * scale
 	if _cam_dir < 0 and _cam_blend <= 0.0:
 		_cam_dir = 0
 		_cam.current = false

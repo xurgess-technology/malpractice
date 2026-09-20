@@ -42,7 +42,7 @@ const PROCEDURE_TEXT := {
 	"gunshot": "A bullet is still inside the patient. Get it out and stop the bleeding.",
 	"amputation": "An infected limb that can't be saved. Take it off before the infection spreads.",
 	"stitches": "A downed teammate with a deep gash. Stitch it shut and they get back up.",
-	"eye_extraction": "A sedated Hive on the table. Cut round the eye, scoop it out, snip the nerve.",
+	"eye_extraction": "A strapped Hive on the table. Hold the scalpel to start: cut round the eye, scoop it out, snip the nerve, then lift it into the specimen vat standing on the table with the forceps.",
 	"trachea_extraction": "A sedated Sonographer on the table. Open the glowing throat and take the windpipe. The last cut is loud.",
 }
 

@@ -15,10 +15,11 @@ const GraftThroat := preload("res://scripts/grafting/graft_throat.gd")   # GRAFT
 const GASH_POS := Vector3(-0.2, 0.24, 0.04)
 const GASH_HALF_LEN := 0.1
 const GASH_HALF_GAP := 0.016
-## GRAFTING chunk C: how far the left eye sits from the eyes' site (the body's left is model -X),
-## and the eyeball's radius on a surgeon.
-const EYE_SIDE := 0.033
+## GRAFTING chunk C: the eyeball's radius on a surgeon. Which eye and how far it sits from the eyes'
+## site comes from GraftEye (its SIDE / local_offset), so the work site and the graft agree.
 const EYE_RADIUS := 0.0135
+## GRAFTING chunk C: the grafted eyeball fills the socket like the eye it replaces (GraftEye.RADIUS).
+const GRAFT_EYE_RADIUS := GraftEye.RADIUS
 
 var player_id: int = 0
 var ailment_id := "stitches"
@@ -62,6 +63,8 @@ var _throat_key := "?"
 ## Where the throat site sits: how far up the neck-to-head run, and how far out of the front of it.
 const THROAT_UP := 0.30
 const THROAT_OUT := 0.045
+## GRAFTING chunk C: the body on the table does not move at all (see set_ailment).
+var still := false
 ## Tools and A/B: build the primitive body.
 static var primitive_only := false
 
@@ -154,6 +157,21 @@ func _build() -> void:
 
 func set_ailment(id: String) -> void:
 	ailment_id = id
+	# GRAFTING chunk C: a graft is millimetre work on the face, so the body under it holds perfectly
+	# still -- no breath, no idle clip, no jolt. The site markers were measured off frame 0 of the
+	# Lying clip, so freezing there is also the only pose where the eye is exactly where the work
+	# plane says it is. Every machine builds this body from the same case, so it is still everywhere.
+	still = id == "eye_graft" or id == "trachea_graft"
+	if still:
+		_idle_t = 0.0
+		_jolt = 0.0
+		_jolt_v = 0.0
+		if rig != null:
+			rig.position = Vector3.ZERO
+		if _torso != null:
+			_torso.scale = Vector3.ONE
+		if _skel != null and _lying != null:
+			HumanModel.sample_clip(_skel, _lying, 0.0)
 	_apply_visuals()
 
 
@@ -201,7 +219,9 @@ func _apply_eye() -> void:
 		_graft_eye = null
 	if hidden or _eye_kind == "":
 		return
-	_graft_eye = GraftEye.build(_eye_l, _eye_kind, EYE_RADIUS)
+	_graft_eye = GraftEye.build(_eye_l, _eye_kind, GRAFT_EYE_RADIUS)
+	# The same resting ember Grafts keeps on a standing surgeon, so the new eye reads on the table too.
+	GraftEye.set_lock(_graft_eye, Grafts.LOCK_IDLE)
 
 
 ## GRAFTING part two: what is in the throat -- "" their own windpipe, "trachea_sonographer" a
@@ -245,7 +265,7 @@ func set_sedation(_s: float) -> void:
 
 
 func stir(strength: float) -> void:
-	if _flat:
+	if _flat or still:
 		return
 	_jolt_v += clampf(strength, 0.0, 1.5) * 6.0
 
@@ -310,6 +330,8 @@ func _apply_visuals() -> void:
 func _process(delta: float) -> void:
 	_apply_eye()   # GRAFTING chunk C: the socket follows the case and the minigame's own eye
 	_apply_throat()
+	if still:
+		return     # GRAFTING chunk C: dead still under the operator's hands
 	delta = minf(delta, 0.1)
 	_t += delta
 	var v01 := _vitals / 100.0
@@ -388,10 +410,10 @@ func _build_human() -> bool:
 	if eyes_site != null:
 		var ea := eyes_site.get_parent() as BoneAttachment3D
 		var e_bone := HumanModel.bone_global(skel, skel.find_bone(ea.bone_name))
-		var exf: Transform3D = to_rig * e_bone * eyes_site.transform
-		# The model's -X (its left) after the quarter turn onto the table: take it from the basis.
-		var left: Vector3 = (to_rig * e_bone).basis.orthonormalized() * Vector3.LEFT
-		_sites["eye"] = Transform3D(Basis(x, y, x.cross(y)), exf.origin + left * EYE_SIDE)
+		# Exactly where GraftEye hangs the grafted eyeball, so the socket you cut into is the one
+		# that ends up with the new eye in it (they used to come out as opposite eyes).
+		var exf: Transform3D = to_rig * e_bone * GraftEye.local_offset(skel, ea, eyes_site)
+		_sites["eye"] = Transform3D(Basis(x, y, x.cross(y)), exf.origin)
 	_eye_l = HumanModel.piece(root, "Human_Eye_L")
 	parts["eye_l"] = _eye_l
 	# GRAFTING part two (docs/GRAFTING_TRACHEA.md): the throat, part way up the neck and out of the

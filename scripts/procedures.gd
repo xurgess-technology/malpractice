@@ -106,7 +106,7 @@ const AILMENTS := {
 		"steps": [
 			{"id": "cut", "label": "Cut around the socket", "item": "scalpel", "uses": 0, "game": "eye", "variant": "cut", "site": "eye"},
 			{"id": "scoop", "label": "Scoop the old eye out", "item": "eye_spoon", "uses": 0, "game": "eye", "variant": "scoop", "site": "eye"},
-			{"id": "seat", "label": "Seat the new eye", "item": "eye_spoon", "uses": 0, "game": "eye", "variant": "seat", "site": "eye"},
+			{"id": "seat", "label": "Seat the new eye with forceps", "item": "forceps", "uses": 0, "game": "eye", "variant": "grab", "site": "eye"},
 			{"id": "stitch", "label": "Stitch it in", "item": "suture_kit", "uses": 1, "game": "eye", "variant": "stitch", "site": "eye"},
 		],
 	},
@@ -122,12 +122,16 @@ const AILMENTS := {
 			{"id": "cut", "label": "Cut around the eye", "item": "scalpel", "uses": 0, "game": "eye", "variant": "cut", "site": "eye"},
 			{"id": "scoop", "label": "Scoop the eye out", "item": "eye_spoon", "uses": 0, "game": "eye", "variant": "scoop", "site": "eye"},
 			{"id": "snip", "label": "Snip the optic nerve", "item": "scalpel", "uses": 0, "game": "eye", "variant": "snip", "site": "eye"},
+			# 2026-09-19: and it goes straight into the specimen vat standing on the table, with the
+			# forceps -- the seat step's game the other way round (scripts/grafting/eye_seat.gd).
+			{"id": "vat", "label": "Put the eye in the vat", "item": "forceps", "uses": 0, "game": "eye", "variant": "place", "site": "eye"},
 		],
 	},
-	# GRAFTING part two (docs/GRAFTING_TRACHEA.md): Trachea Extraction on a strapped Sonographer.
-	# The throat is already marked for you: its windpipe glows through the skin. The SECOND cut, the
-	# one that frees the pipe top and bottom, makes it shriek -- a real noise event that can pull
-	# monsters to the OR (Dissection._host_tick's `free` step).
+	# GRAFTING part two (docs/GRAFTING_TRACHEA.md): Trachea Extraction on a strapped Sonographer, the
+	# eye extraction's shape on a throat. The windpipe glows through the skin, so the first cut is
+	# already marked for you. The SECOND cut, the one that frees the pipe top and bottom, makes it
+	# shriek -- a real noise event that can pull monsters to the OR (Dissection._host_tick's `free`
+	# step). It ends in the specimen vat standing on the table, carried there with the forceps.
 	"trachea_extraction": {
 		"name": "Trachea Extraction",
 		"code": "TX",
@@ -135,20 +139,21 @@ const AILMENTS := {
 		"steps": [
 			{"id": "open", "label": "Open the throat along the glowing line", "item": "scalpel", "uses": 0, "game": "eye", "variant": "cut", "site": "throat"},
 			{"id": "free", "label": "Cut the windpipe free", "item": "scalpel", "uses": 0, "game": "eye", "variant": "snip", "site": "throat"},
-			{"id": "lift", "label": "Lift the trachea out", "item": "forceps", "uses": 0, "game": "eye", "variant": "scoop", "site": "throat"},
+			{"id": "vat", "label": "Put the trachea in the vat", "item": "forceps", "uses": 0, "game": "eye", "variant": "place", "site": "throat"},
 		],
 	},
 	# GRAFTING part two: Trachea Grafting on a surgeon who strapped themselves to a table, with the
-	# vat holding the trachea going in on that table's stand. Same shape as eye_graft: no botches,
-	# no anesthetic, and they can get up until step 2.
+	# vat holding the trachea going in standing on that table. The eye graft's shape on a throat: no
+	# botches (the case sets `no_fail`), no anesthetic, and they can get up until the old windpipe
+	# is out.
 	"trachea_graft": {
 		"name": "Trachea Grafting",
 		"code": "TG",
 		"player_only": true,
 		"steps": [
 			{"id": "open", "label": "Open the throat", "item": "scalpel", "uses": 0, "game": "eye", "variant": "cut", "site": "throat"},
-			{"id": "lift", "label": "Lift the old trachea out", "item": "forceps", "uses": 0, "game": "eye", "variant": "scoop", "site": "throat"},
-			{"id": "seat", "label": "Seat the new trachea", "item": "forceps", "uses": 0, "game": "eye", "variant": "seat", "site": "throat"},
+			{"id": "free", "label": "Cut the old windpipe free", "item": "scalpel", "uses": 0, "game": "eye", "variant": "snip", "site": "throat"},
+			{"id": "seat", "label": "Seat the new trachea with forceps", "item": "forceps", "uses": 0, "game": "eye", "variant": "grab", "site": "throat"},
 			{"id": "stitch", "label": "Stitch the throat closed", "item": "suture_kit", "uses": 1, "game": "eye", "variant": "stitch", "site": "throat"},
 		],
 	},

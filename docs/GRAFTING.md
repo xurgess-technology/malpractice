@@ -17,13 +17,13 @@ from it. The surgeon's own eye goes into the vat and can be swapped back in or s
 2. **Eyeball Extraction** on the Hive. The eye comes out in the operator's hand.
 3. **Put the eye in a vat.** Vats are specimen jars on the lab wall. Outside a vat an eye spoils.
 4. **A surgeon straps themselves** to the player table.
-5. **Bring the vat** from the lab benches to the graft stand, a small spot right next to the
+5. **Bring the vat** from the lab benches to the vat's place on the OR table itself, on the steel beside the
    player table. Afterwards it gets carried back to the benches.
 6. **Another player runs Eyeball Grafting** on the strapped surgeon. Their eye goes into the vat
    and the Hive eye goes into their socket.
 7. The surgeon now has **Hive Eyes, level 1**. The eye glows low normally and high while the
    ability is in use.
-8. **Swapping back** is the same surgery with the surgeon's eye in the vat on the stand. They lose
+8. **Swapping back** is the same surgery with the surgeon's eye in the vat on the table. They lose
    Hive Eyes, and the Hive eye goes back into the vat.
 
 ## Decisions (locked by Zach)
@@ -36,7 +36,7 @@ from it. The surgeon's own eye goes into the vat and can be swapped back in or s
 - **Eyes spoil outside a vat.** Reuse the brain spoil system: over a minute or two the eye clouds
   over and dulls. A vat stops the clock. A spoiled eye can't be grafted.
 - **A graft is always a swap, never an empty socket.** You can only operate when the vat on the
-  graft stand holds the eye that goes in. The eye that comes out goes into that vat.
+  vat on the table holds the eye that goes in. The eye that comes out goes into that vat.
 - **No botching on grafts** for now. The graft minigames play, but mistakes cost nothing and the
   steps can't fail.
 - **Two new tools: a scalpel and an eye spoon.** Both are ordinary non-consumable items, like
@@ -53,7 +53,7 @@ from it. The surgeon's own eye goes into the vat and can be swapped back in or s
 ## Calls the theory session made (approved by Zach)
 
 - **Graft steps (on a surgeon):** 1. Scalpel: cut around the socket. 2. Eye spoon: scoop the old
-  eye out (it drops into the vat and the vat's eye comes up onto the stand). 3. Eye spoon: seat the
+  eye out. 3. Forceps: hold left click on the eye in the vat, drag it to the socket and let go (the old one drops into the vat it came out of). 4. Suture kit: stitch
   new eye. 4. Suture kit: stitch it in (the `surgeon_graft` art already shows stitches). No
   anesthetic: the surgeon is simply awake, which is the joke.
 - **Extraction steps (on a Hive):** 1. Scalpel: cut around the eye. 2. Eye spoon: scoop it out.
@@ -66,7 +66,7 @@ from it. The surgeon's own eye goes into the vat and can be swapped back in or s
   It does nothing, and it's funny.
 - **Refusals:** the graft isn't offered unless the swap makes sense: a Hive eye into a surgeon
   with two normal eyes, or a surgeon's eye into a surgeon with a Hive eye. The table says why when
-  it refuses (no vat on the stand, eye spoiled, "already has one", nobody strapped down).
+  it refuses (no vat on the table, eye spoiled, "already has one", nobody strapped down).
 - **Where things are:** three empty vats sit on the lab wall at the start of a run. The scalpel
   and eye spoon start in the lab storage in the OR, so the feature is never blocked by a search.
   Vats and their contents last the whole run (the entrance building never changes); a new run
@@ -86,7 +86,7 @@ A and B can run at the same time. C starts after both are merged.
 - The specimen vat: a glass jar of cloudy fluid, carried in both hands like bulky loot. Aim + E
   with an eye in hand puts it in; the eye floats in the jar. Taking an eye back out needs its own
   input (the implementer picks one and says which). The vat stops spoiling.
-- Vats live on the lab benches, not on the graft stand. Aim + E sets a carried vat back down on
+- Vats live on the lab benches when they are not on a table. Aim + E sets a carried vat back down on
   a lab bench (fixed spots along the benches are fine), so after a graft it goes home instead of
   sitting by the table.
 - Three empty vats on the lab wall, plus set dressing jars with things floating in them, mostly
@@ -108,8 +108,8 @@ A and B can run at the same time. C starts after both are merged.
 - **Zach sees:** `BOTSWORTH: strap yourself down, switch to Botsworth, look at yourself`.
 
 ### C. `graft-surgery`: the graft itself (Opus, high: several systems)
-- The graft stand next to the player table: E sets a carried vat down on it, and E picks it back
-  up to carry it to the lab benches. The stand holds a vat only for as long as someone leaves it
+- The vat's place on the patient table: E stands a carried vat there, and E picks it back
+  up to carry it to the lab benches. The place holds a vat only for as long as someone leaves it
   there.
 - **Eyeball Grafting** on a strapped surgeon, with the steps, refusals and no-botch rule above.
   The strapped player's awake camera during it.

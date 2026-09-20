@@ -422,7 +422,17 @@ func on_case_finished(c: Dictionary, won: bool) -> void:
 	var who = game.players.get(last_operator) if last_operator != 0 else null
 	var node: Node = null
 	var given := false
-	if who != null and is_instance_valid(who) and who.alive:
+	# The last step puts the part in the vat on the table with the forceps, so that is where it ends
+	# up ({"part_in_vat": true} in the case's flags). Only if there is no vat to put it in does it go
+	# the old way: into the operator's hand, or on the floor by the head.
+	var in_vat := bool((c.get("flags", {}) as Dictionary).get("part_in_vat", false))
+	if in_vat:
+		var vat = game.vats.vat_on_table(table) if game.get("vats") != null else null
+		if vat != null and is_instance_valid(vat) and String(vat.x) == "":
+			vat.x = Eyes.pack(kind, "", 0.0, value)
+			given = true
+			node = vat
+	if not given and who != null and is_instance_valid(who) and who.alive:
 		var i: int = who.take_into(kind, 1, value)
 		if i >= 0:
 			who.selected = i
@@ -439,8 +449,12 @@ func on_case_finished(c: Dictionary, won: bool) -> void:
 	_fx_flatline(table)
 	game._broadcast("dx_flatline", {"tb": table})
 	game._sound("flatline", at)
-	game.say("%s out, condition %d%%. %s is dead. Put it in a vat before it spoils." % [
-		noun.capitalize(), roundi(cond), pname], 5.0)
+	if in_vat and node != null:
+		game.say("%s out, condition %d%%, and in the vat. %s is dead." % [
+			noun.capitalize(), roundi(cond), pname], 5.0)
+	else:
+		game.say("%s out, condition %d%%. %s is dead. Put it in a vat before it spoils." % [
+			noun.capitalize(), roundi(cond), pname], 5.0)
 
 
 ## The graft site a monster case is working on ("eye", "throat").

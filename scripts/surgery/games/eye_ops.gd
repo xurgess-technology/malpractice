@@ -13,9 +13,10 @@ extends "res://scripts/surgery/minigame.gd"
 ##   snip   (scalpel)   The eye is out of its socket but still on its nerve, resting over the socket, seen
 ##                      from a low angle. Hold W to pull it up and the nerve shows. Then aim the scalpel
 ##                      at the nerve and LEFT CLICK to slice.
-##   seat   (eye spoon) GRAFTING chunk C, the graft only: the new eye waits over the empty socket. LEFT
-##                      CLICK inside the socket to lower it, then circle slowly: two turns settle it in.
-##                      The scoop's rules exactly, run the other way round (the eye sinks as it goes).
+##   grab   (forceps)   GRAFTING chunk C, the graft only: the new eye lies on a tray beside the empty
+##                      socket. Pick it up with the forceps, carry it across (it swings on its nerve)
+##                      and hold it over the socket until it slides in. Its own game:
+##                      scripts/grafting/eye_seat.gd, which every call below hands over to.
 ##   stitch (suture kit) GRAFTING chunk C: the cut is open all the way round. Trace the ring the same way
 ##                      the cut was made and it closes behind the needle, stitch by stitch.
 ##
@@ -25,13 +26,18 @@ extends "res://scripts/surgery/minigame.gd"
 ## ctx knobs (all optional, so the graft can reuse this on a surgeon):
 ##   no_fail: true    never botches (grafting: mistakes cost nothing)
 ##   eye_kind         "eye_hive" | "eye_surgeon" (the eye's look); default from patient_id
-##   eye_kind_in      the eye going IN, for the graft's seat step (default: eye_kind)
+##   eye_kind_in      the eye going IN, for the graft's grab step (default: eye_kind)
 ##   eye_radius       metres, default 0.0155
 ##   part_site        "eye" (default) or "throat": GRAFTING part two runs the same five variants on a
 ##                    windpipe instead of an eyeball, so the steps read as a throat. The rules do not
 ##                    change; only what is on the work plane, and which part of the body it hides.
 ## Results: cut {"eye_cut": true}, scoop {"eye_out": true}, snip {"eye_removed": true},
-##          seat {"eye_seated": true}, stitch {"eye_stitched": true}.
+##          grab {"eye_seated": true}, stitch {"eye_stitched": true}.
+
+## GRAFTING chunk C: "Seat the new eye with forceps" is its own game, built and driven by this child
+## when ctx.variant is "grab" (the way every eye variant reaches its own helper).
+const SeatScript := preload("res://scripts/grafting/eye_seat.gd")
+var _seat: Node3D = null
 
 const RING_GAP := 0.0145               # marking ring radius = eye radius + this
 const CUT_MAX_SPEED := 0.075           # m/s of cursor speed the scalpel tolerates while cutting
@@ -148,12 +154,22 @@ func setup(context: Dictionary) -> void:
 	eye_kind = String(ctx.get("eye_kind", ""))
 	if eye_kind == "":
 		eye_kind = String(Eyes.MONSTER_PART.get(part_site, "eye_hive")) if String(ctx.get("patient_id", "hive")) != "player" else String(Eyes.OWN_PART.get(part_site, "eye_surgeon"))
-	if variant == "seat":
+	if variant == "grab":
 		eye_kind = String(ctx.get("eye_kind_in", eye_kind))
 	eye_r = float(ctx.get("eye_radius", eye_r))
 	ring_r = eye_r + RING_GAP
+	if variant == "grab" or variant == "place":
+		# The forceps step draws the eye it is moving, so the body's own is hidden while it plays:
+		# `grab` puts a new one in, `place` (the extraction's last step) takes the loose one to a vat.
+		_hide_body_eye(true)
+		_add_rim()
+		_seat = SeatScript.new()
+		add_child(_seat)
+		_seat.setup(self, ctx, eye_kind, eye_r)
+		_set_layers(self)
+		return
 	_build()
-	if variant == "scoop" or variant == "seat":
+	if variant == "scoop":
 		_hide_body_eye(true)
 	_update_visuals()
 
@@ -171,13 +187,42 @@ func _hide_body_eye(on: bool) -> void:
 
 
 func plane_extent() -> Vector2:
+	if _seat != null:
+		return _seat.plane_extent()
 	return Vector2(0.085, 0.06)
 
 
+func on_jolt(offset: Vector2, strength: float, duration: float) -> void:
+	if _seat != null:
+		_seat.on_jolt(offset, strength, duration)
+
+
+## GRAFTING chunk C: the eye steps put the camera 0.3 m off the site. On a Hive's dark head that is
+## exactly right; on a surgeon's pale face (the graft) the full work lamp bleaches it to white --
+## three times the brightness of the same steps on a Hive. Turn it down for a player's face only.
+func lamp_scale() -> float:
+	return 0.3 if String(ctx.get("patient_id", "")) == "player" else 1.0
+
+
 func camera_pose() -> Dictionary:
+	if _seat != null:
+		return _seat.camera_pose()
 	if variant == "snip":
-		# Low and from the side: the eye rests over the socket and rises off it.
-		return {"height": 0.13, "back": 0.17, "fov": 42.0}
+		# From the side, because the nerve shows under the eye as it rises and a view from straight
+		# above would have the eye sitting on top of it. Raised a little (2026-09-19) so the jump
+		# between it and the extraction's other three steps is smaller.
+		return {"height": 0.22, "back": 0.20, "fov": 50.0}
+	return base_camera_pose()
+
+
+## The view the graft's steps share (the forceps step asks for it too), so the face never shifts
+## between them. Pulled back, and leaning a touch over the patient rather than away from them,
+## because the specimen vat stands on the table beside the head and has to be in the same shot as
+## the socket. The Hive's extraction keeps the tight view for its first three steps; its last one is
+## the forceps step, which needs the vat.
+func base_camera_pose() -> Dictionary:
+	if _seat != null or String(ctx.get("patient_id", "")) == "player":
+		return {"height": 0.45, "back": -0.04, "fov": 54.0}
 	return {"height": 0.3, "back": 0.06, "fov": 48.0}
 
 
@@ -194,6 +239,9 @@ func _ring_pos(theta: float, r: float) -> Vector2:
 func handle_cursor(p: Vector2, buttons: int, delta: float) -> void:
 	if done:
 		return
+	if _seat != null:
+		_seat.handle_cursor(p, buttons, delta)
+		return
 	var raw := p.distance_to(_last_cursor) / maxf(delta, 0.0001) if _have_last else 0.0
 	_speed = lerpf(_speed, raw, 0.3)
 	_last_cursor = p
@@ -207,7 +255,7 @@ func handle_cursor(p: Vector2, buttons: int, delta: float) -> void:
 	match variant:
 		"cut", "stitch":
 			_rules_cut(p, pressed)
-		"scoop", "seat":
+		"scoop":
 			_rules_scoop(p, pressed)
 		"snip":
 			_rules_snip(p, pressed, (buttons & BUTTON_UP) != 0, delta)
@@ -286,7 +334,7 @@ func _rules_scoop(p: Vector2, pressed: bool) -> void:
 	progress = clampf(turns / (TAU * SCOOP_TURNS), 0.0, 0.99)
 	if turns >= TAU * SCOOP_TURNS:
 		progress = 1.0
-		finish({"eye_seated": true} if variant == "seat" else {"eye_out": true})
+		finish({"eye_out": true})
 
 
 func _rules_snip(p: Vector2, pressed: bool, up: bool, delta: float) -> void:
@@ -319,6 +367,9 @@ func _rules_snip(p: Vector2, pressed: bool, up: bool, delta: float) -> void:
 
 
 func tick(delta: float) -> void:
+	if _seat != null:
+		_seat.tick(delta)
+		return
 	_t += delta
 	_dt = delta
 	_flash = maxf(0.0, _flash - delta)
@@ -331,6 +382,8 @@ func tick(delta: float) -> void:
 # ---------------------------------------------------------------------------- HUD / net
 
 func hud_state() -> Dictionary:
+	if _seat != null:
+		return _seat.hud_state()
 	var hint := _hint if _hint_t > 0.0 else ""
 	if hint == "":
 		match variant:
@@ -339,20 +392,38 @@ func hud_state() -> Dictionary:
 			"scoop":
 				hint = "Click to lower the spoon into the socket, then circle it slowly and lightly." if not down else "Circle the inside of the socket. Slowly."
 			"snip":
-				hint = "Hold W to pull the eye up. When the nerve shows, aim the scalpel at it and click."
-			"seat":
-				hint = "Click to lower the new eye into the socket, then circle it slowly to settle it in." if not down else "Circle slowly. It is nearly seated."
+				# Short: the controls line under it already says which keys (surgery_hud "keys").
+				hint = "Pull the eye up. When the nerve shows, aim at it and click."
 			"stitch":
 				hint = "Click to set the needle on the cut, then trace it round. The socket closes behind you." if not down else "Trace the cut. Not too fast."
-	return {"title": String(ctx.get("step", {}).get("label", "")), "hint": hint, "progress": progress, "gauges": []}
+	return {"title": String(ctx.get("step", {}).get("label", "")), "hint": hint, "progress": progress,
+		"gauges": [], "keys": keys()}
+
+
+## What the buttons do in this variant, right now.
+func keys() -> Array:
+	if _seat != null:
+		return _seat.keys()
+	match variant:
+		"snip":
+			return [["Hold W", "pull the eye up"], ["Mouse", "aim at the nerve"], ["Click", "snip it"]]
+		"scoop":
+			return [["Click", "lower the spoon"], ["Mouse", "circle the socket"]] if not down 				else [["Mouse", "circle it slowly"], ["Click", "lift the spoon"]]
+		_:
+			return [["Click", "lower the tool"], ["Mouse", "trace the marking"]] if not down 				else [["Mouse", "trace it slowly"], ["Click", "lift the tool"]]
 
 
 func net_state() -> Dictionary:
+	if _seat != null:
+		return _seat.net_state()
 	return {"d": down, "c": snappedf(cut, 0.01), "u": snappedf(turns, 0.02), "l": snappedf(lift, 0.01), "s": slips,
 		"cur": cursor, "t": snappedf(_t, 0.05), "p": snappedf(progress, 0.001), "sl": snappedf(_slice_t, 0.02)}
 
 
 func apply_net_state(s: Dictionary) -> void:
+	if _seat != null:
+		_seat.apply_net_state(s)
+		return
 	down = bool(s.get("d", down))
 	cut = float(s.get("c", cut))
 	turns = float(s.get("u", turns))
@@ -368,6 +439,8 @@ func apply_net_state(s: Dictionary) -> void:
 
 ## skill 1: slow and steady; skill 0: a heavy hand (too fast, so it slips and has to re-lower).
 func bot_input(t: float, skill: float) -> Dictionary:
+	if _seat != null:
+		return _seat.bot_input(t, skill)
 	var dt := clampf(t - _bt, 0.0, 0.1)
 	_bt = t
 	skill = clampf(skill, 0.0, 1.0)
@@ -382,7 +455,7 @@ func bot_input(t: float, skill: float) -> Dictionary:
 				var c := cursor.move_toward(front, 0.3 * bot_slow * dt)
 				return {"cursor": c, "buttons": BUTTON_PRIMARY if c.distance_to(front) < 0.006 and click and t > bot_hold else 0}
 			return {"cursor": cursor.move_toward(front, lerpf(0.12, 0.05, skill) * bot_slow * dt), "buttons": 0}
-		"scoop", "seat":
+		"scoop":
 			if not down:
 				var c := cursor.move_toward(Vector2(0.012, 0.0), 0.2 * dt)
 				return {"cursor": c, "buttons": BUTTON_PRIMARY if c.length() < 0.02 and click else 0}
@@ -437,10 +510,8 @@ func _build() -> void:
 	_mat_good = _unshaded(Color(0.35, 1.0, 0.55), 0.9)
 	_mat_bad = _unshaded(Color(1.0, 0.25, 0.2), 0.95)
 	# The eye (the scoop and snip draw their own; the cut leaves the body's).
-	if variant == "scoop" or variant == "snip" or variant == "seat":
+	if variant == "scoop" or variant == "snip":
 		_build_scoop_eye()
-		if variant == "seat" and _eye != null:
-			_eye.material_override = Eyes.material(eye_kind)   # the eye going IN, not the body's old one
 	elif variant != "cut" and variant != "stitch":
 		_eye = MeshInstance3D.new()
 		var sph := SphereMesh.new()
@@ -452,7 +523,7 @@ func _build() -> void:
 		_eye.material_override = Eyes.material(eye_kind)
 		add_child(_eye)
 	if part_site == "throat":
-		_as_trachea(_eye, eye_kind)
+		Eyes.as_trachea(_eye, eye_kind, eye_r)
 	match variant:
 		"cut", "stitch":
 			# The marking: dashes round the ring with a hash tick across every other one, in surgical violet.
@@ -487,7 +558,7 @@ func _build() -> void:
 					st_box.visible = false
 					_stitches.append(st_box)
 					_stitch_theta.append(sth)
-		"scoop", "seat":
+		"scoop":
 			# A dim dotted circle just outside the eye to circle along; dots turn green as the turns add up.
 			_mat_mark = _unshaded(Color(0.62, 0.5, 0.82), 0.6)
 			for i in 24:
@@ -545,7 +616,7 @@ func _build() -> void:
 			_flush.material_override = _flush_mat
 			_flush.visible = false
 			add_child(_flush)
-	_tool = _make_cut_scalpel() if (variant == "cut" or variant == "snip" or variant == "stitch") else (_make_scoop_spoon() if (variant == "scoop" or variant == "seat") else ItemModels.make("scalpel"))
+	_tool = _make_cut_scalpel() if (variant == "cut" or variant == "snip" or variant == "stitch") else (_make_scoop_spoon() if variant == "scoop" else ItemModels.make("scalpel"))
 	add_child(_tool)
 	_set_layers(self)
 
@@ -592,26 +663,6 @@ func _make_scoop_spoon() -> Node3D:
 
 ## The scoop's eye is a copy of the body's own eye (same mesh and material, same place), wrapped in a pivot at
 ## its centre so it can rock and lift; the body's eye is hidden while this plays. Without a body it is a sphere.
-## GRAFTING part two: the thing on the work plane is a length of windpipe, not an eyeball. The mesh
-## instance stays (every rule and animation drives it); only what it draws changes.
-func _as_trachea(mi: MeshInstance3D, kind: String) -> void:
-	if mi == null or not is_instance_valid(mi) or mi.has_node("TracheaPart"):
-		return
-	mi.mesh = null
-	mi.material_override = null
-	for c in mi.get_children():
-		c.queue_free()
-	var holder := Node3D.new()
-	holder.name = "TracheaPart"
-	# Built standing on its base and about 90 mm long: lay it down and shrink it to eyeball scale.
-	var k: float = eye_r / 0.0135 * 0.5
-	holder.scale = Vector3.ONE * k
-	holder.position = Vector3(0, 0, Eyes.TRACHEA_LEN * k * 0.5)
-	holder.basis = Basis(Vector3.RIGHT, deg_to_rad(-90.0))
-	mi.add_child(holder)
-	Eyes.build_trachea(holder, kind)
-
-
 func _build_scoop_eye() -> void:
 	_eye_pivot = Node3D.new()
 	add_child(_eye_pivot)
@@ -644,7 +695,7 @@ func _build_scoop_eye() -> void:
 		_eye_base = plane_to_local(Vector2.ZERO, eye_r * 0.85)
 		_eye_pivot.position = _eye_base
 	if part_site == "throat":
-		_as_trachea(_eye, eye_kind)
+		Eyes.as_trachea(_eye, eye_kind, eye_r)
 	var stalk_mat := StandardMaterial3D.new()
 	stalk_mat.albedo_color = Color(0.85, 0.7, 0.62)
 	stalk_mat.roughness = 0.3
@@ -856,10 +907,8 @@ func _update_visuals() -> void:
 			for i in _ring.size():
 				_ring[i].material_override = col
 				_ring[i].visible = _ring_theta[i] > cut
-		"scoop", "seat":
+		"scoop":
 			var k := clampf(turns / (TAU * SCOOP_TURNS), 0.0, 1.0)
-			if variant == "seat":
-				k = 1.0 - k   # the new eye comes down into the socket instead of rising out of it
 			# The eye rocks toward the spoon and lifts a little more each turn on its stalk; when the spoon
 			# slips out it settles back (the turns stay).
 			_eye_k = move_toward(_eye_k, k if down else k * 0.7, _dt * 0.5)

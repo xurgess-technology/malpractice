@@ -4,7 +4,7 @@ extends Node
 ## Grafting. A child "Grafts" of Game on every machine.
 ##
 ## The loop: a surgeon straps themselves to a free OR table (chunk B), somebody sets a specimen vat
-## holding a body part on that table's VAT STAND (vats.gd), and another surgeon operates. The part in
+## holding a body part on that table (vats.gd, `vat_on_table`), and another surgeon operates. The part in
 ## the vat decides which surgery it is -- an eyeball is Eyeball Grafting, a trachea is Trachea
 ## Grafting -- and the part that comes out goes into the same vat, so a graft is always a swap and
 ## never an empty socket. Nothing can be botched (the case sets `no_fail`) and the patient is awake
@@ -28,6 +28,12 @@ const PART_ABILITY := {"eye_hive": "hive_in", "trachea_sonographer": "echo"}
 const SITE_AILMENT := {"eye": "eye_graft", "throat": "trachea_graft"}
 ## The eyeball's radius on a surgeon (the minigames' work plane).
 const EYE_RADIUS := 0.0135
+## And on the body afterwards: the size of the eye it replaces (GraftEye.RADIUS). Bigger pokes
+## through the lids.
+const BODY_EYE_RADIUS := GraftEye.RADIUS
+## What the eye rests at. Your own torch never lights your own face, so at a flat 0 the grafted eye
+## was nothing but a pinpoint in the mirror; a low ember reads as a Hive eye without flaring.
+const LOCK_IDLE := 0.22
 ## How fast a graft's `lock` climbs and falls as its ability starts and stops.
 const LOCK_RATE := 3.0
 ## How long a grafted throat burns after Echo fires. Brains only keeps the half-second shriek POSE,
@@ -88,19 +94,19 @@ func apply_net_state(s: Dictionary) -> void:
 
 # =============================================================================== the offer and its refusals
 
-## The vat standing on the stand of the table `p` is strapped to, or null.
+## The vat standing on the table `p` is strapped to, or null.
 func vat_for(p) -> Node:
 	if p == null or game == null or game.vats == null:
 		return null
 	var ti := int(game.player_table.get("index", -1))
 	if ti >= 0:
-		return game.vats.vat_on_stand(ti)
+		return game.vats.vat_on_table(ti)
 	# A level with a player table of its own has no table index: go by where the table is.
-	var i: int = game.vats.nearest_stand(game.player_table_top())
-	return game.vats.vat_at(game.vats.stands[i].position as Vector3) if i >= 0 else null
+	var i: int = game.vats.nearest_place(game.player_table_top())
+	return game.vats.vat_at(game.vats.places[i].position as Vector3) if i >= 0 else null
 
 
-## The graft site the vat on `p`'s stand would operate on ("eye", "throat"), or "".
+## The graft site the vat on `p`'s table would operate on ("eye", "throat"), or "".
 func site_for(p) -> String:
 	var vat := vat_for(p)
 	if vat == null:
@@ -118,7 +124,7 @@ static func first_tool(site: String) -> String:
 ## What the table offers `q` while a surgeon lies strapped to it: "Operate: ..." , a "!reason", or ""
 ## when no graft is on offer at all. A pure function of replicated state, so every machine says the
 ## same thing. The refusals are the ones docs/GRAFTING.md and docs/GRAFTING_TRACHEA.md list: no vat
-## on the stand, the part is spoiled, they already have one, nobody strapped down.
+## on the table, the part is spoiled, they already have one, nobody strapped down.
 func table_prompt(q) -> String:
 	if game == null or q == null or not q.alive or q.downed or q.on_table:
 		return ""
@@ -129,10 +135,10 @@ func table_prompt(q) -> String:
 		return "!You cannot operate on yourself."
 	var vat := vat_for(p)
 	if vat == null:
-		return "!No vat on the stand beside the table."
+		return "!No vat on the table."
 	var d := Eyes.unpack(String(vat.x))
 	if d.is_empty():
-		return "!The vat on the stand is empty."
+		return "!The vat on the table is empty."
 	var kind := String(d.kind)
 	var owner := String(d.owner)
 	var site := Eyes.site_of(kind)
@@ -160,7 +166,7 @@ func empty_table_prompt(q, table_index: int) -> String:
 	var kind := String(q.selected_stack().get("kind", "")) if q.has_method("selected_stack") else ""
 	if not ["scalpel", "eye_spoon", "forceps", "suture_kit"].has(kind):
 		return ""
-	var vat: Node = game.vats.vat_on_stand(table_index)
+	var vat: Node = game.vats.vat_on_table(table_index)
 	if vat == null or String(vat.x) == "":
 		return ""
 	return "!Nobody is strapped to this table."
@@ -195,12 +201,12 @@ func make_case(q) -> Dictionary:
 	}
 
 
-## Host: a graft step finished. The lift is the moment the swap happens: the old part drops into the
-## vat and the vat's part comes up onto the stand, ready to be seated.
+## Host: a graft step finished. The seat is the moment the swap happens: the forceps have just taken
+## the new part out of the vat and put it in, so the old one goes into the vat they emptied.
 func on_step(case: Dictionary, result: Dictionary) -> void:
 	if game == null or not game.is_host() or case.is_empty():
 		return
-	if not bool(result.get("eye_out", false)):
+	if not bool(result.get("eye_seated", false)) and not bool(result.get("part_seated", false)):
 		return
 	var p = game.players.get(int(case.get("player_id", 0)))
 	var vat := vat_for(p)
@@ -316,8 +322,14 @@ func _physics_process(delta: float) -> void:
 		var locks: Dictionary = _lock.get(peer, {})
 		for site in Eyes.SITES:
 			var kind := String(mine.get(site, ""))
-			# The part swap on the body: third person, other players' screens and the mirrors.
-			if String(shown.get(site, "")) != kind:
+			# The part swap on the body: third person, other players' screens and the mirrors. The
+			# body's human model is thrown away and rebuilt whenever what it has to show changes
+			# (getting up off the table, the mirror's own body, a new stand-in), and the graft goes
+			# with it, so what is remembered carries the model instance: a rebuilt body gets its
+			# graft put back on.
+			var key := "%s|%d" % [kind, human.get_instance_id()]
+			var on_body: bool = (ThroatScript.node_on(human) != null) if site == "throat" 					else (PartScript.node_on(human) != null)
+			if String(shown.get(site, "")) != key or (kind != "" and not on_body):
 				var ok := true
 				if site == "throat":
 					if kind == "":
@@ -327,11 +339,11 @@ func _physics_process(delta: float) -> void:
 				elif kind == "":
 					PartScript.detach(human)
 				else:
-					ok = PartScript.attach(human, kind, EYE_RADIUS) != null
+					ok = PartScript.attach(human, kind, BODY_EYE_RADIUS) != null
 				# Only remember it once it actually went on: a model that is still building has no
 				# skeleton yet, and the next frame should try again.
 				if ok:
-					shown[site] = kind
+					shown[site] = key
 			if kind == "":
 				locks.erase(site)
 				continue
@@ -341,7 +353,10 @@ func _physics_process(delta: float) -> void:
 			if site == "throat":
 				ThroatScript.set_lock(ThroatScript.node_on(human), v)
 			else:
-				PartScript.set_lock(PartScript.node_on(human), v)
+				# The eye never goes fully dark: LOCK_IDLE is its resting ember. The first-person
+				# tint keeps reading the raw value (local_lock), so an eye you are not using still
+				# looks quiet from inside.
+				PartScript.set_lock(PartScript.node_on(human), maxf(v, LOCK_IDLE))
 		_shown[peer] = shown
 		_lock[peer] = locks
 
