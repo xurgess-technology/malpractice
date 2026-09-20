@@ -4,7 +4,7 @@ extends Node
 ##
 ## The loop: a surgeon straps themselves to a free OR table (chunk B), somebody sets a specimen vat
 ## holding an eye on that table's VAT STAND (vats.gd), and another surgeon operates. Four steps --
-## scalpel cut, eye spoon scoop the old eye out, eye spoon seat the new one, suture kit stitch it in
+## scalpel cut, eye spoon scoop the old eye out, forceps seat the new one, suture kit stitch it in
 ## (Procedures.AILMENTS.eye_graft). The eye that comes out goes into the same vat, so a graft is
 ## always a swap and never an empty socket. Nothing can be botched (the case sets `no_fail`) and the
 ## patient is awake the whole time, looking up at it.
@@ -23,8 +23,15 @@ const LootTable := preload("res://scripts/economy/loot_table.gd")
 const PART_ABILITY := {"eye_hive": "hive_in"}
 ## The eyeball's radius on a surgeon (the minigames' work plane).
 const EYE_RADIUS := 0.0135
+## And on the body afterwards: the size of the eye it replaces (GraftEye.RADIUS). It used to be a
+## shade bigger to read better, but that was making up for the pupil facing into the skull; a bigger
+## ball pokes through the lids.
+const BODY_EYE_RADIUS := GraftEye.RADIUS
 ## How fast the Hive eye's `Lock` climbs and falls as Hive Eyes starts and stops.
 const LOCK_RATE := 3.0
+## What it rests at. Your own torch never lights your own face, so at a flat 0 the grafted eye was
+## nothing but a pinpoint in the mirror; a low ember reads as a Hive eye without flaring.
+const LOCK_IDLE := 0.22
 
 var game: Node = null
 
@@ -70,21 +77,21 @@ func apply_net_state(s: Dictionary) -> void:
 
 # =============================================================================== the offer and its refusals
 
-## The vat standing on the stand of the table `p` is strapped to, or null.
+## The vat standing on the table `p` is strapped to, or null.
 func vat_for(p) -> Node:
 	if p == null or game == null or game.vats == null:
 		return null
 	var ti := int(game.player_table.get("index", -1))
 	if ti >= 0:
-		return game.vats.vat_on_stand(ti)
+		return game.vats.vat_on_table(ti)
 	# A level with a player table of its own has no table index: go by where the table is.
-	var i: int = game.vats.nearest_stand(game.player_table_top())
-	return game.vats.vat_at(game.vats.stands[i].position as Vector3) if i >= 0 else null
+	var i: int = game.vats.nearest_place(game.player_table_top())
+	return game.vats.vat_at(game.vats.places[i].position as Vector3) if i >= 0 else null
 
 
 ## What the table offers `q` while a surgeon lies strapped to it: "Operate: ..." , a "!reason", or ""
 ## when the graft is not on offer at all. A pure function of replicated state, so every machine says
-## the same thing. The refusals are the ones docs/GRAFTING.md lists: no vat on the stand, the eye is
+## the same thing. The refusals are the ones docs/GRAFTING.md lists: no vat on the table, the eye is
 ## spoiled, they already have one, nobody is strapped down.
 func table_prompt(q) -> String:
 	if game == null or q == null or not q.alive or q.downed or q.on_table:
@@ -96,10 +103,10 @@ func table_prompt(q) -> String:
 		return "!You cannot operate on yourself."
 	var vat := vat_for(p)
 	if vat == null:
-		return "!No vat on the stand beside the table."
+		return "!No vat on the table."
 	var d := Eyes.unpack(String(vat.x))
 	if d.is_empty():
-		return "!The vat on the stand is empty."
+		return "!The vat on the table is empty."
 	var kind := String(d.kind)
 	var owner := String(d.owner)
 	var have := graft_of(int(p.peer_id))
@@ -121,9 +128,9 @@ func empty_table_prompt(q, table_index: int) -> String:
 	if game == null or q == null or game.vats == null:
 		return ""
 	var kind := String(q.selected_stack().get("kind", "")) if q.has_method("selected_stack") else ""
-	if kind != "scalpel" and kind != "eye_spoon":
+	if kind != "scalpel" and kind != "eye_spoon" and kind != "forceps":
 		return ""
-	var vat: Node = game.vats.vat_on_stand(table_index)
+	var vat: Node = game.vats.vat_on_table(table_index)
 	if vat == null or String(vat.x) == "":
 		return ""
 	return "!Nobody is strapped to this table."
@@ -155,12 +162,13 @@ func make_case(q) -> Dictionary:
 	}
 
 
-## Host: a graft step finished. The scoop is the moment the swap happens: the old eye drops into the
-## vat and the vat's eye comes up onto the stand, ready to be seated.
+## Host: a graft step finished. The seat is the moment the swap happens: the forceps have just taken
+## the new eye out of the vat and put it in, so the old one goes into the vat they emptied. (It used
+## to happen at the scoop, which left you reaching into a vat that already held your own eye.)
 func on_step(case: Dictionary, result: Dictionary) -> void:
 	if game == null or not game.is_host() or case.is_empty():
 		return
-	if not bool(result.get("eye_out", false)):
+	if not bool(result.get("eye_seated", false)):
 		return
 	var p = game.players.get(int(case.get("player_id", 0)))
 	var vat := vat_for(p)
@@ -223,13 +231,19 @@ func _physics_process(delta: float) -> void:
 			continue
 		var peer := int(p.peer_id)
 		var kind := graft_of(peer)
+		var human := _human_of(p)
 		# The eye swap on the body: third person, other players' screens and the Personnel mirrors.
-		if String(_shown.get(peer, "")) != kind:
-			_shown[peer] = kind
+		# The body's human model is thrown away and rebuilt whenever what it has to show changes
+		# (getting up off the table, the mirror's own body, a new stand-in), and the graft goes with
+		# it, so the key carries the model instance: a rebuilt body gets its eye put back on. The
+		# graft used to be remembered by kind alone, which is why it vanished after the operation.
+		var key := "%s|%d" % [kind, human.get_instance_id() if human != null else 0]
+		if String(_shown.get(peer, "?")) != key or (kind != "" and PartScript.node_on(human) == null):
+			_shown[peer] = key
 			if kind == "":
-				PartScript.detach(_human_of(p))
+				PartScript.detach(human)
 			else:
-				PartScript.attach(_human_of(p), kind, EYE_RADIUS)
+				PartScript.attach(human, kind, BODY_EYE_RADIUS)
 		if kind == "":
 			continue
 		# The glow: low normally, high while they are in Hive Eyes. Replicated, because `hive_view`
@@ -237,7 +251,9 @@ func _physics_process(delta: float) -> void:
 		var want := 1.0 if bool(p.get("hive_view")) else 0.0
 		var v := move_toward(float(_lock.get(peer, 0.0)), want, delta * LOCK_RATE)
 		_lock[peer] = v
-		PartScript.set_lock(PartScript.node_on(_human_of(p)), v)
+		# The eye never goes fully dark: LOCK_IDLE is its resting ember. The first-person tint keeps
+		# reading the raw value (local_lock), so a graft you are not using still looks quiet from inside.
+		PartScript.set_lock(PartScript.node_on(human), maxf(v, LOCK_IDLE))
 
 
 func _human_of(p) -> Node:

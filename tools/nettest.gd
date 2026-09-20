@@ -1061,14 +1061,14 @@ func _sc_graft():
 		var table: int = game.free_patient_table()
 		if table < 0:
 			return _end(false, "no free table for the graft")
-		var si: int = game.vats.stand_of_table(table)
+		var si: int = game.vats.place_of_table(table)
 		if si < 0:
-			return _end(false, "table %d has no vat stand" % table)
+			return _end(false, "table %d has no vat place" % table)
 		var patient = game.players.get(_peer_of(1))
 		var op = game.local_player()
-		# The vat with a fresh Hive eyeball, on the stand beside the table.
+		# The vat with a fresh Hive eyeball, standing on the table.
 		var yaw: float = game.table_yaw_of(table)
-		var vat: Node = game._spawn_item("specimen_vat", 1, Transform3D(Basis(Vector3.UP, yaw), game.vats.stands[si].position), WorldItem.State.LOOSE)
+		var vat: Node = game._spawn_item("specimen_vat", 1, Transform3D(Basis(Vector3.UP, yaw), game.vats.places[si].position), WorldItem.State.LOOSE)
 		vat.x = Eyes.pack("eye_hive", "", 0.0, 120)
 		patient.teleport(game._floor_at(game.table_position(table) + Vector3(0, 0, 1.2).rotated(Vector3.UP, yaw)))
 		await _frames(4)
@@ -1081,7 +1081,7 @@ func _sc_graft():
 		var ps: Node = game.player_surgery
 		var sys: Node = ps.surgery
 		sys.bot_skill = 1.0   # the player table's own system, with its own stand-in game
-		for step in [["scalpel", "cut"], ["eye_spoon", "scoop"], ["eye_spoon", "seat"], ["suture_kit", "stitch"]]:
+		for step in [["scalpel", "cut"], ["eye_spoon", "scoop"], ["forceps", "grab"], ["suture_kit", "stitch"]]:
 			for i in op.slots.size():
 				op.slots[i] = Player.empty_slot()
 			game.give_hand(op, String(step[0]), 1)

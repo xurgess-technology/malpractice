@@ -114,7 +114,9 @@ const P := {
 	"doormat": {"size": Vector3(1.5, 0.04, 0.83), "collide": false},
 	"directory_board": {"size": Vector3(1.4, 1.1, 0.06), "mount": 0.9},
 	# ---- operating room --------------------------------------------------------
-	"or_table": {"size": Vector3(2.2, 0.945, 0.7), "block": true},
+	# 2026-09-19: a big rectangular steel prep table (four legs, a brace and a drawer), not the old
+	# narrow pedestal one: room on the top for the patient AND the tray, trays and tools beside them.
+	"or_table": {"size": Vector3(2.4, 0.945, 1.1), "block": true},
 	"surgical_lamp": {"size": Vector3(0.9, 0.9, 0.9), "collide": false},
 	"anesthesia_cart": {"size": Vector3(0.7, 1.6, 0.6), "block": true},
 	"crash_cart": {"size": Vector3(0.8, 1.1, 0.6), "block": true},

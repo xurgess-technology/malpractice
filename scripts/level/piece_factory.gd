@@ -1092,13 +1092,27 @@ static func _primitive(kind: String) -> ArrayMesh:
 		"doormat":
 			g.box(Vector3(1.5, 0.02, 0.83), Vector3(0, 0.01, 0), Color(0.15, 0.15, 0.14))
 		"or_table":
-			g.box(Vector3(0.7, 0.06, 0.5), Vector3(0, 0.03, 0), DARK_STEEL)
-			g.box(Vector3(0.3, 0.72, 0.26), Vector3(0, 0.42, 0), CHROME)
-			g.box(Vector3(2.1, 0.08, 0.62), Vector3(0, 0.82, 0), STEEL)
-			g.box(Vector3(2.16, 0.09, 0.56), Vector3(0, 0.9, 0), Color(0.08, 0.09, 0.1))
-			g.box(Vector3(0.34, 0.07, 0.22), Vector3(0.98, 0.97, 0), Color(0.08, 0.09, 0.1))
-			for sz in [-0.33, 0.33]:
-				g.box(Vector3(2.0, 0.03, 0.02), Vector3(0, 0.84, sz), CHROME)
+			# 2026-09-19: a stainless prep table. One flat rectangular top, a hair proud of four
+			# square-tube legs, a brace near the floor, leveling feet, a shallow drawer under one
+			# end and a row of hooks under the near lip. The top is 0.945 (Game.OR_TABLE_TOP): the
+			# patient lies down the middle with a clear strip of steel either side of them.
+			g.box(Vector3(2.4, 0.045, 1.1), Vector3(0, 0.9225, 0), Color(0.34, 0.37, 0.39))
+			g.box(Vector3(2.36, 0.035, 1.06), Vector3(0, 0.884, 0), DARK_STEEL)   # the folded edge
+			for sx in [-1.11, 1.11]:
+				for sz in [-0.46, 0.46]:
+					g.box(Vector3(0.055, 0.83, 0.055), Vector3(sx, 0.45, sz), CHROME)
+					g.cyl(0.026, 0.07, Vector3(sx, 0.035, sz), DARK, "y", 8)     # leveling foot
+			for sz in [-0.46, 0.46]:
+				g.box(Vector3(2.18, 0.035, 0.035), Vector3(0, 0.19, sz), CHROME)
+			for sx in [-1.11, 0.0, 1.11]:
+				g.box(Vector3(0.035, 0.035, 0.88), Vector3(sx, 0.19, 0), CHROME)
+			# The drawer under the head end, its front on the side you operate from.
+			g.box(Vector3(0.52, 0.115, 0.5), Vector3(-0.72, 0.822, 0.2), DARK_STEEL)
+			g.box(Vector3(0.54, 0.135, 0.02), Vector3(-0.72, 0.822, 0.46), Color(0.46, 0.49, 0.51))
+			g.cyl(0.011, 0.26, Vector3(-0.72, 0.822, 0.485), CHROME, "x", 6)
+			for hx in [0.0, 0.26, 0.52, 0.78]:
+				g.cyl(0.005, 0.055, Vector3(hx, 0.856, 0.5), CHROME, "y", 5)
+				g.cyl(0.005, 0.03, Vector3(hx, 0.831, 0.487), CHROME, "z", 5)
 		"surgical_lamp":
 			g.cyl(0.03, 0.5, Vector3(0, 2.75, 0), DARK_STEEL, "y", 6)
 			g.box(Vector3(0.7, 0.04, 0.05), Vector3(0.3, 2.5, 0), DARK_STEEL)
