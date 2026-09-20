@@ -19,6 +19,7 @@ const PATIENTS := {
 		"blurbs": {
 			"gunshot": "Says he was cleaning it. It was not loaded, apparently.",
 			"amputation": "Scraped his arm on a fence in June. Did not get it looked at.",
+			"laceration": "Lost an argument with a bandsaw. Says the bandsaw started it.",
 		},
 	},
 	"seal": {
@@ -31,6 +32,7 @@ const PATIENTS := {
 		"blurbs": {
 			"gunshot": "Found behind the loading dock. Nobody is admitting to anything.",
 			"amputation": "Tangled in fishing line for weeks. The flipper has to go.",
+			"laceration": "Came off the rocks at speed. Opened up along one side and is very calm about it.",
 		},
 	},
 	# dissection (sweep 3): strapped monsters. `monster: true` keeps them out of roll(), the dev
@@ -83,6 +85,20 @@ const AILMENTS := {
 			{"id": "tourniquet", "label": "Apply the tourniquet", "item": "tourniquet", "uses": 0, "game": "tourniquet", "site": "limb"},
 			{"id": "cut", "label": "Saw through the limb", "item": "bone_saw", "uses": 0, "game": "saw", "site": "limb_cut"},
 			{"id": "dress", "label": "Dress the stump", "item": "gauze", "uses": 2, "game": "gauze", "variant": "stump", "site": "limb_cut"},
+		],
+	},
+	# PANEL TESTBED (docs/PANEL_STYLE.md): a one-step procedure that exists to try the panel
+	# presentation out. `test_only` keeps it out of roll() -- a normal shift never brings one in --
+	# while leaving it in the dev panel's ailment list and the minigame lab. `presedated` starts the
+	# case's flags with sedation 1.0, so there is nothing to sedate and the patient never stirs.
+	# It borrows the `gunshot` site marker (see docs/KNOWN_ISSUES.md: it wants a generic torso site).
+	"laceration": {
+		"name": "Deep laceration",
+		"code": "LAC",
+		"test_only": true,
+		"presedated": true,
+		"steps": [
+			{"id": "close", "label": "Stitch the laceration shut", "item": "suture_kit", "uses": 1, "game": "suture", "site": "gunshot"},
 		],
 	},
 	# downed (sweep 2 wave 3): a downed teammate on the OR's player table. `player_only` keeps it
@@ -148,6 +164,7 @@ const MINIGAME_SCRIPTS := {
 	"gauze": "res://scripts/surgery/games/gauze.gd",
 	"stitches": "res://scripts/surgery/games/stitches.gd",
 	"eye": "res://scripts/surgery/games/eye_ops.gd",   # GRAFTING part one: cut / scoop / snip
+	"suture": "res://scripts/surgery/games/suture.gd", # PANEL TESTBED: the deep laceration
 }
 
 
@@ -163,15 +180,37 @@ static func roll(seed_value: int, shift: int) -> Dictionary:
 	}
 
 
-## Ailments a patient case can have, sorted (everything but the player-only ones such as stitches
-## and the monster-only dissection).
+## Ailments a patient case can have, sorted (everything but the player-only ones such as stitches,
+## the monster-only dissection and the test-only ones a shift never rolls).
 static func patient_ailments() -> Array:
 	var out := []
 	for id in AILMENTS.keys():
-		if not bool(AILMENTS[id].get("player_only", false)) and not bool(AILMENTS[id].get("monster_only", false)):
+		var a: Dictionary = AILMENTS[id]
+		if not bool(a.get("player_only", false)) and not bool(a.get("monster_only", false)) 				and not bool(a.get("test_only", false)):
 			out.append(id)
 	out.sort()
 	return out
+
+
+## PANEL TESTBED: what the dev panel and the warmup offer for a patient on a table, sorted: every
+## rollable ailment plus the test-only ones. A shift still only ever rolls patient_ailments().
+static func dev_ailments() -> Array:
+	var out := patient_ailments()
+	for id in AILMENTS.keys():
+		if bool(AILMENTS[id].get("test_only", false)):
+			out.append(id)
+	out.sort()
+	return out
+
+
+## PANEL TESTBED: a testbed procedure, never rolled into a shift.
+static func is_test_only(ailment_id: String) -> bool:
+	return bool(AILMENTS.get(ailment_id, {}).get("test_only", false))
+
+
+## Whether a case of this ailment arrives already sedated (nothing to inject, and no stirring).
+static func is_presedated(ailment_id: String) -> bool:
+	return bool(AILMENTS.get(ailment_id, {}).get("presedated", false))
 
 
 static func is_player_only(ailment_id: String) -> bool:

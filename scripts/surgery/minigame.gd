@@ -64,8 +64,35 @@ func plane_extent() -> Vector2:
 ##   height: metres above the plane along its +Y
 ##   back: metres pulled back along the plane's +Z so the view is slightly angled
 ##   fov: camera field of view
+##   look: metres along the plane's +Y to the point the camera aims at (0, the site itself, for
+##     every work-plane step; a PANEL step aims at its panel, which floats above the site)
 func camera_pose() -> Dictionary:
 	return {"height": 0.55, "back": 0.18, "fov": 55.0}
+
+
+## PANEL TESTBED (docs/PANEL_STYLE.md): true when this step is played on a SurgeryPanel floating
+## over the site -- an openly 2D diagram facing the leaned-in camera -- instead of on the work plane
+## laid on the patient. Opt-in: every step that does not override this behaves exactly as before.
+func uses_panel() -> bool:
+	return false
+
+
+## The plane the operator's cursor is projected onto. The work plane (this node) by default; a panel
+## step returns its panel's plane, so the mouse lands on the diagram (scripts/surgery/panel/).
+## plane_extent() is the half-size of whichever plane this is.
+func input_plane() -> Transform3D:
+	return global_transform
+
+
+## Shared by the surgery system and the lab: the operating camera for `pose` at `site`, as
+## [Transform3D, fov]. Honours the pose's optional "look" lift (see camera_pose).
+static func pose_camera(site: Transform3D, pose: Dictionary) -> Array:
+	var up := site.basis.y.normalized()
+	var back := site.basis.z.normalized()
+	var pos := site.origin + up * float(pose.get("height", 0.55)) + back * float(pose.get("back", 0.18))
+	var at := site.origin + up * float(pose.get("look", 0.0))
+	var upv := -back if absf(up.dot(Vector3.UP)) > 0.9 else Vector3.UP
+	return [Transform3D(Basis.looking_at(at - pos, upv), pos), float(pose.get("fov", 55.0))]
 
 
 ## Operator only. `p` is the cursor on the plane in metres (clamped to plane_extent),

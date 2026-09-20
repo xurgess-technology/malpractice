@@ -142,7 +142,7 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	var bodies := {}
 	var bx := -0.6
 	for pid in Procedures.human_patients():
-		for ail in Procedures.patient_ailments():
+		for ail in Procedures.dev_ailments():   # PANEL TESTBED: the laceration testbed warms up too
 			var b: Node3D = BodyScript.create(pid)
 			shelf.add_child(b)
 			b.position = Vector3(bx, -0.3, -0.8)
@@ -333,6 +333,9 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 					"step": step, "variant": step.get("variant", ""), "shift": 1,
 					"difficulty": 1.0, "flags": {"sedation": 1.0, "tourniquet": 0.4},
 					"seed": 7 + i, "body": body, "operator": false,
+					# PANEL TESTBED: a panel step builds and draws its panel while somebody operates,
+					# so warm it here or the first real open compiles the shader mid-step.
+					"operating": true,
 					# GRAFTING chunk C: the graft's own knobs, so the eye steps build the eye going IN
 					# (the Hive eyeball's shader) and the forceps seat step's tray, nerve and cues here.
 					"no_fail": true, "eye_kind": "eye_surgeon", "eye_kind_in": "eye_hive",

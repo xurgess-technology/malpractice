@@ -1904,6 +1904,10 @@ func add_case(c: Dictionary) -> int:
 	nc["ailment_id"] = String(c.get("ailment_id", "gunshot"))
 	nc["step_index"] = int(c.get("step_index", 0))
 	nc["flags"] = (c.get("flags", {}) as Dictionary).duplicate(true)
+	# PANEL TESTBED: a `presedated` ailment (Procedures.is_presedated) arrives already under, so
+	# there is no anesthetic step and the patient never stirs. An explicit flag still wins.
+	if Procedures.is_presedated(String(nc.ailment_id)) and not (nc.flags as Dictionary).has("sedation"):
+		nc.flags["sedation"] = 1.0
 	nc["vitals"] = float(c.get("vitals", 100.0))
 	nc["state"] = String(c.get("state", "on_table" if table >= 0 else "incoming"))
 	if c.has("player_id"):

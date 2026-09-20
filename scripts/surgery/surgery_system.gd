@@ -350,6 +350,9 @@ func physics_tick(delta: float) -> void:
 		elif game.is_host():
 			_drive_bot_operator(delta)
 		if mg != null:
+			# PANEL TESTBED: is ANYONE operating this table? `operator` is only true on the operating
+			# machine; a panel has to exist on every machine, so onlookers see it in the room too.
+			mg.ctx["operating"] = operator_id != 0
 			mg.tick(delta)
 		_mg_t += delta
 	_update_camera(delta)
@@ -484,6 +487,8 @@ func _spawn_mg() -> void:
 		"seed": hash("%s|%d" % [mg_key, int(game.get("seed_value") if game.get("seed_value") != null else 0)]),
 		"body": body,
 		"operator": false,
+		# PANEL TESTBED: which table this is, for the panel's header.
+		"table": table_index,
 		"helper_lights": _helper_lights,
 		# GRAFTING: the specimen vat standing on this table, for the forceps steps that take an eye
 		# out of it or put one in. Every machine looks it up for itself; null when there is none.
@@ -646,7 +651,8 @@ func _drive(delta: float) -> void:
 		buttons = int(inp.get("buttons", 0))
 	elif _cam_blend > 0.7:
 		var vp := get_viewport()
-		var hit = MinigameBase.screen_to_plane(_cam, vp.get_mouse_position(), mg.global_transform)
+		# PANEL TESTBED: a panel step's input plane is its panel, not the work plane on the patient.
+		var hit = MinigameBase.screen_to_plane(_cam, vp.get_mouse_position(), mg.input_plane())
 		if hit != null:
 			_cursor = hit
 		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
@@ -783,14 +789,9 @@ func _body_stir(strength: float) -> void:
 func _pose() -> Transform3D:
 	if mg == null:
 		return _last_pose
-	var site := mg.global_transform
-	var pose: Dictionary = mg.camera_pose()
-	var up := site.basis.y.normalized()
-	var back := site.basis.z.normalized()
-	var pos := site.origin + up * float(pose.get("height", 0.55)) + back * float(pose.get("back", 0.18))
-	var upv := -back if absf(up.dot(Vector3.UP)) > 0.9 else Vector3.UP
-	_last_pose = Transform3D(Basis.looking_at(site.origin - pos, upv), pos)
-	_last_pose_fov = float(pose.get("fov", 55.0))
+	var cam: Array = MinigameBase.pose_camera(mg.global_transform, mg.camera_pose())
+	_last_pose = cam[0]
+	_last_pose_fov = float(cam[1])
 	return _last_pose
 
 

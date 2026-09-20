@@ -321,7 +321,9 @@ func _build() -> void:
 	_section(col, "Patient")
 	var p1 := _row(col)
 	var pids: Array = Procedures.human_patients()  # SWEEP 3 HOOK (dissection): monsters strap below
-	var aids: Array = Procedures.patient_ailments()  # downed hook: stitches is for players only
+	# downed hook: stitches is for players only. PANEL TESTBED: dev_ailments adds the test-only
+	# procedures (Deep laceration), which a shift never rolls but the panel is tried out with.
+	var aids: Array = Procedures.dev_ailments()
 	var patients := _option(p1, pids.map(func(k): return Procedures.patient(k).name))
 	var ailments := _option(p1, aids.map(func(k): return Procedures.ailment(k).name))
 	patients.size_flags_horizontal = Control.SIZE_EXPAND_FILL

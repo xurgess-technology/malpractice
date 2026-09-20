@@ -4,10 +4,11 @@ extends Node3D
 ##   godot --path . tools/minigame_lab.tscn -- --game=forceps [--patient=bob|seal]
 ##         [--ailment=gunshot|amputation] [--variant=pack|stump] [--bot=1.0] [--seconds=40]
 ##         [--shot=res://tools/lab_shots/forceps.png] [--shot-at=6.0] [--flags=sedation:0.6,tourniquet:0.9]
-##         [--seed=N] [--wide] [--nohud] [--look=or] [--selftest=<game>]
+##         [--seed=N] [--wide] [--nohud] [--look=or] [--selftest=<game>] [--sedation=0.4]
 ##         [--teammate-light[=nohelp|away]] [--teammate-aim=dx,dz]
 ##
 ## --flags with sedation under 0.75 makes the patient stir the way the surgery system does.
+## --sedation=0.4 is shorthand for --flags=sedation:0.4, to exercise a step's on_jolt.
 ## --look=or lights it like the game: the hospital environment and post effects, a dim ceiling
 ##   light and the surgery system's work lamp on the camera (the default lab light is much brighter).
 ## --nohud hides the lab's text overlay (to judge a screenshot without the hint).
@@ -87,6 +88,7 @@ func _ready() -> void:
 			"selftest": self_test = v
 			"nohud": nohud = true
 			"look": look = v
+			"sedation": flags["sedation"] = float(v)
 			"teammate-light": teammate_light = v if v != "" else "help"
 			"teammate-aim":
 				var av := v.split(",")
@@ -108,6 +110,8 @@ func _ready() -> void:
 			patient_id = "player"
 		if game_id == "eye" and patient_id == "player":   # GRAFTING chunk C: the graft on a surgeon
 			ailment_id = "eye_graft"
+		if game_id == "suture":   # PANEL TESTBED: the one-step deep laceration
+			ailment_id = "laceration"
 	var step := _find_step()
 	if variant == "" and step.has("variant"):
 		variant = step.variant
@@ -150,6 +154,8 @@ func _ready() -> void:
 		"ailment_id": ailment_id, "step": step, "variant": variant,
 		"shift": 1, "difficulty": Procedures.difficulty(1), "flags": flags,
 		"seed": seed_value if seed_value >= 0 else hash(game_id + patient_id), "body": body, "operator": true,
+		# PANEL TESTBED: somebody IS at the table in the lab, so a panel step opens its panel.
+		"operating": true,
 	}
 	if ailment_id == "eye_graft":
 		# GRAFTING chunk C: the knobs grafts.gd puts in the case's flags, so the lab plays the eye
@@ -166,12 +172,9 @@ func _ready() -> void:
 
 	cam = Camera3D.new()
 	add_child(cam)
-	var pose: Dictionary = mg.camera_pose()
-	var up := site.basis.y.normalized()
-	var back := site.basis.z.normalized()
-	cam.global_position = site.origin + up * float(pose.get("height", 0.55)) + back * float(pose.get("back", 0.18))
-	cam.look_at(site.origin, -back if absf(up.dot(Vector3.UP)) > 0.9 else Vector3.UP)
-	cam.fov = float(pose.get("fov", 55.0))
+	var shot: Array = MinigameBase.pose_camera(site, mg.camera_pose())
+	cam.global_transform = shot[0]
+	cam.fov = float(shot[1])
 	if wide:
 		# Pulled back and to the side, to judge the body around the site (infection, severed limb).
 		cam.global_position = site.origin + Vector3(0.25, 0.75, 0.55)

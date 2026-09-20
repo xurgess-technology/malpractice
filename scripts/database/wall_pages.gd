@@ -40,6 +40,7 @@ const MONSTER_TEXT := {
 const PROCEDURE_TEXT := {
 	"gunshot": "A bullet is still inside the patient. Get it out and stop the bleeding.",
 	"amputation": "An infected limb that can't be saved. Take it off before the infection spreads.",
+	"laceration": "A deep cut that won't close on its own. Stitch it shut.",
 	"stitches": "A downed teammate with a deep gash. Stitch it shut and they get back up.",
 	"dissection": "A sedated monster on the table. Open the skull and pull out the brain.",
 	"eye_extraction": "A strapped Hive on the table. Hold the scalpel to start: cut round the eye, scoop it out, snip the nerve, then lift it into the specimen vat standing on the table with the forceps.",

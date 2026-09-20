@@ -25,6 +25,8 @@ const GAME_HOW := {
 	"gauze:pack": "Pack the wound with even tension.",
 	"gauze:stump": "Wrap the stump with even tension.",
 	"gauze": "Pack the wound or wrap the stump with even tension.",
+	# PANEL TESTBED: the deep laceration's one step.
+	"suture": "Stitch across the gash, a bite either side, until every section holds.",
 }
 
 ## Handwritten margin notes. Items without an entry get notes derived from their data.
@@ -39,6 +41,7 @@ const ITEM_NOTES := {
 const PROCEDURE_NOTES := {
 	"gunshot": "nobody is admitting to anything",
 	"amputation": "count the rolls BEFORE you start",
+	"laceration": "one pack does it. usually",
 }
 
 const LOCKED_SCRAWLS := [
