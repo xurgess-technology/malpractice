@@ -221,6 +221,9 @@ func camera_pose() -> Dictionary:
 ## the socket. The Hive's extraction keeps the tight view for its first three steps; its last one is
 ## the forceps step, which needs the vat.
 func base_camera_pose() -> Dictionary:
+	if part_site == "throat" and (_seat != null or String(ctx.get("patient_id", "")) == "player"):
+		# The vat stands beside the head, a good way from the throat: back off so both are in shot.
+		return {"height": 0.62, "back": -0.04, "fov": 54.0}
 	if _seat != null or String(ctx.get("patient_id", "")) == "player":
 		return {"height": 0.45, "back": -0.04, "fov": 54.0}
 	return {"height": 0.3, "back": 0.06, "fov": 48.0}
