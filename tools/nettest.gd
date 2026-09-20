@@ -162,6 +162,7 @@ func _run() -> void:
 		"combat": await _sc_combat()
 		"brains": await _sc_brains()
 		"monsters": await _sc_monsters()   # SWEEP 3 HOOK (monsters)
+		"sono": await _sc_sono()   # docs/SONOGRAPHER.md chunk B: the Sonographer's echo over the wire
 		"dissection": await _sc_dissection()
 		"graft": await _sc_graft()   # GRAFTING chunk C
 		"pockets": await _sc_pockets()   # POCKETS
@@ -1924,6 +1925,103 @@ func _sc_monsters():
 			return
 		_send("ng_seen", {})
 	await _finish_together("saw the Hives, one sedated (lying), hit, dragged by me and waking")
+
+
+## docs/SONOGRAPHER.md chunk B: the Sonographer's hunting crosses the wire. The host stands a
+## Sonographer in front of client 1 and makes noise at them until the meter fills; the client sees
+## the neck grow (`ss`), the charge come on (`sc`), the mode go CHARGE -> ECHO, the fan drawn on its
+## own machine, and is imaged and deafened by it -- then hunted, the host rushing it at them.
+func _sc_sono():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		var c1 = game.players.get(_peer_of(1))
+		if c1 == null:
+			return _end(false, "no client 1")
+		_hurtable = -1                      # nobody gets hurt: this is about what replicates
+		for m in game.monsters.values():
+			m.calm = 600.0                  # every other monster stays out of it
+		var fwd: Vector3 = -c1.global_transform.basis.z
+		fwd.y = 0.0
+		fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
+		var at := _stand_spot(c1.global_position + fwd * 6.0)
+		var s: Node = game._add_monster("sonographer", at)
+		s.rotation.y = atan2(-(-fwd).x, -(-fwd).z)   # facing back down the corridor at them
+		_send("sn_start", {"id": s.monster_id, "pos": at})
+		await _wall_wait(0.5)
+		# Quiet noises where the client stands: the meter fills, and it echoes rather than rushing.
+		var poke := func():
+			if is_instance_valid(c1):
+				game.emit_noise(c1.global_position, 0.5, "container")
+		if not await _do_until(poke, func(): return int(s.brain.echoes) > 0 or not is_instance_valid(s), 60.0,
+				"the Sonographer to charge and echo (suspicion %.2f mode %d)" % [float(s.brain.suspicion), int(s.mode)]):
+			return
+		var caught: Array = s.brain.last_echo.get("peers", [])
+		if not caught.has(c1.peer_id):
+			return _end(false, "the echo did not catch client 1 (peers %s, they were %.1f m away)" % [str(caught), s.global_position.distance_to(c1.global_position)])
+		_say("it echoed and imaged client 1 (%d caught)" % caught.size())
+		if not await _until(func(): return _count_msgs("sn_seen") > 0 or _count_msgs("fail") > 0, 60.0, "the client's view of it"):
+			return
+		# And then it hunts them: the host rushes it at where it imaged them.
+		if not await _until(func(): return int(s.mode) == Monster.Mode.RUSH or int(s.mode) == Monster.Mode.WAIL, 20.0,
+				"it to hunt the player it imaged (mode %d)" % int(s.mode)):
+			return
+		_say("it is hunting client 1 (mode %d)" % int(s.mode))
+		await _finish_together("the Sonographer charged, echoed, imaged client 1 and hunted them; the client saw all of it")
+		return
+	if not await _wait_shift_as_client():
+		return
+	if not await _until(func(): return _count_msgs("sn_start") > 0, 90.0, "the Sonographer test to start"):
+		return
+	var id := int(_msgs("sn_start")[0].data.id)
+	if not await _until(func(): return game.monsters.has(id), 30.0, "the Sonographer on my machine"):
+		return
+	var s2 = game.monsters[id]
+	var fx = game.sono_echo
+	var echoes_before := int(fx.seen)
+	var imaged_before := int(fx.imaged_count)
+	var seen := {"neck": 0.0, "crane": 0.0, "charge": 0.0, "charging": false, "echoing": false, "deafen": 0.0}
+	# The neck IS the suspicion meter, so the client must see it grow, then the charge, then the fan.
+	var watch := func():
+		if not is_instance_valid(s2):
+			return
+		seen.neck = maxf(float(seen.neck), float(s2.sono_susp))
+		seen.charge = maxf(float(seen.charge), float(s2.sono_charge))
+		seen.deafen = maxf(float(seen.deafen), float(Audio.deafen))
+		if s2.model != null and s2.model.sono != null:
+			seen.crane = maxf(float(seen.crane), float(s2.model.sono.crane()))
+		if int(s2.mode) == Monster.Mode.CHARGE:
+			seen.charging = true
+		if int(s2.mode) == Monster.Mode.ECHO:
+			seen.echoing = true
+	if not await _do_until(watch, func(): return int(fx.seen) > echoes_before, 90.0,
+			"the fan on my machine (neck %.2f charge %.2f)" % [float(seen.neck), float(seen.charge)]):
+		return
+	for i in 12:
+		watch.call()
+		await _frames(1)
+	_say("client saw: neck %.2f, crane %.2f, charge %.2f, charging %s, echoing %s, fans %d, imaged %d, deafen %.2f" % [
+		float(seen.neck), float(seen.crane), float(seen.charge), str(seen.charging), str(seen.echoing),
+		int(fx.seen) - echoes_before, int(fx.imaged_count) - imaged_before, float(seen.deafen)])
+	if float(seen.neck) < 0.6:
+		return _end(false, "the neck never grew on my machine (ss peaked at %.2f)" % float(seen.neck))
+	if s2.model != null and s2.model.sono != null and float(seen.crane) < 0.3:
+		return _end(false, "the model's neck never craned on my machine (crane peaked at %.2f)" % float(seen.crane))
+	if not bool(seen.charging) or float(seen.charge) < 0.5:
+		return _end(false, "the charge never showed on my machine (charging %s, sc peaked at %.2f)" % [str(seen.charging), float(seen.charge)])
+	if int(fx.imaged_count) - imaged_before < 1:
+		return _end(false, "the echo did not image me on my machine")
+	if float(seen.deafen) < 0.5:
+		return _end(false, "being imaged did not deafen me (Audio.deafen peaked at %.2f)" % float(seen.deafen))
+	_send("sn_seen", {})
+	# It comes for me: the host's rush reaches my machine as mode RUSH or WAIL, closing the distance.
+	var start_d: float = s2.global_position.distance_to(_me().global_position)
+	if not await _until(func():
+		return is_instance_valid(s2) and (int(s2.mode) == Monster.Mode.RUSH or int(s2.mode) == Monster.Mode.WAIL), 30.0,
+		"it to hunt me on my machine (mode %d)" % int(s2.mode)):
+		return
+	_say("it is hunting me on my machine (mode %d, %.1f m away, was %.1f)" % [int(s2.mode), s2.global_position.distance_to(_me().global_position), start_d])
+	await _finish_together("saw the neck grow, the charge, the fan and the deafen, was imaged, and got hunted")
 
 
 ## One frame of a simple co-op bot through the loop: clock in, answer the phone, gather what the

@@ -1,13 +1,13 @@
 # The Sonographer (the Discharged, redesigned)
 
-**Status (2026-09-18):** chunk A (the model) is done and approved, and the Sonographer is **in the game
-and the Discharged is gone**: the same hunting brain (listen, rush, search, contact, retreat), the new
-model, its neck growing with `LISTEN` / `SEARCH`, clicks and wet steps instead of the IV rattle, and
-the kind id renamed `discharged` -> `sonographer` everywhere (old databases migrate). **Not done, and
-what chunk B (`sono-brain`) is now for:** suspicion, the echo (charge, wedge, sweep, blocking, imaging),
-the deafen squeal, the rush at imaged players, the wail with its pauses, the low-ceiling check, and its
-own sounds and netcode. Echo, the ability, still comes from the Sonographer's brain until the trachea
-graft replaces it (docs/GRAFTING_TRACHEA.md).
+**Status (2026-09-18):** chunk A (the model) is done and approved. **Chunk B (`sono-brain`) is
+built** and waiting on Zach's review: suspicion (the neck is the meter), the charge and the echo's
+wedge with its sweep, walls and closed doors blocking it, imaging and the deafen squeal (with its
+`soft_squeal` setting), the rush at the nearest imaged player, the wail with its listening pauses
+and losing you when you go quiet, the low-ceiling check, its own sounds and the netcode.
+Written up in [docs/CONTRACTS.md](CONTRACTS.md) under "The Sonographer"; every number below is a
+first guess for the review to argue with. Echo, the ability, still comes from the Sonographer's
+brain until the trachea graft replaces it (docs/GRAFTING_TRACHEA.md).
 
 Brief for the orchestrator. Agreed with Zach on 2026-09-18 (theory session); rewritten the same
 day when the ultrasound cart was dropped. The Discharged gets a new name, a new look and a new way

@@ -167,8 +167,29 @@ func set_fog_muffle(amount01: float) -> void:
 	if is_equal_approx(amount01, fog_muffle):
 		return
 	fog_muffle = amount01
+	_apply_muffle()
+
+
+# ------------------------------------------------------------------ the Sonographer's deafen
+
+## The Sonographer's echo caught the local player (scripts/monsters/sono_echo.gd): a short soft
+## squeal goes off and everything else is muffled under it, coming back over about a second. It
+## reuses the fog's low-pass, whichever of the two is deeper. The squeal's own volume is capped
+## where it is played, never here.
+var deafen := 0.0
+
+
+func set_deafen(amount01: float) -> void:
+	amount01 = clampf(amount01, 0.0, 1.0)
+	if is_equal_approx(amount01, deafen):
+		return
+	deafen = amount01
+	_apply_muffle()
+
+
+func _apply_muffle() -> void:
 	_ensure_fog_filters()
-	var hz := lerpf(20000.0, 400.0, amount01)
+	var hz := minf(lerpf(20000.0, 400.0, fog_muffle), lerpf(20000.0, 500.0, deafen))
 	if _fog_lpf_sfx != null:
 		_fog_lpf_sfx.cutoff_hz = hz
 	if _fog_lpf_amb != null:

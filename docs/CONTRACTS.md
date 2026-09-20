@@ -470,17 +470,50 @@ func eye_transform() -> Transform3D                         # every machine: eye
   the last sighting for up to 2.5 s after losing them, looks around about 3 s, gives up. Ignores
   every noise; `alert_to(pos)` sends it to look at `pos`. Hits for 1 on contact, then backs off
   and stays calm 4 s. Shove: 2 s stun. Height about 1.75 m, collision radius 0.36.
-- **The Sonographer** (it replaced the Discharged, 2026-09-18; same brain, `sonographer_brain.gd`):
-  about 1.8 m with the neck at rest (collision capsule 1.85 m, radius 0.36), blind. Its model is
-  `monster/sonographer` (see "The Sonographer's model"); `Monster._sono_visual` drives it from the mode
-  alone, so every machine agrees: the neck (`set_sono_look` suspicion) is ordinary while it wanders,
-  grows while it LISTENs (0.8) and SEARCHes (0.55), and drops to 0.1 in a RUSH. It clicks
-  (`monsters_sono_click`, faster with suspicion) and squelches (`monsters_sono_step`) as it walks, and
-  both stop while it listens. `MonsterModel.set_ears(listen, yaw, delta)` swivels its ears toward
-  `listen_yaw` (every machine, from the report's mode and `ly`). Its kind id is `sonographer`
-  (`brain_sonographer`, Brains path `sonographer`, database key `sonographer`); old saves' `discharged`
-  database page loads as it (`database_store.gd`). The echo, imaging and the rest of its planned
-  hunting (docs/SONOGRAPHER.md, chunk B) are not in yet.
+- **The Sonographer** (`sonographer_brain.gd`, docs/SONOGRAPHER.md chunk B, 2026-09-18): about 1.8 m
+  with the neck at rest (collision capsule 1.85 m, radius 0.36), blind. Modes, in order:
+  WANDER / IDLE 1.4 m/s, **LISTEN** (stops dead 0.8-1.2 s, head cocked), **CHARGE** (1.2 s),
+  **ECHO** (0.35 s), RUSH 5.2 m/s, **WAIL**, SEARCH 1.1 m/s, STUNNED, RETREAT, SEDATED.
+  `Monster.Mode` and `modes.gd` gained `CHARGE`, `ECHO`, `WAIL` (appended; the ints cross the wire).
+  - **Suspicion** `brain.suspicion` 0..1. **The neck is the meter** -- there is no HUD for it. Every
+    noise under `LOUD` (0.8) adds `loudness * (0.35 + 0.65 * closeness) * SUSP_GAIN` (1.6) and it
+    drains at 0.06/s. Full: it LISTENs out its timer, then CHARGEs and ECHOes. A noise at 0.8 or
+    louder adds nothing and makes it **certain** instead: after the listen it rushes straight there,
+    spending no echo.
+  - **The echo** fires from the wand (`model.echo_origin()`, not the head) toward what it heard:
+    a wedge `ECHO_ARC` 60 degrees wide and `ECHO_RANGE` 14 m long, `ECHO_PITCH` 28 degrees off the
+    horizontal. Walls and **closed doors** block it (`clear_line`, `C.L_WORLD`). Later shifts and
+    deeper wings **sweep**: `brain.sweep` 0..1 (from `game.shift` and the distance from the
+    entrance, worked out once at spawn) widens the fan by up to `SWEEP_EXTRA` 110 degrees.
+    `brain.in_echo(origin, dir, point)` is the test; `brain.echo_beam()` is where it fires from.
+  - **Imaged**: every player the wedge catches goes into `brain.imaged` (peer -> {pos, t}) and into
+    the event; the echo then empties the meter and it RUSHes the **nearest** imaged player's imaged
+    position. `scripts/monsters/sono_echo.gd` (child `SonoEcho` of Game, every machine) draws the
+    grainy fan and, for a caught local player, flashes ultrasound grain over their screen and
+    **deafens** them: a capped, ramped squeal (`monsters_sono_squeal`, `SQUEAL_DB` -9, setting
+    `soft_squeal` takes it to -19) with `Audio.set_deafen()` muffling everything else for about
+    1.25 s. **The squeal must never hurt a real player's ears.**
+  - **The wail**: contact starts it (`brain.start_wail`, from `recoil_after_hit`) instead of the old
+    retreat. Bursts of `WAIL_BURST` 1.1 s with a `WAIL_PAUSE` 0.85 s **listening pause** between
+    them, a blow every `WAIL_HIT_EVERY` 0.85 s. It chases where it last **heard** them, not where
+    they are, so going quiet for `LOSE_QUIET` 3 s shakes it off; a shove clears the quarry; a downed
+    player ends it (it does not finish them off) and it goes back to hunting. With nobody standing
+    in reach, a blow still leaves it in RETREAT and calm for `CALM_AFTER_HIT` 5 s.
+  - **The ceiling check** (`Monster._headroom`, every machine, 4 Hz): a ray up from the head's rest
+    height feeds `crane_limit` to `set_sono_look`, so under a low ceiling the neck bends forward
+    instead of going through it.
+  - **Sounds**: `monsters_sono_click` (faster with suspicion) and `monsters_sono_step` while it
+    walks, both silent while it listens, charges or echoes; `monsters_sono_charge`,
+    `monsters_sono_ping` (at the wand), `monsters_sono_rush`, `monsters_sono_wail`,
+    `monsters_sono_squeal`. All in `tools/gen_audio_monsters.mjs`.
+  - **Networking**: `report()` appends `ss` (suspicion) and `sc` (charge), both quantized to 1/64,
+    so a client's neck and charge match the host's. The echo itself is the reliable event
+    `sn_echo {id, o, d, h, r, pk}` (origin, direction, half-angle, reach, the peers it caught),
+    routed in `game._event` by its `sn_` prefix to `game.sono_echo`. `Monster._sono_visual` works
+    the clip, the aim and the headroom out locally, so nothing else needs replicating.
+  - `MonsterModel.set_ears(listen, yaw, delta)` swivels its ears toward `listen_yaw`. Its kind id is
+    `sonographer` (`brain_sonographer`, Brains path `sonographer`, database key `sonographer`); old
+    saves' `discharged` database page loads as it (`database_store.gd`).
 - **Placement** (`hive_spots`, host): hallway tiles (`.`/`M`, outside every room rect grown by a
   tile, not in a doorway's mouth) of each wing (`zone_of` == the wing id), at least 5 m from the
   entrance building and within 12 m of the wing's shallowest such tile; blocked tiles rejected

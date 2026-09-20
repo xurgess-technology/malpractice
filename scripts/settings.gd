@@ -47,6 +47,9 @@ const DEFAULTS := {
 	"camera": "first_person",   # "first_person" | "shoulder" | "front", ordinary play
 	"carry_camera": "shoulder",   # HANDS HOOK: "shoulder" | "first_person", carrying/dragging
 	"sprint_mode": "toggle",
+	# The Sonographer's deafen squeal (docs/SONOGRAPHER.md): on, it plays softer still. The squeal
+	# is capped and ramped anyway; this is for anyone who wants it further back than that.
+	"soft_squeal": false,
 	# SWEEP 4A HOOK (controls): rebindable keys, stored as a physical_keycode int. Applied to the
 	# matching InputMap action (see REBIND_ACTIONS / _apply) so the whole game (not just the
 	# settings screen) follows a rebind immediately.
@@ -223,6 +226,10 @@ func _sanitize(key: String, v):
 	if key == "window_mode":
 		var s := str(v)
 		return s if WINDOW_MODES.has(s) else def
+	if def is bool:
+		if v is String:
+			return String(v).to_lower() == "true"
+		return bool(v) if (v is bool or v is int or v is float) else def
 	if not (v is int or v is float or v is bool or (v is String and (v as String).is_valid_float())):
 		return def
 	var r: Array = RANGES[key]

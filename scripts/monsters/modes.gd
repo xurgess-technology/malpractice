@@ -4,4 +4,4 @@ extends RefCounted
 ## preloads them. New values are only ever appended (the ints cross the wire).
 
 enum State { WANDER, CHASE, STUNNED, SEDATED }
-enum Mode { IDLE, WANDER, LISTEN, RUSH, SEARCH, STALK, STUNNED, RETREAT, SEDATED }
+enum Mode { IDLE, WANDER, LISTEN, RUSH, SEARCH, STALK, STUNNED, RETREAT, SEDATED, CHARGE, ECHO, WAIL }

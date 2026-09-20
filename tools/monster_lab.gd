@@ -20,6 +20,7 @@ const Modes := preload("res://scripts/monsters/modes.gd")
 const NurseRig := preload("res://scripts/monsters/night_nurse_rig.gd")
 const NurseGrab := preload("res://scripts/monsters/nurse_grab.gd")
 const MonsterModelScript := preload("res://scripts/monsters/monster_model.gd")
+const DoorScript := preload("res://scripts/doors/door.gd")
 const SHOT_DIR := "res://tools/monster_shots"
 
 ## The stand-in game: exactly the surface monsters and Perception use.
@@ -34,9 +35,22 @@ class LabGame extends Node3D:
 	var drops: Array = []   # and her letting go: {time, peer}
 	var said: Array = []
 	var combat: Node = null   # a LabCombat while a drag scenario runs
+	## The Sonographer's echo (scripts/monsters/sono_echo.gd), under the name the real game gives it.
+	var sono_echo: Node = null
 
 	func _ready() -> void:
 		add_to_group("game")
+		sono_echo = preload("res://scripts/monsters/sono_echo.gd").new()
+		sono_echo.name = "SonoEcho"
+		add_child(sono_echo)
+		sono_echo.setup(self)
+
+	## The lab looks out through player 1's eyes: the echo images them like anyone else.
+	func local_player() -> Node:
+		return players.get(1)
+
+	func _broadcast(_kind: String, _data: Dictionary) -> void:
+		pass
 
 	func _physics_process(delta: float) -> void:
 		world_time += delta
@@ -294,6 +308,7 @@ func _run_scenarios() -> void:
 	await _scenario_dark_still()
 	await _scenario_nurse()
 	await _scenario_contact()
+	await _scenario_echo()
 	_scenario_roster()
 	await _scenario_client()
 	await _scenario_hive()
@@ -512,29 +527,57 @@ func _scenario_contact() -> void:
 			break
 	check("the Sonographer rushes the noise and hits the player standing there for 1", game.hits.size() == 1 and game.hits[0].damage == 1 and p1.hp == 2, "hits=%s" % [game.hits])
 	check("it lunges before contact", lunged)
-	check("after the hit it retreats and is calm", d.mode == Modes.Mode.RETREAT and d.calm > 0.0, "mode=%d calm=%.1f" % [d.mode, d.calm])
-	var at_hit: Vector3 = d.global_position
-	await wait(1.0)
-	check("retreating: it backs away (%.2f m further)" % (d.global_position.distance_to(p1.global_position) - at_hit.distance_to(p1.global_position)), d.global_position.distance_to(p1.global_position) > at_hit.distance_to(p1.global_position) + 1.0)
+	# docs/SONOGRAPHER.md chunk B: it no longer backs off after a blow -- it gets on them and wails.
+	check("after the hit it wails on them instead of backing off", d.mode == Modes.Mode.WAIL and d.brain.quarry == p1, "mode=%d" % d.mode)
+	# The wail's listening pauses are the way out: a stretch where it stands still, not swinging.
+	var paused := 0.0
+	var run := 0.0
+	for i in 3 * 60:
+		await get_tree().physics_frame
+		if d.mode == Modes.Mode.WAIL and not d.moving and d.lunge_t <= 0.0:
+			run += 1.0 / 60.0
+			paused = maxf(paused, run)
+		else:
+			run = 0.0
+	check("the wail has listening pauses you can slip away in (longest %.2f s)" % paused, paused > 0.3)
+
+	# A shove gets it off you (the co-op save).
+	d.brain.shoved(Vector3.RIGHT)
+	await get_tree().physics_frame
+	check("a shove interrupts the wail", d.mode == Modes.Mode.STUNNED and d.brain.quarry == null, "mode=%d" % d.mode)
+	var st: Vector3 = d.global_position
+	await wait(1.7)
+	check("a shove stuns the Sonographer for ~2 s", d.mode == Modes.Mode.STUNNED and d.global_position.distance_to(st) < 0.05)
+	await wait(0.5)
+	check("then it recovers", d.mode != Modes.Mode.STUNNED)
+
+	# Downed: it stops and goes back to hunting rather than finishing them off.
 	p1.invuln = 0.0
-	game.emit_noise(p1.global_position, 0.9, "glass")
+	d.global_position = p1.global_position + Vector3(0.8, 0.0, 0.0)
+	await get_tree().physics_frame
+	d.brain.start_wail(p1)
+	await get_tree().physics_frame
+	check("it is on them again", d.mode == Modes.Mode.WAIL)
+	p1.downed = true
+	await wait(0.2)
+	check("once the player is downed it stops wailing", d.mode != Modes.Mode.WAIL and d.brain.quarry == null, "mode=%d" % d.mode)
+	p1.downed = false
+	p1.invuln = 99.0
+	p1.hp = p1.max_hp
+
+	# Retreating and going calm still happens when there is nobody left standing to wail on.
+	d.global_position = cor(30.0)
+	await get_tree().physics_frame
+	d.brain.recoil_after_hit()
+	check("with nobody in reach a blow leaves it retreating and calm", d.mode == Modes.Mode.RETREAT and d.calm > 0.0, "mode=%d calm=%.1f" % [d.mode, d.calm])
+	game.emit_noise(d.global_position + Vector3(3.0, 0, 0), 0.9, "glass")
 	await wait(1.0)
 	check("while calm it ignores even breaking glass", d.mode != Modes.Mode.LISTEN and d.mode != Modes.Mode.RUSH, "mode=%d" % d.mode)
-	p1.invuln = 99.0   # keep a wandering bump from muddying the next check
-	await wait(4.0)
-	var hits_before := game.hits.size()
+	await wait(4.5)
 	game.emit_noise(d.global_position + Vector3(3.0, 0, 0), 0.8, "footstep")
 	await wait(0.2)
-	check("calm wears off after a few seconds and it hears again", d.mode == Modes.Mode.LISTEN or d.mode == Modes.Mode.RUSH, "mode=%d calm=%.1f hits=%d" % [d.mode, d.calm, game.hits.size() - hits_before])
+	check("calm wears off after a few seconds and it hears again", d.mode == Modes.Mode.LISTEN or d.mode == Modes.Mode.RUSH, "mode=%d calm=%.1f" % [d.mode, d.calm])
 	p1.invuln = 0.0
-
-	# Shove: 2 s stun.
-	d.brain.shoved(Vector3.RIGHT)
-	var st: Vector3 = d.global_position
-	await wait(1.8)
-	check("a shove stuns the Sonographer for ~2 s", d.mode == Modes.Mode.STUNNED and d.global_position.distance_to(st) < 0.05)
-	await wait(0.4)
-	check("then it recovers", d.mode != Modes.Mode.STUNNED)
 	await clear_monsters()
 
 	# The Nurse from behind: no hearts. She grabs them by the neck, lifts them to her face, her head
@@ -585,6 +628,183 @@ func _scenario_contact() -> void:
 	n.shoved(Vector3.RIGHT)
 	await get_tree().physics_frame
 	check("shoving the Nurse does nothing", n.mode != Modes.Mode.STUNNED and n.global_position.distance_to(pos) < 0.2)
+	await clear_monsters()
+
+
+## docs/SONOGRAPHER.md chunk B: suspicion, the charge, the echo's wedge, what it blocks on, being
+## imaged and deafened, the rush at the nearest imaged player, losing somebody, and the ceiling.
+func _scenario_echo() -> void:
+	print("[monster_lab] --- 4b. the Sonographer's echo ---")
+	set_all_lights(false)
+	await clear_monsters()
+	var fx = game.sono_echo
+	fx.seen = 0
+	fx.imaged_count = 0
+	Audio.set_deafen(0.0)
+
+	# --- quiet noises fill the meter, and a full meter echoes -------------------------------
+	var d: Node = spawn("sonographer", cor(10.0), -PI * 0.5)
+	place_player(cor(16.0), cor(10.0) + Vector3.UP * 1.2, false)
+	p1.invuln = 999.0
+	await wait(0.3)
+	game.emit_noise(cor(13.0), 0.25, "footstep")
+	await wait(0.1)
+	var one: float = d.brain.suspicion
+	check("a quiet noise fills the suspicion meter (%.2f)" % one, one > 0.05 and one < 0.9)
+	check("one quiet noise is not enough to echo", d.brain.echoes == 0 and d.mode == Modes.Mode.LISTEN, "mode=%d" % d.mode)
+	# Two container-loud noises from where the player stands fill the rest of it.
+	for i in 2:
+		game.emit_noise(p1.global_position, 0.5, "container")
+		await get_tree().physics_frame
+	await get_tree().physics_frame
+	check("more noise fills it right up (%.2f)" % d.brain.suspicion, d.brain.suspicion > 0.98 and d.brain._full)
+	var charged := -1.0
+	var t0: float = game.world_time
+	while game.world_time - t0 < 3.0 and d.brain.echoes == 0:
+		await get_tree().physics_frame
+		if d.mode == Modes.Mode.CHARGE and charged < 0.0:
+			charged = game.world_time
+	check("a full meter charges, then echoes", d.brain.echoes == 1 and charged > 0.0, "echoes=%d mode=%d" % [d.brain.echoes, d.mode])
+	check("the charge takes about %.1f s (%.2f s)" % [d.brain.CHARGE_TIME, game.world_time - charged],
+		charged > 0.0 and absf((game.world_time - charged) - d.brain.CHARGE_TIME) < 0.25)
+	check("the meter empties when it echoes (%.2f)" % d.brain.suspicion, d.brain.suspicion < 0.05)
+	var caught: Array = d.brain.last_echo.get("peers", [])
+	check("everyone the echo caught is imaged", caught.has(p1.peer_id), "peers=%s" % [caught])
+	check("every machine draws the fan", fx.seen == 1, "seen=%d" % fx.seen)
+	check("the player it caught is deafened by the squeal", fx.imaged_count == 1 and Audio.deafen > 0.5, "imaged=%d deafen=%.2f" % [fx.imaged_count, Audio.deafen])
+	await wait(0.45)
+	check("then it rushes the player it imaged", d.mode == Modes.Mode.RUSH and d.brain.target.distance_to(p1.global_position) < 1.0,
+		"mode=%d target=%s" % [d.mode, d.brain.target])
+	await wait(1.6)
+	check("the deafen wears off (%.2f)" % Audio.deafen, Audio.deafen < 0.05)
+
+	# --- a loud noise rushes without spending an echo ----------------------------------------
+	await clear_monsters()
+	fx.seen = 0
+	d = spawn("sonographer", cor(10.0), -PI * 0.5)
+	place_player(cor(60.0), cor(0.0), false)
+	await wait(0.2)
+	game.emit_noise(cor(16.0), 0.9, "glass")
+	await wait(1.5)
+	check("a loud noise sends it straight there with no echo", d.mode == Modes.Mode.RUSH and d.brain.echoes == 0 and fx.seen == 0,
+		"mode=%d echoes=%d" % [d.mode, d.brain.echoes])
+
+	# --- the wedge: what it catches and what blocks it ---------------------------------------
+	await clear_monsters()
+	d = spawn("sonographer", cor(10.0), -PI * 0.5)
+	await wait(0.2)
+	d.brain.target = cor(24.0)
+	var beam: Array = d.brain.echo_beam()
+	var org: Vector3 = beam[0]
+	var dir: Vector3 = beam[1]
+	check("the echo fires from the wand, not the head (%.2f m up)" % org.y, org.y > 0.6 and org.y < 1.9)
+	check("straight ahead at 8 m is inside the fan", d.brain.in_echo(org, dir, cor(18.0) + Vector3.UP * 1.1))
+	check("past %.0f m it is out of reach" % d.brain.ECHO_RANGE, not d.brain.in_echo(org, dir, cor(10.0 + d.brain.ECHO_RANGE + 2.0) + Vector3.UP * 1.1))
+	# 60 degrees wide: +-30 degrees. Both test points are well inside the corridor, so the only
+	# thing deciding them is the angle.
+	check("just inside the 60 degree fan is caught (22 degrees off)", d.brain.in_echo(org, dir, cor(13.0, 1.2) + Vector3.UP * 1.1))
+	check("outside it is not (39 degrees off)", not d.brain.in_echo(org, dir, cor(11.5, 1.2) + Vector3.UP * 1.1))
+	# A wall: the bottom room behind the corridor's south wall.
+	var behind := Vector3(cor(18.0).x, 1.1, 8.5 * C.TILE + 0.75)
+	check("a wall blocks the echo", not d.brain.in_echo(org, dir, behind))
+	# Later shifts and deeper wings sweep the wand: the same spot is inside the widened fan.
+	var narrow: bool = not d.brain.in_echo(org, dir, cor(11.5, 1.2) + Vector3.UP * 1.1)
+	d.brain.sweep = 1.0
+	check("sweeping widens the fan (%.0f -> %.0f degrees)" % [rad_to_deg(d.brain.ECHO_ARC), rad_to_deg(d.brain.half_arc() * 2.0)],
+		narrow and d.brain.in_echo(org, dir, cor(11.5, 1.2) + Vector3.UP * 1.1))
+	d.brain.sweep = 0.0
+
+	# A closed door in the corridor between it and the spot.
+	var door: Node3D = DoorScript.create({
+		"id": "lab_echo", "kind": "double", "width": 2.0, "max_out": 90.0, "max_in": 90.0,
+		"n": Vector2i(1, 0), "s": Vector2i(0, 1), "hinge": 1,
+		"plane": Vector2(16.0 / C.TILE, 6.0),
+	})
+	game.add_child(door)
+	door.amount = 0.0
+	door.target = 0.0
+	door._apply_pose()
+	await wait(0.1)
+	check("a closed door blocks the echo", not d.brain.in_echo(org, dir, cor(18.0) + Vector3.UP * 1.1))
+	door.amount = 1.0
+	door._apply_pose()
+	await wait(0.1)
+	check("an open one does not", d.brain.in_echo(org, dir, cor(18.0) + Vector3.UP * 1.1))
+	door.queue_free()
+	await get_tree().physics_frame
+
+	# --- it rushes the NEAREST player it imaged ----------------------------------------------
+	await clear_monsters()
+	d = spawn("sonographer", cor(10.0), -PI * 0.5)
+	await wait(0.2)
+	d.brain.target = cor(24.0)
+	d.brain.imaged = {
+		1: {"pos": cor(20.0), "t": game.world_time},
+		2: {"pos": cor(15.0), "t": game.world_time},
+	}
+	d.brain._after_echo()
+	check("it goes for the nearest player it imaged", d.brain.target.distance_to(cor(15.0)) < 0.1, "target=%s" % d.brain.target)
+
+	# --- losing somebody who gets away and goes quiet ----------------------------------------
+	await clear_monsters()
+	d = spawn("sonographer", cor(10.0), -PI * 0.5)
+	place_player(cor(10.8), cor(20.0), false)
+	p1.invuln = 999.0
+	await wait(0.2)
+	d.brain.start_wail(p1)
+	await get_tree().physics_frame
+	check("it is on the player", d.mode == Modes.Mode.WAIL)
+	# They break away during a pause, get distance and go quiet.
+	p1.teleport(cor(10.8 + d.brain.LOSE_DIST + 4.0))
+	await wait(d.brain.LOSE_QUIET + 0.6)
+	check("it loses a player who gets away and goes quiet", d.mode != Modes.Mode.WAIL and d.brain.quarry == null, "mode=%d" % d.mode)
+	# ...but staying loud keeps it on you.
+	p1.teleport(cor(10.8))
+	await get_tree().physics_frame
+	d.brain.start_wail(p1)
+	p1.teleport(cor(10.8 + d.brain.LOSE_DIST + 4.0))
+	var kept := true
+	for i in int((d.brain.LOSE_QUIET + 0.8) * 60):
+		await get_tree().physics_frame
+		game.emit_noise(p1.global_position, 0.8, "footstep")
+		if d.mode != Modes.Mode.WAIL:
+			kept = false
+	check("sprinting (making noise) keeps it on you", kept, "mode=%d" % d.mode)
+
+	# --- the low ceiling: the neck bends forward instead of going through it -----------------
+	await clear_monsters()
+	d = spawn("sonographer", cor(10.0), -PI * 0.5)
+	await wait(0.3)
+	var open_sky: float = d._headroom()
+	var lid := StaticBody3D.new()
+	lid.collision_layer = C.L_WORLD
+	lid.collision_mask = 0
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(4.0, 0.2, 4.0)
+	cs.shape = box
+	lid.add_child(cs)
+	game.add_child(lid)
+	lid.global_position = d.global_position + Vector3.UP * 2.1
+	await wait(0.4)
+	var low: float = d._headroom()
+	check("open sky above it: the neck may stretch all the way up (%.2f)" % open_sky, open_sky > 0.99)
+	check("under a low ceiling the crane is limited (%.2f)" % low, low < 0.5)
+	# The rig turns the limit into forward reach, so the head never goes up through the lid.
+	d.brain.suspicion = 1.0
+	d.sono_susp = 1.0
+	await wait(2.0)
+	var head_y := 0.0
+	head_y = float(d.global_position.y) + float(d.height)
+	if d.model != null and d.model.sono != null:
+		head_y = float((d.model.sono.bone_world("head") as Vector3).y)
+	var crane := -1.0
+	if d.model != null and d.model.sono != null:
+		crane = float(d.model.sono.crane())
+	check("the head stays under the ceiling (head %.2f, ceiling %.2f)" % [head_y, lid.global_position.y],
+		head_y < lid.global_position.y, "limit=%.2f crane=%.2f" % [d._sono_limit, crane])
+	lid.queue_free()
+	p1.invuln = 0.0
 	await clear_monsters()
 
 
@@ -1075,6 +1295,10 @@ func _run_shots() -> void:
 		["sono_face", _shot_sono.bind(1.0, 0.40, "listen", 0.0, 0.0, 1.0, 1.0, 1.80)],
 		["sono_lying", _shot_sono_lying],
 		["sono_review_view", _shot_sono_review],
+		# chunk B, driven by the real brain: the fan going out, being caught by it, the craned neck
+		["sono_echo_fan", _shot_sono_echo.bind(true)],
+		["sono_echo_imaged", _shot_sono_echo.bind(false)],
+		["sono_echo_neck", _shot_sono_suspicion],
 	]
 	for s in list:
 		if only != "" and not only.split(",").has(s[0]):
@@ -1092,6 +1316,63 @@ func _run_shots() -> void:
 		print("[monster_lab] wrote ", path)
 		_shot_tick = Callable()
 	get_tree().quit(0)
+
+
+## chunk B: a real echo, fired by the real brain, kept going so the capture lands on a fan.
+## `behind`: the camera stands behind it and watches the wedge sweep away down the corridor;
+## otherwise the camera is the thing it is aiming at, so the shot is what being imaged looks like
+## (the grain over your screen) with the fan coming at you.
+var _echo_repeat := 0
+
+
+func _shot_sono_echo(behind: bool) -> void:
+	game.host = true
+	set_all_lights(true)
+	var d: Node = spawn("sonographer", cor(20.0), PI * 0.5)   # facing -X, down the corridor
+	var at := cor(12.0)
+	if behind:
+		place_player(cor(24.5, 0.9), cor(20.0) + Vector3.UP * 1.5, true)
+	else:
+		place_player(at, cor(20.0) + Vector3.UP * 1.5, true)
+	p1.invuln = 999.0
+	await wait(0.4)
+	d.brain.target = at
+	d.brain.suspicion = 1.0
+	d.brain._full = true
+	d.brain._start_charge()
+	var t0: float = game.world_time
+	while game.world_time - t0 < 3.0 and int(d.brain.echoes) == 0:
+		await get_tree().physics_frame
+	# _run_shots waits exactly 1.2 s (72 frames) after this returns and then captures, so fire the
+	# echo 0.2 s before that: the capture lands mid-sweep, with the imaging flash still up.
+	_echo_repeat = 0
+	_shot_tick = func():
+		d.global_position = cor(20.0)
+		d.rotation.y = PI * 0.5
+		d.brain.target = at
+		d.brain.suspicion = 1.0
+		_echo_repeat += 1
+		if _echo_repeat == 60:
+			d.brain._fire_echo(game)
+
+
+## chunk B: the neck as the suspicion meter, grown by real noises rather than set by hand.
+func _shot_sono_suspicion() -> void:
+	game.host = true
+	set_all_lights(true)
+	var d: Node = spawn("sonographer", cor(20.0), PI * 0.5)
+	place_player(cor(23.5, 0.8), cor(20.0) + Vector3.UP * 1.9, true)
+	p1.invuln = 999.0
+	await wait(0.3)
+	_shot_tick = func():
+		d.global_position = cor(20.0)
+		d.brain.target = cor(12.0)
+		d.brain.suspicion = 1.0
+		d.brain._full = true
+		if int(d.mode) != Modes.Mode.LISTEN:
+			d.mode = Modes.Mode.LISTEN
+			d.brain.timer = 5.0
+	await wait(2.2)
 
 
 func _pose(m: Node, pos: Vector3, yaw: float, mode: int, moving: bool, spd: float, extra := {}) -> void:

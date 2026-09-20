@@ -21,6 +21,13 @@
 //   monsters_flesh_hit       sweep 3: a monster struck by the saw
 //   monsters_hive_death    sweep 3: the Hive killed
 //   monsters_sedated_breath  sweep 3: a sedated monster's slow snoring breath
+//   monsters_sono_charge   chunk B: the clicks rising into a whine as it charges an echo
+//   monsters_sono_ping     chunk B: the echo itself, a deep sonar ping with a hiss of scan noise
+//   monsters_sono_squeal   chunk B: the deafen squeal everyone the echo catches hears. **Soft.**
+//                          Rendered quiet, kept out of the range that hurts, with long ramps at
+//                          both ends; it must never hurt a real player's ears.
+//   monsters_sono_rush     chunk B: the continuous rattling shriek while it rushes
+//   monsters_sono_wail     chunk B: the grunts and wet blows while it is on somebody
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -415,6 +422,134 @@ function sedatedBreath(v) {
   return fadeEdges(room(out, 0.25), 30, 200);
 }
 
+// ------------------------------------------------- the Sonographer's echo (chunk B)
+
+/** The charge: the tongue clicks speed up into a rising whine as the throat fills. About 1.2 s. */
+function sonoCharge(v) {
+  const r = rngFor('sono_charge' + v);
+  const len = 1.2;
+  const out = buf(len + 0.25);
+  // the clicks, accelerating: the gap halves and halves again
+  let at = 0.02;
+  let gap = r.range(0.17, 0.2);
+  while (at < len * 0.9) {
+    const c = buf(0.05), bp = biquad('bandpass', 5), f = r.range(2000, 2900);
+    for (let i = 0; i < c.length; i++) {
+      const t = i / SR;
+      c[i] = bp(r() * 2 - 1, f) * Math.exp(-t / 0.005) * 1.4;
+    }
+    add(out, c, at, 0.55);
+    at += gap;
+    gap = Math.max(0.035, gap * 0.78);   // a floor, or the gaps converge and this never ends
+  }
+  // the whine coming up under them: a thin voiced tone through the windpipe
+  const lp = biquad('lowpass', 0.8), bp2 = biquad('bandpass', 3);
+  let ph = 0;
+  for (let i = 0; i < len * SR; i++) {
+    const t = i / SR, u = t / len;
+    const f = 220 * Math.pow(3.4, u * u);
+    ph += f / SR;
+    const e = Math.pow(u, 1.6) * 0.7;
+    out[i] += bp2(Math.sin(TAU * ph) * (0.7 + 0.3 * Math.sin(TAU * 7 * t)), f * 2) * e;
+    out[i] += lp(r() * 2 - 1, 300 + 900 * u) * e * 0.25;
+  }
+  return fadeEdges(room(out, 0.28), 4, 60);
+}
+
+/** The echo: a deep sonar ping with a hiss of scan noise sweeping out behind it. */
+function sonoPing(v) {
+  const r = rngFor('sono_ping' + v);
+  const len = 1.35;
+  const out = buf(len + 0.2);
+  let ph = 0;
+  const bp = biquad('bandpass', 1.1), hp = biquad('highpass', 0.7);
+  for (let i = 0; i < len * SR; i++) {
+    const t = i / SR, u = t / len;
+    // the ping: a low sine falling a little, with a hard front
+    const f = r.range(150, 185) * (1 - 0.22 * u);
+    ph += f / SR;
+    const e = Math.min(1, t / 0.004) * Math.exp(-t / 0.42);
+    out[i] += Math.sin(TAU * ph) * e * 0.85;
+    out[i] += Math.sin(TAU * ph * 2.01) * e * 0.2;
+    // the scan noise: a band of hiss sweeping up and away as the fan goes out
+    const hiss = bp(r() * 2 - 1, 900 + 4200 * Math.min(1, u * 1.8));
+    out[i] += hp(hiss, 500) * Math.sin(Math.PI * Math.min(1, u * 1.3)) * 0.34;
+  }
+  return fadeEdges(room(out, 0.3, 1.3), 2, 90);
+}
+
+/**
+ * The deafen squeal. This one plays in a real player's ears, so it is deliberately gentle:
+ * a narrow tone around 1.4-1.8 kHz (well below where a squeal starts to hurt), a slow
+ * 180 ms ramp in and a 400 ms ramp out, no harmonics stacked on top, and rendered well down.
+ */
+function sonoSqueal(v) {
+  const r = rngFor('sono_squeal' + v);
+  const len = r.range(1.15, 1.45);
+  const out = buf(len + 0.1);
+  const inR = 0.18, outR = 0.4;
+  let ph = 0;
+  const lp = biquad('lowpass', 0.7), bp = biquad('bandpass', 1.2);
+  const f0 = r.range(1400, 1800);
+  for (let i = 0; i < len * SR; i++) {
+    const t = i / SR, u = t / len;
+    const ramp = Math.min(1, t / inR) * Math.min(1, (len - t) / outR);
+    const e = Math.sin(Math.PI * 0.5 * ramp) ** 2;   // soft at both ends, never a step
+    const f = f0 * (1 + 0.04 * Math.sin(TAU * 1.6 * t));
+    ph += f / SR;
+    // a single soft tone; the sine is rounded further by the low-pass so there is no edge on it
+    out[i] += lp(Math.sin(TAU * ph), 2600) * e * 0.6;
+    // the ringing after-noise, a soft band of hiss, not a whistle
+    out[i] += bp(r() * 2 - 1, f * 0.8) * e * 0.18;
+  }
+  return fadeEdges(out, 60, 200);
+}
+
+/** The rush: the clicks have become one continuous rattling shriek. */
+function sonoRush(v) {
+  const r = rngFor('sono_rush' + v);
+  const len = r.range(1.3, 1.6);
+  const out = buf(len + 0.25);
+  const f1 = biquad('bandpass', 3.5), f2 = biquad('bandpass', 5), hp = biquad('highpass', 0.7);
+  let ph = 0;
+  for (let i = 0; i < len * SR; i++) {
+    const t = i / SR, u = t / len;
+    const e = Math.min(1, t / 0.05) * (u < 0.8 ? 1 : (1 - u) / 0.2);
+    // the rattle: the voice chopped by a fast tremolo, the way a clicking tongue runs together
+    const rattle = 0.45 + 0.55 * Math.sign(Math.sin(TAU * r.range(31, 38) * t));
+    const base = 330 * (1 + 0.12 * u) * (1 + 0.02 * (r() - 0.5));
+    ph += base / SR; ph -= Math.floor(ph);
+    const s = Math.tanh((2 * ph - 1) * 2.2);
+    out[i] += hp(f1(s, 1200 + 500 * u) * 0.9 + f2(r() * 2 - 1, 3000) * 0.35, 240) * e * rattle;
+  }
+  return fadeEdges(room(out, 0.3, 1.1), 4, 80);
+}
+
+/** The wail: one grunt with a wet blow landing under it. */
+function sonoWail(v) {
+  const r = rngFor('sono_wail' + v);
+  const len = r.range(0.42, 0.58);
+  const out = buf(len + 0.2);
+  const bp = biquad('bandpass', 2.4), lp = biquad('lowpass', 0.7);
+  let ph = 0;
+  for (let i = 0; i < len * SR; i++) {
+    const t = i / SR, u = t / len;
+    const e = env(t, 0.02, len * 0.28);
+    const f = r.range(120, 165) * (1 - 0.25 * u);
+    ph += f / SR; ph -= Math.floor(ph);
+    out[i] += bp(Math.tanh((2 * ph - 1) * 1.8), 700 + 500 * u) * e * 0.9;
+    out[i] += lp(r() * 2 - 1, 320) * e * 0.35;
+  }
+  // the blow: a wet slap a beat into the grunt
+  const slap = buf(0.14), sbp = biquad('bandpass', 1.3);
+  for (let i = 0; i < slap.length; i++) {
+    const t = i / SR;
+    slap[i] = sbp(r() * 2 - 1, 420 - 200 * (t / 0.14)) * Math.exp(-t / 0.022) * 1.4;
+  }
+  add(out, slap, r.range(0.05, 0.12), 0.8);
+  return fadeEdges(room(out, 0.26, 0.9));
+}
+
 // ---------------------------------------------------------------- main
 
 const CUES = [
@@ -431,6 +566,13 @@ const CUES = [
   ['monsters_flesh_hit', 3, fleshHit, -3],
   ['monsters_hive_death', 2, hiveDeath, -5],
   ['monsters_sedated_breath', 2, sedatedBreath, -14],
+  // the Sonographer's echo (docs/SONOGRAPHER.md, chunk B). The squeal is rendered well down and
+  // played capped (sono_echo.gd SQUEAL_DB): it must never hurt a real player's ears.
+  ['monsters_sono_charge', 2, sonoCharge, -9],
+  ['monsters_sono_ping', 2, sonoPing, -5],
+  ['monsters_sono_squeal', 2, sonoSqueal, -17],
+  ['monsters_sono_rush', 2, sonoRush, -7],
+  ['monsters_sono_wail', 3, sonoWail, -6],
 ];
 
 function writeWav(file, a) {
