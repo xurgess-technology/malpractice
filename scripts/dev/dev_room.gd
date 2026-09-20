@@ -32,7 +32,7 @@ const GUN_FP_POS := Vector3(0.24, -0.23, -0.46)
 ## Render layer 18 for the first-person gun (layer 20 is the minigames').
 const GUN_FP_LAYER := 1 << 17
 const ORDERS := ["follow", "stay", "carry", "operate"]
-const MONSTER_KINDS := ["hive", "discharged", "night_nurse"]  # SWEEP 3 HOOK (monsters): the Hive
+const MONSTER_KINDS := ["hive", "sonographer", "night_nurse"]  # SWEEP 3 HOOK (monsters): the Hive
 ## NURSE HOOK: the panel's pace choices for the Night Nurse, m/s (her hunting speed first).
 const NURSE_PACES := [3.4, 1.6, 0.8]
 const NURSE_PACE_NAMES := ["Hunt (3.4 m/s)", "Stalk (1.6 m/s)", "Creep (0.8 m/s)"]
@@ -677,7 +677,7 @@ func _apply_request(sender: int, action: String, a: Dictionary) -> void:
 		"spawn_item":
 			_spawn_item(who, String(a.get("kind", "gauze")), int(a.get("count", 1)))
 		"spawn_monster":
-			spawn_monster(String(a.get("kind", "discharged")), String(a.get("where", "pen")), who)
+			spawn_monster(String(a.get("kind", "sonographer")), String(a.get("where", "pen")), who)
 		"kill_monsters":
 			for m in game.monsters.values().duplicate():
 				game.kill_monster(m)
@@ -700,7 +700,7 @@ func _apply_request(sender: int, action: String, a: Dictionary) -> void:
 		"pocket":
 			_set_pocket(String(a.get("kind", "")))   # POCKETS HOOK
 		"strap_monster":
-			# SWEEP 3 HOOK (dissection): a Hive or Discharged strapped to a patient table.
+			# SWEEP 3 HOOK (dissection): a Hive or Sonographer strapped to a patient table.
 			game.dissection.dev_strap(String(a.get("kind", "hive")), float(a.get("sedation", 1.0)), int(a.get("table", -1)))
 		"extra_patient":
 			game.dev_extra_patient()
@@ -1212,7 +1212,7 @@ func on_event(kind: String, data: Dictionary) -> void:
 
 
 func monster_died_fx(data: Dictionary) -> void:
-	GunFx.monster_corpse(game.get_node("Entities"), String(data.get("kind", "discharged")), data.get("pos", Vector3.ZERO), float(data.get("y", 0.0)))
+	GunFx.monster_corpse(game.get_node("Entities"), String(data.get("kind", "sonographer")), data.get("pos", Vector3.ZERO), float(data.get("y", 0.0)))
 	# SWEEP 3 HOOK (monsters): the Hive dies with its own groan.
 	var death_cue := "monsters_hive_death" if String(data.get("kind", "")) == "hive" else "monsters_shriek"
 	Audio.play(death_cue, data.get("pos", Vector3.ZERO) + Vector3.UP * 1.5, -4.0, 0.15)

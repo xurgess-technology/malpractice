@@ -466,8 +466,8 @@ static func monster_name(kind: String) -> String:
 			return "Hive"
 		"night_nurse":
 			return "Night Nurse"
-		"discharged":
-			return "Discharged"
+		"sonographer":
+			return "Sonographer"
 	return kind.capitalize()
 
 

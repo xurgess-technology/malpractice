@@ -3,8 +3,29 @@
 Everything that changes in **Malpractice**, newest first. One minor version per day of work, one
 patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog).
 
+**2026-09-19 (0.7.x)**
+
+- **0.7.1**: ONE WAY TO HANDLE AN EYEBALL 👁️🫙
+    - Changed: An eyeball is picked up and put down the same way everywhere: hold left click on it, drag it where it goes, let go. It can't be dropped, fumbled or lost, and letting go anywhere else puts it back for free.
+    - Added: The Hive's extraction ends with carrying its eye to a specimen vat, so the eye never touches the floor.
+    - Changed: The new eye for a graft waits in a vat instead of on a tray, and comes out with the forceps.
+    - Added: Every surgery step says what each button does, under its hint.
+    - Changed: A big rectangular steel table in the OR, with room beside the patient. The specimen vat stands on it; the vat stand is gone.
+    - Fixed: The grafted eye was going in backwards, which read as a red blob. It's an orange Hive eye now, the right way round and the right size.
+    - Fixed: The patient no longer appears to shift on the table between surgery steps, and the operating view doesn't bleach a pale face.
+- **0.7.0**: Quiet, please 🔇
+    - Changed: The game starts at 10% volume.
+
 **2026-09-18 (0.6.x)**
 
+- **0.6.16**: The Discharged is gone, the Sonographer is in 🩺
+    - Removed: The Discharged, its IV pole and its rattle. Its kind is the Sonographer everywhere now: shifts, brains, the database, dissection and the dev tools. Old databases keep its page.
+    - Added: The Sonographer walks the halls. He clicks as he goes and squelches through the gel, and both stop when he stops to listen; his neck grows while he listens and searches.
+    - Changed: He hunts the way the Discharged did for now (listen, rush, search). The echo and the rest of his hunting are next.
+- **0.6.15**: The Sonographer, finished
+    - Changed: He looks almost normal until he gets suspicious, and then his neck grows, and grows, with the glowing windpipe stretching up it.
+    - Changed: His right hand is gone: the arm ends at the wrist and an ultrasound wand is fitted there. No cable.
+    - Changed: Ears that look like part of his head, a cleaner shoulder and collar line, no head tilt when he charges, and gel that really drips off him.
 - **0.6.14**: Slim pickings, full shelves
     - Changed: Loot is scarce: 15 to 20 finds a shift instead of 70, and a shift pays about $1,000 instead of $11,000. Most rooms hold nothing, and a harvested brain is a real chunk of the pay.
     - Changed: Pill bottles and X-ray film are cheap filler now; the ultrasound, heart monitor and gold watch are where the money is.

@@ -489,14 +489,14 @@ func _ability_slots() -> void:
 	me.bot_move = Vector2.ZERO
 	me.bot_crouch = false
 	b.add_points(me.peer_id, "hive", 1.0)     # -> slot 0, hive_in
-	b.add_points(me.peer_id, "discharged", 1.0)  # -> slot 1, echo
+	b.add_points(me.peer_id, "sonographer", 1.0)  # -> slot 1, echo
 	_check(b.slot_of(me.peer_id, "hive_in") == 0 and b.slot_of(me.peer_id, "echo") == 1, "hive_in in slot 1, echo in slot 2")
 	# Fire slot 2 (Echo). Slot 1 (Hive Eyes) must still be off cooldown.
 	me.bot_ability_slot = 1
 	me.bot_ability += 1
 	await _frames(3)
 	_check(b.last_result == "echo", "Alt+2 fires Echo (%s)" % b.last_result)
-	_check(b.cooldown_left(me.peer_id, "discharged") > 0.0, "Echo's own cooldown is running")
+	_check(b.cooldown_left(me.peer_id, "sonographer") > 0.0, "Echo's own cooldown is running")
 	_check(b.cooldown_left(me.peer_id, "hive") <= 0.0, "Hive Eyes' cooldown is untouched: each slot cools down on its own")
 	# Now fire slot 1 (Hive Eyes): a Hive to borrow.
 	var wi: Node = b.spawn_hive(game._floor_at(me.global_position + Vector3(0, 0, 10)))
@@ -536,7 +536,7 @@ func _scanner() -> void:
 	_check(me.scan_progress < mid_progress, "looking away resets progress (%.2f)" % me.scan_progress)
 	me.bot_yaw = atan2(-to.x, -to.z)
 	await _frames(3)
-	# A full hold completes the scan. The stand-in Hive (a wandering Discharged body, since
+	# A full hold completes the scan. The stand-in Hive (a wandering Sonographer body, since
 	# Monster.HIVE's real AI does not exist on this branch) would drift off-centre over a full
 	# 3 s hold; pin it in place so this test is about the scanner, not about tracking a moving
 	# target (a real player's aim would need to track it, same as Perception's other callers do).

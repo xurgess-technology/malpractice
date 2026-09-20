@@ -53,16 +53,17 @@ VARIANTS = {
         jaw=0.70, cheek=0.25, nose=1.15, brow=0.0, jowl=0.35, sag=0.6, mouth_open=1.0, eye_open=0.92,
         outfit='gown', graft=False, seed=41),
     # The Sonographer: a doctor who went blind and learned to see with sound. Tall and thin, shoulders
-    # rounded, head cocked. Where the eyes were is flat, smooth scar tissue with a faint seam; no eye
-    # objects and no bandage. Its neck is a chain of bones that stretches about 0.6 m as it gets
-    # suspicious (st_build.add_neck_bones); the windpipe rings ride that chain, so they pull apart as
-    # it cranes. The throat's skin is thin and see-through over them and nothing covers it: the collar
-    # is open and the tie is pulled loose. An ultrasound probe is grown into the right palm, its cable
-    # running up the arm into the side of the neck. Grey-pink skin under a wet gel sheen.
-    # `neck_ext` metres of extra neck at rest, on top of the kit's; it stands `height` + that tall.
+    # a little rounded. Where the eyes were is flat, blank skin; no eye objects and no bandage. At rest
+    # it looks almost normal: an ordinary neck with a glowing windpipe behind a thin pane of skin. The
+    # neck is a chain of bones that stretches about 0.9 m as it gets suspicious
+    # (st_build.add_neck_bones), and the first time you see it longer than a person's neck is when it
+    # starts to grow; the windpipe rings ride that chain, so they pull apart as it cranes. Nothing
+    # covers the throat: the collar is open and the tie is pulled loose. Its right hand is gone: the
+    # arm ends at the wrist and an ultrasound wand is fitted there. Grey-pink skin under a wet gel sheen.
+    # `neck_ext` metres of extra neck at rest, on top of the kit's (none: the crane is the game's).
     'sonographer': dict(
         height=1.82, fem=0.0, girth=0.86, head_scale=1.00, shoulders=0.92, v2=True, sono=True,
-        neck_ext=0.30,
+        neck_ext=0.0,
         skin=(0.78, 0.63, 0.65), flush=(0.74, 0.50, 0.54), lip=(0.46, 0.30, 0.34),
         hair=(0.10, 0.10, 0.10), iris=(0.2, 0.2, 0.2), cloth=(0.86, 0.85, 0.78),
         shirt=(0.72, 0.72, 0.68), tie=(0.30, 0.26, 0.32), trouser=(0.36, 0.35, 0.33),
@@ -73,6 +74,8 @@ VARIANTS = {
 
 FUNGUS = 'fungus'
 GLOW = 'glow'
+## How far apart the Sonographer's windpipe rings stand at rest, head-local metres.
+RING_PITCH = 0.0110
 
 
 def get(name):
@@ -126,6 +129,38 @@ TRUNK = np.array([
     (1.500, 0.120, 0.066, 0.020, 2.4),
     (1.515, 0.075, 0.056, 0.022, 2.1),
 ])
+
+
+# The Sonographer's trunk: the same body up to the chest, then a shoulder line that slopes down from
+# the neck to the shoulder joint like a person's (the surgeon's table stays broad and flat there, which
+# on a long thin body read as a coat hanger). The neck's base is the narrow end of it.
+SONO_TRUNK = np.vstack([
+    TRUNK[TRUNK[:, 0] < 1.29],
+    np.array([
+        (1.290, 0.156, 0.104, 0.002, 2.5),
+        (1.350, 0.160, 0.102, 0.004, 2.6),
+        (1.400, 0.158, 0.096, 0.008, 2.6),
+        (1.440, 0.142, 0.086, 0.013, 2.4),
+        (1.470, 0.112, 0.074, 0.018, 2.2),
+        (1.495, 0.076, 0.062, 0.021, 2.1),
+        (1.512, 0.056, 0.054, 0.022, 2.0),
+        (1.530, 0.050, 0.050, 0.022, 2.0),
+    ])])
+
+
+# The skin under the shirt: the same chest, then a funnel up into the neck's own width. Only the front
+# V of the shirt ever shows it; it must not stand wider than the neck up there or it fills the
+# windpipe's window in.
+SONO_SKIN_TRUNK = np.vstack([
+    TRUNK[TRUNK[:, 0] < 1.29],
+    np.array([
+        (1.290, 0.156, 0.104, 0.002, 2.5),
+        (1.350, 0.140, 0.100, 0.004, 2.4),
+        (1.400, 0.108, 0.086, 0.010, 2.2),
+        (1.440, 0.070, 0.066, 0.016, 2.0),
+        (1.470, 0.048, 0.052, 0.022, 2.0),
+        (1.500, 0.044, 0.046, 0.024, 2.0),
+    ])])
 
 
 def trunk_sdf(s, girth=1.0, belly=0.0, grow=0.0, extra=None, z_lo=None, z_hi=None, table=None, shoulders=1.0):
@@ -318,10 +353,8 @@ class Head:
             h = S.union(h, self.lids_v2(), k=0.0020)
         # ears: a flat plate blended into the side of the head, a rolled rim round the back and top,
         # a lobe, and a shallow bowl in the middle. The Sonographer's are their own pieces (they swivel),
-        # so the head only keeps the stub each one grows from.
-        if self.V.get('sono'):
-            h = S.union(h, S.mirror_x(self.ear_root_sono()), k=0.010)
-        else:
+        # each grown into the side of the head so no seam shows.
+        if not self.V.get('sono'):
             h = S.union(h, S.mirror_x(self.ear_v2()), k=0.009)
         if with_neck:
             h = S.union(h, self.neck_sdf_local(), k=0.016)
@@ -340,8 +373,8 @@ class Head:
     def neck_sdf_local(self):
         ext = self.neck_ext()
         if self.V.get('sono'):
-            # long and thin, barely tapering: it has to read as a column that can stretch
-            return S.round_cone((0, 0.030, -0.200 - ext), (0, 0.010, -0.048), 0.040, 0.030)
+            # an ordinary neck at rest, a little slim; the game stretches it
+            return S.round_cone((0, 0.028, -0.200 - ext), (0, 0.012, -0.050), 0.042, 0.034)
         return S.round_cone((0, 0.024, -0.190 - ext), (0, 0.016, -0.055), 0.046, 0.043)
 
     # -------------------------------------------------------------- the Sonographer's face and throat
@@ -359,37 +392,22 @@ class Head:
                np.array([ec[0] + 0.022, ec[1] - 0.0035, ec[2] + 0.0025])]
         return S.mirror_x(S.chain(pts, [0.0007, 0.0012, 0.0012, 0.0007]))
 
-    def ear_root_sono(self):
-        """The stub the big ear grows out of: it stays on the head so there is no hole behind the ear."""
-        x0, y0, z0 = self.EAR_ROOT - np.array([0.008, 0.0, 0.002])
-        return S.ellipsoid((x0, y0, z0), (0.012, 0.018, 0.028), S.rot((1, 0, 0), -10))
-
-    EAR_ROOT = np.array([0.0780, 0.010, 0.002])     # where the ear pivots (head-local)
+    EAR_ROOT = np.array([0.0705, 0.009, -0.016])    # where the ear pivots: the middle of its root (head-local)
+    EAR_SCALE = 1.30                                 # how much bigger than the surgeon's it is
 
     def ear_sono(self):
-        """A big swivelling ear: a broad thin shell, taller than it is wide, rolled all round its back
-        edge, cupped deep in the middle, on a short stalk. Built round EAR_ROOT so it can turn there."""
-        x0, y0, z0 = self.EAR_ROOT
-        # turned out and back: the cup faces forward and a little away from the head
-        R = S.rot((0, 0, 1), -26) @ S.rot((1, 0, 0), -10)
-        stalk = S.ellipsoid((x0 - 0.008, y0 + 0.001, z0 - 0.006), (0.012, 0.015, 0.020), R)
-        plate = S.ellipsoid((x0 + 0.014, y0 + 0.004, z0 + 0.008), (0.0080, 0.0290, 0.0480), R)
-        lobe = S.ellipsoid((x0 + 0.010, y0 - 0.002, z0 - 0.040), (0.0065, 0.0105, 0.0120), R)
+        """A human ear, grown into the side of the head like the surgeon's but a size up and turned out a
+        little so it catches sound: a plate with a rolled rim, a lobe and a shallow bowl, no stalk, no
+        cup standing off the head. It is its own piece (it swivels), so its root is buried in the skull
+        and the two skins run into each other. Built round EAR_ROOT so it can turn there."""
+        base = self.ear_v2()
+        c = self.EAR_ROOT
+        k = self.EAR_SCALE
+        R = S.rot((0, 0, 1), -10)
 
-        def rim(P):
-            Q = (P - np.array([x0 + 0.017, y0 + 0.005, z0 + 0.009])) @ R
-            u, v = Q[:, 1], Q[:, 2] / 1.62
-            q = np.sqrt(u * u + v * v) - 0.0255
-            d = np.sqrt(q * q + Q[:, 0] ** 2) - 0.0042
-            keep = -(u + 0.011)                      # open at the front, where the sound goes in
-            return S.smax(d, keep, 0.004)
-        ear = S.union(stalk, plate, k=0.008)
-        ear = S.union(ear, lobe, k=0.007)
-        ear = S.union(ear, rim, k=0.005)
-        bowl = S.ellipsoid((x0 + 0.0215, y0 - 0.002, z0 + 0.005), (0.0075, 0.0165, 0.0260), R)
-        ear = S.subtract(ear, bowl, k=0.004)
-        canal = S.sphere((x0 + 0.006, y0 - 0.004, z0 - 0.006), 0.0055)
-        return S.subtract(ear, canal, k=0.002)
+        def f(P):
+            return base(c + ((P - c) @ R) / k) * k
+        return f
 
     def throat_window(self):
         """The shallow lens carved out of the front of the neck, where the skin goes thin and
@@ -397,22 +415,25 @@ class Head:
         ext = self.neck_ext()
         z0 = -0.086
         z1 = -0.188 - ext
-        c = np.array([0.0, -0.024, 0.5 * (z0 + z1)])
-        return S.ellipsoid(c, (0.026, 0.023, 0.5 * (z0 - z1) + 0.002))
+        # deep enough that the rings (centred 0.016 back) stand in the opening, not buried in the neck
+        c = np.array([0.0, -0.020, 0.5 * (z0 + z1)])
+        return S.ellipsoid(c, (0.026, 0.033, 0.5 * (z0 - z1) + 0.002))
 
     def windpipe(self):
         """The rings: a stack of open cartilage hoops down the middle of the neck, on a soft tube.
         They are what glows (scripts/monsters/sonographer_rig.gd)."""
         ext = self.neck_ext()
         z0, z1 = -0.090, -0.192 - ext
-        n = max(6, int(round((z0 - z1) / 0.0175)))
+        # close together at rest, so the throat reads as a windpipe and not a ladder; the crane is what
+        # pulls them apart
+        n = max(6, int(round((z0 - z1) / RING_PITCH)))
         R = S.rot((1, 0, 0), 4)
         fs = []
         for i in range(n):
             t = i / max(n - 1, 1)
             z = z0 + (z1 - z0) * t
             y = 0.016 - 0.008 * t
-            fs.append(S.torus((0.0, y, z), 0.0155 + 0.0030 * t, 0.0040, R))
+            fs.append(S.torus((0.0, y, z), 0.0140 + 0.0030 * t, 0.0030, R))
         tube = S.round_cone((0, 0.016, z0 + 0.008), (0, 0.008, z1 - 0.006), 0.0125, 0.0145)
         f = S.union(*fs, k=0.0035)
         return S.union(f, tube, k=0.004)
@@ -833,19 +854,15 @@ class Head:
         return col, rough
 
     def paint_ear(self, P):
-        """The big ear: the same skin outside, thinner and warmer inside the cup where the light gets
-        through it, darkest down the canal."""
+        """The ear: the head's own skin, a touch warmer toward the rim, so it reads as part of the head
+        and not a separate object stuck on it."""
         V = self.V
         L = self.local(P)
         col, rough = self.paint_skin(P)
-        x0, y0, z0 = self.EAR_ROOT
-        rx = np.abs(L[:, 0]) - x0
-        inside = smooth01((rx - 0.004) / 0.008)
-        warm = srgb(V['flush']) * np.array([1.05, 0.92, 0.90])
-        col = mix(col, warm, np.clip(inside * 0.55, 0, 1))
-        canal = np.exp(-((rx - 0.004) / 0.008) ** 2 - ((L[:, 1] - (y0 - 0.002)) / 0.007) ** 2 - ((L[:, 2] - (z0 - 0.004)) / 0.008) ** 2)
-        col = mix(col, srgb((0.10, 0.05, 0.05)), np.clip(canal * 1.1, 0, 1))
-        rough = rough - 0.10 * inside
+        rx = np.abs(L[:, 0]) - self.EAR_ROOT[0]
+        out = smooth01((rx - 0.008) / 0.014)
+        warm = srgb(V['flush']) * np.array([1.03, 0.94, 0.92])
+        col = mix(col, warm, np.clip(out * 0.35, 0, 1))
         return col, rough
 
     def paint_windpipe(self, P):
@@ -853,7 +870,7 @@ class Head:
         L = self.local(P)
         base = srgb((0.61, 0.42, 1.00))          # #9b6bff, the ability icon's trachea
         col = np.tile(base, (len(P), 1)) * (0.92 + 0.14 * S.fbm(L, 260.0, 19, 2))[:, None]
-        band = 0.5 + 0.5 * np.sin(L[:, 2] / 0.0175 * math.tau)
+        band = 0.5 + 0.5 * np.sin(L[:, 2] / RING_PITCH * math.tau)
         col = mix(col, srgb((0.42, 0.25, 0.84)), np.clip(band * 0.55, 0, 1))
         return col, np.full(len(P), 0.18)
 
@@ -1035,9 +1052,13 @@ def build(name, body):
         hl = np.minimum(hl, np.array([-0.2, -0.13, 1.24 * s]))
         # The Sonographer's stops well under its collar: only the neck is meant to come out of the
         # shirt, and when the neck stretches nothing of the torso goes with it.
-        top = 1.345 * s if V.get('sono') else 1.50 * s
-        chest = trunk_sdf(s, V['girth'], grow=-0.004, z_lo=1.28 * s if V.get('sono') else 1.36 * s, z_hi=top)
-        chest = S.intersect(chest, lambda P: np.abs(P[:, 0]) - (0.075 if V.get('sono') else 0.10) * s, k=0.02)
+        if V.get('sono'):
+            # the skin under the shirt runs up into the neck's base as a funnel, so the collar closes
+            # round skin and not a hole
+            chest = trunk_sdf(s, V['girth'], grow=-0.004, z_lo=1.28 * s, z_hi=1.50 * s, table=SONO_SKIN_TRUNK)
+        else:
+            chest = trunk_sdf(s, V['girth'], grow=-0.004, z_lo=1.36 * s, z_hi=1.50 * s)
+            chest = S.intersect(chest, lambda P: np.abs(P[:, 0]) - 0.10 * s, k=0.02)
         hsdf = S.union(hsdf, chest, k=0.03)
     parts.append(Part('Head', SKIN, hsdf, hl, hh, 0.0011, paint=lambda P: head.paint_skin(P, V['graft'])))
 
@@ -1103,22 +1124,21 @@ def build(name, body):
 # windpipe rings apart, which is the suspicion meter.
 NECK_CHAIN = ('neck', 'neck2', 'neck3', 'neck4')
 ## How much the chain can stretch, in metres, from rest to fully craned.
-CRANE_M = 0.60
-## Where the probe's cable leaves the neck, in head-local units (the side of the neck, its right).
-CABLE_NECK = np.array([-0.030, 0.012, -0.150])
+CRANE_M = 0.90
+WAND_LEN = 0.222        # from the cut wrist to the wand's face, metres
 
 
 def probe_axis(sk):
-    """The wand's axis: out of the right palm, on down past the knuckles."""
+    """The wand's axis: straight on from the forearm, out of the cut wrist."""
+    el = sk.mirror(sk.J['elbow'])
     wr = sk.mirror(sk.J['wrist'])
-    kn = sk.mirror(sk.J['knuckle'])
-    d = kn - wr
+    d = wr - el
     return wr, d / np.linalg.norm(d)
 
 
 def probe_tip(sk):
     wr, d = probe_axis(sk)
-    return wr + d * 0.20
+    return wr + d * WAND_LEN
 
 
 def _gel_paint(V, P):
@@ -1139,8 +1159,8 @@ def _drips(pts):
 
 
 def _sono_hands(V, sk, parts):
-    """The two hands are the character: a probe grown into the right palm with its cable running up
-    the arm into the neck, and a left hand with long spread fingers feeling the air."""
+    """Its left hand is long-fingered and spread, feeling the air. Its right hand is gone: the arm
+    stops at the wrist, cut clean across, and an ultrasound wand is fitted there in a metal collar."""
     g = V['girth']
     s = sk.s
     skin_col = srgb(V['skin'])
@@ -1151,71 +1171,63 @@ def _sono_hands(V, sk, parts):
         low = smooth01((1.05 * s - Pp[:, 2]) / 0.22)
         col = mix(col, srgb(V['flush']), np.clip(low * 0.35, 0, 1))
         return col, np.full(len(Pp), 0.30) - 0.12 * low
+
+    wr, d = probe_axis(sk)
+    frame = _aim_frame(d)
     for side, tag in ((1, 'L'), (-1, 'R')):
-        arm, (sh, el, wr, kn) = arm_sdf(sk, side, g * 0.92, from_t=0.16)
-        hand = hand_sdf(sk, side, 1.06 if side > 0 else 1.10)
-        f = S.union(arm, hand, k=0.010)
-        if side < 0:
-            # the cable's ridge under the skin, from the wrist up to the shoulder
-            ridge = S.chain([wr, el + (wr - el) * 0.22, el, sh + (el - sh) * 0.45, sh],
-                            [0.008, 0.009, 0.010, 0.009, 0.008])
-            f = S.union(f, S.offset(ridge, -0.004), k=0.012)
-        lo = np.minimum(np.minimum(sh, kn), wr) - 0.12
-        hi = np.maximum(np.maximum(sh, kn), wr) + 0.12
+        arm, (sh, el, wrist, kn) = arm_sdf(sk, side, g * 0.92, from_t=0.16)
+        if side > 0:
+            f = S.union(arm, hand_sdf(sk, side, 1.06), k=0.010)
+        else:
+            # cut square across the wrist, with a low healed lip round the edge of the cut
+            f = S.intersect(arm, S.plane(d, float(wrist @ d)), k=0.003)
+            lip = S.torus(tuple(wrist - d * 0.007), 0.0165 * s, 0.0068, frame)
+            f = S.union(f, lip, k=0.007)
+        lo = np.minimum(np.minimum(sh, kn), wrist) - 0.12
+        hi = np.maximum(np.maximum(sh, kn), wrist) + 0.12
         parts.append(Part('Arm_' + tag, SKIN, f, lo, hi, 0.0012, paint=arm_skin))
 
-    # the probe: a chunky wand fused into the right palm, the fingers grown half round it
-    wr, d = probe_axis(sk)
-    # the grip runs through the middle of the palm, so the fingers curl right round it
-    a = wr + d * 0.030
-    b = wr + d * 0.215
-    grip_body = S.round_cone(tuple(wr - d * 0.020), tuple(a + d * 0.055), 0.0225, 0.0215)
-    neck_ = S.round_cone(tuple(a + d * 0.055), tuple(b - d * 0.045), 0.020, 0.023)
-    head_ = S.rbox(tuple(b - d * 0.010), (0.032, 0.032, 0.015), 0.008, _aim_frame(d))
-    collar = S.torus(tuple(a + d * 0.050), 0.026, 0.0075, _aim_frame(d))
-    f = S.union(grip_body, neck_, k=0.012)
-    f = S.union(f, head_, k=0.010)
-    f = S.union(f, collar, k=0.006)
+    # the wand, fitted where the hand was: a metal collar on the cut, a grip with three ridges, a neck
+    # that flares out, and the flat rectangular face that sends the sound
+    at = lambda t: wr + d * t
+    collar = S.torus(tuple(at(0.006)), 0.0235, 0.0072, frame)
+    grip = S.round_cone(tuple(at(0.004)), tuple(at(0.122)), 0.0230, 0.0198)
+    ridges = [S.torus(tuple(at(t)), 0.0230 - 0.0032 * (t - 0.004) / 0.118, 0.0034, frame) for t in (0.050, 0.070, 0.090)]
+    flare = S.round_cone(tuple(at(0.116)), tuple(at(0.190)), 0.0198, 0.0250)
+    face = S.rbox(tuple(at(0.206)), (0.036, 0.023, 0.016), 0.008, frame)
+    f = S.union(grip, flare, k=0.010)
+    for r in ridges:
+        f = S.union(f, r, k=0.004)
+    f = S.union(f, face, k=0.010)
+    f = S.union(f, collar, k=0.005)
 
     def probe_paint(Pp):
         col = np.tile(srgb((0.80, 0.79, 0.74)), (len(Pp), 1)) * (0.92 + 0.14 * S.fbm(Pp, 60.0, 71, 2))[:, None]
         t = (Pp - wr) @ d
-        face = smooth01((t - 0.185) / 0.02)
-        col = mix(col, srgb((0.16, 0.14, 0.20)), np.clip(face, 0, 1))
         grimy = smooth01((S.fbm(Pp, 30.0, 73, 3) - 0.58) / 0.1)
         col = mix(col, srgb((0.40, 0.34, 0.26)), np.clip(grimy * 0.5, 0, 1))
-        return col, np.full(len(Pp), 0.25) + 0.3 * face
+        rough = np.full(len(Pp), 0.25)
+        # the collar is bare metal, the face is dark rubber
+        metal = 1.0 - smooth01((t - 0.016) / 0.008)
+        col = mix(col, srgb((0.52, 0.52, 0.55)), np.clip(metal, 0, 1))
+        rough = rough + (0.28 - rough) * metal
+        face_m = smooth01((t - 0.212) / 0.012)
+        col = mix(col, srgb((0.16, 0.14, 0.20)), np.clip(face_m, 0, 1))
+        return col, rough + 0.3 * face_m
+    a, b = at(-0.03), at(WAND_LEN + 0.03)
     parts.append(Part('Probe', SHOE, f, np.minimum(a, b) - 0.06, np.maximum(a, b) + 0.06, 0.0009,
                       paint=probe_paint, rigid='hand.R'))
 
-    # the cable, in three runs so the charge can travel along it: neck -> shoulder, shoulder ->
-    # elbow, elbow -> probe. Each is its own piece, lit in turn (scripts/monsters/sonographer_rig.gd).
+    # gel drips: off the fingertips of the left hand and off the chin
     hd = Head(V, sk)
-    neck_pt = hd.world(CABLE_NECK)
-    sh, el, wrist, kn = arm_points(sk, -1)
-    over = sh + np.array([0.0, 0.0, 0.055 * s])
-    runs = [('A', [neck_pt, neck_pt + np.array([-0.03, 0.01, -0.10]), over, sh + np.array([-0.02, 0.0, 0.01])]),
-            ('B', [sh + np.array([-0.02, 0.0, 0.01]), sh + (el - sh) * 0.5 + np.array([-0.012, -0.008, 0.0]), el]),
-            ('C', [el, el + (wrist - el) * 0.5 + np.array([-0.010, -0.010, 0.0]), wrist, wrist + d * 0.05])]
-    for tag, pts in runs:
-        rad = [0.0085] * len(pts)
-        cf = S.chain([np.asarray(p, float) for p in pts], rad)
-        lo = np.min(np.array(pts), axis=0) - 0.05
-        hi = np.max(np.array(pts), axis=0) + 0.05
-        parts.append(Part('Cable_' + tag, SHOE, cf, lo, hi, 0.0010,
-                          paint=lambda Pp: (np.tile(srgb((0.22, 0.20, 0.26)), (len(Pp), 1)), np.full(len(Pp), 0.45))))
-
-    # gel drips: off the fingertips of both hands and off the chin
-    for side, tag in ((1, 'L'), (-1, 'R')):
-        m = (lambda p: p) if side > 0 else sk.mirror
-        tips = []
-        for fname in ('index', 'middle', 'ring'):
-            t = m(sk.bones[fname + '3.L'][1])
-            tips.append((t + np.array([0.0, 0.004, -0.004]), 0.0075, 0.022))
-        f = _drips(tips)
-        c = np.array([tp[0] for tp in tips]).mean(axis=0)
-        parts.append(Part('Gel_' + tag, SKIN, f, c - 0.09, c + 0.09, 0.0008,
-                          paint=lambda Pp: _gel_paint(V, Pp), rigid='hand.' + tag))
+    tips = []
+    for fname in ('index', 'middle', 'ring'):
+        t = sk.bones[fname + '3.L'][1]
+        tips.append((t + np.array([0.0, 0.004, -0.004]), 0.0075, 0.022))
+    f = _drips(tips)
+    c = np.array([tp[0] for tp in tips]).mean(axis=0)
+    parts.append(Part('Gel_L', SKIN, f, c - 0.09, c + 0.09, 0.0008,
+                      paint=lambda Pp: _gel_paint(V, Pp), rigid='hand.L'))
     chin = hd.world(np.array([0.0, -0.070, -0.092]))
     parts.append(Part('Gel_Chin', SKIN, _drips([(chin, 0.008, 0.026)]), chin - 0.06, chin + 0.06, 0.0008,
                       paint=lambda Pp: _gel_paint(V, Pp), rigid='head'))
@@ -1240,12 +1252,12 @@ def _coat(V, sk, parts):
     frayed trousers and scuffed shoes. Nothing covers the throat: that is the rule."""
     s = sk.s
     g = V['girth']
-    T2 = TRUNK.copy()
+    T2 = SONO_TRUNK.copy()
     T2[:, 4] = np.minimum(T2[:, 4], 2.2)
 
     # ---- the shirt: close to the body, open at the collar
     # it tucks in: the shirt stops just above the waistband and the trousers sit outside it
-    shirt = trunk_sdf(s, g, grow=0.012, z_lo=0.97 * s, z_hi=1.435 * s, table=T2)
+    shirt = trunk_sdf(s, g, grow=0.012, z_lo=0.97 * s, z_hi=1.515 * s, table=T2)
     for side in (1, -1):
         sh, el, wr, kn = arm_points(sk, side)
         ax = (el - sh) / np.linalg.norm(el - sh)
@@ -1260,11 +1272,15 @@ def _coat(V, sk, parts):
         x, y, z = Pp[:, 0], Pp[:, 1], Pp[:, 2]
         zv = 1.330 * s + np.abs(x) * 0.95
         return np.maximum(zv - z, y - 0.01)
+    # a short stand collar hugging the neck, so the shirt ends in a collar and not a raw hole
+    band = S.subtract(S.capsule((0, 0.024, 1.462 * s), (0, 0.024, 1.510 * s), 0.060 * s),
+                      S.capsule((0, 0.024, 1.40 * s), (0, 0.024, 1.70 * s), 0.048 * s), k=0.004)
+    shirt = S.union(shirt, band, k=0.010)
     shirt = S.subtract(shirt, collar, k=0.008)
-    shirt = S.subtract(shirt, S.capsule((0, 0.02, 1.375 * s), (0, 0.02, 1.70 * s), 0.064 * s), k=0.014)
+    shirt = S.subtract(shirt, S.capsule((0, 0.024, 1.40 * s), (0, 0.024, 1.70 * s), 0.048 * s), k=0.008)
 
     def shirt_extra(Pp, c, r):
-        st = smooth01((S.fbm(Pp, 5.0, 44, 3) - 0.54) / 0.09) * (Pp[:, 1] < 0.02)
+        st = smooth01((S.fbm(Pp, 5.0, 44, 3) - 0.52) / 0.24) * (Pp[:, 1] < 0.02)
         c = mix(c, srgb((0.52, 0.48, 0.34)), np.clip(st * 0.5, 0, 1))
         return c, r
     parts.append(Part('Shirt', CLOTH, shirt, np.array([-0.42, -0.2, 0.86 * s]), np.array([0.42, 0.2, 1.56 * s]),
@@ -1272,22 +1288,24 @@ def _coat(V, sk, parts):
                                                            grime=0.55, blood=0.05, seed=17, extra=shirt_extra)))
 
     # ---- the tie, pulled loose: a short knot low on the chest and a blade hanging off it
-    knot = S.rbox((0.030 * s, -0.098 * s, 1.262 * s), (0.016, 0.014, 0.020), 0.006)
-    blade = S.chain([np.array([0.030 * s, -0.100 * s, 1.250 * s]),
-                     np.array([0.022 * s, -0.104 * s, 1.150 * s]),
-                     np.array([0.034 * s, -0.098 * s, 1.040 * s])], [0.019, 0.022, 0.016])
-    tie = S.union(knot, blade, k=0.010)
+    knot = S.rbox((0.030 * s, -0.106 * s, 1.262 * s), (0.017, 0.010, 0.020), 0.006)
+    blade = S.rbox((0.030 * s, -0.109 * s, 1.135 * s), (0.021, 0.0075, 0.112), 0.005)
+    tie = S.union(knot, blade, k=0.008)
     parts.append(Part('Tie', CLOTH, tie, np.array([-0.06, -0.2, 0.98 * s]), np.array([0.14, 0.02, 1.32 * s]),
                       0.0016, paint=lambda Pp: cloth_paint(V, Pp, V.get('tie', (0.30, 0.26, 0.32)),
                                                            grime=0.4, seed=23)))
 
     # ---- the coat: long, loose, open down the front, one shoulder torn open
+    # roomy over the hips: the thighs of the trousers used to push out through its flanks
     COAT = np.array([
         (0.52, 0.205, 0.168, 0.000, 2.2),
-        (0.70, 0.200, 0.160, 0.004, 2.2),
-        (0.88, 0.192, 0.150, 0.008, 2.3),
-    ] + [tuple(r) for r in TRUNK[4:]])
-    coat = trunk_sdf(s, g, grow=0.030, table=COAT, z_lo=0.52 * s, z_hi=1.455 * s)
+        (0.70, 0.205, 0.160, 0.004, 2.2),
+        (0.88, 0.202, 0.152, 0.008, 2.3),
+        (0.96, 0.190, 0.140, 0.010, 2.4),
+        (1.02, 0.170, 0.122, 0.008, 2.4),
+        (1.08, 0.152, 0.108, 0.004, 2.4),
+    ] + [tuple(r) for r in SONO_TRUNK[6:]])
+    coat = trunk_sdf(s, g, grow=0.030, table=COAT, z_lo=0.52 * s, z_hi=1.515 * s)
     for side in (1, -1):
         sh, el, wr, kn = arm_points(sk, side)
         ax = (el - sh) / np.linalg.norm(el - sh)
@@ -1301,16 +1319,24 @@ def _coat(V, sk, parts):
         rag = 0.055 * (S.fbm(Pp * np.array([1, 1, 0]), 11.0, 51, 2) - 0.45)
         return (0.56 * s + rag) - Pp[:, 2]
     coat = S.intersect(coat, hem, k=0.006)
-    # open down the front: a wedge taken out from the collar to the hem
+    # the collar: a low rolled band round the neck, standing a little off it
+    lapel = S.subtract(S.capsule((0, 0.024, 1.452 * s), (0, 0.024, 1.500 * s), 0.076 * s),
+                       S.capsule((0, 0.024, 1.40 * s), (0, 0.024, 1.70 * s), 0.058 * s), k=0.005)
+    coat = S.union(coat, lapel, k=0.014)
+
+    # open down the front: a wedge taken out from the collar to the hem, wide at the neck so the
+    # throat shows
     def front(Pp):
         x, y, z = Pp[:, 0], Pp[:, 1], Pp[:, 2]
-        w = 0.030 * s + 0.085 * s * smooth01((1.30 * s - z) / (0.55 * s))
+        w = 0.055 * s + 0.060 * s * smooth01((1.30 * s - z) / (0.55 * s))
         return np.maximum(np.abs(x - 0.012 * s) - w, y + 0.02)
     coat = S.subtract(coat, front, k=0.010)
-    coat = S.subtract(coat, S.capsule((0, 0.02, 1.385 * s), (0, 0.02, 1.72 * s), 0.078 * s), k=0.016)
+    coat = S.subtract(coat, S.capsule((0, 0.024, 1.40 * s), (0, 0.024, 1.72 * s), 0.058 * s), k=0.010)
     # the tear: a bite out of the left shoulder
     shL = arm_points(sk, 1)[0]
-    coat = S.subtract(coat, S.ellipsoid(tuple(shL + np.array([-0.035, -0.02, 0.040])), (0.052, 0.058, 0.040)), k=0.014)
+    bite = S.ellipsoid(tuple(shL + np.array([0.030, 0.0, 0.058])), (0.060, 0.060, 0.036))
+    bite = S.displace(bite, lambda Pp: 0.020 * (S.fbm(Pp, 22.0, 81, 3) - 0.5))
+    coat = S.subtract(coat, bite, k=0.006)
     coat = S.displace(coat, lambda Pp: 0.004 * np.sin(np.arctan2(Pp[:, 0], -Pp[:, 1]) * 7 + 0.4)
                       * smooth01((1.15 * s - Pp[:, 2]) / 0.35))
 
@@ -1318,9 +1344,9 @@ def _coat(V, sk, parts):
         # yellowed with age, and gel smeared where the hands wipe
         age = smooth01((0.95 * s - Pp[:, 2]) / (0.5 * s))
         c = mix(c, srgb((0.70, 0.63, 0.42)), np.clip(age * 0.35, 0, 1))
-        gel = smooth01((S.fbm(Pp, 6.0, 57, 3) - 0.52) / 0.08) * smooth01((1.25 * s - Pp[:, 2]) / 0.4)
-        c = mix(c, srgb((0.58, 0.60, 0.52)), np.clip(gel * 0.55, 0, 1))
-        r = r - 0.35 * gel
+        gel = smooth01((S.fbm(Pp, 6.0, 57, 3) - 0.50) / 0.30) * smooth01((1.25 * s - Pp[:, 2]) / 0.4)
+        c = mix(c, srgb((0.62, 0.63, 0.55)), np.clip(gel * 0.40, 0, 1))
+        r = r - 0.25 * gel
         return c, r
     parts.append(Part('Coat', CLOTH, coat, np.array([-0.48, -0.32, 0.50 * s]), np.array([0.48, 0.32, 1.60 * s]),
                       0.0030, paint=lambda Pp: cloth_paint(V, Pp, V['cloth'], grime=0.7, blood=0.1,

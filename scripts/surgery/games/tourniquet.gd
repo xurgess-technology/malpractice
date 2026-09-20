@@ -420,7 +420,16 @@ func hud_state() -> Dictionary:
 				hint = "Circle clockwise round the red rod until the pulse stops."
 		Stage.LOCKED:
 			hint = "Locked."
-	return {"title": title, "hint": hint, "progress": progress, "gauges": []}
+	return {"title": title, "hint": hint, "progress": progress, "gauges": [], "keys": keys()}
+
+
+func keys() -> Array:
+	match stage:
+		Stage.PLACE:
+			return [["Mouse", "slide the strap"], ["Click", "set it there"]]
+		Stage.CRANK:
+			return [["Mouse", "circle the rod"], ["Hold LMB", "keep turning"]]
+	return []
 
 
 func net_state() -> Dictionary:

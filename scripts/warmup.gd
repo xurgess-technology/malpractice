@@ -3,7 +3,7 @@ extends RefCounted
 ## Removes first-time hitches.
 ##
 ## Measured on a Radeon 890M: the first patient body cost 107 ms to build, the first
-## Discharged 119 ms, the first anesthetic vial 37 ms, and every surgery step 70 to 150 ms,
+## Sonographer 119 ms, the first anesthetic vial 37 ms, and every surgery step 70 to 150 ms,
 ## because each new kind of material has to be compiled. Worse, Godot frees a material's
 ## shader as soon as nothing uses it, so a step's minigame paid that cost again every time.
 ##
@@ -224,12 +224,12 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	shelf.add_child(ptable)
 	ptable.position = Vector3(0.0, -1.4, -2.2)
 	ptable.scale = Vector3.ONE * 0.5
-	# GRAFTING chunk C: the vat stand that sits beside every OR table.
-	var vstand := Node3D.new()
-	Vats.build_stand(vstand)
-	shelf.add_child(vstand)
-	vstand.position = Vector3(0.6, -1.4, -2.2)
-	vstand.scale = Vector3.ONE * 0.5
+	# GRAFTING chunk C: the specimen vat that stands on every OR table (the eye steps reach into it).
+	var vat := Node3D.new()
+	Vats.build_model(vat)
+	shelf.add_child(vat)
+	vat.position = Vector3(0.6, -1.4, -2.2)
+	vat.scale = Vector3.ONE * 0.5
 	_inert(shelf)
 	_report(progress, "staff", HumanModelScript.SURGEONS.size())
 	await _frame(slice)
@@ -238,9 +238,9 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	# builds her Blender model (monster/night_nurse: its two skinned materials, shadow mesh and the
 	# first load of its six maps), so the first Night Nurse of a session does not hitch.
 	var mx := -1.0
-	# "sonographer" also builds the glow shader its throat, cable and probe share, the see-through
+	# "sonographer" also builds its gel-drip particles, the glow shader its throat and wand share, the see-through
 	# pane of skin over its windpipe and the glossy gel copy of its skin material.
-	for kind in ["discharged", "night_nurse", "hive", "sonographer"]:  # SWEEP 3 HOOK (monsters)
+	for kind in ["night_nurse", "hive", "sonographer"]:  # SWEEP 3 HOOK (monsters)
 		var model: Node3D = MonsterModel.new()
 		shelf.add_child(model)
 		model.setup(kind)
@@ -337,6 +337,10 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 					"step": step, "variant": step.get("variant", ""), "shift": 1,
 					"difficulty": 1.0, "flags": {"sedation": 1.0, "tourniquet": 0.4},
 					"seed": 7 + i, "body": body, "operator": false,
+					# GRAFTING chunk C: the graft's own knobs, so the eye steps build the eye going IN
+					# (the Hive eyeball's shader) and the forceps seat step's tray, nerve and cues here.
+					"no_fail": true, "eye_kind": "eye_surgeon", "eye_kind_in": "eye_hive",
+					"eye_radius": Grafts.EYE_RADIUS,
 				})
 				games.append(mg)
 				await _slice(slice)

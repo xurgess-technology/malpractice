@@ -10,7 +10,7 @@ extends Node
 ## the OR's doors are a manual "double" pair (polish-or-doors: they used to be automatic) that a
 ## player opens and closes with E and that the paramedic crew pushes open by walking into them with
 ## the gurney, staying open where the crew leaves them; a Hive pushes a door open slowly, a
-## rushing Discharged bursts through, the Night Nurse opens one only while unobserved; closed doors
+## rushing Sonographer bursts through, the Night Nurse opens one only while unobserved; closed doors
 ## block sight (perception, the Hive's eyes) and attenuate noise; gates are locked in the lobby
 ## and open after clock-in; the wings regenerate between two shifts with a different layout while
 ## the entrance stays identical; the rebuild is spread over frames; a jammed gate frees itself.
@@ -443,15 +443,15 @@ func _sight_and_noise() -> void:
 	await _seconds(0.6)
 	var f_open: float = game.doors.sound_factor(outside, inside)
 	_check(f_closed < 0.6 and is_equal_approx(f_open, 1.0), "sound through the door: closed %.2f, open %.2f" % [f_closed, f_open])
-	# A Discharged beyond a closed door does not hear a footstep that it hears with the door open.
+	# A Sonographer beyond a closed door does not hear a footstep that it hears with the door open.
 	game.doors._drive(d, 0.0, 5.0)
 	await _seconds(0.6)
-	var m: Node = game._add_monster("discharged", inside + d.normal * 1.5)
+	var m: Node = game._add_monster("sonographer", inside + d.normal * 1.5)
 	await _frames(3)
 	m.brain.heard_time = game.world_time - 0.05
 	var loud := 0.55
 	var dist: float = (outside - m.global_position).length()
-	_say("discharged %.1f m from the noise; hear per loudness %.1f" % [dist, m.brain.HEAR_PER_LOUDNESS])
+	_say("sonographer %.1f m from the noise; hear per loudness %.1f" % [dist, m.brain.HEAR_PER_LOUDNESS])
 	loud = clampf((dist + 0.8) / m.brain.HEAR_PER_LOUDNESS, 0.1, 2.0)
 	game.emit_noise(outside, loud, "footstep")
 	await _frames(2)
@@ -463,7 +463,7 @@ func _sight_and_noise() -> void:
 	game.emit_noise(outside, loud, "footstep")
 	await _frames(2)
 	var heard_open: bool = not m.brain.last_heard.is_empty()
-	_check(not heard_closed and heard_open, "a Discharged hears a noise through the open door but not the closed one (closed %s, open %s)" % [str(heard_closed), str(heard_open)])
+	_check(not heard_closed and heard_open, "a Sonographer hears a noise through the open door but not the closed one (closed %s, open %s)" % [str(heard_closed), str(heard_open)])
 	game.kill_monster(m)
 	await _frames(2)
 
@@ -500,8 +500,8 @@ func _monsters_and_doors() -> void:
 	game.kill_monster(w)
 	game.doors.set_all(false)
 	await _seconds(1.5)
-	# The Discharged, rushing: bursts through.
-	var dm: Node = game._add_monster("discharged", outside)
+	# The Sonographer, rushing: bursts through.
+	var dm: Node = game._add_monster("sonographer", outside)
 	await _frames(2)
 	dm.brain.target = inside
 	dm.mode = dm.Mode.RUSH
@@ -518,8 +518,8 @@ func _monsters_and_doors() -> void:
 		if opened_at < 0.0 and absf(d.amount) > 0.85:
 			opened_at = t
 			break
-	_check(opened_at > 0.0 and first_move > 0.0 and opened_at - first_move < 0.4, "a rushing Discharged bursts a door open (%.2f s)" % (opened_at - first_move if opened_at > 0.0 else -1.0))
-	_check(int(game.doors.stats.get("discharged_burst", 0)) >= 1, "counted as a burst (slam)")
+	_check(opened_at > 0.0 and first_move > 0.0 and opened_at - first_move < 0.4, "a rushing Sonographer bursts a door open (%.2f s)" % (opened_at - first_move if opened_at > 0.0 else -1.0))
+	_check(int(game.doors.stats.get("sonographer_burst", 0)) >= 1, "counted as a burst (slam)")
 	game.kill_monster(dm)
 	game.doors.set_all(false)
 	await _seconds(1.5)

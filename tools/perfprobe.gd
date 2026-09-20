@@ -529,7 +529,7 @@ func _run_brains() -> void:
 		var placed := []
 		var fwd: Vector3 = -bot.global_transform.basis.z
 		for i in 5:
-			var it: Node = b.spawn_brain("brain_hive" if i % 2 == 0 else "brain_discharged", 1.0, bot.global_position + fwd * (1.2 + i * 0.25) + Vector3.UP * 0.5)
+			var it: Node = b.spawn_brain("brain_hive" if i % 2 == 0 else "brain_sonographer", 1.0, bot.global_position + fwd * (1.2 + i * 0.25) + Vector3.UP * 0.5)
 			it.bt = game.world_time - i * 50.0
 			placed.append(it)
 		bot.bot_pitch = -0.5

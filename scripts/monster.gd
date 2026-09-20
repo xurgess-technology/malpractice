@@ -3,7 +3,7 @@ extends CharacterBody3D
 ## Three creatures, three rules you can learn: eyes, then ears, then being watched.
 ##
 ##   The Hive     sight only; lumbers slowly after anyone it sees, forgets them fast.
-##   The Discharged  eyeless; hunts by sound. Freezes to listen, ears turning, then rushes.
+##   The Sonographer  blind; hunts by sound. Freezes to listen, ears turning, its neck growing, then rushes.
 ##   The Night Nurse moves only while nobody is looking at it with light on it.
 ##
 ## Simulated only on the host (the behaviour lives in scripts/monsters/*_brain.gd).
@@ -18,11 +18,11 @@ enum State { WANDER, CHASE, STUNNED, SEDATED }
 ## What the monster is visibly doing. Replicated; drives animation and sound. Append only.
 enum Mode { IDLE, WANDER, LISTEN, RUSH, SEARCH, STALK, STUNNED, RETREAT, SEDATED }
 
-const DISCHARGED := "discharged"
+const SONOGRAPHER := "sonographer"
 const NIGHT_NURSE := "night_nurse"
 const HIVE := "hive"
-const KINDS := [HIVE, DISCHARGED, NIGHT_NURSE]
-## The Discharged and the Night Nurse together.
+const KINDS := [HIVE, SONOGRAPHER, NIGHT_NURSE]
+## The Sonographer and the Night Nurse together.
 const MAX_MONSTERS := 5
 ## Hives have their own cap.
 const MAX_HIVES := 8
@@ -33,7 +33,8 @@ const STAGGER_SECONDS := 0.7
 const WAKE_STAGGER := 1.2
 
 const Model := preload("res://scripts/monsters/monster_model.gd")
-const DischargedBrain := preload("res://scripts/monsters/discharged_brain.gd")
+const SonographerBrain := preload("res://scripts/monsters/sonographer_brain.gd")
+const SonoRig := preload("res://scripts/monsters/sonographer_rig.gd")
 const NurseBrain := preload("res://scripts/monsters/night_nurse_brain.gd")
 const HiveBrain := preload("res://scripts/monsters/hive_brain.gd")
 const Zones := preload("res://scripts/hospital_builder.gd")
@@ -42,7 +43,7 @@ const HiveRig := preload("res://scripts/monsters/hive_rig.gd")
 const NurseGrab := preload("res://scripts/monsters/nurse_grab.gd")
 
 var monster_id: int = 0
-var kind: String = DISCHARGED
+var kind: String = SONOGRAPHER
 var state: int = State.WANDER
 var damage: int = 1
 var knockback: float = 9.0
@@ -52,7 +53,7 @@ var moving: bool = false
 var mode: int = Mode.WANDER
 var speed: float = 0.0          ## current ground speed, m/s
 var observed: bool = false      ## Night Nurse: someone is watching it in the light
-var listen_yaw: float = 0.0     ## Discharged: head turn toward the sound, relative to facing
+var listen_yaw: float = 0.0     ## Sonographer: head turn toward the sound, relative to facing
 var lunge_t: float = 0.0        ## > 0 while the lunge plays
 ## Night Nurse: the peer id of the surgeon she holds by the neck (0 nobody), and how long she has held
 ## them. Host authoritative (report `gp`); every machine counts grab_t itself (nurse_grab.gd).
@@ -90,6 +91,8 @@ var _groan_timer := 0.0
 var _breath_timer := 0.0
 var _twitch_timer := 0.0
 var _twitch := Vector3.ZERO
+var _click_timer := 0.0
+var _sono_susp := 0.0          ## the Sonographer's neck: 0 an ordinary neck, 1 fully craned
 var _listen_amt := 0.0
 var _lunge_amt := 0.0
 var _stagger := 0.0
@@ -105,8 +108,8 @@ var _rng := RandomNumberGenerator.new()
 
 
 ## Which monsters a shift gets.
-##   The Discharged / the Night Nurse (cap MAX_MONSTERS): shift 1 is one Discharged; the Night
-##   Nurse joins on shift 2; one more of each every two shifts after that; one extra Discharged
+##   The Sonographer / the Night Nurse (cap MAX_MONSTERS): shift 1 is one Sonographer; the Night
+##   Nurse joins on shift 2; one more of each every two shifts after that; one extra Sonographer
 ##   per two players beyond the first.
 ##   Hives (cap MAX_HIVES), from shift 1: 4 solo on shift 1, one more per shift and per
 ##   extra player. They come last in the list; game._spawn_monsters places them in groups.
@@ -123,7 +126,7 @@ static func roster(shift: int, player_count: int) -> Array[String]:
 	var i := 0
 	while d + n > 0:
 		if (i % 2 == 0 and d > 0) or n == 0:
-			out.append(DISCHARGED)
+			out.append(SONOGRAPHER)
 			d -= 1
 		else:
 			out.append(NIGHT_NURSE)
@@ -140,13 +143,13 @@ static func hive_count(shift: int, player_count: int) -> int:
 
 ## Can it be sedated, strapped and dissected (it has a brain)?
 static func is_capturable(monster_kind: String) -> bool:
-	return monster_kind == HIVE or monster_kind == DISCHARGED
+	return monster_kind == HIVE or monster_kind == SONOGRAPHER
 
 
 static func max_hp_for(monster_kind: String) -> int:
 	match monster_kind:
 		HIVE: return 2
-		DISCHARGED: return 4
+		SONOGRAPHER: return 4
 	return 0
 
 
@@ -154,7 +157,7 @@ static func display_name(monster_kind: String) -> String:
 	match monster_kind:
 		HIVE: return "Hive"
 		NIGHT_NURSE: return "Night Nurse"
-	return "Discharged"
+	return "Sonographer"
 
 
 ## A still copy lying on its back (monster_model.gd), for dissection bodies.
@@ -165,7 +168,7 @@ static func make_lying(monster_kind: String) -> Node3D:
 static func new_monster(id: int, monster_kind: String, pos: Vector3) -> CharacterBody3D:
 	var m: Monster = Monster.new()
 	m.monster_id = id
-	m.kind = monster_kind if KINDS.has(monster_kind) else DISCHARGED
+	m.kind = monster_kind if KINDS.has(monster_kind) else SONOGRAPHER
 	m.name = "Monster_%d_%s" % [id, m.kind]
 	m._rng.seed = hash("monster%d" % id)
 	m._build()
@@ -194,8 +197,8 @@ func _build() -> void:
 			damage = 1
 			knockback = 9.0
 			body_radius = 0.36
-			height = 2.1
-			brain = DischargedBrain.new(self)
+			height = 1.85
+			brain = SonographerBrain.new(self)
 	max_hp = max_hp_for(kind)
 	hp = max_hp
 
@@ -820,6 +823,10 @@ func _update_visual(delta: float) -> void:
 			model.play("idle", 0.45, 0.4)
 		return
 
+	if model.sono != null:
+		_sono_visual(delta)
+		return
+
 	# Twitches while it searches or stands: small, sudden, bird-like.
 	_twitch_timer -= delta
 	if _twitch_timer <= 0.0:
@@ -838,6 +845,50 @@ func _update_visual(delta: float) -> void:
 		model.play("walk", clampf(speed / 3.6, 0.2, 1.0), 0.25)
 	else:
 		model.play("idle", 1.4 if mode == Mode.SEARCH else 0.7, 0.3)
+
+
+## The Sonographer's own model (monster/sonographer, sonographer_rig.gd): which clip and how fast, and its
+## look interface. **The neck is the suspicion meter**: an ordinary neck while it wanders, growing while
+## it listens and searches (the longer it has been suspicious, the further), and dropping back to a low
+## run when it rushes. Every machine, from the mode alone, so clients need no extra state.
+func _sono_visual(delta: float) -> void:
+	var sn = model.sono
+	var want := 0.0
+	var look := "idle"
+	match mode:
+		Mode.LISTEN:
+			want = 0.8
+			look = "suspicious"
+		Mode.SEARCH:
+			want = 0.55
+			look = "search"
+		Mode.RUSH:
+			want = 0.1
+			look = "rush"
+		Mode.STUNNED:
+			look = "stagger"
+		Mode.WANDER:
+			look = "wander" if moving else "idle"
+	if lunge_t > 0.0:
+		look = "wail"
+	# It rises quickly and sinks slowly, the way the rig eases it.
+	_sono_susp = move_toward(_sono_susp, want, delta * (1.8 if want > _sono_susp else 0.5))
+	model.set_sono_look(_sono_susp, 0.0, look)
+	sn.twitch = sn.twitch.lerp(Vector3.ZERO, clampf(delta * 6.0, 0.0, 1.0))
+	if lunge_t > 0.0:
+		model.play("attack", 1.0, 0.05)
+	elif mode == Mode.STUNNED:
+		model.play("stagger", 1.0, 0.05)
+	elif mode == Mode.LISTEN:
+		model.play("listen", 1.0, 0.15)
+	elif mode == Mode.RUSH and moving:
+		model.play("run", clampf(speed / SonoRig.RUSH_SPEED, 0.5, 2.0), 0.15)
+	elif moving:
+		model.play("walk", clampf(speed / SonoRig.WANDER_SPEED, 0.5, 2.2), 0.25)
+	elif mode == Mode.SEARCH:
+		model.play("search", 1.0, 0.3)
+	else:
+		model.play("idle", 1.0, 0.3)
 
 
 ## The Hive's own model (monster/hive, hive_rig.gd): which clip and how fast, the idle head lolling,
@@ -966,7 +1017,7 @@ func _update_sound(delta: float) -> void:
 		if kind == HIVE:
 			Audio.play("monsters_hive_groan", global_position + Vector3.UP * 1.5, 2.0, 0.15)
 		else:
-			Audio.play("monsters_shriek", global_position + Vector3.UP * 1.6, -3.0 if kind == DISCHARGED else -6.0, 0.1)
+			Audio.play("monsters_shriek", global_position + Vector3.UP * 1.6, -3.0 if kind == SONOGRAPHER else -6.0, 0.1)
 	_last_lunge = lunging
 	var calm_now := calm > 0.0
 	if calm_now and not _last_calm and mode == Mode.RETREAT:
@@ -996,11 +1047,17 @@ func _update_sound(delta: float) -> void:
 			_groan_timer = _rng.randf_range(9.0, 20.0)
 			if viewer == null or viewer.global_position.distance_to(global_position) < 18.0:
 				Audio.play("monsters_hive_groan", global_position + Vector3.UP * 1.5, -7.0, 0.12)
-	elif kind == DISCHARGED:
-		# The rattle only while it walks. When it stops to listen, the silence is the tell.
-		if moving and mode != Mode.LISTEN and _sound_timer <= 0.0:
-			_sound_timer = clampf(0.62 - speed * 0.07, 0.24, 0.55) * _rng.randf_range(0.85, 1.15)
-			Audio.play("monsters_iv_rattle", global_position + Vector3.UP * 0.2, -4.0 if speed < 2.0 else -1.0, 0.1)
+	elif kind == SONOGRAPHER:
+		# A wet step per footfall and dry tongue clicks, both only while it is not listening: when it
+		# stops to listen, the silence is the tell. The clicks come faster the more suspicious it is.
+		if mode != Mode.LISTEN:
+			if moving and _sound_timer <= 0.0:
+				_sound_timer = clampf(0.95 - speed * 0.11, 0.26, 0.8) * _rng.randf_range(0.9, 1.1)
+				Audio.play("monsters_sono_step", global_position + Vector3.UP * 0.05, -6.0 if speed < 2.0 else -2.0, 0.1)
+			_click_timer -= delta
+			if _click_timer <= 0.0:
+				_click_timer = lerpf(1.3, 0.35, _sono_susp) * _rng.randf_range(0.8, 1.25)
+				Audio.play("monsters_sono_click", global_position + Vector3.UP * 1.5, -8.0, 0.08)
 	else:
 		if moving and not observed:
 			if _sound_timer <= 0.0:

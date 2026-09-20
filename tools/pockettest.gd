@@ -12,7 +12,7 @@ extends Node
 ##     offset from the seam, its speed and heading; the carried body stays on the shoulder; the
 ##     supplies stay in hand; everyone ends up on the far side
 ##   - a Night Nurse follows a player from the hospital into the pocket through a seam
-##   - a Discharged in the pocket hears a player on the hospital side of a seam and comes through
+##   - a Sonographer in the pocket hears a player on the hospital side of a seam and comes through
 ##   - a loose item dropped past a seam lands in the other copy
 ##   - noise near a seam is heard on the other side; nothing past a seam is reachable
 ##   - the next shift: whoever is in the pocket is walked out, what was left there is gone, the old
@@ -107,7 +107,7 @@ func _run_space(kind: String) -> void:
 	_remove_bot(follower)
 	await _frames(2)
 	await _nurse_follows(kind, pk)
-	await _discharged_hears(kind, pk)
+	await _sonographer_hears(kind, pk)
 	await _item_crosses(kind, pk)
 	game._clear_monsters()
 	await _rebuild_next_shift(kind)
@@ -320,7 +320,7 @@ func _nurse_follows(kind: String, pk) -> void:
 	await _frames(2)
 
 
-func _discharged_hears(kind: String, pk) -> void:
+func _sonographer_hears(kind: String, pk) -> void:
 	var s: Dictionary = pk.seams[pk.seams.size() - 1]
 	var back := float(s.d) - 1.0
 	var listener := Stub.local_point(s.xp, float(s.w) - 1.0, back)
@@ -334,7 +334,7 @@ func _discharged_hears(kind: String, pk) -> void:
 	_check(ok, "%s: a noise near a seam is mirrored into the other copy (%d mirrors)" % [kind, mirrors.size()])
 	bot.teleport(speaker)
 	bot.bot_move = Vector2.ZERO
-	var d = game._add_monster("discharged", listener)
+	var d = game._add_monster("sonographer", listener)
 	await _frames(2)
 	var before := _count_crossings("monster", int(d.monster_id))
 	var t0 := game.world_time
@@ -347,9 +347,9 @@ func _discharged_hears(kind: String, pk) -> void:
 			break
 		await _frames(1)
 	if pk.in_pocket(d.global_position):
-		_say("     Discharged mode %d at stub-local %s, last heard %s" % [int(d.mode), str(Stub.to_local(s.xp, d.global_position)), str(d.brain.last_heard)])
-	_check(not pk.in_pocket(d.global_position), "%s: the Discharged heard the player through the seam and came through (%.1f s)" % [kind, game.world_time - t0])
-	_check(_count_crossings("monster", int(d.monster_id)) - before == 1, "%s: the Discharged crossed exactly once" % kind)
+		_say("     Sonographer mode %d at stub-local %s, last heard %s" % [int(d.mode), str(Stub.to_local(s.xp, d.global_position)), str(d.brain.last_heard)])
+	_check(not pk.in_pocket(d.global_position), "%s: the Sonographer heard the player through the seam and came through (%.1f s)" % [kind, game.world_time - t0])
+	_check(_count_crossings("monster", int(d.monster_id)) - before == 1, "%s: the Sonographer crossed exactly once" % kind)
 	game._clear_monsters()
 	await _frames(2)
 

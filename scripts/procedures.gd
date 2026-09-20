@@ -49,16 +49,16 @@ const PATIENTS := {
 			"dissection": "Came in through the front door and never left. Still in the gown.",
 		},
 	},
-	"discharged": {
-		"name": "The Discharged",
-		"full_name": "Discharged patient, no records",
-		"body": "discharged",
+	"sonographer": {
+		"name": "The Sonographer",
+		"full_name": "Sonographer, unregistered",
+		"body": "sonographer",
 		"monster": true,
 		"weight_kg": 88.0,
 		"limb_name": "",
 		"limb_radius_m": 0.05,
 		"blurbs": {
-			"dissection": "Signed out years ago. The IV line is still taped to its arm.",
+			"dissection": "Walked out of the ultrasound room mid-scan. The wand is still fitted to its wrist.",
 		},
 	},
 }
@@ -106,7 +106,7 @@ const AILMENTS := {
 		"steps": [
 			{"id": "cut", "label": "Cut around the socket", "item": "scalpel", "uses": 0, "game": "eye", "variant": "cut", "site": "eye"},
 			{"id": "scoop", "label": "Scoop the old eye out", "item": "eye_spoon", "uses": 0, "game": "eye", "variant": "scoop", "site": "eye"},
-			{"id": "seat", "label": "Seat the new eye", "item": "eye_spoon", "uses": 0, "game": "eye", "variant": "seat", "site": "eye"},
+			{"id": "seat", "label": "Seat the new eye with forceps", "item": "forceps", "uses": 0, "game": "eye", "variant": "grab", "site": "eye"},
 			{"id": "stitch", "label": "Stitch it in", "item": "suture_kit", "uses": 1, "game": "eye", "variant": "stitch", "site": "eye"},
 		],
 	},
@@ -132,6 +132,9 @@ const AILMENTS := {
 			{"id": "cut", "label": "Cut around the eye", "item": "scalpel", "uses": 0, "game": "eye", "variant": "cut", "site": "eye"},
 			{"id": "scoop", "label": "Scoop the eye out", "item": "eye_spoon", "uses": 0, "game": "eye", "variant": "scoop", "site": "eye"},
 			{"id": "snip", "label": "Snip the optic nerve", "item": "scalpel", "uses": 0, "game": "eye", "variant": "snip", "site": "eye"},
+			# 2026-09-19: and it goes straight into the specimen vat standing on the table, with the
+			# forceps -- the seat step's game the other way round (scripts/grafting/eye_seat.gd).
+			{"id": "vat", "label": "Put the eye in the vat", "item": "forceps", "uses": 0, "game": "eye", "variant": "place", "site": "eye"},
 		],
 	},
 }
@@ -180,7 +183,7 @@ static func is_monster_only(ailment_id: String) -> bool:
 	return bool(AILMENTS.get(ailment_id, {}).get("monster_only", false))
 
 
-## dissection (sweep 3): a monster patient (hive, discharged).
+## dissection (sweep 3): a monster patient (hive, sonographer).
 static func is_monster(patient_id: String) -> bool:
 	return bool(PATIENTS.get(patient_id, {}).get("monster", false))
 

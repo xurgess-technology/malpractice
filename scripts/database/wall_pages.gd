@@ -29,11 +29,11 @@ const SECTIONS := [
 ]
 
 ## Which brain path a monster's ability grows on, and its name.
-const ABILITY := {"hive": "Hive Eyes", "discharged": "Echo"}
+const ABILITY := {"hive": "Hive Eyes", "sonographer": "Echo"}
 
 const MONSTER_TEXT := {
 	"hive": ["Wanders the wings until it hears something. It can't see: running, dropping things and shoving give you away.", "About 2 doses of anesthetic put it under."],
-	"discharged": ["Big, slow and relentless. It hunts by sound and smell, and once it has your trail it doesn't let go.", "It takes about 3 doses to put it under."],
+	"sonographer": ["A blind doctor with a wand for a hand. It clicks as it walks and hunts by sound: watch its neck, it grows as it gets suspicious.", "It takes about 3 doses to put it under."],
 	"night_nurse": ["She only moves when nobody is looking at her. Keep your eyes on her.", "Nobody knows what happens if she reaches you."],
 }
 
@@ -42,7 +42,7 @@ const PROCEDURE_TEXT := {
 	"amputation": "An infected limb that can't be saved. Take it off before the infection spreads.",
 	"stitches": "A downed teammate with a deep gash. Stitch it shut and they get back up.",
 	"dissection": "A sedated monster on the table. Open the skull and pull out the brain.",
-	"eye_extraction": "A strapped Hive on the table. Hold the scalpel to start: cut round the eye, scoop it out, snip the nerve. Then get the eye into a vat before it spoils.",
+	"eye_extraction": "A strapped Hive on the table. Hold the scalpel to start: cut round the eye, scoop it out, snip the nerve, then lift it into the specimen vat standing on the table with the forceps.",
 }
 
 const SURGERY_TEXT := {
@@ -69,7 +69,7 @@ const LOOT_BLURBS := {
 	"defibrillator": "A portable defibrillator. Takes both hands.",
 	"ultrasound": "A portable ultrasound. The best find in the wings.",
 	"brain_hive": "A Hive's brain. Drink it to grow Hive Eyes.",
-	"brain_discharged": "A Discharged brain. Drink it to grow Echo.",
+	"brain_sonographer": "A Sonographer brain. Drink it to grow Echo.",
 	"eye_hive": "The eyeball of a strapped Hive. It clouds over and spoils in a minute or two unless it goes in a vat.",
 	"eye_surgeon": "A surgeon's own eyeball, labelled with whose it is. It spoils outside a vat, too.",
 }

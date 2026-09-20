@@ -139,7 +139,7 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 
 - **Monsters wander into the entrance building and the neutral area.** They only *spawn* on wing
   hallways, but `Monster.random_nav_point` picks any point of the one navigation region, so a
-  Discharged can stroll into the lobby or the parking lot. `HospitalBuilder.zone_of(info, pos)`
+  Sonographer can stroll into the lobby or the parking lot. `HospitalBuilder.zone_of(info, pos)`
   tells where a point is. Loop (wave 2): wander targets inside the entrance building or the
   neutral area are now rejected (`game.monster_may_wander_to`, one hook in `random_nav_point`), but
   noise (surgery monitors, footsteps) and chases still lead monsters into the OR and outside, and
@@ -357,7 +357,7 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 ## Brains (sweep 3, brains worker)
 
 - **Hive Eyes was built against a stand-in Hive.** On the brains branch `Monster.HIVE` does
-  not exist, so `brains.spawn_hive` makes a Discharged body with `kind = "hive"` (it still
+  not exist, so `brains.spawn_hive` makes a Sonographer body with `kind = "hive"` (it still
   hunts by sound). The camera sits at `m.height * 0.93` and 0.34 m in front of the monster's origin
   along its facing; the real Hive model may need a different eye point (its head can block the
   view, or the camera can poke through a wall the Hive faces). The sedation end is only reached
@@ -396,7 +396,7 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 
 - **Spawning a Hive costs about 6-8 ms** on the machine that builds it (the rig, its animation
   library copy, a few dozen primitives and materials; the baked part meshes are cached after the
-  first one, which the warmup builds), about what a Discharged (9 ms) or Night Nurse (8 ms) costs.
+  first one, which the warmup builds), about what a Sonographer (9 ms) or Night Nurse (8 ms) costs.
   Clock-in now spawns 4-8 of them in the same frame on the host, and a client builds them as the
   snapshot arrives: 25-60 ms more in an already heavy frame. Spreading the spawns over frames, or
   pooling models, would remove it; not yet seen as a stall in play.
@@ -419,9 +419,9 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
   doorway. `MIN_ENTRANCE_DIST` (5 m) and `SHALLOW_BAND` (12 m) in `monster.gd` are the knobs.
 - **wake() while dragged hits the dragger itself** (the contract says combat drops the monster and
   it hits the dragger); combat must not add its own hit, or the dragger takes two.
-- **The Discharged's ears only read up close.** At 4 m or more in flashlight they are a small
+- **The Sonographer's ears only read up close.** At 4 m or more in flashlight they are a small
   bump on each side of the head; the listening flare is visible in the lab's
-  `discharged_ears_listen` close-up. The face is primitives (brow, sealed sockets with a stitched
+  `sonographer_ears_listen` close-up. The face is primitives (brow, sealed sockets with a stitched
   seam, a slit mouth) and still looks a bit mask-like in profile.
 - **The nettest `monsters` scenario uses the combat stub** (no `monster_pin`), so a dragged monster
   on the client is only checked for `dragged_by`, not for following the pin; the lab checks the pin
@@ -530,11 +530,11 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   off the body: `tools/dissectiontest` fails its head-bone check (2 cm) and the table-fit check, but
   the straps have no check, so look at `tools/dissection_shots/01*`, `02*` after such a change.
 - **The openable head is one ellipsoid**, not the walking look's two skull pieces, so the skull is a
-  little rounder, and the face pieces are copied from `discharged_look.gd` / `hive_look.gd` (edits
-  there do not reach the table). The Discharged's brow sits 6 mm further out so it does not sink into
+  little rounder, and the face pieces are copied from `sonographer_look.gd` / `hive_look.gd` (edits
+  there do not reach the table). The Sonographer's brow sits 6 mm further out so it does not sink into
   the ellipsoid; it keeps the walking head's bright, fine-noise band look, which under the OR lamp
   (plus the saw's guide glow on the forehead) reads a bit like a bandage. From beside the table the
-  Discharged's ear bowl (pink with a dark canal dot) can read as an eye at a glance, exactly as it
+  Sonographer's ear bowl (pink with a dark canal dot) can read as an eye at a glance, exactly as it
   does on the walking monster in profile.
 - **The rig body's back sinks about 4 cm into the table top** (the lying copy's gown back is lower
   than its legs; raised so the legs rest on the table). Hidden by the table from most angles.
@@ -556,7 +556,7 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   the surgery system's stir (strongest at sedation 0, roughly every 2.5 s); there is no separate,
   stronger jolt for an awake monster. The head barely moves so the work planes stay on it.
 - **An awake monster shrieks forever** (noise 0.7 every 3.5-6.5 s) until re-dosed, dissected or the
-  shift ends: a forgotten one keeps calling the Discharged to the OR. No strap breaks (by design).
+  shift ends: a forgotten one keeps calling the Sonographer to the OR. No strap breaks (by design).
 - **Monster cases never block clocking out** (`ShiftLoop._clock_out_blocker` skips them); the next
   shift's `_clear_case` removes a strapped monster left behind. The softlock guard
   (`_live_requirements`) still counts a monster case's bone saw and forceps.
@@ -590,10 +590,10 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   regions join the map a few frames apart. `tools/mapcheck.gd` waits for both; code that paths the frame
   after a build may get a hospital-only path.
 - **Things the mirrors do not carry across a seam**: a player's head glow, held-item models' own lights,
-  monster sounds (a Discharged's rattle is heard where it really is), the Echo outlines and Hive Eyes. A
+  monster sounds (a Sonographer's rattle is heard where it really is), the Echo outlines and Hive Eyes. A
   Hive does not see a player on the other side of a seam (its sight rays go to the real position), and
   the danger heartbeat counts only monsters in the same space. Hearing does cross: a noise within 26 m of
-  a seam is mirrored into the other copy, pulled into the stub (the Discharged comes through and then
+  a seam is mirrored into the other copy, pulled into the stub (the Sonographer comes through and then
   hears the real noise).
 - **Mirrors copy meshes, not animation state**: a mirror shares the body's skeleton, so it animates, but
   anything drawn without a MeshInstance3D (particles, decals, Label3D name tags) does not show, and blend
@@ -610,7 +610,7 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
 - **The Restaurant's fourth entrance wall is the kitchen's back wall**, so an entrance can open into the
   kitchen between the stove and the sink (only when the dining room's walls are taken).
 - **The pockets add loot, containers and monster spawn points** to the map's lists, so a map with a pocket
-  has more loot, and a Discharged or a Night Nurse may spawn inside the pocket. `Monster.random_nav_point`
+  has more loot, and a Sonographer or a Night Nurse may spawn inside the pocket. `Monster.random_nav_point`
   can pick a pocket point, so hospital monsters sometimes wander into a pocket through a seam.
 - **The Factory reads dim**: pools of high-bay light 12-20 m apart and the flashlight; the far walls are
   lost in the (per-pocket) fog on purpose. Its machines are primitive silhouettes.
@@ -825,8 +825,7 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   tracked in combat (replicated as `cb.s`), the lying look tips the monster's model onto its back,
   and combat pins a dragged monster itself (in `physics_tick` and `_process`). Each fallback turns
   itself off once the real method or field exists; re-run `tools/combattest.tscn` and the nettest
-  `combat` scenario after the merge. The fallback lying Discharged keeps its IV pole standing
-  upright beside it (`tools/combat_shots/05_sedated_prompt.png`).
+  `combat` scenario after the merge. (The old note about the lying fallback's IV pole is gone with the pole.)
 - **Fallback only: shoving a sedated monster half wakes it.** `game.player_shoved` calls
   `m.shoved()`, which replaces the long knock-down with a 2 s stun; the monster then wanders while
   combat still counts it as sedated. Gone once `sedate()` / `is_sedated()` come from monster.gd.
@@ -841,7 +840,7 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   `Player.carry_hold` so the HUD needed no change). One word in `hud.gd` if it matters.
 - **Prompts over a bright surface are hard to read.** The cream prompt text under the crosshair
   (`hud.gd _draw_prompt`, no outline) all but vanishes over the white patient table, so "Strap the
-  Discharged to the table" is barely visible (`tools/combat_shots/06_drag_fp.png`). Not combat's
+  Sonographer to the table" is barely visible (`tools/combat_shots/06_drag_fp.png`). Not combat's
   code; an outline or a dark backing would fix every prompt.
 - **Friendly fire respects invulnerability.** A teammate hit in the last 3 s (the normal
   post-hit invulnerability) takes no saw damage, but the swing still counts as a hit (noise, break

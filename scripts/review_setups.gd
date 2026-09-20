@@ -23,6 +23,9 @@ const SETUPS := {
 	# Dr. Botsworth, ready to operate. `graft_back` is the same with the graft already done.
 	"graft": {"seed": 4242, "stage": "_graft"},
 	"graft_back": {"seed": 4242, "stage": "_graft_back"},
+	# 2026-09-19: both eye procedures at once -- a Hive strapped to one table with an empty vat on
+	# it (Eyeball Extraction), and you strapped to another with a Hive's eye in its vat (Grafting).
+	"eyes": {"seed": 4242, "stage": "_eyes"},
 	# TRINKETS chunk B (docs/ITEMS_AND_ICONS.md): all six in hand, a Hive to tag and bonk, and a
 	# teammate lying down for the defibrillator.
 	"trinkets": {"seed": 4242, "stage": "_trinkets"},
@@ -248,7 +251,8 @@ static func _trinkets(game: Game) -> void:
 ## GRAFT (docs/GRAFTING.md, chunk C): you are strapped to a free OR table with a vat holding a
 ## Hive's eyeball on its stand, and you are already Dr. Botsworth, standing beside you with the
 ## scalpel, the eye spoon and the suture kit. Aim at the table and press E for each of the four
-## steps; F1 -> "Back to my own body" puts you back in your own head, where you hold E to get up and
+## steps (hold the right tool: 1 scalpel, 2 eye spoon, 3 forceps, 4 suture kit); F1 -> "Back to my
+## own body" puts you back in your own head, where you hold E to get up and
 ## can go and look in the Personnel mirror.
 static func _graft(game: Game) -> void:
 	await _graft_stage(game, "eye_hive", "", false)
@@ -271,7 +275,7 @@ static func _graft_stage(game: Game, vat_kind: String, owner: String, already: b
 	game.dev.request("no_game_over", {"on": true})
 	game.dev.request("monsters_off", {"on": true})
 	var ti: int = game.free_patient_table()
-	var si: int = game.vats.stand_of_table(ti)
+	var si: int = game.vats.place_of_table(ti)
 	if ti < 0 or si < 0:
 		push_warning("[review] graft setup: no free table with a vat stand")
 		return
@@ -279,7 +283,7 @@ static func _graft_stage(game: Game, vat_kind: String, owner: String, already: b
 	var tb := Basis(Vector3.UP, yaw)
 	var table: Vector3 = game.table_position(ti)
 	# The vat, already on that table's stand, with the part that goes in.
-	var vat = game._spawn_item("specimen_vat", 1, Transform3D(tb, game.vats.stands[si].position as Vector3), WorldItem.State.LOOSE)
+	var vat = game._spawn_item("specimen_vat", 1, Transform3D(tb, game.vats.places[si].position as Vector3), WorldItem.State.LOOSE)
 	vat.x = Eyes.pack(vat_kind, owner, 0.0, 120 if vat_kind == "eye_hive" else 45)
 	if already:
 		game.grafts.apply(p.peer_id, "eye_hive")   # you already wear the Hive eyeball
@@ -303,8 +307,10 @@ static func _graft_stage(game: Game, vat_kind: String, owner: String, already: b
 	bw.bot_move = Vector2.ZERO
 	for i in bw.slots.size():
 		bw.slots[i] = Player.empty_slot()
+	# The four steps' tools, in the order they are used: 1 scalpel, 2 eye spoon, 3 forceps, 4 suture kit.
 	bw.take_into("scalpel", 1)
 	bw.take_into("eye_spoon", 1)
+	bw.take_into("forceps", 1)
 	bw.take_into("suture_kit", 1)
 	bw.selected = 0
 	bw.flashlight_on = true
@@ -319,3 +325,23 @@ static func _graft_stage(game: Game, vat_kind: String, owner: String, already: b
 	bw.bot_yaw = bw._yaw
 	bw.bot_pitch = bw._pitch
 	game.say("Aim at the table and press E for each step. F1: back to your own body.", 8.0)
+
+
+## BOTH EYE PROCEDURES in one window (2026-09-19): a Hive strapped to a free table with an empty vat
+## standing on it -- hold the scalpel and press E to start Eyeball Extraction, four steps, the last
+## one putting the eye in that vat -- and you strapped to another table with a vat holding a Hive's
+## eye, as Dr. Botsworth with all four tools, for Eyeball Grafting.
+static func _eyes(game: Game) -> void:
+	var tree := game.get_tree()
+	var hive_table: int = game.free_patient_table()
+	if hive_table >= 0:
+		game.dissection.dev_strap("hive", 1.0, hive_table)
+		for i in 4:
+			await tree.physics_frame
+		var hi: int = game.vats.place_of_table(hive_table)
+		if hi >= 0:
+			game._spawn_item("specimen_vat", 1,
+				Transform3D(Basis(Vector3.UP, float(game.table_yaw_of(hive_table))),
+					game.vats.places[hi].position as Vector3), WorldItem.State.LOOSE)
+	await _graft_stage(game, "eye_hive", "", false)
+	game.say("Two tables: the Hive's eye comes out into its vat, yours gets swapped. F1: back to your own body.", 9.0)

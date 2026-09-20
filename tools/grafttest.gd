@@ -1,6 +1,6 @@
 extends Node
 ## Grafting (docs/GRAFTING.md): chunk A -- the eyes, the specimen vat and Eyeball Extraction -- and
-## chunk C -- the vat stands, Eyeball Grafting on a strapped surgeon and the ability it gives.
+## chunk C -- the vat on the table, Eyeball Grafting on a strapped surgeon and the ability it gives.
 ##
 ##   godot --headless --fixed-fps 60 --path . tools/grafttest.tscn
 ##
@@ -50,7 +50,8 @@ func _data_checks() -> void:
 	_check(Eyes.label("eye_hive", "") == "Hive's eyeball" and Eyes.label("eye_surgeon", "Zach") == "Zach's eyeball", "eye labels")
 	_check(Eyes.spoil_factor(0.0) == 1.0 and Eyes.spoil_factor(Eyes.FRESH_SECONDS) == 1.0 and Eyes.is_spoiled_factor(Eyes.spoil_factor(Eyes.ROTTEN_SECONDS)), "an eye is fresh, then spoils")
 	var st: Array = Procedures.steps("eye_extraction")
-	_check(st.size() == 3 and st[0].item == "scalpel" and st[1].item == "eye_spoon" and st[2].item == "scalpel" and st[0].site == "eye", "extraction steps: scalpel, spoon, scalpel")
+	_check(st.size() == 4 and st[0].item == "scalpel" and st[1].item == "eye_spoon" and st[2].item == "scalpel" 		and st[3].item == "forceps" and String(st[3].get("variant", "")) == "place" and st[0].site == "eye",
+		"extraction steps: scalpel, spoon, scalpel, forceps into the vat")
 	_check(Procedures.is_monster_only("eye_extraction") and not Procedures.patient_ailments().has("eye_extraction"), "extraction is monster-only")
 	var packed := Eyes.pack("eye_surgeon", "Zach", 12.4, 45)
 	var u := Eyes.unpack(packed)
@@ -124,6 +125,107 @@ func _minigame_checks() -> void:
 		sn.handle_cursor(Vector2(0.0, 0.008), 0, 1.0 / 60.0)
 	_check(sd[0], "and the nerve parts, then the step finishes")
 	sn.free()
+	_grab_checks(script)
+
+
+## GRAFTING chunk C, step 3: the forceps game (scripts/grafting/eye_seat.gd). The graft's `grab`
+## takes the new eye out of the vat and seats it; the extraction's `place` takes the loose eye out
+## of the socket and drops it in the vat. Same game, one each way.
+func _grab_checks(script: GDScript) -> void:
+	var st3: Dictionary = Procedures.step("eye_graft", 2)
+	_check(String(st3.get("item", "")) == "forceps" and String(st3.get("variant", "")) == "grab",
+		"step 3 seats the new eye with forceps ('%s', %s)" % [String(st3.get("label", "")), str(st3.get("item", ""))])
+	var dt := 1.0 / 60.0
+	var g = script.new()
+	var seated := [false]
+	var botches := [0]
+	g.botched.connect(func(_a, _r): botches[0] += 1)
+	g.finished.connect(func(r): seated[0] = bool(r.get("eye_seated", false)))
+	g.setup({"variant": "grab", "no_fail": true, "patient_id": "player", "eye_kind": "eye_surgeon",
+		"eye_kind_in": "eye_hive", "eye_radius": 0.0135, "step": st3, "body": null, "operator": true})
+	var seat = g.get("_seat")
+	_check(seat != null, "the grab variant hands over to its own game")
+	if seat == null:
+		g.free()
+		return
+	var vat: Vector2 = seat.source_at()
+	_check(vat != Vector2.ZERO and String(seat.mode) == "grab", "the eye starts in the vat, away from the socket")
+	# Grab and drag, the same as the extraction's step: hold primary near the eye in the vat and the
+	# jaws take it, with nothing to lower first.
+	for i in 90:
+		g.handle_cursor(vat, 0, dt)
+	for i in 30:
+		g.handle_cursor(vat, 1, dt)
+	_check(int(seat.stage) == 1, "holding left click on the eye in the vat picks it up (stage %d)" % int(seat.stage))
+	# Whipping the hand about cannot lose it.
+	for i in 60:
+		g.handle_cursor(Vector2(0.07 if i % 2 == 0 else -0.07, 0.06 if i % 3 == 0 else -0.05), 1, dt)
+	_check(int(seat.stage) == 1 and int(seat.drops) == 0, "no speed shakes it loose (stage %d, drops %d)"
+		% [int(seat.stage), int(seat.drops)])
+	# Letting go away from the socket puts it back in the vat, and never botches.
+	for i in 40:
+		g.handle_cursor(Vector2(0.09, 0.08), 1, dt)   # draw it clear of the socket first
+	for i in 20:
+		g.handle_cursor(Vector2(0.09, 0.08), 0, dt)
+	_check(int(seat.stage) == 0 and int(seat.drops) == 1 and botches[0] == 0,
+		"letting go away from the socket drops it back in the vat, no botch (stage %d, drops %d, botches %d)"
+			% [int(seat.stage), int(seat.drops), botches[0]])
+	# The bot plays the whole step out: into the vat, out with the eye, across, let go over the socket.
+	var t := 0.0
+	while t < 40.0 and not seated[0]:
+		t += dt
+		var inp: Dictionary = g.bot_input(t, 1.0)
+		g.handle_cursor(inp.cursor, int(inp.buttons), dt)
+		g.tick(dt)
+	_check(seated[0] and botches[0] == 0, "the bot seats it: 'eye_seated' after %.1f s, %d botches" % [t, botches[0]])
+	g.free()
+	_place_checks(script)
+
+
+## GRAFTING, the extraction's last step: the loose eye goes into the vat on the table (`place`).
+func _place_checks(script: GDScript) -> void:
+	var st4: Dictionary = Procedures.step("eye_extraction", 3)
+	_check(String(st4.get("item", "")) == "forceps" and String(st4.get("variant", "")) == "place",
+		"the extraction's last step puts the eye in the vat with forceps ('%s')" % String(st4.get("label", "")))
+	var dt := 1.0 / 60.0
+	var g = script.new()
+	var in_vat := [false]
+	var botches := [0]
+	g.botched.connect(func(_a, _r): botches[0] += 1)
+	g.finished.connect(func(r): in_vat[0] = bool(r.get("eye_in_vat", false)))
+	g.setup({"variant": "place", "patient_id": "hive", "eye_kind": "eye_hive", "eye_radius": 0.0155,
+		"step": st4, "body": null, "operator": true})
+	var seat = g.get("_seat")
+	_check(seat != null and String(seat.mode) == "place", "the place variant runs the same game the other way")
+	if seat == null:
+		g.free()
+		return
+	_check(seat.source_at() == Vector2.ZERO and seat.target_at() != Vector2.ZERO,
+		"it starts in the socket and ends in the vat")
+	# 2026-09-19: grab and drop, nothing else. Hold primary near the loose eye and it comes up; no
+	# speed and no distance can shake it out; letting go off the vat only puts it back in the socket.
+	for i in 40:
+		g.handle_cursor(Vector2.ZERO, 1, dt)
+	_check(int(seat.stage) == 1, "holding left click near the loose eye picks it up, with no lowering (stage %d)" % int(seat.stage))
+	for i in 60:
+		g.handle_cursor(Vector2(0.09 if i % 2 == 0 else -0.09, 0.08 if i % 3 == 0 else -0.06), 1, dt)
+	_check(int(seat.stage) == 1 and int(seat.drops) == 0, "whipping the hand about cannot lose it (stage %d, drops %d)"
+		% [int(seat.stage), int(seat.drops)])
+	for i in 40:
+		g.handle_cursor(Vector2(0.09, 0.08), 1, dt)   # clear of the vat before letting go
+	for i in 20:
+		g.handle_cursor(Vector2(0.09, 0.08), 0, dt)
+	_check(int(seat.stage) == 0 and int(seat.drops) == 1 and botches[0] == 0,
+		"letting go away from the vat drops it back in the socket, no botch (stage %d, drops %d)"
+			% [int(seat.stage), int(seat.drops)])
+	var t := 0.0
+	while t < 40.0 and not in_vat[0]:
+		t += dt
+		var inp: Dictionary = g.bot_input(t, 1.0)
+		g.handle_cursor(inp.cursor, int(inp.buttons), dt)
+		g.tick(dt)
+	_check(in_vat[0] and botches[0] == 0, "the bot gets it into the vat: 'eye_in_vat' after %.1f s, %d botches" % [t, botches[0]])
+	g.free()
 
 
 func _run() -> void:
@@ -154,7 +256,8 @@ func _run() -> void:
 	for v in vat_items:
 		all_empty = all_empty and String(v.x) == ""
 	_check(all_empty, "they are empty")
-	_check(game.shelf_count("scalpel") == 1 and game.shelf_count("eye_spoon") == 1, "a scalpel and an eye spoon wait in the OR's storage")
+	_check(game.shelf_count("scalpel") == 1 and game.shelf_count("eye_spoon") == 1 and game.shelf_count("forceps") >= 1,
+		"a scalpel, an eye spoon and forceps wait in the OR's storage (forceps %d)" % game.shelf_count("forceps"))
 	_check(not vats.spot_free(0) and not vats.spot_free(2) and vats.spot_free(3), "spots 0-2 hold vats, 3-5 are free")
 
 	# ---- spoiling, in and out of a vat
@@ -276,16 +379,33 @@ func _run() -> void:
 	game._proxy_used(game.table_interact_id(table), me)
 	var began3 := await _until(func(): return sys.is_local_operating() and sys.mg != null and String(sys.mg.get("variant")) == "snip", 5.0)
 	_check(began3, "then the nerve snip")
-	var ok3 := await _until(func(): return String(c.get("state", "")) != "on_table", 60.0)
-	_check(ok3 and String(c.state) == "stable" and bool(c.flags.get("eye_removed", false)), "the snip wins the case (state %s, flags %s)" % [String(c.get("state", "")), str(c.flags)])
+	var ok3 := await _until(func(): return int(c.get("step_index", 0)) >= 3, 60.0)
+	_check(ok3 and bool(c.flags.get("eye_removed", false)), "the snip cuts it free (step %d, flags %s)" % [int(c.get("step_index", 0)), str(c.flags)])
+	# 2026-09-19: and the last step puts it in the vat standing on the table, with the forceps.
+	var vi: int = game.vats.place_of_table(table)
+	var evat: Node = game._spawn_item("specimen_vat", 1,
+		Transform3D(Basis(Vector3.UP, float(game.table_yaw_of(table))), game.vats.places[vi].position as Vector3),
+		WorldItem.State.LOOSE)
+	await _seconds(0.5)
+	_clear_hands()
+	game.give_hand(me, "forceps", 1)
+	me.selected = _slot_of("forceps")
+	game._proxy_used(game.table_interact_id(table), me)
+	var began4 := await _until(func(): return sys.is_local_operating() and sys.mg != null and String(sys.mg.get("variant")) == "place", 5.0)
+	_check(began4, "then the forceps step that puts the eye in the vat")
+	var ok4 := await _until(func(): return String(c.get("state", "")) != "on_table", 90.0)
+	_check(ok4 and String(c.state) == "stable" and bool(c.flags.get("eye_in_vat", false)),
+		"the vat step wins the case (state %s, flags %s)" % [String(c.get("state", "")), str(c.flags)])
 	var le: Dictionary = game.dissection.last_eye
 	_check(not le.is_empty() and String(le.kind) == "eye_hive", "the Hive's eye is handed over (%s)" % str(le.keys()))
-	var in_hand := -1
-	for i in me.slots.size():
-		if String(me.slots[i].kind) == "eye_hive":
-			in_hand = i
-	_check(in_hand >= 0 or (le.get("node") != null and is_instance_valid(le.get("node"))), "the eye came out in the operator's hand (or on the tray)")
-	_check(in_hand >= 0 and me.slots[in_hand].has("bt") and int(me.slots[in_hand].get("v", 0)) > 0, "it is a live eye with a spoil clock and a value")
+	await _frames(3)
+	var packed := Eyes.unpack(String(evat.x))
+	_check(String(packed.get("kind", "")) == "eye_hive" and int(packed.get("value", 0)) > 0,
+		"the eye is floating in the vat on the table (%s)" % String(evat.x))
+	# Clear it away again: the graft checks below want a table with nothing on it.
+	game.world_items.erase(evat.item_id)
+	evat.queue_free()
+	await _frames(2)
 	await _frames(3)
 	_check(body != null and bool(body.get("_flat")), "the Hive dies on the table")
 
@@ -302,14 +422,14 @@ func _graft_checks() -> void:
 	dev.request("clear_patient")
 	_clear_hands()
 	await _frames(3)
-	_check(vats.stands.size() == game.patient_tables.size() and vats.stands.size() >= 2,
-		"every OR table has a vat stand (%d stands, %d tables)" % [vats.stands.size(), game.patient_tables.size()])
+	_check(vats.places.size() == game.patient_tables.size() and vats.places.size() >= 2,
+		"every OR table has a place for a vat on it (%d places, %d tables)" % [vats.places.size(), game.patient_tables.size()])
 	var ti := game.free_patient_table()
-	var si: int = vats.stand_of_table(ti)
-	_check(si >= 0, "the free table's stand (table %d, stand %d)" % [ti, si])
+	var si: int = vats.place_of_table(ti)
+	_check(si >= 0, "the free table's vat place (table %d, place %d)" % [ti, si])
 	if si < 0:
 		return
-	# ---- strapped down, with nothing on the stand
+	# ---- strapped down, with no vat on the table
 	game.strap_in(me, ti)
 	await _frames(4)
 	_check(me.strapped() and int(game.player_table.get("index", -1)) == ti, "strapped to table %d" % ti)
@@ -325,14 +445,14 @@ func _graft_checks() -> void:
 	game.give_hand(bw, "scalpel", 1)
 	await _frames(3)
 	var no_vat := String(game._table_prompt(bw, ti))
-	_check(no_vat.begins_with("!No vat on the stand"), "no vat on the stand: the table says why ('%s')" % no_vat)
+	_check(no_vat.begins_with("!No vat on the table"), "no vat on the table: the table says why ('%s')" % no_vat)
 
 	# ---- a vat with a spoiled Hive eye
-	var stand_at: Vector3 = vats.stands[si].position
+	var stand_at: Vector3 = vats.places[si].position
 	var vat: Node = game._spawn_item("specimen_vat", 1, Transform3D(Basis(Vector3.UP, yaw), stand_at), WorldItem.State.LOOSE)
 	vat.x = Eyes.pack("eye_hive", "", Eyes.ROTTEN_SECONDS + 50.0, 120)
 	await _frames(3)
-	_check(vats.vat_on_stand(ti) == vat, "the vat stands on the stand beside the table")
+	_check(vats.vat_on_table(ti) == vat, "the vat stands on the table")
 	var spoiled := String(game._table_prompt(bw, ti))
 	_check(spoiled.begins_with("!") and spoiled.contains("spoiled"), "a spoiled eye cannot be grafted ('%s')" % spoiled)
 	vat.x = Eyes.pack("eye_hive", "", 0.0, 120)
@@ -373,8 +493,8 @@ func _graft_checks() -> void:
 ## One whole graft, Botsworth operating. `first` only changes the messages. False on a timeout.
 func _graft_run(bw, ti: int, first: bool) -> bool:
 	var tag := "graft" if first else "swap back"
-	var tools := ["scalpel", "eye_spoon", "eye_spoon", "suture_kit"]
-	var names := ["cut", "scoop", "seat", "stitch"]
+	var tools := ["scalpel", "eye_spoon", "forceps", "suture_kit"]
+	var names := ["cut", "scoop", "grab", "stitch"]
 	var ps: Node = game.player_surgery
 	var sys: Node = ps.surgery
 	for i in tools.size():

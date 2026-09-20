@@ -453,7 +453,13 @@ func hud_state() -> Dictionary:
 			hint = "Bone. Steady strokes, don't rush it."
 		else:
 			hint = "That's biting. Keep going."
-	return {"title": title, "hint": hint, "progress": progress, "gauges": []}
+	return {"title": title, "hint": hint, "progress": progress, "gauges": [], "keys": keys()}
+
+
+func keys() -> Array:
+	if done or depth >= 1.0:
+		return []
+	return [["Hold LMB", "saw"], ["Mouse", "back and forth on the line"]]
 
 
 func net_state() -> Dictionary:
@@ -522,7 +528,7 @@ static func self_test() -> Array:
 	# dissection (sweep 3): the skull variant on both monsters, sedated, stirring and awake (the
 	# awake thrashing botches come from the dissection system, not from here).
 	for sed in [1.0, 0.5, 0.2]:
-		for pid in ["hive", "discharged"]:
+		for pid in ["hive", "sonographer"]:
 			for skill in [1.0, 0.5, 0.0]:
 				var g = script.new()
 				var tally := {"n": 0, "v": 0.0, "done": false, "q": 0.0, "flag": false, "reasons": {}}

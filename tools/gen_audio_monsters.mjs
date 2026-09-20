@@ -9,8 +9,9 @@
 // the Audio autoload picks between at random.
 //
 // Cues (all meant to be unsettling rather than loud; the game plays them in 3D):
-//   monsters_iv_rattle   squeaky caster + loose pole rattle, short, retriggered while walking
-//   monsters_inhale      the Discharged's wet listening inhale when it hears something
+//   monsters_sono_step   the Sonographer's wet footfall in ultrasound gel, one per step
+//   monsters_sono_click  its dry tongue clicks, retriggered while it walks; the rate follows suspicion
+//   monsters_inhale      the Sonographer's wet listening inhale when it hears something
 //   monsters_shriek      the lunge shriek, both monsters
 //   monsters_squeak      the Night Nurse's shoe squeaks, one per footfall
 //   monsters_lullaby     a faint, slightly wrong humming the Nurse breathes when unobserved
@@ -101,43 +102,48 @@ function room(a, mix = 0.25, size = 1) {
 
 // ---------------------------------------------------------------- cues
 
-/** Caster squeal + a loose clamp ticking against the pole + wheels on lino. */
-function ivRattle(v) {
-  const r = rngFor('iv_rattle' + v);
-  const len = r.range(0.34, 0.46);
-  const out = buf(len);
-  // Squeal: a stick-slip chirp, pitch wobbling, amplitude chattering.
-  const f0 = r.range(1700, 2500), bp = biquad('bandpass', 6);
-  const sq0 = r.range(0.0, 0.08), sqLen = r.range(0.12, 0.24);
+/** A wet footfall: a shoe squelching through ultrasound gel, with a little suction pop as it lifts. */
+function sonoStep(v) {
+  const r = rngFor('sono_step' + v);
+  const len = r.range(0.20, 0.27);
+  const out = buf(len + 0.1);
+  const bp = biquad('bandpass', 1.6), lp = biquad('lowpass', 0.7);
+  const f0 = r.range(700, 1100);
+  for (let i = 0; i < len * SR; i++) {
+    const t = i / SR, u = t / len;
+    const e = Math.min(1, t / 0.012) * Math.exp(-u * 4.2);
+    // the squelch: filtered noise whose centre falls as the gel squeezes out
+    out[i] += bp(r() * 2 - 1, f0 * (1 - 0.65 * u)) * e * 1.3;
+    out[i] += lp(r() * 2 - 1, 240) * e * 0.5;
+  }
+  // the suction pop as the foot comes away
+  const pop = r.range(0.11, 0.16);
   let ph = 0;
-  for (let i = 0; i < out.length; i++) {
-    const t = i / SR - sq0;
-    if (t < 0 || t > sqLen) continue;
-    const f = f0 * (1 + 0.06 * Math.sin(TAU * 7 * t) + 0.12 * (t / sqLen));
-    ph += f / SR;
-    const chatter = 0.5 + 0.5 * Math.sign(Math.sin(TAU * r.range(38, 44) * t + ph * 0.02));
-    const e = Math.sin(Math.PI * t / sqLen) ** 1.5;
-    out[i] += bp(Math.sin(TAU * ph) + 0.4 * Math.sin(TAU * ph * 2.01), f) * chatter * e * 0.55;
+  for (let i = 0; i < 0.05 * SR; i++) {
+    const t = i / SR;
+    ph += (260 + 900 * t / 0.05) / SR;
+    const j = Math.floor(pop * SR) + i;
+    if (j < out.length) out[j] += Math.sin(TAU * ph) * Math.exp(-t / 0.012) * 0.45;
   }
-  // Rattle: 3-6 metallic ticks, each an inharmonic ringing pole.
-  const n = 3 + Math.floor(r() * 4);
-  for (let k = 0; k < n; k++) {
-    const at = r.range(0, len - 0.12);
-    const modes = [r.range(780, 980), r.range(2300, 2600), r.range(4400, 5100), r.range(6900, 7600)];
-    const tick = buf(0.14);
-    const g = r.range(0.35, 1);
-    for (let i = 0; i < tick.length; i++) {
-      const t = i / SR;
-      let s = 0;
-      modes.forEach((m, j) => { s += Math.sin(TAU * m * t) * Math.exp(-t / (0.05 / (j + 1))) / (j + 1); });
-      tick[i] = s * g * 0.35;
-    }
-    add(out, tick, at);
+  return fadeEdges(room(out, 0.2, 0.7));
+}
+
+/** One dry tongue click, the way blind people echolocate. Retriggered; the rate follows how suspicious it is. */
+function sonoClick(v) {
+  const r = rngFor('sono_click' + v);
+  const len = 0.12;
+  const out = buf(len + 0.15);
+  const bp = biquad('bandpass', 4), bp2 = biquad('bandpass', 9);
+  const f = r.range(2100, 3000);
+  for (let i = 0; i < len * SR; i++) {
+    const t = i / SR;
+    const n = r() * 2 - 1;
+    out[i] += bp(n, f) * Math.exp(-t / 0.006) * 1.6;
+    out[i] += bp2(n, f * 1.9) * Math.exp(-t / 0.004) * 0.6;
+    // the palate: a short resonant thock under the click
+    out[i] += Math.sin(TAU * r.range(1100, 1300) * t) * Math.exp(-t / 0.012) * 0.5;
   }
-  // Rolling: low filtered noise under everything.
-  const lp = biquad('lowpass', 0.8);
-  for (let i = 0; i < out.length; i++) out[i] += lp(r() * 2 - 1, 220) * 0.5 * Math.sin(Math.PI * i / out.length);
-  return fadeEdges(room(out, 0.2, 0.8));
+  return fadeEdges(room(out, 0.3, 0.9), 1, 20);
 }
 
 /** A slow, wet, rising inhale through something that is not quite a mouth. */
@@ -412,7 +418,8 @@ function sedatedBreath(v) {
 // ---------------------------------------------------------------- main
 
 const CUES = [
-  ['monsters_iv_rattle', 4, ivRattle, -9],
+  ['monsters_sono_step', 4, sonoStep, -10],
+  ['monsters_sono_click', 5, sonoClick, -8],
   ['monsters_inhale', 2, inhale, -6],
   ['monsters_shriek', 3, shriek, -5],
   ['monsters_squeak', 5, squeak, -10],

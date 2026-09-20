@@ -2,7 +2,7 @@ extends Node
 ## dissection (sweep 3): strapped monsters on the patient tables. See docs/SWEEP3.md ("Dissection")
 ## and docs/CONTRACTS.md ("Dissection").
 ##
-## A monster case is a normal game case with `monster: true`, `patient_id` hive | discharged and
+## A monster case is a normal game case with `monster: true`, `patient_id` hive | sonographer and
 ## `ailment_id` "dissection" (Procedures). The surgery systems operate it like any patient; this
 ## node adds what only a monster has, all host authoritative:
 ##
@@ -32,11 +32,11 @@ const SHRIEK_NOISE := 0.7
 const SHRIEK_EVERY := Vector2(3.5, 6.5)
 const REMOVE_AFTER := 6.0
 const FLAG_STEP := 0.05
-const BRAIN_KINDS := {"hive": "brain_hive", "discharged": "brain_discharged"}
+const BRAIN_KINDS := {"hive": "brain_hive", "sonographer": "brain_sonographer"}
 const LootTable := preload("res://scripts/economy/loot_table.gd")
 ## Fallback when the brains system has no spawn_brain: a plain loot item worth this much at quality 1.
 const FALLBACK_KIND := "gold_watch"
-const FALLBACK_VALUE := {"hive": 150, "discharged": 350}
+const FALLBACK_VALUE := {"hive": 150, "sonographer": 350}
 
 var game: Node = null
 
@@ -436,7 +436,16 @@ func _finish_eye(c: Dictionary, won: bool, table: int, at: Vector3, pname: Strin
 	var who = game.players.get(last_operator) if last_operator != 0 else null
 	var node: Node = null
 	var given := false
-	if who != null and is_instance_valid(who) and who.alive:
+	# 2026-09-19: the last step puts the eye in the vat on the table with the forceps, so that is
+	# where it ends up ({"eye_in_vat": true} in the case's flags). Only if there is no vat to put it
+	# in does it go the old way: into the operator's hand, or on the floor by the head.
+	if bool((c.get("flags", {}) as Dictionary).get("eye_in_vat", false)):
+		var vat = game.vats.vat_on_table(table) if game.get("vats") != null else null
+		if vat != null and is_instance_valid(vat) and String(vat.x) == "":
+			vat.x = Eyes.pack("eye_hive", "", 0.0, value)
+			given = true
+			node = vat
+	if not given and who != null and is_instance_valid(who) and who.alive:
 		var i: int = who.take_into("eye_hive", 1, value)
 		if i >= 0:
 			who.selected = i
@@ -451,7 +460,10 @@ func _finish_eye(c: Dictionary, won: bool, table: int, at: Vector3, pname: Strin
 	_fx_flatline(table)
 	game._broadcast("dx_flatline", {"tb": table})
 	game._sound("flatline", at)
-	game.say("Eye out, condition %d%%. %s is dead. Put it in a vat before it spoils." % [roundi(cond), pname], 5.0)
+	if bool((c.get("flags", {}) as Dictionary).get("eye_in_vat", false)) and node != null:
+		game.say("Eye out, condition %d%%, and in the vat. %s is dead." % [roundi(cond), pname], 5.0)
+	else:
+		game.say("Eye out, condition %d%%. %s is dead. Put it in a vat before it spoils." % [roundi(cond), pname], 5.0)
 
 
 func _base_value(kind: String) -> int:

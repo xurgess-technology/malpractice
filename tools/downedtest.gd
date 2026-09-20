@@ -159,7 +159,7 @@ func _dev_room() -> void:
 	me.bot_press += 1
 	await _frames(3)
 	_check(float(game._call_at.get(me.peer_id, -1.0)) > 0.0, "calling for help reaches the host")
-	var m = dev.spawn_monster("discharged", "front", me)
+	var m = dev.spawn_monster("sonographer", "front", me)
 	await _frames(2)
 	var hp0 := me.hp
 	game.monster_hit_player(m, me)

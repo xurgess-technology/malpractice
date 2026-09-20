@@ -36,7 +36,7 @@ extends Node
 ##                    client 2 watches the swings, the drag and the strapped case
 ##   brains           (sweep 3) the client picks up a Hive brain (its spoil clock replicated),
 ##                    blends and drinks it at the blender, looks through a Hive with Hive Eyes and
-##                    comes back, then drinks a Discharged brain and shrieks Echo; the host sees the
+##                    comes back, then drinks a Sonographer brain and shrieks Echo; the host sees the
 ##                    points, the hive view and the echo noise
 ##   monsters         host + 1 client: a Hive sedated, hit, dragged and woken on the host; the
 ##                    client sees each (sweep 3). Then a Night Nurse grabs the client: it hangs from
@@ -280,7 +280,7 @@ func _sc_wall():
 		var c1 := _peer_of(1)
 		if not await _until(func(): return int(game.wall.user) == c1, 60.0, "client 1 signed in on the host"):
 			return
-		if not await _until(func(): return int(game.wall.view().db.get("hive", 0)) & 2 != 0 and int(game.wall.view().db.get("discharged", 0)) & 2 != 0, 30.0, "client 1's database (hive, then a discharged scan) on the host: %s" % str(game.wall.view().db)):
+		if not await _until(func(): return int(game.wall.view().db.get("hive", 0)) & 2 != 0 and int(game.wall.view().db.get("sonographer", 0)) & 2 != 0, 30.0, "client 1's database (hive, then a sonographer scan) on the host: %s" % str(game.wall.view().db)):
 			return
 		if game.database.has("hive"):
 			return _end(false, "client 1's scan landed in the host's own database")
@@ -325,8 +325,8 @@ func _sc_wall():
 			return
 		me.bot_laser_hold = false
 		_say("signed in as %s" % game.wall.user_name())
-		game.mark_own_db("discharged", "scanned")   # while signed in: the screen shows it too
-		if not await _until(func(): return int(game.wall.view().db.get("discharged", 0)) & 2 != 0, 20.0, "my later scan on the screen"):
+		game.mark_own_db("sonographer", "scanned")   # while signed in: the screen shows it too
+		if not await _until(func(): return int(game.wall.view().db.get("sonographer", 0)) & 2 != 0, 20.0, "my later scan on the screen"):
 			return
 		# Click MONSTERS (the first home card).
 		var card: Control = wt.ui._body.get_child(0)
@@ -869,8 +869,8 @@ func _sc_brains():
 		var at: Vector3 = c1.global_position
 		var map := get_viewport().world_3d.navigation_map
 		var b1: Node = game.brains.spawn_brain("brain_hive", 1.0, at + Vector3(1.0, 0.3, 0.0))
-		var b2: Node = game.brains.spawn_brain("brain_discharged", 0.5, at + Vector3(-1.0, 0.3, 0.0))
-		var b3: Node = game.brains.spawn_brain("brain_discharged", 0.3, at + Vector3(0.0, 0.3, 1.0))
+		var b2: Node = game.brains.spawn_brain("brain_sonographer", 0.5, at + Vector3(-1.0, 0.3, 0.0))
+		var b3: Node = game.brains.spawn_brain("brain_sonographer", 0.3, at + Vector3(0.0, 0.3, 1.0))
 		b3.bt = game.world_time - 400.0   # rotten long ago (fresh / spoiling depend on how fast the bot is)
 		var wi: Node = game.brains.spawn_hive(NavigationServer3D.map_get_closest_point(map, at + Vector3(0, 0, 9)))
 		wi.set_physics_process(false)   # a still Hive: the test is about the view, not the chase
@@ -888,11 +888,11 @@ func _sc_brains():
 		if not await _do_until(watch, func(): return seen.hive and seen.echo and _count_msgs("ok") >= 1, 200.0, "the client's hive view and echo (hive %s echo %s)" % [str(seen.hive), str(seen.echo)]):
 			return
 		var w: float = game.brains.points(c1.peer_id, "hive")
-		var d: float = game.brains.points(c1.peer_id, "discharged")
-		# Hive fresh 1.0; the second Discharged brain was fresh or spoiling by the time it was drunk
+		var d: float = game.brains.points(c1.peer_id, "sonographer")
+		# Hive fresh 1.0; the second Sonographer brain was fresh or spoiling by the time it was drunk
 		# (1.0 or 0.75), the third rotten (0.5).
 		if w != 1.0 or not (is_equal_approx(d, 1.25) or is_equal_approx(d, 1.5)):
-			return _end(false, "host points for the client: hive %.2f discharged %.2f, expected 1.00 / 1.25..1.5" % [w, d])
+			return _end(false, "host points for the client: hive %.2f sonographer %.2f, expected 1.00 / 1.25..1.5" % [w, d])
 		await _finish_together("the client drank three brains (%.2f / %.2f), looked through a Hive and shrieked Echo" % [w, d])
 		return
 	if not await _until(func(): return game.phase != Game.Phase.MENU and _me() != null and _count_msgs("brains") > 0 and game.brains.blender != null, 90.0, "the brains"):
@@ -903,7 +903,7 @@ func _sc_brains():
 	var ids: Dictionary = _msgs("brains")[0].data
 	var bs := game.brains
 	for pass_i in 3:
-		var kind := "brain_hive" if pass_i == 0 else "brain_discharged"
+		var kind := "brain_hive" if pass_i == 0 else "brain_sonographer"
 		var item_id := int(ids.items[pass_i])
 		if not await _until(func(): return game.world_items.has(item_id), 20.0, "the %s on my machine" % kind):
 			return
@@ -923,7 +923,7 @@ func _sc_brains():
 		me.selected = _slot_of(kind)
 		if not await _until(func(): return me.slots[_slot_of(kind)].has("bt"), 10.0, "bt in my hand slot"):
 			return
-		var path := "hive" if pass_i == 0 else "discharged"
+		var path := "hive" if pass_i == 0 else "sonographer"
 		var blend := func():
 			var i := _slot_of(kind)
 			if i >= 0:
@@ -934,7 +934,7 @@ func _sc_brains():
 			return
 		me.bot_interact = false
 		me.bot_aim_id = ""
-		_say("drank the %s: hive %.2f discharged %.2f" % [kind, bs.points(Net.my_id(), "hive"), bs.points(Net.my_id(), "discharged")])
+		_say("drank the %s: hive %.2f sonographer %.2f" % [kind, bs.points(Net.my_id(), "hive"), bs.points(Net.my_id(), "sonographer")])
 		if pass_i == 0:
 			# Hive Eyes: R, then R again to come back.
 			me.teleport(_stand_spot(game.monsters[int(ids.hive)].global_position + Vector3(0, 0, -8)))
@@ -957,12 +957,12 @@ func _sc_brains():
 			if not await _until(func(): return not me.hive_view and not bs.local_hive_active(), 20.0, "coming back from Hive Eyes"):
 				return
 			_say("looked through the Hive and came back")
-	# 1.00 Hive against 1.25+ Discharged: Hive Eyes landed in the first slot (hive drunk
+	# 1.00 Hive against 1.25+ Sonographer: Hive Eyes landed in the first slot (hive drunk
 	# first), Echo in the second (SWEEP 4A HOOK, chunk 1: best_path()/single-R-ability is gone,
 	# replaced by fixed per-slot abilities -- Alt+2 fires whichever landed second, not "whichever
 	# path has more points").
-	if bs.points(Net.my_id(), "discharged") <= bs.points(Net.my_id(), "hive"):
-		return _end(false, "expected discharged points ahead of hive (hive %.2f discharged %.2f)" % [bs.points(Net.my_id(), "hive"), bs.points(Net.my_id(), "discharged")])
+	if bs.points(Net.my_id(), "sonographer") <= bs.points(Net.my_id(), "hive"):
+		return _end(false, "expected sonographer points ahead of hive (hive %.2f sonographer %.2f)" % [bs.points(Net.my_id(), "hive"), bs.points(Net.my_id(), "sonographer")])
 	var echo_slot: int = bs.slot_of(Net.my_id(), "echo")
 	if echo_slot < 0:
 		return _end(false, "Echo never landed in a slot")
@@ -1066,14 +1066,14 @@ func _sc_graft():
 		var table: int = game.free_patient_table()
 		if table < 0:
 			return _end(false, "no free table for the graft")
-		var si: int = game.vats.stand_of_table(table)
+		var si: int = game.vats.place_of_table(table)
 		if si < 0:
-			return _end(false, "table %d has no vat stand" % table)
+			return _end(false, "table %d has no vat place" % table)
 		var patient = game.players.get(_peer_of(1))
 		var op = game.local_player()
-		# The vat with a fresh Hive eyeball, on the stand beside the table.
+		# The vat with a fresh Hive eyeball, standing on the table.
 		var yaw: float = game.table_yaw_of(table)
-		var vat: Node = game._spawn_item("specimen_vat", 1, Transform3D(Basis(Vector3.UP, yaw), game.vats.stands[si].position), WorldItem.State.LOOSE)
+		var vat: Node = game._spawn_item("specimen_vat", 1, Transform3D(Basis(Vector3.UP, yaw), game.vats.places[si].position), WorldItem.State.LOOSE)
 		vat.x = Eyes.pack("eye_hive", "", 0.0, 120)
 		patient.teleport(game._floor_at(game.table_position(table) + Vector3(0, 0, 1.2).rotated(Vector3.UP, yaw)))
 		await _frames(4)
@@ -1086,7 +1086,7 @@ func _sc_graft():
 		var ps: Node = game.player_surgery
 		var sys: Node = ps.surgery
 		sys.bot_skill = 1.0   # the player table's own system, with its own stand-in game
-		for step in [["scalpel", "cut"], ["eye_spoon", "scoop"], ["eye_spoon", "seat"], ["suture_kit", "stitch"]]:
+		for step in [["scalpel", "cut"], ["eye_spoon", "scoop"], ["forceps", "grab"], ["suture_kit", "stitch"]]:
 			for i in op.slots.size():
 				op.slots[i] = Player.empty_slot()
 			game.give_hand(op, String(step[0]), 1)
@@ -1509,7 +1509,7 @@ func _sc_combat():
 		var tp: Vector3 = game.table_position(ti)
 		var ids := []
 		for off in [Vector3(0.0, 0.0, 2.4), Vector3(0.0, 0.0, -2.4)]:
-			var m = game._add_monster("discharged", _nav_point(tp + off))
+			var m = game._add_monster("sonographer", _nav_point(tp + off))
 			ids.append(m.monster_id)
 		await _frames(3)
 		for id in ids:
@@ -1537,7 +1537,7 @@ func _sc_combat():
 			return
 		var c: Dictionary = game.case_on_table(ti)
 		var sed := float(c.get("flags", {}).get("sedation", -1.0))
-		if String(c.patient_id) != "discharged" or String(c.ailment_id) != "dissection" or String(c.state) != "on_table" or sed < 0.35 or sed > 1.0:
+		if String(c.patient_id) != "sonographer" or String(c.ailment_id) != "dissection" or String(c.state) != "on_table" or sed < 0.35 or sed > 1.0:
 			return _end(false, "the strapped case is wrong: %s" % str(c))
 		if game.monsters.has(ids[0]) or game.monsters.has(ids[1]):
 			return _end(false, "monsters left: %s" % str(game.monsters.keys()))

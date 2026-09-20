@@ -1,9 +1,9 @@
 extends RefCounted
-## The Discharged, host side. Completely blind: it knows only what it hears.
+## The Sonographer, host side. Completely blind: it knows only what it hears.
 ##
-##   WANDER   drifts between corridor spots at 1.4 m/s, the IV pole rattling behind it
+##   WANDER   drifts between corridor spots at 1.4 m/s, clicking as it goes
 ##   LISTEN   a noise reached it: it stops dead, cocks its head toward the sound for
-##            0.8-1.2 s (the rattle stops, which is the tell)
+##            0.8-1.2 s (the clicking stops, which is the tell)
 ##   RUSH     a fast awkward lope to where the noise was, 5.2 m/s
 ##   SEARCH   picks at that spot for a few seconds, twitching, then gives up
 ##   STUNNED  shoved: 2 s of staggering; struck by the saw: a short stagger, then it rushes the
@@ -50,7 +50,7 @@ var last_heard: Dictionary = {}
 
 func _init(monster: CharacterBody3D) -> void:
 	m = monster
-	rng.seed = hash("discharged%d" % monster.monster_id)
+	rng.seed = hash("sonographer%d" % monster.monster_id)
 	m.mode = M.Mode.WANDER
 
 
