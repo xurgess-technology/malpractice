@@ -3,6 +3,16 @@
 Everything that changes in **Malpractice**, newest first. One minor version per day of work, one
 patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog).
 
+**2026-09-20 (0.8.x)**
+
+- **0.8.0**: A PANEL TO OPERATE ON 🩹📋
+    - Added: Surgery can be played on a panel: a flat glowing diagram that pops in over the wound when you start operating, faces you, and shows the step as an openly 2D board. The real patient stays visible all round it, and when you step back the panel goes with you.
+    - Added: Onlookers see the panel as a real object hanging over the table, from wherever they are standing, and its glow falls on the patient and your hands.
+    - Added: Deep laceration, a one-step test procedure for it: a gash that gapes wider in some stretches than others, five stitches, press-drag-release. Good stitches shut a section, sloppy ones hold but keep seeping, and burying the needle in the gash rips the thread through.
+    - Added: The cut is on the patient, not on the diagram. It is open in the gown before anyone walks up, and afterwards it is stitched -- neat for good work, crooked for bad -- and he walks out of the hospital wearing it.
+    - Changed: Suture kits are sterile peel-packs now, with the curved needle, the coil of thread and the needle driver visible inside. New icon to match.
+    - Note: Deep laceration never turns up in a shift. It is in the dev panel's patient list and the minigame lab, to try the panel out.
+
 **2026-09-19 (0.7.x)**
 
 - **0.7.2**: THE SONOGRAPHER HUNTS 🩺👂
