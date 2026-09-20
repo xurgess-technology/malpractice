@@ -213,7 +213,9 @@ static func _trinkets(game: Game) -> void:
 	var base: Vector3 = game._floor_at(t + Vector3(0.0, 0.0, 4.2))
 	var out := open_direction(game, base + Vector3.UP * 1.2, 7.0)
 	var side := out.cross(Vector3.UP).normalized()
-	place(game, base, base + out * 5.0 + Vector3(0, 0.2, 0))
+	# Look low enough that the four on the floor are in shot from the first frame (they used to sit
+	# under the hands), and high enough that the Hive further out is still in view.
+	place(game, base, base + out * 4.0 + Vector3(0, 0.05, 0))
 	clear_hands(game)
 	give(game, "pulse_oximeter", 1, 40)
 	give(game, "reflex_hammer", 1, 20)
@@ -222,16 +224,17 @@ static func _trinkets(game: Game) -> void:
 	var row := ["desk_phone", "laptop", "epipen", "defibrillator"]
 	var value := [20, 80, 30, 120]
 	for i in row.size():
-		floor_item(game, row[i], base + out * 3.0 + side * (float(i) - 2.2) * 0.6, 1, value[i])
+		floor_item(game, row[i], base + out * 2.4 + side * (float(i) - 1.5) * 0.7, 1, value[i])
 	await tree.physics_frame
-	# A Hive, out in front. It is calm for a few seconds so it does not walk straight over and
-	# knock everything out of your hands before you have looked at any of it.
+	# A Hive, out in front. It starts idle and, once it spots you, it will come -- but `calm` means
+	# it cannot land a hit for the first half minute, so you get to look at the phone and the laptop
+	# before it can knock anything out of your hands. After that it is an ordinary Hive.
 	var m = game._add_monster("hive", game._floor_at(base + out * 7.0 - side * 0.6))
 	if m != null:
-		m.calm = 12.0
+		m.calm = 35.0
 		if m.brain != null and "home" in m.brain:
 			m.brain.home = m.global_position
-			m.brain.timer = 12.0
+			m.brain.timer = 35.0
 			m.mode = Monster.Mode.IDLE
 	# A teammate on the floor beside you, waiting for the paddles. A dummy, not a bot: it has no
 	# brain of its own, so it stays exactly where it is put and stays down.

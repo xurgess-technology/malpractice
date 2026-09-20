@@ -11,8 +11,11 @@ extends Node
 ##   laptop_used  the same laptop a moment later: greyed, cracked, worth scrap
 ##   phone_down   the desk phone set down and ringing
 ##   defib        a teammate shocked back onto their feet where they lay
-##   hive_before  the Hive facing me
-##   hive_after   the same Hive after a bonk with the reflex hammer
+##   hive_before  the Hive as it stands, with the "[Click] Bonk it" prompt up
+##   hive_after   the same Hive a moment after the bonk, turned 180 degrees
+##   oximeter     the pulse oximeter clipped onto a shoved Hive
+##   epipen       the EpiPen jab
+##   bar_spent    the item bar afterwards, with the spent ones greyed and cracked
 
 const OUT_DIR := "res://tools/trinket_shots"
 
@@ -40,8 +43,13 @@ func _run() -> void:
 			await get_tree().create_timer(6.0).timeout
 			break
 	me = game.local_player()
+	# Take the bot over from where the setup left the player looking, or bot_pitch's 0.0 snaps the
+	# view level and the four trinkets on the floor drop out of the bottom of the frame.
+	me.bot_yaw = me._yaw
+	me.bot_pitch = me._pitch
 	me.bot_active = true
 	me.bot_invulnerable = true
+	await _frames(4)
 	await _shot("bar")
 	# The laptop: take it off the floor, open it, photograph the map, then the dead laptop in the bar.
 	if await _take("laptop"):
@@ -52,8 +60,11 @@ func _run() -> void:
 		await _shot("laptop_used")
 		_drop()
 		await _seconds(1.0)
-	# The desk phone: take it and set it down again, ringing.
+	# The desk phone: take it and set it down again, ringing. Step away from the Hive first, or it
+	# stands on top of the phone and fills the shot.
 	if await _take("desk_phone"):
+		_away_from_monsters(6.0)
+		await _frames(4)
 		await _click()
 		await _seconds(1.2)
 		_look_down()
@@ -66,6 +77,9 @@ func _run() -> void:
 		await _frames(8)
 		await _click()
 		await _seconds(1.0)
+		# They are on their feet now, so look at them standing rather than at where they lay.
+		_face(mate, 2.2, 1.1)
+		await _frames(6)
 		await _shot("defib")
 		_drop()
 		await _seconds(1.0)
@@ -79,6 +93,25 @@ func _run() -> void:
 		await _click()
 		await _seconds(0.5)
 		await _shot("hive_after")
+	# The pulse oximeter: shove the Hive to open the needle's window, then clip it on.
+	if hive != null and is_instance_valid(hive) and me.holding("pulse_oximeter"):
+		me.selected = _slot_of("pulse_oximeter")
+		_face(hive, 1.6, 1.2)
+		await _frames(8)
+		game.player_shoved(me)
+		await _frames(4)
+		# The shove knocks it back out of reach, so close in again before clipping it on.
+		_face(hive, 1.3, 1.2)
+		await _frames(6)
+		await _click()
+		await _seconds(0.8)
+		await _shot("oximeter")
+	# The EpiPen last, because ten seconds later it puts you on the floor.
+	if await _take("epipen"):
+		await _click()
+		await _seconds(0.7)
+		await _shot("epipen")
+		await _shot("bar_spent")
 	print("[trinketshot] done")
 
 
@@ -167,6 +200,19 @@ func _face(target: Node, dist: float, look_h: float) -> void:
 
 func _look_down() -> void:
 	me.bot_pitch = -0.7
+
+
+## Put at least `want` metres between me and the nearest monster, so it stays out of the shot.
+func _away_from_monsters(want: float) -> void:
+	var m := _nearest_monster()
+	if m == null or not is_instance_valid(m):
+		return
+	var d: Vector3 = me.global_position - m.global_position
+	d.y = 0.0
+	if d.length() >= want:
+		return
+	d = d.normalized() if d.length() > 0.2 else Vector3.BACK
+	me.teleport(game._floor_at(m.global_position + d * want))
 
 
 func _frames(n: int) -> void:
