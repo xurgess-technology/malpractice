@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-20 (0.8.x)**
 
+- **0.8.1**: The panel stands up and gets out of the way
+    - Changed: The panel is bigger and stands up off the patient instead of lying nearly flat over him, so onlookers can actually read it from where they are standing. It looks the same size to whoever is operating.
+    - Added: When something goes wrong -- a torn stitch, a gush, a patient jerking -- the panel goes see-through for half a second so you watch him take it, then comes back.
 - **0.8.0**: A PANEL TO OPERATE ON 🩹📋
     - Added: Surgery can be played on a panel: a flat glowing diagram that pops in over the wound when you start operating, faces you, and shows the step as an openly 2D board. The real patient stays visible all round it, and when you step back the panel goes with you.
     - Added: Onlookers see the panel as a real object hanging over the table, from wherever they are standing, and its glow falls on the patient and your hands.
