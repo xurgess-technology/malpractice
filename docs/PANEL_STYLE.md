@@ -34,17 +34,32 @@ shown by `PatientBody._laceration` from the ailment and the case flags), not the
 
 ## Placement and framing
 
-- Anchored at the step's site marker, lifted `panel_lift` (0.20 m) along the site normal.
+- Anchored at the step's site marker, lifted `panel_lift` (0.24 m) along the site normal.
 - Oriented **once**, at open time, to face the operator's final leaned-in camera pose, then frozen
   in the room (`top_level`). It is not a per-frame billboard: it is a fixed object you can walk
   round and look at from the side.
-- 0.42 × 0.28 m (3:2), matching a 1200 × 800 SubViewport that only renders while the panel is open.
+- 0.52 × 0.347 m (3:2), matching a 1200 × 800 SubViewport that only renders while the panel is open.
+- It **stands up** rather than lying over the patient: the step's `camera_pose()` puts the operator
+  well back (`view_tilt_deg`, 32 degrees off straight down) and the panel adds `tilt_bias_deg`
+  (12 degrees) past facing them square on. Square on is easiest to play but nearly edge-on to
+  everyone else in the room; the bias costs the operator nothing and gives onlookers a face to read.
 - The step's `camera_pose()` is computed so the panel fills about 78% of the view's height at 16:9,
   which leaves the real patient, the table and the room visible around it.
 - Render layer 20, the same one every minigame's props use, so the patient's blood decals (which
   project onto layer 1 only) never stamp across the diagram.
 - Open: 0.2 s, scale 0.85 → 1.0 with a little overshoot, fading in. Close: 0.15 s. Both have
   `AudioStream` exports, empty for now.
+
+### Getting out of the way
+
+When something goes wrong the panel is the last thing you want to be looking at, so it clears:
+`panel.ghost(seconds)` drops it to `ghost_alpha` (0.24) in `ghost_in` (0.09 s), holds, and brings it
+back over `ghost_out` (0.45 s). You see the patient flinch, the blood spread on the gown and the
+particles come off the body straight through the diagram, and then the diagram is back.
+
+The suture step asks for it on a tear (0.55 s, so it is returning as the tear cooldown ends), on a
+gush (0.9 s) and on a jerk from an underdosed patient (0.55 s). It is driven from `_react()`, which
+runs on every machine from the replicated state, so onlookers see it clear too.
 
 ## Coordinates
 

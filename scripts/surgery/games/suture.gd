@@ -66,12 +66,19 @@ enum Grade { MISS, TEAR, SLOPPY, GOOD }
 # -- costs -------------------------------------------------------------------------------------
 @export_range(0.0, 10.0, 0.1) var tear_botch := 2.0
 @export_range(0.0, 10.0, 0.1) var gush_botch := 3.0
+## Seconds the panel clears out of the way when something goes wrong, so you can watch the patient
+## take it instead of the diagram (SurgeryPanel.ghost).
+@export_range(0.0, 3.0, 0.05) var ghost_on_tear := 0.55
+@export_range(0.0, 3.0, 0.05) var ghost_on_gush := 0.9
+@export_range(0.0, 3.0, 0.05) var ghost_on_jolt := 0.55
 
 # -- the panel ---------------------------------------------------------------------------------
 ## How much of the view's height the panel fills. The rest is the real patient, table and room.
 @export_range(0.3, 1.0, 0.01) var view_fill := 0.78
-## How far the operator's camera is pulled back from straight over the site, in degrees.
-@export_range(0.0, 60.0, 1.0) var view_tilt_deg := 21.0
+## How far the operator's camera is pulled back from straight over the site, in degrees. The panel
+## turns to face it, so this is also how far the panel stands up off the patient (plus the panel's
+## own tilt_bias_deg): low is a board lying on the body, high is a screen standing over it.
+@export_range(0.0, 60.0, 1.0) var view_tilt_deg := 32.0
 @export_range(20.0, 90.0, 1.0) var view_fov := 50.0
 
 # ---- state (all of it replicated) ----
@@ -459,6 +466,8 @@ func handle_cursor(p: Vector2, buttons: int, delta: float) -> void:
 ## A jerk from an underdosed patient yanks the needle out: the drag is cancelled, and that is all it
 ## costs. Only reachable in the lab, since a laceration case arrives already sedated.
 func on_jolt(_offset: Vector2, _strength: float, _duration: float) -> void:
+	if _panel != null and is_instance_valid(_panel):
+		_panel.ghost(ghost_on_jolt)
 	if dragging:
 		dragging = false
 		pressed = false
@@ -638,11 +647,16 @@ func _react() -> void:
 		_seen_tears = tears
 		_flash = tear_flash_time
 		_audio("surgery_tear", at, -3.0, 0.1)
+		# The diagram gets out of the way: the flinch is on the patient, not on the panel.
+		if _panel != null and is_instance_valid(_panel):
+			_panel.ghost(ghost_on_tear)
 		if has_body and body.has_method("stir"):
 			body.stir(0.5)
 	if gushes > _seen_gushes:
 		_seen_gushes = gushes
 		_audio("surgery_botch", at, -6.0)
+		if _panel != null and is_instance_valid(_panel):
+			_panel.ghost(ghost_on_gush)
 		if _gush_fx != null and is_instance_valid(_gush_fx):
 			_gush_fx.restart()
 			_gush_fx.emitting = true

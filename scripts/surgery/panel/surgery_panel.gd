@@ -40,13 +40,18 @@ enum State { SHUT, OPENING, OPEN, CLOSING }
 
 # -- size and framing ------------------------------------------------------------------------------
 ## Metres. 3:2, matching the SubViewport, so nothing is stretched.
-@export var panel_size := Vector2(0.42, 0.28)
+@export var panel_size := Vector2(0.52, 0.3467)
 ## Metres along the site normal from the site marker to the panel's centre.
-@export var panel_lift := 0.20
+@export var panel_lift := 0.24
 ## The diagram area the panel shows, in millimetres.
 @export var view_mm := Vector2(120.0, 80.0)
 ## SubViewport width; the height follows panel_size's aspect.
 @export var texture_width := 1200
+## Degrees the panel stands up PAST facing the operator square on, tipping its top back toward them.
+## Square on is easiest to play but lies almost flat over the patient, which is nearly edge-on to
+## anyone else in the room; a few degrees of this costs the operator nothing (cos 12 deg) and gives
+## onlookers a face to read.
+@export_range(0.0, 45.0, 1.0) var tilt_bias_deg := 12.0
 
 # -- opening and closing ---------------------------------------------------------------------------
 @export_range(0.05, 1.0, 0.01) var open_time := 0.20
@@ -61,7 +66,7 @@ enum State { SHUT, OPENING, OPEN, CLOSING }
 # -- light -----------------------------------------------------------------------------------------
 ## A weak light tinted to the panel, so it glows onto the patient and the operator's hands.
 @export_range(0.0, 2.0, 0.01) var light_energy := 0.30
-@export_range(0.1, 3.0, 0.05) var light_range := 0.95
+@export_range(0.1, 3.0, 0.05) var light_range := 1.15
 ## How much of the operating camera's work lamp a panel step wants (Minigame.lamp_scale). The
 ## diagram is its own light source, so the lamp comes down or it washes the frame out.
 @export_range(0.0, 2.0, 0.05) var lamp_scale := 0.55
@@ -69,6 +74,17 @@ enum State { SHUT, OPENING, OPEN, CLOSING }
 @export_range(0.2, 3.0, 0.05) var brightness := 1.0
 ## The back face: a panel seen from the wrong side is a dim plate, not a mirrored diagram.
 @export_range(0.0, 1.0, 0.01) var back_dim := 0.12
+
+# -- going see-through ------------------------------------------------------------------------------
+## When something goes wrong the panel clears out of the way for a moment so the patient can be seen
+## through it -- the flinch, the blood, the monitor -- and then comes back. `ghost()` asks for it.
+## How see-through it goes.
+@export_range(0.0, 1.0, 0.01) var ghost_alpha := 0.24
+## How much of the diagram is left while it is out of the way.
+@export_range(0.0, 1.0, 0.01) var ghost_brightness := 0.55
+## Out of the way quickly (you want to see what happened NOW), back slowly.
+@export_range(0.02, 1.0, 0.01) var ghost_in := 0.09
+@export_range(0.05, 2.0, 0.01) var ghost_out := 0.45
 
 # -- contents --------------------------------------------------------------------------------------
 ## Small header, top-left inside the frame.
@@ -87,6 +103,8 @@ var _quad: MeshInstance3D
 var _mat: ShaderMaterial
 var _light: OmniLight3D
 var _oriented := false
+var _ghost := 0.0                 # 0..1, how far out of the way it is right now
+var _ghost_hold := 0.0            # seconds still to stay there
 
 static var _shader: Shader = null
 
@@ -149,7 +167,7 @@ func input_plane() -> Transform3D:
 ## Where the panel sits and faces, in the parent's (the site's) local space, given where the
 ## operating camera ends up. Oriented once, at open time: the panel is a fixed object, not a
 ## billboard. Local +Y is out of the patient, local +Z is back toward the operator.
-static func local_pose(camera_local: Vector3, lift: float) -> Transform3D:
+static func local_pose(camera_local: Vector3, lift: float, bias_deg := 0.0) -> Transform3D:
 	var centre := Vector3(0.0, lift, 0.0)
 	var normal := camera_local - centre
 	if normal.length() < 0.02:
@@ -159,6 +177,10 @@ static func local_pose(camera_local: Vector3, lift: float) -> Transform3D:
 	if absf(right.dot(normal)) > 0.95:
 		right = Vector3.BACK
 	right = (right - normal * right.dot(normal)).normalized()
+	# Stand it up past square on: about the wound axis, from +Y (flat over the patient) toward +Z
+	# (facing the operator), which is the direction everyone else in the room is looking from.
+	if bias_deg != 0.0:
+		normal = normal.rotated(right, deg_to_rad(bias_deg)).normalized()
 	return Transform3D(Basis(right, normal.cross(right), normal), centre)
 
 
@@ -170,7 +192,7 @@ func open(camera_local: Vector3) -> void:
 	if state == State.OPENING or state == State.OPEN:
 		return
 	if not _oriented:
-		transform = local_pose(camera_local, panel_lift)
+		transform = local_pose(camera_local, panel_lift, tilt_bias_deg)
 		_oriented = true
 		# Fixed in the room from here on. The site marker rides the patient's breathing and stirs;
 		# a panel that bobbed with it would read as stuck to the body instead of hanging over it.
@@ -201,24 +223,33 @@ func is_open() -> bool:
 	return state == State.OPENING or state == State.OPEN
 
 
+## Clear out of the way for `hold` seconds so the patient can be seen through the panel: a tear, a
+## gush, a jerk. Calling it again while it is already out of the way extends the stay.
+func ghost(hold: float) -> void:
+	_ghost_hold = maxf(_ghost_hold, hold)
+
+
 ## Every frame, from the minigame's tick. Redraws the diagram while the panel is open.
 func tick(delta: float) -> void:
-	match state:
-		State.OPENING:
-			_k = minf(1.0, _k + delta / maxf(0.01, open_time))
-			if _k >= 1.0:
-				state = State.OPEN
-			_apply_anim()
-		State.CLOSING:
-			_k = minf(1.0, _k + delta / maxf(0.01, close_time))
-			_apply_anim()
-			if _k >= 1.0:
-				state = State.SHUT
-				visible = false
-				_set_updating(false)
-				return
-		State.SHUT:
-			return
+	if state == State.SHUT:
+		return
+	if _ghost_hold > 0.0:
+		_ghost_hold = maxf(0.0, _ghost_hold - delta)
+		_ghost = move_toward(_ghost, 1.0, delta / maxf(0.01, ghost_in))
+	else:
+		_ghost = move_toward(_ghost, 0.0, delta / maxf(0.01, ghost_out))
+	if state == State.OPENING:
+		_k = minf(1.0, _k + delta / maxf(0.01, open_time))
+		if _k >= 1.0:
+			state = State.OPEN
+	elif state == State.CLOSING:
+		_k = minf(1.0, _k + delta / maxf(0.01, close_time))
+	_apply_anim()
+	if state == State.CLOSING and _k >= 1.0:
+		state = State.SHUT
+		visible = false
+		_set_updating(false)
+		return
 	redraw()
 
 
@@ -241,10 +272,12 @@ func _apply_anim() -> void:
 		s = lerpf(1.0, open_scale + 0.06, _k)
 		fade = 1.0 - _k
 	scale = Vector3(s, s, 1.0)
+	var clear: float = lerpf(1.0, ghost_alpha, _ghost)
 	if _mat != null:
-		_mat.set_shader_parameter("fade", fade)
+		_mat.set_shader_parameter("fade", fade * clear)
+		_mat.set_shader_parameter("brightness", brightness * lerpf(1.0, ghost_brightness, _ghost))
 	if _light != null:
-		_light.light_energy = light_energy * fade
+		_light.light_energy = light_energy * fade * clear
 
 
 func _play(stream: AudioStream) -> void:
@@ -345,7 +378,7 @@ static func warm(parent: Node3D) -> Node3D:
 	p.header = "LAC / CLOSE"
 	p.right_text = "TABLE 1"
 	parent.add_child(p)
-	p.open(Vector3(0.0, 0.56, 0.14))
+	p.open(Vector3(0.0, 0.64, 0.25))
 	p.tick(0.016)
 	return p
 
