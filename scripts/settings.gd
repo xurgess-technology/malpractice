@@ -36,7 +36,7 @@ const CAMERA_MODES: PackedStringArray = ["first_person", "shoulder", "front"]
 const SPRINT_MODES: PackedStringArray = ["toggle", "hold"]
 
 const DEFAULTS := {
-	"master_volume": 1.0,
+	"master_volume": 0.1,   # the game starts quiet for now; the slider goes back up
 	"music_volume": 1.0,
 	"sfx_volume": 1.0,
 	"window_mode": "windowed",
@@ -85,6 +85,10 @@ const RANGES := {
 ## Below this slider position a bus is muted outright.
 const MUTE_BELOW := 0.005
 const MIN_DB := -80.0
+## A review window is something Zach glances at beside his own work, so it opens quiet: the Master
+## bus plays as if the volume slider sat here, whatever the saved setting is. `--volume=<0..1>`
+## after `--` picks another level (1 for full). Nothing is saved: it only changes what is played.
+const REVIEW_VOLUME := 0.1
 ## Slider drags would otherwise write the file every frame.
 const SAVE_DELAY := 0.4
 
@@ -96,6 +100,7 @@ var legacy_path := LEGACY_PREFS
 
 var _values: Dictionary = {}
 var _save_timer := -1.0
+var _volume_trim := -2.0   # worked out once from the command line, below (-1 means "no override")
 
 
 func _ready() -> void:
@@ -275,10 +280,28 @@ func _set_bus(bus_name: String, v: float) -> void:
 	var idx := AudioServer.get_bus_index(bus_name)
 	if idx < 0:
 		return
+	if bus_name == "Master" and volume_override() >= 0.0:
+		v = volume_override()
 	AudioServer.set_bus_volume_db(idx, slider_to_db(v))
 	# Warmup mutes Master briefly and restores it; never unmute over it, only mute at zero.
 	if bus_name != "Master":
 		AudioServer.set_bus_mute(idx, v <= MUTE_BELOW)
+
+
+## The Master slider position this window plays at whatever the settings say, or -1 when it plays
+## at the saved volume: REVIEW_VOLUME in a review window, or whatever `--volume=<0..1>` asks for.
+func volume_override() -> float:
+	if _volume_trim >= -0.5:
+		return _volume_trim
+	_volume_trim = -1.0
+	for a in OS.get_cmdline_user_args():
+		var arg := a.strip_edges().trim_prefix("\"").trim_suffix("\"")
+		if arg.begins_with("--volume="):
+			_volume_trim = clampf(float(arg.trim_prefix("--volume=")), 0.0, 1.0)
+			return _volume_trim
+		if arg.begins_with("--review="):
+			_volume_trim = REVIEW_VOLUME
+	return _volume_trim
 
 
 func _apply_window_mode() -> void:

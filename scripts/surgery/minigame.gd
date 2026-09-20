@@ -81,6 +81,13 @@ func on_jolt(_offset: Vector2, _strength: float, _duration: float) -> void:
 	pass
 
 
+## How much of the operating camera's work lamp this step wants (1.0 = the usual amount). A step
+## whose camera sits very close to a bright surface -- the graft's eye steps, 30 cm off a surgeon's
+## pale face -- turns it down so the site does not bleach out.
+func lamp_scale() -> float:
+	return 1.0
+
+
 ## Every machine, every physics frame while the step is on screen.
 func tick(_delta: float) -> void:
 	pass
@@ -89,8 +96,17 @@ func tick(_delta: float) -> void:
 ## What the HUD should show for this step:
 ##   title: String, hint: String, progress: float 0..1
 ##   gauges: Array of {label, value, min, max, good_min, good_max}
+##   keys: Array of [key, what it does] pairs, e.g. [["Hold LMB", "close the jaws"], ["W / S", "raise / lower"]]
+##     -- the controls line under the hint (surgery_hud). Short: two or three pairs, a couple of words
+##     each, and they change with the stage so they always say what to do NOW.
 func hud_state() -> Dictionary:
-	return {"title": String(ctx.get("step", {}).get("label", "")), "hint": "", "progress": progress, "gauges": []}
+	return {"title": String(ctx.get("step", {}).get("label", "")), "hint": "", "progress": progress,
+		"gauges": [], "keys": keys()}
+
+
+## The controls this step wants shown right now. Override per stage.
+func keys() -> Array:
+	return []
 
 
 ## Small dictionary describing what spectators need to draw (tool position, stage).

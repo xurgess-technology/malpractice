@@ -9,6 +9,12 @@
 #   tools\review.bat 4 "ICONS: pick things up" --setup=icons      (skips the menu: a solo shift with the
 #                                                                  named setup from scripts/review_setups.gd staged)
 #
+# -Front opens it in front, focused and ready for clicks (Zach is waiting for it); without it the
+# window waits minimized in the taskbar and its clicks go nowhere until he gives it focus.
+#
+# A review window plays at 10% of the saved volume, so it doesn't shout over what Zach is doing.
+# -Volume 0.5 (or 1 for full) picks another level.
+#
 # Anything after the named options goes to the game as user args (after "--"), e.g. --seed=3.
 # Steam is off (--no-steam) unless you pass --steam. Logs go to <slot>\.godot\review-<n>.log.
 
@@ -17,6 +23,8 @@ param(
     [Parameter(Mandatory = $true, Position = 1)][string]$Say,
     [string]$Scene = "",
     [int]$Count = 1,
+    [double]$Volume = -1,
+    [switch]$Front,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$GameArgs = @()
 )
 
@@ -44,11 +52,15 @@ for ($i = 1; $i -le $Count; $i++) {
     if ($Count -gt 1) { $a += @("--position", ("{0},{1}" -f (60 + ($i - 1) * 820), 80), "--resolution", "800x450") }
     if ($Scene) { $a += $Scene }
     $a += @("--", "`"--review=$title`"", "--no-steam")
+    if ($Volume -ge 0) { $a += "`"--volume=$Volume`"" }
     foreach ($g in $GameArgs) { $a += "`"$g`"" }
     # Minimized and never activated (SW_SHOWMINNOACTIVE): it waits in the taskbar, flashing, until
     # Zach opens it, and doesn't take keyboard focus. Start-Process's "Minimized" still activates the
     # window, and a child of this shell may take the foreground, so WMI starts it instead.
-    $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]7 }
+    # -Front: Zach is sitting there waiting for it, so show it normally and let it take focus. A
+    # minimized window ignores his clicks until he gives it focus, which reads as a dead window.
+    $show = if ($Front) { [uint16]1 } else { [uint16]7 }
+    $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = $show }
     $cmd = "`"$GodotGui`" " + ($a -join " ")
     $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
         CommandLine = $cmd; CurrentDirectory = $p; ProcessStartupInformation = $startup }

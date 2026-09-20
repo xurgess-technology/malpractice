@@ -13,32 +13,34 @@ extends Node
 ##   E with a vat AND an eye in your hands, aimed at nothing      puts the eye in
 ##   V ("vat_take") aimed at a vat, or with one in your hands     takes the eye back out
 ##   E on a free lab-bench spot while carrying a vat              sets it down there
-##   E on an OR table's VAT STAND while carrying a vat            sets it down there (chunk C)
+##   E on an OR table's vat place while carrying a vat            stands it on the table (chunk C)
 ## Three empty vats stand on the lab wall at the start of a run (level_info.vat_spots, from the
 ## entrance building; the host spawns them once per run).
 ##
-## THE VAT STANDS (grafting chunk C, docs/GRAFTING.md). Every OR table has a small steel stand
-## beside its head end. A carried vat goes down on it with E and is picked back up like any world
-## item; the stand holds one only for as long as someone leaves it there. Eyeball Grafting reads
-## the vat on the stand of the table the surgeon is strapped to (`vat_on_stand`).
+## THE VAT ON THE TABLE (grafting chunk C, docs/GRAFTING.md). Every OR table has a place for a vat
+## on its own top, on the steel beside where the patient's head goes. A carried vat goes down there
+## with E and is picked back up like any world item; the place holds one only for as long as someone
+## leaves it there. Both eye procedures read the vat on the table they are being done on
+## (`vat_on_table`): the graft takes the new eye out of it, the extraction puts the old one in.
+## 2026-09-19: this replaces the little steel stand that used to live beside each table.
 
 const KIND := "specimen_vat"
 const HAND_AIM := "vat_hand"
 const SPOT_RADIUS := 0.13
 const SPOT_TAKEN_XZ := 0.2
 const START_VATS := 3
-## The stand's tray height, and where it sits in the table's frame (long axis X, head end -X).
-const STAND_TOP := 0.92
-const STAND_OFFSETS := [Vector3(-0.85, 0.0, 0.98), Vector3(-0.85, 0.0, -0.98),
-	Vector3(0.85, 0.0, 0.98), Vector3(0.85, 0.0, -0.98), Vector3(-1.5, 0.0, 0.0)]
+## Where the vat stands on a patient table, in the table's own frame (long axis X, head end -X,
+## the top at Game.OR_TABLE_TOP): on the steel beside the patient's head, on the side the socket
+## the eye steps work on is, so the forceps step reaches from the vat to the eye in one short trip.
+const TABLE_VAT_OFFSET := Vector3(-0.71, 0.0, -0.215)
 
 var game: Node = null
 
 var spots: Array = []           # [{position: Vector3, yaw: float}], every machine
 var _markers: Array = []        # Marker per spot
-## Grafting chunk C: [{position (the tray top), yaw, table: table index}], one per patient table.
-var stands: Array = []
-var _stand_markers: Array = []
+## Grafting chunk C: [{position (on the table top), yaw, table: table index}], one per patient table.
+var places: Array = []
+var _place_markers: Array = []
 var _t := 0.0
 var _stamp_t := 0.0
 
@@ -46,18 +48,18 @@ var _stamp_t := 0.0
 class Marker extends Area3D:
 	var vats: Node
 	var index := 0
-	## Grafting chunk C: a table's vat stand rather than a lab-bench spot.
-	var stand := false
+	## Grafting chunk C: a patient table's own vat place rather than a lab-bench spot.
+	var on_table := false
 
 	func interact_prompt(p) -> String:
-		return vats.stand_prompt(p, index) if stand else vats.spot_prompt(p, index)
+		return vats.place_prompt(p, index) if on_table else vats.spot_prompt(p, index)
 
 	func interact_hold() -> float:
 		return 0.0
 
 	func interact(p) -> void:
-		if stand:
-			vats.set_down_on_stand(p, index)
+		if on_table:
+			vats.set_down_on_table(p, index)
 		else:
 			vats.set_down(p, index)
 
@@ -227,11 +229,11 @@ func spot_prompt(p, index: int) -> String:
 	return "Set the vat down on the bench"
 
 
-## Grafting chunk C: E on an OR table's vat stand while carrying a vat.
-func stand_prompt(p, index: int) -> String:
-	if p == null or held_vat(p) < 0 or not stand_free(index):
+## Grafting chunk C: E on an OR table's vat place while carrying a vat.
+func place_prompt(p, index: int) -> String:
+	if p == null or held_vat(p) < 0 or not place_free(index):
 		return ""
-	return "Set the vat down on the stand"
+	return "Stand the vat on the table"
 
 
 # =============================================================================== actions (host)
@@ -328,26 +330,27 @@ func set_down(p, index: int) -> void:
 	game.tell(p, "Vat set down on the bench.", 2.0)
 
 
-## Grafting chunk C: E on a table's vat stand while carrying a vat.
-func set_down_on_stand(p, index: int) -> void:
-	if not game.is_host() or p == null or index < 0 or index >= stands.size() or not stand_free(index):
+## Grafting chunk C: E on a table's vat place while carrying a vat.
+func set_down_on_table(p, index: int) -> void:
+	if not game.is_host() or p == null or index < 0 or index >= places.size() or not place_free(index):
 		return
 	var vh := held_vat(p)
 	if vh < 0:
 		return
-	var sp: Dictionary = stands[index]
+	var sp: Dictionary = places[index]
 	var xf := Transform3D(Basis(Vector3.UP, float(sp.get("yaw", 0.0))), sp.position as Vector3)
 	var it: Node = game._spawn_item(KIND, 1, xf, WorldItem.State.LOOSE)
 	it.x = String(p.slots[vh].get("x", ""))
 	p.clear_slot(vh)
 	game._sound("items_clink", xf.origin)
-	game.tell(p, "Vat set down on the stand beside the table.", 2.0)
+	game.tell(p, "Vat standing on the table.", 2.0)
 
 
 # =============================================================================== the lab wall
 
 ## Every machine, right after the level is built: markers for the bench spots. The host also stands
-## the starting vats on the first spots and stocks the scalpel and the eye spoon in the OR's storage.
+## the starting vats on the first spots and stocks the scalpel, the eye spoon and the forceps in
+## the OR's storage.
 func on_level_built(info: Dictionary) -> void:
 	for m in _markers:
 		if is_instance_valid(m):
@@ -378,129 +381,81 @@ func on_level_built(info: Dictionary) -> void:
 			game._spawn_item(KIND, 1, Transform3D(Basis(Vector3.UP, float(sp.get("yaw", 0.0))), sp.position as Vector3), WorldItem.State.LOOSE)
 		game.stock_storage("scalpel", 1)
 		game.stock_storage("eye_spoon", 1)
-	_build_stands()
+		# GRAFTING chunk C: the graft seats the new eye with forceps, and forceps otherwise only turn
+		# up in random drawer units, so one waits here too. The feature is never blocked by a search.
+		game.stock_storage("forceps", 1)
+	_build_places()
 
 
-# =============================================================================== the vat stands (chunk C)
+# =============================================================================== the vat's place on the table (chunk C)
 
-## A small steel stand: a round foot, a post and a tray, origin at the floor, the tray at STAND_TOP.
-static func build_stand(root: Node3D) -> void:
-	var steel := _mat(Color(0.52, 0.55, 0.58), 0.3, 0.7)
-	var parts := [
-		[0.16, 0.02, 0.01],          # foot
-		[0.022, STAND_TOP, STAND_TOP * 0.5],   # post
-		[0.135, 0.018, STAND_TOP],   # tray
-	]
-	for e in parts:
-		var mi := MeshInstance3D.new()
-		var c := CylinderMesh.new()
-		c.top_radius = float(e[0])
-		c.bottom_radius = float(e[0])
-		c.height = float(e[1])
-		c.radial_segments = 14
-		c.rings = 1
-		mi.mesh = c
-		mi.material_override = steel
-		mi.position = Vector3(0, float(e[2]), 0)
-		root.add_child(mi)
-	# A low lip so the jar reads as sitting in the tray.
-	var lip := MeshInstance3D.new()
-	var t := TorusMesh.new()
-	t.inner_radius = 0.125
-	t.outer_radius = 0.14
-	t.rings = 16
-	t.ring_segments = 6
-	lip.mesh = t
-	lip.material_override = steel
-	lip.position = Vector3(0, STAND_TOP + 0.012, 0)
-	root.add_child(lip)
-
-
-## Every machine, after the level is built: one stand beside each patient table, on the first of
-## STAND_OFFSETS that is clear of the level's geometry (identical on every machine).
-func _build_stands() -> void:
-	for m in _stand_markers:
+## Every machine, after the level is built: where a vat stands on each patient table. No geometry
+## of its own any more -- it is a spot on the table's own steel (TABLE_VAT_OFFSET) with a marker on
+## it, so a carried vat can be set down there.
+func _build_places() -> void:
+	for m in _place_markers:
 		if is_instance_valid(m):
 			m.queue_free()
-	_stand_markers.clear()
-	stands.clear()
+	_place_markers.clear()
+	places.clear()
 	if game.level == null or not is_instance_valid(game.level):
 		return
-	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
-	var q := PhysicsShapeQueryParameters3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(0.36, 0.9, 0.36)
-	q.shape = box
-	q.collision_mask = C.L_WORLD
 	for t in game.patient_tables:
 		var yaw: float = float(t.get("yaw", 0.0))
-		var b := Basis(Vector3.UP, yaw)
-		var base: Vector3 = t.position
-		var at: Vector3 = base + b * (STAND_OFFSETS[0] as Vector3)
-		for off in STAND_OFFSETS:
-			var c: Vector3 = base + b * (off as Vector3)
-			q.transform = Transform3D(b, c + Vector3.UP * 0.5)
-			if space.intersect_shape(q, 1).is_empty():
-				at = c
-				break
-		var model := Node3D.new()
-		model.name = "VatStand_%d" % int(t.index)
-		build_stand(model)
-		game.level.add_child(model)
-		model.global_position = at
-		model.rotation.y = yaw
-		stands.append({"position": at + Vector3.UP * STAND_TOP, "yaw": yaw, "table": int(t.index)})
-	for i in stands.size():
+		var at: Vector3 = (t.position as Vector3) + Basis(Vector3.UP, yaw) * TABLE_VAT_OFFSET 			+ Vector3.UP * Game.OR_TABLE_TOP
+		places.append({"position": at, "yaw": yaw, "table": int(t.index)})
+	for i in places.size():
 		var m := Marker.new()
-		m.name = "VatStandSpot_%d" % i
+		m.name = "VatTableSpot_%d" % i
 		m.vats = self
 		m.index = i
-		m.stand = true
+		m.on_table = true
 		m.collision_layer = 0
 		m.collision_mask = 0
 		m.monitoring = false
 		m.add_to_group("interactable")
-		m.set_meta("interact_id", "vatstand_%d" % i)
+		m.set_meta("interact_id", "vattable_%d" % i)
 		var cs := CollisionShape3D.new()
 		var sph := SphereShape3D.new()
 		sph.radius = SPOT_RADIUS + 0.06
 		cs.shape = sph
 		m.add_child(cs)
 		game.level.add_child(m)
-		m.global_position = (stands[i].position as Vector3) + Vector3.UP * 0.1
-		_stand_markers.append(m)
+		m.global_position = (places[i].position as Vector3) + Vector3.UP * 0.1
+		_place_markers.append(m)
 
 
-## Is there no vat standing on this stand?
-func stand_free(index: int) -> bool:
-	return index >= 0 and index < stands.size() and vat_at(stands[index].position as Vector3) == null
+## Is the table's vat place empty?
+func place_free(index: int) -> bool:
+	return index >= 0 and index < places.size() and vat_at(places[index].position as Vector3) == null
 
 
-## Grafting chunk C: the vat standing on the stand of patient table `table_index`, or null.
-func vat_on_stand(table_index: int) -> Node:
-	for s in stands:
+## Grafting chunk C: the vat standing on patient table `table_index`, or null.
+func vat_on_table(table_index: int) -> Node:
+	for s in places:
 		if int(s.get("table", -1)) == table_index:
 			return vat_at(s.position as Vector3)
 	return null
 
 
-## The stand nearest `pos` within `within` metres, or -1. Levels with a player table of their own
-## (the dev room, the fallback ward) have no table index to go by, so the graft asks by position.
-func nearest_stand(pos: Vector3, within := 4.0) -> int:
+## The table vat place nearest `pos` within `within` metres, or -1. Levels with a player table of
+## their own (the dev room, the fallback ward) have no table index to go by, so the graft asks by
+## position.
+func nearest_place(pos: Vector3, within := 4.0) -> int:
 	var best := -1
 	var best_d := within
-	for i in stands.size():
-		var d: float = (stands[i].position as Vector3).distance_to(pos)
+	for i in places.size():
+		var d: float = (places[i].position as Vector3).distance_to(pos)
 		if d < best_d:
 			best_d = d
 			best = i
 	return best
 
 
-## The stand index for a patient table, or -1.
-func stand_of_table(table_index: int) -> int:
-	for i in stands.size():
-		if int(stands[i].get("table", -1)) == table_index:
+## The vat place index for a patient table, or -1.
+func place_of_table(table_index: int) -> int:
+	for i in places.size():
+		if int(places[i].get("table", -1)) == table_index:
 			return i
 	return -1
 
@@ -590,7 +545,7 @@ func _arm_markers() -> void:
 		var m: Area3D = _markers[i]
 		if is_instance_valid(m):
 			m.collision_layer = C.L_INTERACT if (carrying and spot_free(i)) else 0
-	for i in _stand_markers.size():
-		var m: Area3D = _stand_markers[i]
+	for i in _place_markers.size():
+		var m: Area3D = _place_markers[i]
 		if is_instance_valid(m):
-			m.collision_layer = C.L_INTERACT if (carrying and stand_free(i)) else 0
+			m.collision_layer = C.L_INTERACT if (carrying and place_free(i)) else 0

@@ -3,6 +3,19 @@
 Everything that changes in **Malpractice**, newest first. One minor version per day of work, one
 patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog).
 
+**2026-09-19 (0.7.x)**
+
+- **0.7.1**: ONE WAY TO HANDLE AN EYEBALL 👁️🫙
+    - Changed: An eyeball is picked up and put down the same way everywhere: hold left click on it, drag it where it goes, let go. It can't be dropped, fumbled or lost, and letting go anywhere else puts it back for free.
+    - Added: The Hive's extraction ends with carrying its eye to a specimen vat, so the eye never touches the floor.
+    - Changed: The new eye for a graft waits in a vat instead of on a tray, and comes out with the forceps.
+    - Added: Every surgery step says what each button does, under its hint.
+    - Changed: A big rectangular steel table in the OR, with room beside the patient. The specimen vat stands on it; the vat stand is gone.
+    - Fixed: The grafted eye was going in backwards, which read as a red blob. It's an orange Hive eye now, the right way round and the right size.
+    - Fixed: The patient no longer appears to shift on the table between surgery steps, and the operating view doesn't bleach a pale face.
+- **0.7.0**: Quiet, please 🔇
+    - Changed: The game starts at 10% volume.
+
 **2026-09-18 (0.6.x)**
 
 - **0.6.16**: The Discharged is gone, the Sonographer is in 🩺
