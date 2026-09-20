@@ -53,7 +53,7 @@ from it. The surgeon's own eye goes into the vat and can be swapped back in or s
 ## Calls the theory session made (approved by Zach)
 
 - **Graft steps (on a surgeon):** 1. Scalpel: cut around the socket. 2. Eye spoon: scoop the old
-  eye out. 3. Forceps: take the new eye out of the vat and seat it (the old one drops into the vat it came out of). 4. Suture kit: stitch
+  eye out. 3. Forceps: hold left click on the eye in the vat, drag it to the socket and let go (the old one drops into the vat it came out of). 4. Suture kit: stitch
   new eye. 4. Suture kit: stitch it in (the `surgeon_graft` art already shows stitches). No
   anesthetic: the surgeon is simply awake, which is the joke.
 - **Extraction steps (on a Hive):** 1. Scalpel: cut around the eye. 2. Eye spoon: scoop it out.

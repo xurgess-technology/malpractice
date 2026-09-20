@@ -354,12 +354,11 @@ stitches, should too):
   any more (the HUD still draws it if given).
 - **`hud_state()` also returns `keys`** (2026-09-19): `[[key, what it does], ...]`, the controls
   line the surgery HUD draws under the hint, in the panel's teal. Two or three pairs of a couple of
-  words each, and they change with the stage, so the strip always says what to do NOW ("HOLD S
-  lower them | HOLD LMB close the jaws"). Override `Minigame.keys()` per stage; `E / Esc: step away`
-  is drawn by the HUD itself. Inputs a step can read: the cursor, `BUTTON_PRIMARY` (left click),
-  `BUTTON_SECONDARY` (right), `BUTTON_UP` (**W**) and `BUTTON_DOWN` (**S**) -- W and S are the
-  raise / lower pair (the eye steps' pull and the forceps' depth), never the mouse going "past" a
-  point. Bots set the same bits in `bot_input`'s `buttons`.
+  words each, and they change with the stage, so the strip always says what to do NOW ("HOLD LMB
+  grab the eye | MOUSE drag it to the socket"). Override `Minigame.keys()` per stage;
+  `E / Esc: step away` is drawn by the HUD itself. Inputs a step can read: the cursor,
+  `BUTTON_PRIMARY` (left click), `BUTTON_SECONDARY` (right) and `BUTTON_UP` (**W**, the eye snip's
+  "pull the eyeball up"). Bots set the same bits in `bot_input`'s `buttons`.
 - Colour language in the world: **green** = right / holds / grab it now (tourniquet strap and
   pulse probe, gauze path ring and trail, saw guide, forceps reach ring and exit glow);
   **amber** = works but weak (loose wrap, short saw pass, strap too high); **red** = a mistake is
@@ -2260,18 +2259,14 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
   `grab` (the graft's step 3) takes the new eye (`eye_kind_in`) out of the specimen vat standing on
   the table and seats it in the socket, `{"eye_seated": true}`; `place` (the extraction's step 4)
   takes the cut-free eye out of the socket and drops it in the vat, `{"eye_in_vat": true}`.
-  The two directions are not equally fussy, because one is millimetre work on a face and the other
-  is putting a dead monster's eye in a jar. **`grab`**: hold **S** to lower the forceps into the
-  fluid, primary to close the jaws on the nerve, **W** to lift it clear, carry it across -- it hangs
-  on its nerve and lags, and moving too fast, or leaving without lifting it clear, shakes it loose
-  back into the vat -- then hold S over the socket and it goes in under slow, steady pressure,
-  turning so the pupil faces out. **`place`** (2026-09-19, after Zach could not finish it) is grab
-  and drop and nothing else: no depth keys, hold primary anywhere within `PLACE_GRAB` of the loose
-  eye and the jaws take it, drag it with the mouse (the nerve still swings, but no speed and no
-  distance can shake it out -- the step cannot be lost), and let go within `PLACE_DROP` of the vat
-  to drop it in; letting go anywhere else puts it back in the socket. The forceps raise and lower
-  themselves, and the vat's ring is up from the first frame at 2.6x size. Nothing here botches and
-  a dropped eye costs nothing. ctx knobs `no_fail`,
+  **One way to handle an eyeball, both ways round** (2026-09-19, after the extraction's proved too
+  fiddly to finish): hold primary anywhere within `GRAB_R` (5.5 cm) of the eye and the jaws take it
+  -- no aiming, no lowering, the forceps dip and lift by themselves -- drag it with the mouse (the
+  nerve swings, but no speed and no distance can shake it out: neither step can be lost), and let
+  go within `DROP_SOCKET` / `DROP_VAT` of where it has to go. It sinks home by itself, turning so a
+  seated pupil faces out. Letting go anywhere else drops it back where it came from, with the hint
+  saying so. Both rings are up from the first frame and the target's is drop-radius sized. No depth
+  keys, no speed limit, no botches, and a dropped eye costs nothing. ctx knobs `no_fail`,
   `eye_kind`, `eye_kind_in`, `eye_radius`, and `vat` (the real `specimen_vat` on the table, which
   `surgery_system` looks up per machine: the game draws its own open copy where that one stands and
   hides the real one while the step runs). Every graft step shares `eye_ops.base_camera_pose()`, so

@@ -9,8 +9,6 @@ extends Node
 ## not inside, the vat's put-in / take-out / carry / set-down paths, a strapped Hive taking the scalpel
 ## into Eyeball Extraction and giving up its eye, and an eye selling at the furnace for less as it spoils.
 
-const MinigameBase := preload("res://scripts/surgery/minigame.gd")
-
 var main: Node3D
 var game: Game
 var dev: Node
@@ -150,36 +148,29 @@ func _grab_checks(script: GDScript) -> void:
 	if seat == null:
 		g.free()
 		return
-	var DOWN: int = MinigameBase.BUTTON_DOWN
-	var UP: int = MinigameBase.BUTTON_UP
 	var vat: Vector2 = seat.source_at()
 	_check(vat != Vector2.ZERO and String(seat.mode) == "grab", "the eye starts in the vat, away from the socket")
-	# Over the vat but still up in the air, the jaws close on nothing.
+	# Grab and drag, the same as the extraction's step: hold primary near the eye in the vat and the
+	# jaws take it, with nothing to lower first.
 	for i in 90:
 		g.handle_cursor(vat, 0, dt)
-	for i in 40:
-		g.handle_cursor(vat, 1, dt)
-	_check(int(seat.stage) == 0 and not seated[0], "the jaws close on nothing until they are lowered into the vat")
-	for i in 10:
-		g.handle_cursor(vat, 0, dt)
-	# Hold S to lower them in, then the jaws take it.
-	for i in 90:
-		g.handle_cursor(vat, DOWN, dt)
-	_check(float(seat.depth) > 0.79, "holding S lowers the forceps into the vat (depth %.2f)" % float(seat.depth))
-	for i in 20:
-		g.handle_cursor(vat, 1 | DOWN, dt)
-	_check(int(seat.stage) == 1, "down in the vat, holding primary picks the new eye up (stage %d)" % int(seat.stage))
-	# Whipping it across without lifting it out shakes it loose back into the vat, and costs nothing.
 	for i in 30:
-		g.handle_cursor(Vector2(0.06, 0.05), 1 | DOWN, dt)
+		g.handle_cursor(vat, 1, dt)
+	_check(int(seat.stage) == 1, "holding left click on the eye in the vat picks it up (stage %d)" % int(seat.stage))
+	# Whipping the hand about cannot lose it.
+	for i in 60:
+		g.handle_cursor(Vector2(0.07 if i % 2 == 0 else -0.07, 0.06 if i % 3 == 0 else -0.05), 1, dt)
+	_check(int(seat.stage) == 1 and int(seat.drops) == 0, "no speed shakes it loose (stage %d, drops %d)"
+		% [int(seat.stage), int(seat.drops)])
+	# Letting go away from the socket puts it back in the vat, and never botches.
+	for i in 40:
+		g.handle_cursor(Vector2(0.09, 0.08), 1, dt)   # draw it clear of the socket first
+	for i in 20:
+		g.handle_cursor(Vector2(0.09, 0.08), 0, dt)
 	_check(int(seat.stage) == 0 and int(seat.drops) == 1 and botches[0] == 0,
-		"a whipped hand shakes it loose back into the vat, and never botches (stage %d, drops %d, botches %d)"
+		"letting go away from the socket drops it back in the vat, no botch (stage %d, drops %d, botches %d)"
 			% [int(seat.stage), int(seat.drops), botches[0]])
-	# Raising them again: W is the other half of the pair.
-	for i in 90:
-		g.handle_cursor(vat, UP, dt)
-	_check(float(seat.depth) < 0.05, "holding W raises them again (depth %.2f)" % float(seat.depth))
-	# The bot plays the whole step out: into the vat, out with the eye, across, and in.
+	# The bot plays the whole step out: into the vat, out with the eye, across, let go over the socket.
 	var t := 0.0
 	while t < 40.0 and not seated[0]:
 		t += dt
@@ -220,6 +211,8 @@ func _place_checks(script: GDScript) -> void:
 		g.handle_cursor(Vector2(0.09 if i % 2 == 0 else -0.09, 0.08 if i % 3 == 0 else -0.06), 1, dt)
 	_check(int(seat.stage) == 1 and int(seat.drops) == 0, "whipping the hand about cannot lose it (stage %d, drops %d)"
 		% [int(seat.stage), int(seat.drops)])
+	for i in 40:
+		g.handle_cursor(Vector2(0.09, 0.08), 1, dt)   # clear of the vat before letting go
 	for i in 20:
 		g.handle_cursor(Vector2(0.09, 0.08), 0, dt)
 	_check(int(seat.stage) == 0 and int(seat.drops) == 1 and botches[0] == 0,

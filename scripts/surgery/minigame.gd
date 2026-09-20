@@ -44,8 +44,6 @@ const BUTTON_SECONDARY := 2
 ## The forward key (W) held, for steps that use it (the eye steps' "pull the eyeball up"). Bots set it in
 ## bot_input's `buttons` too.
 const BUTTON_UP := 4
-## The back key (S) held: the other half of a raise / lower pair (the forceps steps). Bots set it too.
-const BUTTON_DOWN := 8
 
 ## Render layer 20, reserved for a minigame's own props (tools, straps, raised wound models).
 ## Every decal, the patient's and the minigames', projects only onto layer 1 (cull_mask = 1),

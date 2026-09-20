@@ -231,21 +231,20 @@ func _run() -> void:
 		game._proxy_used(game.table_interact_id(ti), bw)
 		var ok := await _until(func(): return sys.mg != null and String(sys.mg.get("variant") if sys.mg.get("variant") != null else "") == String(step[1]), 10.0)
 		print("[graftshot] step %s began=%s" % [String(step[1]), str(ok)])
-		await _seconds(1.0 if String(step[1]) == "grab" else 2.0)
+		await _seconds(0.9 if String(step[1]) == "grab" else 2.0)
 		await _shot("%d_%s_operating" % [n, String(step[1])])
 		_still_probe(ps, String(step[1]))
 		if String(step[1]) == "cut" and sys.mg != null:
 			_lights_near(sys.mg.global_position)
 		n += 1
 		if String(step[1]) == "grab":
-			# The forceps step plays out in about four seconds: the eye on the tray, the carry across
-			# and the moment it goes in.
+			# The forceps step: the eye in the vat, the drag across, and the moment it goes in.
+			await _shot("56a_grab_in_the_vat")        # the eye in the vat, both rings up
 			await _until(func(): return _seat_stage(sys) >= 1, 20.0)
-			await _seconds(0.7)
-			await _shot("56b_grab_carry")
+			await _seconds(0.5)
+			await _shot("56b_grab_carry")             # dragging it across
 			await _until(func(): return _seat_stage(sys) >= 2, 30.0)
-			await _seconds(0.9)
-			await _shot("56c_grab_seating")
+			await _shot("56c_grab_seating")           # let go over the socket: in it goes
 			_still_probe(ps, "seat")
 			await _until(func(): return sys.mg == null or bool(sys.mg.get("done")), 20.0)
 			await _shot("56d_grab_seated")

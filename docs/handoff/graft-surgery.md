@@ -249,3 +249,13 @@ what to do in one line. `grab` (the graft) still has all its careful work; only 
 The snip's camera is raised (0.22 / 0.20 / 50) so the extraction's steps sit closer together; it
 stays side-on because the nerve shows under the lifted eye and a view from straight above would
 have the eye covering it.
+
+### Sixth round (one way to handle an eyeball)
+
+Zach: "make the new way of handling the eyeball true of the grafting surgery too". The graft's seat
+step is the same grab-and-drag as the extraction's now, and `eye_seat.gd` has one set of rules with
+`mode` only choosing where the eye comes from and where it goes. Gone from the step, and from the
+file: the depth input and `Minigame.BUTTON_DOWN` (S; W stays for the snip's pull), `DEEP_ENOUGH` /
+`LIFT_CLEAR` and the lift-clear drop, `CARRY_MAX_SPEED` and the slack drop, `SEAT_MAX_SPEED` and
+the steady-pressure push, the `_speed` tracking and the jolt reaction (nothing is left to shake
+loose). What is left: hold left click near the eye, drag, let go over the ring.
