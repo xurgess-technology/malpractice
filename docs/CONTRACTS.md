@@ -2577,3 +2577,40 @@ shift 2), nettest scenario `doors`, devtest door checks, `tools/perfprobe.tscn -
 `place`, `clear_hands`, `give` (a stack, with extra stack keys like `bt`, `used`, `x`), `give_abilities`
 and `floor_item`. An unknown name is logged with the known ones and the menu opens as usual. Setups so
 far: `icons`.
+
+## Quick start (debug only, 2026-09-20)
+
+`scripts/quick_start.gd` (`QuickStart`): `--quick=<ailment>:<step_id>` after `--` opens the game
+leaning over the patient mid-surgery, one press of E from the step. `quick.bat` at the root is the
+front door (it finds Godot like play.bat, re-imports first, opens a normal window in front, and with
+no arguments reuses the last ones from the gitignored `tools\.quick_args`).
+
+```
+quick.bat --quick=gunshot:extract --patient=bob --shift=1
+```
+
+`--patient=` (default `bob`) and `--shift=` (default 1, the difficulty knob) go with it; `--seed=N`
+is the review windows' own argument and works here too (4242 without one). Only the patient ailments
+can be quick-started (`gunshot`, `amputation`); an unknown ailment, step or patient prints what is
+valid and boots the title menu instead.
+
+- **Everything is behind `OS.is_debug_build()`.** A release build parses none of it and boots
+  exactly as before, and nothing here touches `Game.DEV_CODE` or the pharmacy fax: the secret order
+  is still the only way into dev mode in a real session.
+- `main._launch` asks `QuickStart.requested()` before it builds the launch printout and runs
+  `main._boot_quick()` instead when there is one: no printout pacing, no sign-in sheet and no shift
+  fax (`_quick_boot` makes `_loading_screen_up` return at once), then a solo host session, then
+  `QuickStart.stage(game, spec)`.
+- `Warmup.run(..., scope)` takes `{"patient": id, "ailment": id}` and builds only what that case
+  needs; **everything it skips hitches the first time it draws**, which is the trade.
+- `stage()` turns dev tools on with the existing `game.set_dev_tools`, asks the dev room for
+  `monsters_off` / `freeze` / `no_game_over` / `difficulty`, clocks in with nothing left to ring,
+  adds the case on the first free table with `step_index` and every earlier step's clean result in
+  `flags` (`QuickStart.CLEAN_RESULTS`, what the minigames emit), then stands you beside the step's
+  site with the rest of the procedure in hand and the step's item selected. It checks what you end
+  up aiming at (`SurgerySystem.can_begin` wants the step's item as the *selected* stack, and E only
+  reaches the table's aim proxy from far enough back) and logs the step and any reason E would fail.
+- **F5 / F6 while operating** (debug builds only, `surgery_system._dev_rebuild_minigame`): F5
+  rebuilds the current step's minigame in place on the same seed, F6 rerolls it. The step's script
+  is re-read past ResourceLoader's cache and `Minigame._shader_cache` is cleared, so an edited .gd,
+  shader or material shows without relaunching; the step starts over rather than resuming.

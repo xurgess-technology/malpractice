@@ -449,7 +449,9 @@ func _spawn_mg() -> void:
 			_missing_warned[path] = true
 			push_warning("Surgery: no minigame script for step '%s' at '%s'." % [step.get("id", "?"), path])
 		return
-	var script := load(path) as GDScript
+	# DEBUG ONLY (F5 / F6 below): load() comes back out of ResourceLoader's cache, so an edited .gd
+	# would not be picked up. A rebuild asks for a fresh copy instead.
+	var script := (ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) if _dev_fresh else load(path)) as GDScript
 	if script == null:
 		return
 	var inst = script.new()
@@ -481,7 +483,7 @@ func _spawn_mg() -> void:
 		"shift": shift,
 		"difficulty": Procedures.difficulty(shift),
 		"flags": c.flags,
-		"seed": hash("%s|%d" % [mg_key, int(game.get("seed_value") if game.get("seed_value") != null else 0)]),
+		"seed": hash("%s|%d" % [mg_key, int(game.get("seed_value") if game.get("seed_value") != null else 0)]) + _dev_seed_nudge,
 		"body": body,
 		"operator": false,
 		"helper_lights": _helper_lights,
@@ -613,6 +615,14 @@ func local_operator_exit() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if _local_op and _op_time > 0.35 and event.is_action_pressed("interact"):
 		local_operator_exit()
+		get_viewport().set_input_as_handled()
+		return
+	# DEBUG ONLY: while you are operating, F5 rebuilds this step's minigame where it stands (same
+	# seed) and F6 rerolls it, so a script, shader or material edit shows without relaunching. A
+	# release build never gets here, so F5 stays main.gd's camera cycle.
+	if _local_op and OS.is_debug_build() and event is InputEventKey and event.pressed and not event.echo \
+			and (event.physical_keycode == KEY_F5 or event.physical_keycode == KEY_F6):
+		_dev_rebuild_minigame(event.physical_keycode == KEY_F6)
 		get_viewport().set_input_as_handled()
 
 
@@ -853,6 +863,47 @@ func hud_state() -> Dictionary:
 
 func is_local_operating() -> bool:
 	return _local_op
+
+
+# =============================================================================== DEBUG: F5 and F6
+
+## DEBUG ONLY. True only while _spawn_mg() is rebuilding for F5 / F6, so the step's script is read
+## past ResourceLoader's cache and an edited .gd really is picked up.
+var _dev_fresh := false
+## DEBUG ONLY. Added to the step's seed. F6 bumps it; F5 leaves it where it is.
+var _dev_seed_nudge := 0
+
+
+## DEBUG ONLY: build the current step's minigame again where it stands. `reroll` (F6) gives it a new
+## seed, otherwise (F5) it gets the same one. Local and immediate, and nothing about it is
+## replicated: it is a tool for looking at an edit, not a game action.
+func _dev_rebuild_minigame(reroll: bool) -> void:
+	if mg == null or not is_instance_valid(mg) or mg_key == "":
+		return
+	if reroll:
+		_dev_seed_nudge += 7919
+	# Minigame.cached_shader() keeps one Shader per distinct source for the whole run, so without
+	# this an edited shader inside a minigame comes back exactly as it was.
+	Minigame._shader_cache.clear()
+	var key := mg_key
+	_free_mg()
+	mg_key = key
+	# The step starts over rather than resuming: the script that produced its progress is the one
+	# being edited.
+	if game != null and game.is_host():
+		_mg_state = {}
+		_mg_state_key = key
+		_finished_keys.erase(key)
+	_dev_fresh = true
+	_spawn_mg()
+	_dev_fresh = false
+	if mg == null:
+		return
+	_mg_t = 0.0
+	if _local_op:
+		mg.ctx["operator"] = true
+		_stir_rng.seed = int(mg.ctx.get("seed", 0)) + 7919 * (_stir_count + 1)
+	game.say("Step rebuilt%s." % (" with a new seed" if reroll else ""), 1.5)
 
 
 func _audio(cue: String, at, vol := 0.0) -> void:

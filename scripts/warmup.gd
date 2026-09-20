@@ -35,10 +35,22 @@ const SonoEchoScript := preload("res://scripts/monsters/sono_echo.gd")  # the So
 
 
 ## Run once. Safe to call again; later calls return immediately.
-static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Callable = Callable(), may_work: Callable = Callable()) -> void:
+##
+## `scope` is the DEBUG-ONLY quick start's (scripts/quick_start.gd) subset: `{"patient": id,
+## "ailment": id}` builds only what that one case needs -- its items, its patient's body, its
+## steps' minigames, the OR wall monitor, the first-person hands, the aim highlight and the
+## furniture kinds the wing loader's thread shares -- and skips the monsters, the doors, the
+## exterior, the terminal, the brains, the vats, the pocket spaces, the crew, the dev gun, the
+## other surgeons and the downed player's table. **Everything it skips hitches the first time it
+## draws instead**, which is the trade a quick start makes for being on the table in seconds; a
+## normal launch passes no scope and still builds one of everything.
+static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Callable = Callable(), may_work: Callable = Callable(), scope: Dictionary = {}) -> void:
 	if game.has_meta("warmed_up"):
 		return
 	game.set_meta("warmed_up", true)
+	var only: bool = not scope.is_empty()
+	var only_patient := String(scope.get("patient", ""))
+	var only_ailment := String(scope.get("ailment", ""))
 	var tree := game.get_tree()
 	var started := Time.get_ticks_msec()
 	var slice := {"t": Time.get_ticks_msec(), "tree": tree, "may_work": may_work}
@@ -66,9 +78,10 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	# launch it runs before the first frame, while Godot's boot splash is still up. (The renderer's
 	# own one-time setup, ~2.5 s on the first real 3D frames, can't be moved or split; the launch
 	# printout covers it with its still "connecting" page.)
-	# Items
+	# Items (scoped: only the ones this case's steps use).
 	var x := -0.9
-	for kind in Items.ITEMS.keys():
+	var item_kinds: Array = Procedures.requirements(only_ailment).keys() if only else Items.ITEMS.keys()
+	for kind in item_kinds:
 		for n in ([1, 3] if Items.is_consumable(kind) else [1]):
 			var m := ItemModels.make(kind, n)
 			shelf.add_child(m)
@@ -77,47 +90,52 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 
 	# INVENTORY HOOK: the teal / gold rim overlay on stacks, every loot kind, and (pharmacy chunk 3)
 	# the pharmacy window and the furnace.
-	for kind in Items.ITEMS.keys() + LootTable.kinds():
+	for kind in (item_kinds if only else Items.ITEMS.keys() + LootTable.kinds()):
 		var tm := ItemModels.make_tinted(kind, 1)
 		shelf.add_child(tm)
 		tm.position = Vector3(x, 0.05, 0.3)
 		x += 0.2
 	_inert(shelf)
-	_report(progress, "items", Items.ITEMS.size())
+	_report(progress, "items", item_kinds.size())
 	ItemIcons.preload_all()   # ICONS: every item and ability icon loaded, and the greyscale ones (spoiled, used up) made
-	EconomyScript.warm(shelf)
-	preload("res://scripts/rocket_boots.gd").warm(shelf)   # ROCKET BOOTS: the heel pods and the flame
-	ExteriorScript.warm(shelf)   # the front: concrete, window glass, sign letters
-	_inert(shelf)
+	if not only:
+		EconomyScript.warm(shelf)
+		preload("res://scripts/rocket_boots.gd").warm(shelf)   # ROCKET BOOTS: the heel pods and the flame
+		ExteriorScript.warm(shelf)   # the front: concrete, window glass, sign letters
+		_inert(shelf)
 	_report(progress, "economy")
 	AimHighlight.warm(shelf)   # AFFORDANCE HOOK: the aim-highlight rim shader (scripts/aim_highlight.gd)
-	SonoEchoScript.warm(shelf)   # the Sonographer's echo: the grainy fan and the imaging flash
+	if not only:
+		SonoEchoScript.warm(shelf)   # the Sonographer's echo: the grainy fan and the imaging flash
 	OrScreenScript.warm(shelf)  # ORSCREEN HOOK: the wall monitor's glass shader and viewport
-	# HUB REDESIGN: the database terminal's bigger desk, and (the more expensive part) its live
-	# camera-mirror SubViewport and material.
-	var term: Node3D = TerminalModelScript.make_terminal()
-	shelf.add_child(term)
-	term.position = Vector3(x, -0.9, 0.5)
-	x += 1.4
-	# SWEEP 3 HOOK (combat): the syringe the jab draws (its glass is alpha-blended).
-	var syringe: Node3D = preload("res://scripts/combat/combat.gd").make_syringe()
-	shelf.add_child(syringe)
-	syringe.position = Vector3(x, 0.3, 0.3)
-	_inert(shelf)
+	if not only:
+		# HUB REDESIGN: the database terminal's bigger desk, and (the more expensive part) its live
+		# camera-mirror SubViewport and material.
+		var term: Node3D = TerminalModelScript.make_terminal()
+		shelf.add_child(term)
+		term.position = Vector3(x, -0.9, 0.5)
+		x += 1.4
+		# SWEEP 3 HOOK (combat): the syringe the jab draws (its glass is alpha-blended).
+		var syringe: Node3D = preload("res://scripts/combat/combat.gd").make_syringe()
+		shelf.add_child(syringe)
+		syringe.position = Vector3(x, 0.3, 0.3)
+		_inert(shelf)
 	_report(progress, "terminal")
-	BrainsScript.warm(shelf)  # SWEEP 3 HOOK (brains): the blender, Echo's ghosts and veil, Hive Eyes' screen
-	# GRAFTING part one: a vat with each eye floating in it (the glass, the fluid and the eye shader).
-	for ek in Eyes.KINDS:
-		var vm := ItemModels.make("specimen_vat")
-		shelf.add_child(vm)
-		vm.position = Vector3(x, 0.05, 0.6)
-		x += 0.2
-		Vats.set_contents(vm, Eyes.pack(ek, "", 60.0, 1))
-	_inert(shelf)
+	if not only:
+		BrainsScript.warm(shelf)  # SWEEP 3 HOOK (brains): the blender, Echo's ghosts and veil, Hive Eyes' screen
+		# GRAFTING part one: a vat with each eye floating in it (the glass, the fluid and the eye shader).
+		for ek in Eyes.KINDS:
+			var vm := ItemModels.make("specimen_vat")
+			shelf.add_child(vm)
+			vm.position = Vector3(x, 0.05, 0.6)
+			x += 0.2
+			Vats.set_contents(vm, Eyes.pack(ek, "", 60.0, 1))
+		_inert(shelf)
 	_report(progress, "brains")
-	# POCKETS HOOK: the Factory's and the Restaurant's meshes, textures and materials, and a stub copy.
-	preload("res://scripts/level/pockets/pocket_spaces.gd").warm(shelf)
-	_inert(shelf)
+	if not only:
+		# POCKETS HOOK: the Factory's and the Restaurant's meshes, textures and materials, and a stub copy.
+		preload("res://scripts/level/pockets/pocket_spaces.gd").warm(shelf)
+		_inert(shelf)
 	_report(progress, "pockets")
 	# HANDS HOOK: the first-person forearms, hands and torch (their skin, sleeve and lens materials, on
 	# the hands layer the flashlight skips). The wind-ups build nothing new: they pose these and the
@@ -141,8 +159,8 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	# still page instead of in the middle of the printing.
 	var bodies := {}
 	var bx := -0.6
-	for pid in Procedures.human_patients():
-		for ail in Procedures.patient_ailments():
+	for pid in ([only_patient] if only else Procedures.human_patients()):
+		for ail in ([only_ailment] if only else Procedures.patient_ailments()):
 			var b: Node3D = BodyScript.create(pid)
 			shelf.add_child(b)
 			b.position = Vector3(bx, -0.3, -0.8)
@@ -169,7 +187,7 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	shelf.visible = false
 	await _frame(slice)
 	# SWEEP 3 HOOK (dissection): strapped monsters, one closed and awake (thrashing), one opened.
-	for mpid in Procedures.monster_patients():
+	for mpid in ([] if only else Procedures.monster_patients()):
 		for opened in [false, true]:
 			var mb: Node3D = BodyScript.create(mpid)
 			shelf.add_child(mb)
@@ -184,7 +202,7 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 			bx += 0.4
 			await _slice(slice)
 	# DOWNED HOOK: the lying player on the player table (bleeding and stitched) and the table itself.
-	for stitched in [false, true]:
+	for stitched in ([] if only else [false, true]):
 		var pb: Node3D = PlayerBodyScript.create(1, Color("3d8f80"))
 		shelf.add_child(pb)
 		pb.position = Vector3(bx, -0.3, -0.8)
@@ -203,7 +221,7 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	_report(progress, "patients", Procedures.human_patients().size())
 	# HUMAN HOOK: every Blender surgeon a player can wear (their maps, the tinted cloth shader), posed
 	# by the idle clip, so a teammate joining does not hitch.
-	for v in HumanModelScript.SURGEONS:
+	for v in ([] if only else HumanModelScript.SURGEONS):
 		var hb: Node3D = HumanModelScript.spawn(v, C.PLAYER_COLORS[1])
 		if hb != null:
 			shelf.add_child(hb)
@@ -216,17 +234,18 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 				hap.play("Idle")
 			bx += 0.4
 		await _slice(slice)
-	var ptable := PlayerTableScript.make()
-	shelf.add_child(ptable)
-	ptable.position = Vector3(0.0, -1.4, -2.2)
-	ptable.scale = Vector3.ONE * 0.5
-	# GRAFTING chunk C: the specimen vat that stands on every OR table (the eye steps reach into it).
-	var vat := Node3D.new()
-	Vats.build_model(vat)
-	shelf.add_child(vat)
-	vat.position = Vector3(0.6, -1.4, -2.2)
-	vat.scale = Vector3.ONE * 0.5
-	_inert(shelf)
+	if not only:
+		var ptable := PlayerTableScript.make()
+		shelf.add_child(ptable)
+		ptable.position = Vector3(0.0, -1.4, -2.2)
+		ptable.scale = Vector3.ONE * 0.5
+		# GRAFTING chunk C: the specimen vat that stands on every OR table (the eye steps reach into it).
+		var vat := Node3D.new()
+		Vats.build_model(vat)
+		shelf.add_child(vat)
+		vat.position = Vector3(0.6, -1.4, -2.2)
+		vat.scale = Vector3.ONE * 0.5
+		_inert(shelf)
 	_report(progress, "staff", HumanModelScript.SURGEONS.size())
 	await _frame(slice)
 
@@ -236,7 +255,7 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	var mx := -1.0
 	# "sonographer" also builds its gel-drip particles, the glow shader its throat and wand share, the see-through
 	# pane of skin over its windpipe and the glossy gel copy of its skin material.
-	for kind in ["night_nurse", "hive", "sonographer"]:  # SWEEP 3 HOOK (monsters)
+	for kind in ([] if only else ["night_nurse", "hive", "sonographer"]):  # SWEEP 3 HOOK (monsters)
 		var model: Node3D = MonsterModel.new()
 		shelf.add_child(model)
 		model.setup(kind)
@@ -249,28 +268,29 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	_inert(shelf)
 	_report(progress, "monsters")
 
-	# DEV HOOK (scripts/dev): the dev gun, its tracers and the target dummy.
-	DevGun.warm(shelf)
-	await _slice(slice)
+	if not only:
+		# DEV HOOK (scripts/dev): the dev gun, its tracers and the target dummy.
+		DevGun.warm(shelf)
+		await _slice(slice)
 
-	# LOOP HOOK: a paramedic crew with its gurney, and the break-room phone.
-	var crew: Node3D = (load("res://scripts/loop/crew.gd") as GDScript).create("", "")
-	crew.scale = Vector3.ONE * 0.4
-	crew.position = Vector3(1.2, -0.6, -1.2)
-	shelf.add_child(crew)
-	# MODELS HOOK: the look-alike crew must not collide with anything (its paramedics are rigged
-	# models now; their skinning and the merged gurney compile here).
-	for n in crew.find_children("*", "CollisionObject3D", true, false):
-		n.queue_free()
-	var ph: Node3D = (load("res://scripts/loop/phone.gd") as GDScript).create()
-	ph.remove_from_group("interactable")   # only a look-alike: never the real "phone"
-	ph.remove_meta("interact_id")
-	for n in ph.find_children("*", "CollisionObject3D", true, false):
-		n.queue_free()
-	ph.position = Vector3(-1.2, -0.6, -1.0)
-	shelf.add_child(ph)
-	ph.set_ringing(true)
-	_inert(shelf)
+		# LOOP HOOK: a paramedic crew with its gurney, and the break-room phone.
+		var crew: Node3D = (load("res://scripts/loop/crew.gd") as GDScript).create("", "")
+		crew.scale = Vector3.ONE * 0.4
+		crew.position = Vector3(1.2, -0.6, -1.2)
+		shelf.add_child(crew)
+		# MODELS HOOK: the look-alike crew must not collide with anything (its paramedics are rigged
+		# models now; their skinning and the merged gurney compile here).
+		for n in crew.find_children("*", "CollisionObject3D", true, false):
+			n.queue_free()
+		var ph: Node3D = (load("res://scripts/loop/phone.gd") as GDScript).create()
+		ph.remove_from_group("interactable")   # only a look-alike: never the real "phone"
+		ph.remove_meta("interact_id")
+		for n in ph.find_children("*", "CollisionObject3D", true, false):
+			n.queue_free()
+		ph.position = Vector3(-1.2, -0.6, -1.0)
+		shelf.add_child(ph)
+		ph.set_ringing(true)
+		_inert(shelf)
 	_report(progress, "crew")
 	await _frame(slice)
 
@@ -286,8 +306,10 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	var warm_parts_ms := Time.get_ticks_msec() - wp0
 	_inert(shelf)
 	_report(progress, "furniture", kinds.size())
+	# The look-alike doors are skipped by a scoped warmup; the furniture kinds above are not, because
+	# the wing loader's worker thread shares those meshes rather than just drawing them.
 	var dx := -1.5
-	for kind in ["hinged", "double", "gate", "auto", "sliding"]:
+	for kind in ([] if only else ["hinged", "double", "gate", "auto", "sliding"]):
 		var w := 4.0 if kind == "sliding" else (2.0 if kind != "hinged" else 1.0)
 		var door: Node3D = DoorScript.create({"id": "warm_" + kind, "kind": kind, "tiles": [], "n": Vector2i(0, 1),
 				"s": Vector2i(1, 0), "plane": Vector2.ZERO, "width": w, "hinge": -1, "max_in": 90.0, "max_out": 90.0,
@@ -315,14 +337,14 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 
 	# Every surgery minigame, set up on a patient the way the surgery system does it
 	var games := []
-	for ail in Procedures.AILMENTS.keys():
+	for ail in ([only_ailment] if only else Procedures.AILMENTS.keys()):
 		for i in Procedures.steps(ail).size():
 			var step: Dictionary = Procedures.step(ail, i)
 			var path: String = Procedures.MINIGAME_SCRIPTS.get(step.game, "")
 			if path == "" or not ResourceLoader.exists(path):
 				continue
 			# SWEEP 3 HOOK (dissection): the skull saw and brain forceps on the monster bodies.
-			var pids: Array = ["player"] if Procedures.is_player_only(ail) else (Procedures.monster_patients() if Procedures.is_monster_only(ail) else Procedures.human_patients())
+			var pids: Array = [only_patient] if only else (["player"] if Procedures.is_player_only(ail) else (Procedures.monster_patients() if Procedures.is_monster_only(ail) else Procedures.human_patients()))
 			for pid in pids:
 				var body: Node3D = bodies["%s|%s" % [pid, ail]]
 				var mg: Node3D = (load(path) as GDScript).new()

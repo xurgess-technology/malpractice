@@ -29,3 +29,6 @@ override.cfg
 
 # What the orchestrator is working on right now (RULES.md, "NOW.md")
 NOW.md
+
+# The arguments quick.bat was last given, so running it with none repeats them
+tools/.quick_args

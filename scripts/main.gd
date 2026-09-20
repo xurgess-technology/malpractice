@@ -157,6 +157,13 @@ signal launched
 ## game's very first frame is a lit 3D frame of its first models: the renderer's one-time setup
 ## (seconds, and it can't be split up) happens while Godot's boot splash is still on screen.
 func _launch() -> void:
+	# DEBUG ONLY (scripts/quick_start.gd): `--quick=<ailment>:<step_id>` skips all of this -- the
+	# printout, the sign-in sheet, the lobby -- and opens leaning over the patient. requested()
+	# returns {} in a release build and for a name it does not know, and then nothing changes.
+	var quick := QuickStart.requested()
+	if not quick.is_empty():
+		await _boot_quick(quick)
+		return
 	var screen := LaunchScreenScript.new()
 	screen.name = "LaunchScreen"
 	add_child(screen)
@@ -209,6 +216,28 @@ func _boot_setup(setup: String) -> void:
 	for i in 45:
 		await get_tree().process_frame
 	await ReviewSetups.stage(setup, game)
+
+
+## DEBUG ONLY: the quick start (scripts/quick_start.gd). A warmup scoped to this one case instead
+## of the whole game, then a solo host session with no fax anywhere, and the shift staged around
+## the player. Everything the scoped warmup left out hitches the first time it draws; that is the
+## trade for being at the table in seconds.
+func _boot_quick(spec: Dictionary) -> void:
+	var t0 := Time.get_ticks_msec()
+	menu.hide_menu()
+	await Warmup.run(game, Callable(), Callable(), Callable(), QuickStart.warmup_scope(spec))
+	launching = false
+	launched.emit()
+	_quick_boot = true
+	await _start_solo(QuickStart.PLAYER_NAME, QuickStart.seed_of(spec))
+	while game.get_parent().has_node("WarmupCover") or game.local_player() == null:
+		await get_tree().process_frame
+	await QuickStart.stage(game, spec)
+	print("[quick] at the table %.1f s after launch" % ((Time.get_ticks_msec() - t0) / 1000.0))
+
+
+## DEBUG ONLY: set by _boot_quick, so the session start puts up no sign-in sheet and no shift fax.
+var _quick_boot := false
 
 
 func _after_launch() -> void:
@@ -297,6 +326,9 @@ func _loading_screen_up(mode: String, player_name: String) -> bool:
 	await _after_launch()
 	if _starting():
 		return false
+	# DEBUG ONLY (the quick start): no sign-in sheet and no shift fax to wait for.
+	if _quick_boot:
+		return true
 	shift_fax.begin("session", mode, player_name)
 	await shift_fax.drawn()
 	return true
