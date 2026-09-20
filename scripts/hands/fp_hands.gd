@@ -151,7 +151,8 @@ func update(delta: float) -> void:
 		pr = right_both
 
 	# ---- THROW HOOK: the drop key's charged throw (scripts/hands/throw_pose.gd)
-	_throw.update(delta, float(player.throw_wind) if act.is_empty() else 0.0, two)
+	_throw.update(delta, float(player.throw_wind) if act.is_empty() else 0.0, two,
+		float(player.swing_speed))   # TRINKETS chunk B: a reflex-hammer bonk is this pose, sped up
 	if _throw.active():
 		var ww: float = _throw.wind_w()
 		var sw: float = _throw.strike_w()

@@ -233,7 +233,8 @@ func update(delta: float) -> void:
 			tor.x -= 0.1 * float(act.charge)
 	# THROW HOOK: the drop key's charged throw (scripts/hands/throw_pose.gd), over the hold pose.
 	var busy_body: bool = player.carrying != 0 or player.dragging_monster >= 0 or player.downed or player.carried_by != 0 or player.on_table
-	_throw.update(delta, float(player.throw_wind) if act.is_empty() and not busy_body else 0.0, _two)
+	_throw.update(delta, float(player.throw_wind) if act.is_empty() and not busy_body else 0.0, _two,
+		float(player.swing_speed))   # TRINKETS chunk B: a reflex-hammer bonk is this pose, sped up
 	if _throw.active():
 		var prefix := "throw_both_" if _throw.two else "throw_"
 		for step in [[prefix + "windup", _throw.wind_w()], [prefix + "strike", _throw.strike_w()]]:

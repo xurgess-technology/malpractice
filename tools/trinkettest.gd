@@ -349,10 +349,25 @@ func _hammer() -> void:
 	m.brain.timer = 999.0
 	await _gap()
 	var yaw0: float = m.rotation.y
-	await _click()
-	_check(String(tk.last_result.get("what", "")) == "spun_monster", "the bonk lands (%s)" % str(tk.last_result))
+	# The swing: the click plays the charged-throw pose sped up (Player.SWING_SPEED), and the bonk
+	# lands on the contact frame rather than the click frame.
+	tk.last_result = {}
+	me.bot_use += 1
+	await _frames(3)
+	_check(me.swinging() and me.throw_wind > 0.0,
+		"the arm winds up on the click (throw_wind %.2f)" % me.throw_wind)
+	_check(String(tk.last_result.get("what", "")) == "swinging",
+		"and nothing has been hit yet (%s)" % str(tk.last_result))
+	await _seconds(Player.SWING_CONTACT + 0.05)
+	_check(String(tk.last_result.get("what", "")) == "spun_monster",
+		"the bonk lands on the contact frame (%s)" % str(tk.last_result))
+	# The turn is quick but not instant: at the contact frame it has only just started.
+	_check(m.spinning(), "it is a turn you can watch, not a teleport of the heading")
+	await _settle(m)
 	var turned := absf(angle_difference(yaw0, m.rotation.y))
 	_check(absf(turned - PI) < 0.08, "the Hive spins 180 degrees (%.0f deg)" % rad_to_deg(turned))
+	_check(not me.swinging() and absf(me.throw_wind) < 0.001,
+		"the swing plays out and the arm comes back to rest")
 	_check(not m.brain.seeing and m.brain.target_id == 0, "and it has lost sight of me")
 	# Standing off (a Hive notices anything practically touching it whichever way it faces), its
 	# next look does not find me: I am behind it now.
@@ -380,8 +395,10 @@ func _hammer() -> void:
 	await _click()
 	_check(String(tk.last_result.get("what", "")) == "spun_player",
 		"after the cooldown a teammate can be bonked too (%s)" % str(tk.last_result))
+	_check(mate.spinning(), "their view is being turned, not teleported")
+	await _settle(mate)
 	_check(absf(absf(angle_difference(mate_yaw, mate.rotation.y)) - PI) < 0.08,
-		"their view snaps 180 degrees (%.0f deg)" % rad_to_deg(absf(angle_difference(mate_yaw, mate.rotation.y))))
+		"their view comes right round (%.0f deg)" % rad_to_deg(absf(angle_difference(mate_yaw, mate.rotation.y))))
 	# The Night Nurse ignores it.
 	var nurse := await _monster("night_nurse", o + Vector3(18.0, 0, 14.0))
 	game.knock_down_monster(nurse, Vector3.ZERO, 300.0)
@@ -477,11 +494,25 @@ func _gap() -> void:
 	await _seconds(TrinketsScript.USE_GAP + 0.05)
 
 
-## One left-mouse press, and the frames the host needs to resolve it.
+## One left-mouse press, and the frames the host needs to resolve it. TRINKETS chunk B: a reflex
+## hammer only starts a swing on the click ("swinging"); the bonk itself lands Player.SWING_CONTACT
+## later, so wait for that and last_result is the real answer either way.
 func _click() -> void:
 	tk.last_result = {}
 	me.bot_use += 1
 	await _frames(4)
+	if String(tk.last_result.get("what", "")) == "swinging":
+		await _seconds(Player.SWING_CONTACT + 0.05)
+
+
+## Wait out a reflex-hammer turn (Monster.SPIN_TIME / Player.SPIN_TIME): it is quick, but it is a
+## turn now, not a teleport of the heading, so a facing is only final once it has finished.
+func _settle(node: Node) -> void:
+	for i in 60:
+		if not (node.has_method("spinning") and node.spinning()):
+			break
+		await _frames(1)
+	await _frames(1)
 
 
 func _noise_near(pos: Vector3, kind: String, radius: float) -> float:

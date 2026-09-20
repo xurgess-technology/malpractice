@@ -252,6 +252,9 @@ func _physics_process(delta: float) -> void:
 			brain.think(delta)
 		if dragged_by != 0:
 			_apply_pin()
+		# TRINKETS chunk B: a reflex-hammer turn has the last word on the yaw while it runs, over
+		# whatever the brain's face_dir asked for this frame.
+		_tick_spin(delta)
 	else:
 		if dragged_by != 0 and _apply_pin():
 			pass
@@ -397,16 +400,47 @@ func wake() -> void:
 ## it was looking at. The Night Nurse has no reflexes and is never sent here. A brain may add
 ## `spun_around()` to decide what it does next (the Hive gives up and searches where it now faces);
 ## without one, the turn alone is the effect.
+## The turn is quick but not instant (SPIN_TIME): the body whips round over a fraction of a second
+## while _tick_spin drives the yaw. The brain is told about it up front, with the monster already
+## facing the new way, so a Hive's search swings around where it *ends up* rather than where it
+## started -- it really does look the wrong way.
+const SPIN_TIME := 0.18
+var _spin_t := -1.0
+var _spin_from := 0.0
+
+
 func spin_around() -> void:
 	if game != null and not game.is_host():
 		return
 	if mode == Mode.SEDATED or grab_peer != 0:
 		return
-	rotation.y = wrapf(rotation.y + PI, -PI, PI)
+	var from := rotation.y
+	rotation.y = wrapf(from + PI, -PI, PI)
 	_target_yaw = rotation.y
 	_repath = 0.0
 	if brain != null and brain.has_method("spun_around"):
 		brain.spun_around()
+	# Now put it back where it stood and let the turn play out.
+	_spin_from = from
+	_spin_t = 0.0
+	rotation.y = from
+
+
+## True while the reflex hammer's turn is still playing.
+func spinning() -> bool:
+	return _spin_t >= 0.0
+
+
+func _tick_spin(delta: float) -> void:
+	if _spin_t < 0.0:
+		return
+	_spin_t += delta
+	var u: float = clampf(_spin_t / SPIN_TIME, 0.0, 1.0)
+	# Out-cubic, the same curve a spun player's view uses.
+	rotation.y = wrapf(_spin_from + PI * (1.0 - pow(1.0 - u, 3.0)), -PI, PI)
+	_target_yaw = rotation.y
+	if u >= 1.0:
+		_spin_t = -1.0
 
 
 ## Every machine: where its eyes are and which way they look (-Z forward), following the

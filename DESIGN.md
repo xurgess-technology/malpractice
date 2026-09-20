@@ -103,7 +103,7 @@ and sells for a few dollars of scrap** — never nothing.
 | **Laptop** | Open it for about six seconds of a plan of the 25 m around you, with a blip for every surgery item in range. Then the battery dies. | Scrap |
 | **Defibrillator** | Aim at a downed teammate and they come straight back up **where they lie** — no carrying them to a table. Bulky (two hand slots), and very loud: a real noise event. | Scrap |
 | **Pulse oximeter** | In the same window as the sedative jab (a monster stunned by a shove), clip it on **instead of** sedating. The monster gets up and carries on, and from then on **the whole team hears its heartbeat**, positional and through walls: slow while it wanders, faster when it is suspicious, racing when it hunts. You get the pulse oximeter back, on the floor, when that monster is caught or killed. The Night Nurse can't be tagged. | Reusable |
-| **Reflex hammer** | Bonk anyone in reach and **they instantly spin 180°**. A teammate's camera snaps round. A Hive loses sight of you and starts searching the wrong way. The Night Nurse has no reflexes and ignores it. Short cooldown. | Reusable |
+| **Reflex hammer** | A quick swing of the arm, and whoever it lands on **is whipped 180°** in a fraction of a second. A teammate's camera comes right round. A Hive loses sight of you and starts searching the wrong way. The Night Nurse has no reflexes and ignores it. Short cooldown. | Reusable |
 | **EpiPen** | Jab yourself or a teammate: double sprint speed, and no getting out of breath, for 10 s — then a 3 s collapse where you stand. | Scrap |
 
 ## The database terminal

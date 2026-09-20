@@ -12,7 +12,8 @@ extends Node
 ##                   instead of sedating. It gets up and carries on and the whole team hears its
 ##                   heartbeat through walls, faster the more interested it is. It comes back when
 ##                   that monster is caught or killed. The Night Nurse cannot be tagged.
-##   Reflex hammer   bonk anyone in reach and they spin 180 degrees. Reusable, short cooldown.
+##   Reflex hammer   a quick swing of the arm; whoever it lands on is whipped 180 degrees.
+##                   Reusable, short cooldown.
 ##   EpiPen          once: jab yourself or a teammate for EPI_SECONDS of double sprint, then a
 ##                   EPI_COLLAPSE second collapse.
 ##
@@ -95,6 +96,7 @@ var _maps: Dictionary = {}       ## peer id -> world_time the laptop map goes da
 var _tagged: Dictionary = {}     ## monster id -> the peer id whose pulse oximeter is on it
 var _epi: Dictionary = {}        ## peer id -> world_time the sprint boost ends
 var _spins: Dictionary = {}      ## peer id -> how many times the reflex hammer has turned them (mod 64)
+var _swings: Dictionary = {}     ## peer id -> how many reflex-hammer swings they have thrown (mod 64)
 
 # --- host only
 var _tag_value: Dictionary = {}  ## monster id -> the dollars the clipped-on pulse oximeter was worth
@@ -102,11 +104,13 @@ var _sel_seen: Dictionary = {}   ## peer id -> the kind their selected slot held
 var _hammer_cd: Dictionary = {}  ## peer id -> world_time their hammer is ready again
 var _last_use: Dictionary = {}   ## peer id -> world_time of their last accepted trinket use
 var _collapse: Dictionary = {}   ## peer id -> world_time their EpiPen collapse is due (0 none)
+var _bonk_due: Dictionary = {}   ## peer id -> world_time their swing connects (see Player.SWING_CONTACT)
 
 # --- every machine, local presentation only
 var _beat: Dictionary = {}       ## monster id -> seconds until its next heartbeat
 var _ring_at: Dictionary = {}    ## ring key -> seconds until its next ring
 var _spin_seen: Dictionary = {}  ## peer id -> the spin counter this machine has already acted on
+var _swing_seen: Dictionary = {} ## peer id -> the swing counter this machine has already animated
 
 
 func setup(g: Node) -> void:
@@ -153,6 +157,12 @@ func local_try_use(p) -> bool:
 		return false
 	if not is_usable(String(p.selected_stack().kind)):
 		return false
+	# The swing plays here the moment you click, so a melee swing feels like one even on a client
+	# waiting on the host's answer. The host's `sw` counter arrives a moment later and _tick_swings
+	# leaves an already-running swing alone, so it never restarts. A refused bonk (the cooldown, a
+	# spent stack) simply leaves you swinging at nothing, which is what it looks like anyway.
+	if String(p.selected_stack().kind) == "reflex_hammer" and p.has_method("start_swing") 			and not p.swinging():
+		p.start_swing()
 	if game.is_host():
 		use(p)
 	elif Net.active:
@@ -482,12 +492,25 @@ func on_monsters_cleared() -> void:
 
 # =============================================================================== the reflex hammer
 
+## Host: the click. The arm goes up now and the bonk lands when the swing looks like it connects
+## (Player.SWING_CONTACT later, in _tick_bonks), so the hit is on the contact frame rather than the
+## click frame. What the target is gets decided then, too, the way a real swing would.
 func _use_hammer(p, _head: int) -> void:
 	var now: float = game.world_time
-	if float(_hammer_cd.get(int(p.peer_id), 0.0)) > now:
+	var peer := int(p.peer_id)
+	if float(_hammer_cd.get(peer, 0.0)) > now:
 		last_result = {"what": "cooldown", "kind": "reflex_hammer"}
 		return
-	_hammer_cd[int(p.peer_id)] = now + HAMMER_COOLDOWN
+	_hammer_cd[peer] = now + HAMMER_COOLDOWN
+	_swings[peer] = (int(_swings.get(peer, 0)) + 1) % 64
+	_bonk_due[peer] = now + Player.SWING_CONTACT
+	last_result = {"what": "swinging", "kind": "reflex_hammer"}
+
+
+## Host: the contact frame of somebody's swing.
+func _land_bonk(p) -> void:
+	if p == null or not is_instance_valid(p):
+		return
 	var t := _target(p, HAMMER_REACH, HAMMER_CONE_DEG)
 	if t.is_empty():
 		last_result = {"what": "air", "kind": "reflex_hammer"}
@@ -524,9 +547,10 @@ func spin_player(q) -> void:
 	if q.has_method("spin_view") and (q.is_local or bool(q.get("is_bot"))):
 		_spin_seen[peer] = _spins[peer]
 		q.spin_view()
-	else:
-		# The host's copy of a remote player turns too, so its own view of them is not a beat behind.
-		q.rotation.y = wrapf(q.rotation.y + PI, -PI, PI)
+	elif q.has_method("spin_view"):
+		# The host's copy of a remote player turns too, so its own view of them is not a beat
+		# behind; the same eased turn, since the client will report exactly that heading.
+		q.spin_view()
 
 
 ## Every machine: my own view turns when the host's counter for me goes up. A machine that has never
@@ -545,6 +569,37 @@ func _tick_spins() -> void:
 	_spin_seen[peer] = want
 	if me.has_method("spin_view"):
 		me.spin_view()
+
+
+## Host: a swing that has reached its contact frame lands.
+func _tick_bonks() -> void:
+	if _bonk_due.is_empty():
+		return
+	var now: float = game.world_time
+	for peer in _bonk_due.keys():
+		if now < float(_bonk_due[peer]):
+			continue
+		_bonk_due.erase(peer)
+		_land_bonk(game.players.get(int(peer)))
+
+
+## Every machine: play the swing for anybody whose counter has gone up. Unlike the spin (which only
+## the machine owning a camera may do) this is a body animation, so every machine runs it for every
+## player. A machine that has never seen a counter before just remembers where it is, so a late
+## joiner does not swing on arrival.
+func _tick_swings() -> void:
+	for peer in _swings.keys():
+		var want := int(_swings[peer])
+		if not _swing_seen.has(peer):
+			_swing_seen[peer] = want
+			continue
+		if int(_swing_seen[peer]) == want:
+			continue
+		_swing_seen[peer] = want
+		var p = game.players.get(int(peer))
+		# Already swinging here means the clicking machine predicted it; let that one play out.
+		if p != null and is_instance_valid(p) and p.has_method("start_swing") and not p.swinging():
+			p.start_swing()
 
 
 ## Host: the monster turns right round, and loses whatever it was looking at.
@@ -635,6 +690,7 @@ func physics_tick(delta: float) -> void:
 		_host_tick(delta)
 	_apply_boosts()
 	_tick_spins()
+	_tick_swings()
 	_play_rings(delta)
 	_play_heartbeats(delta)
 
@@ -688,6 +744,7 @@ func _host_tick(delta: float) -> void:
 			_tagged.erase(mid)
 			_tag_value.erase(mid)
 	_tick_ring_noise(delta)
+	_tick_bonks()
 
 
 ## Host: each ringing phone shouts about RING_PERIOD apart. The local sound is played by
@@ -768,6 +825,8 @@ func net_state() -> Dictionary:
 		s["ep"] = _snapped(_epi)
 	if not _spins.is_empty():
 		s["sp"] = _spins.duplicate()
+	if not _swings.is_empty():
+		s["sw"] = _swings.duplicate()
 	return s
 
 
@@ -787,6 +846,7 @@ func apply_net_state(s: Dictionary) -> void:
 	_tagged = _ints((s.get("tg", {}) as Dictionary))
 	_epi = _ints((s.get("ep", {}) as Dictionary))
 	_spins = _ints((s.get("sp", {}) as Dictionary))
+	_swings = _ints((s.get("sw", {}) as Dictionary))
 
 
 ## Dictionary keys come back off the wire as floats; every key here is an id.
@@ -817,6 +877,9 @@ func on_reset() -> void:
 	_last_use.clear()
 	_spins.clear()
 	_spin_seen.clear()
+	_swings.clear()
+	_swing_seen.clear()
+	_bonk_due.clear()
 	_beat.clear()
 	_ring_at.clear()
 	_noise_at.clear()

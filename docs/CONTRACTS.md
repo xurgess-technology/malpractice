@@ -1182,9 +1182,12 @@ spent for everyone. The furnace needs no change: it pays `s.v`.
 **Replicated state** (snapshot `g.tk`, host authoritative, `net_state` / `apply_net_state`):
 `ri` ringing world item ids, `rh` peers with a phone ringing in hand, `mp` peers with a live laptop
 map, `tg` `{monster id: the peer whose pulse oximeter is on it}`, `ep` peers with an EpiPen boost —
-each mapping to the `world_time` it ends. Every machine plays the rings and the heartbeats itself
-from that plus the monster's replicated `md` (mode), so no sound crosses the wire. One reliable
-event, `tk_spin` (`{id}`), tells one client its own camera has been turned.
+each mapping to the `world_time` it ends — plus two counters, `sp` `{peer: forced turns}` and
+`sw` `{peer: reflex-hammer swings}`, both mod 64. Every machine plays the rings and the heartbeats
+itself from that plus the monster's replicated `md` (mode), so no sound crosses the wire, and it
+runs the swings and the turns off the counters, so no animation does either. A counter rather than
+an event because it cannot be lost or repeated by a dropped packet; a machine seeing one for the
+first time just remembers where it is, so a late joiner neither swings nor spins on arrival.
 
 **Per trinket** (the constants are the tuning; the brief's numbers are their defaults):
 
@@ -1208,12 +1211,26 @@ event, `tk_spin` (`{id}`), tells one client its own camera has been turned.
   `combat.on_monster_removed` (so both `game.kill_monster` and strapping it to a table come through
   it), drops the pulse oximeter on the floor where the monster was, worth what it was worth.
   `on_monsters_cleared` forgets the tags with the level.
-- **Reflex hammer.** `spin_player(q)` calls the new `Player.spin_view()` (yaw + PI, on the machine
-  that owns that camera; the host broadcasts `tk_spin` for a remote one). `spin_monster(m)` calls
-  the new **`Monster.spin_around()`** (host): the monster's yaw turns by PI and its brain's optional
-  `spun_around()` runs. `HiveBrain.spun_around` forgets its target, stops seeing and starts
-  searching where it now faces, so the next sight check does not simply re-acquire you. The Night
-  Nurse is refused before either. A brain without `spun_around` just gets the turn, so the
+- **Reflex hammer.** A click starts a **swing**, and the bonk lands on the swing's contact frame
+  (`Player.SWING_CONTACT`), not the click frame. The swing is the charged-throw pose
+  (`scripts/hands/throw_pose.gd`) run at `Player.SWING_SPEED`: `Player.start_swing()` scripts
+  `throw_wind` the way holding and releasing the drop key would, only faster, and hands
+  `swing_speed` to `ThrowPose.update()` so the pose plays at the same rate. Nothing new is
+  animated. The swing travels as a counter in `tk.sw` (`{peer: swings}`), and every machine runs
+  its own timer from it, for every player, so the swinger sees it in their own hands and everyone
+  else sees it on their body. The clicking machine starts its own swing on the click for
+  responsiveness and `_tick_swings` leaves an already-running one alone. While a swing plays here,
+  the local timer owns `throw_wind` and the 20 Hz report of it is ignored.
+  The turn itself is quick but not instant (`Player.SPIN_TIME` / `Monster.SPIN_TIME`, both 0.18 s,
+  out-cubic). `spin_player(q)` calls `Player.spin_view()`, which starts that turn on the machine
+  that owns the camera (`tk.sp`, the counter) and on the host's own copy; while it runs it owns
+  `_yaw`, so the mouse cannot fight it, and ordinary look resumes the moment it ends.
+  `spin_monster(m)` calls **`Monster.spin_around()`** (host): the brain is told with the monster
+  already facing the new way (so `HiveBrain._start_search`'s `_look_base` is the *new* heading and
+  it really does search the wrong way), then the body turns over `SPIN_TIME` while `_tick_spin`
+  has the last word on the yaw over whatever `face_dir` asked for. `HiveBrain.spun_around` forgets
+  its target, stops seeing, starts searching, and holds its next sight check until the turn is
+  finished. The Night Nurse is refused before either. A brain without `spun_around` just gets the turn, so the
   Sonographer (not in the game yet, docs/SONOGRAPHER.md chunk B) will work the moment it lands and
   can add its own reaction there.
 - **EpiPen.** `jab_epipen(q)` sets the boost; every machine pushes `trinkets.sprint_mult(p)` onto the

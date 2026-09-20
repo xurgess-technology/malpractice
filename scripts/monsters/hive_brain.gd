@@ -245,7 +245,9 @@ func spun_around() -> void:
 	wander_goal = null
 	if m.mode != M.Mode.STUNNED and m.mode != M.Mode.RETREAT and m.mode != M.Mode.SEDATED:
 		_start_search()
-	sight_timer = SIGHT_INTERVAL
+	# Don't look again until the body has finished coming round (Monster.SPIN_TIME): a sight check
+	# half way through the turn would still have you in the cone.
+	sight_timer = maxf(SIGHT_INTERVAL, float(m.SPIN_TIME) + 0.05)
 
 
 ## Deaf: a noise means nothing. Something certain (the game says so: a needle that did not
