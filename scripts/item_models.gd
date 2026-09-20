@@ -616,9 +616,10 @@ static func _eye_spoon(root: Node3D) -> void:
 static func _suture_kits(root: Node3D, n: int) -> void:
 	var paper := _mat(Color(0.94, 0.95, 0.96), 0.85)
 	var band := _mat(Color(0.17, 0.42, 0.72), 0.55)
-	var blister := _glass(Color(0.52, 0.76, 0.93))
-	var steel := _mat(Color(0.84, 0.88, 0.91), 0.25, 0.6)
-	var thread := _mat(Color(0.14, 0.13, 0.2), 0.75)
+	var blister := _glass(Color(0.62, 0.82, 0.95))
+	blister.albedo_color.a = 0.26
+	var steel := _mat(Color(0.62, 0.68, 0.73), 0.22, 0.75)
+	var thread := _mat(Color(0.09, 0.08, 0.13), 0.8)
 	for i in n:
 		var pack := Node3D.new()
 		var y := 0.005 + i * 0.012
@@ -627,31 +628,33 @@ static func _suture_kits(root: Node3D, n: int) -> void:
 		_add(pack, _box(Vector3(0.026, 0.0095, 0.093), Color.WHITE), Vector3(-0.0595, 0, 0)).material_override = band
 		_add(pack, _box(Vector3(0.112, 0.0098, 0.006), Color.WHITE), Vector3(0.014, 0, -0.038)).material_override = band
 		if i == n - 1:
-			# The curved needle, nose down toward the tab.
-			var needle := MeshInstance3D.new()
-			var t := TorusMesh.new()
-			t.inner_radius = 0.0145
-			t.outer_radius = 0.0175
-			t.rings = 14
-			t.ring_segments = 4
-			needle.mesh = t
-			needle.material_override = steel
-			_add(pack, needle, Vector3(-0.012, 0.0095, -0.018)).scale = Vector3(1, 0.22, 1)
+			# The curved needle: a three-quarter arc of short steel segments, point toward the tab.
+			# A full torus reads as a ring, which is what the coil of thread next to it already is.
+			var needle := Node3D.new()
+			_add(pack, needle, Vector3(-0.014, 0.0112, -0.019))
+			var nr := 0.0155
+			for k in 9:
+				var a: float = lerpf(-0.5, 3.6, float(k) / 8.0)
+				var seg: float = nr * 0.55
+				var thick: float = lerpf(0.0030, 0.0009, float(k) / 8.0)   # tapering to a point
+				_add(needle, _box(Vector3(seg, thick, thick), Color.WHITE),
+					Vector3(cos(a), 0.0, sin(a)) * nr,
+					Vector3(0, rad_to_deg(-a) + 90.0, 0)).material_override = steel
 			# The coil of thread beside it.
 			var coil := MeshInstance3D.new()
 			var ct := TorusMesh.new()
-			ct.inner_radius = 0.008
-			ct.outer_radius = 0.0125
+			ct.inner_radius = 0.0075
+			ct.outer_radius = 0.0135
 			ct.rings = 12
 			ct.ring_segments = 4
 			coil.mesh = ct
 			coil.material_override = thread
-			_add(pack, coil, Vector3(0.042, 0.0093, -0.017)).scale = Vector3(1, 0.22, 1)
+			_add(pack, coil, Vector3(0.043, 0.0115, -0.018)).scale = Vector3(1, 0.34, 1)
 			# A run of thread from the coil to the needle's eye.
-			_add(pack, _box(Vector3(0.042, 0.0014, 0.0014), Color.WHITE), Vector3(0.014, 0.0095, -0.026)).material_override = thread
+			_add(pack, _box(Vector3(0.044, 0.0018, 0.0018), Color.WHITE), Vector3(0.015, 0.0112, -0.028)).material_override = thread
 			# The needle driver, lying along the pack: two crossed arms, ring handles and short jaws.
 			var driver := Node3D.new()
-			_add(pack, driver, Vector3(0.006, 0.0095, 0.021))
+			_add(pack, driver, Vector3(0.006, 0.0112, 0.021))
 			for side in [-1.0, 1.0]:
 				_add(driver, _box(Vector3(0.058, 0.0035, 0.0035), Color.WHITE),
 					Vector3(-0.014, 0.0, side * 0.005), Vector3(0, side * 6.0, 0)).material_override = steel
@@ -667,7 +670,7 @@ static func _suture_kits(root: Node3D, n: int) -> void:
 			_add(driver, _box(Vector3(0.028, 0.004, 0.004), Color.WHITE), Vector3(0.028, 0, 0)).material_override = steel
 			_add(driver, _box(Vector3(0.007, 0.006, 0.009), Color.WHITE), Vector3(0.012, 0, 0)).material_override = steel
 			# The blister goes on last: everything above shows through it.
-			_add(pack, _box(Vector3(0.108, 0.013, 0.07), Color.WHITE), Vector3(0.014, 0.0095, 0)).material_override = blister
+			_add(pack, _box(Vector3(0.108, 0.016, 0.07), Color.WHITE), Vector3(0.014, 0.0112, 0)).material_override = blister
 		_add(root, pack, Vector3(i * 0.004, y, i * 0.003), Vector3(0, (i * 11) % 14 - 7, 0))
 
 

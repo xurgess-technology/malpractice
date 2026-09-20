@@ -807,8 +807,17 @@ func _paint_stitches(c: CanvasItem, st: StyleScript) -> void:
 		var mid := (a + b) * 0.5
 		var pa: Vector2 = a.lerp(mid, 0.18 * k)
 		var pb: Vector2 = b.lerp(mid, 0.18 * k)
-		st.glow_line(c, pa, pb, col, st.outline)
-		c.draw_line(pa, pb, col, st.outline)
+		if m == "g":
+			st.glow_line(c, pa, pb, col, st.outline)
+			c.draw_line(pa, pb, col, st.outline)
+		else:
+			# A sloppy stitch is drawn with a kink in it: crooked on the panel, crooked on the body.
+			var n := (pb - pa).orthogonal().normalized()
+			var kink: PackedVector2Array = PackedVector2Array([pa,
+				pa.lerp(pb, 0.38) + n * _panel.mm_len_px(1.6),
+				pa.lerp(pb, 0.72) - n * _panel.mm_len_px(1.2), pb])
+			st.glow_poly(c, kink, col, st.outline)
+			c.draw_polyline(kink, col, st.outline)
 		# Little knots either end.
 		c.draw_circle(pa, st.outline * 0.9, col)
 		c.draw_circle(pb, st.outline * 0.9, col)
