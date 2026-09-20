@@ -1,10 +1,10 @@
-extends Node3D
+﻿extends Node3D
 ## Runs one surgery minigame on a stand-in operating table, with no game around it.
 ##
 ##   godot --path . tools/minigame_lab.tscn -- --game=forceps [--patient=bob|seal]
 ##         [--ailment=gunshot|amputation] [--variant=pack|stump] [--bot=1.0] [--seconds=40]
 ##         [--shot=res://tools/lab_shots/forceps.png] [--shot-at=6.0] [--flags=sedation:0.6,tourniquet:0.9]
-##         [--seed=N] [--wide] [--nohud] [--look=or] [--selftest=<game>]
+##         [--seed=N] [--wide] [--stand] [--nohud] [--look=or] [--selftest=<game>]
 ##         [--teammate-light[=nohelp|away]] [--teammate-aim=dx,dz]
 ##
 ## --flags with sedation under 0.75 makes the patient stir the way the surgery system does.
@@ -36,6 +36,7 @@ var shot_at := -1.0
 var flags := {}
 var seed_value := -1
 var wide := false
+var stand := false
 var self_test := ""
 var nohud := false
 var look := ""
@@ -84,6 +85,7 @@ func _ready() -> void:
 			"shot-at": shot_at = float(v)
 			"seed": seed_value = int(v)
 			"wide": wide = true
+			"stand": stand = true
 			"selftest": self_test = v
 			"nohud": nohud = true
 			"look": look = v
@@ -172,7 +174,14 @@ func _ready() -> void:
 	cam.global_position = site.origin + up * float(pose.get("height", 0.55)) + back * float(pose.get("back", 0.18))
 	cam.look_at(site.origin, -back if absf(up.dot(Vector3.UP)) > 0.9 else Vector3.UP)
 	cam.fov = float(pose.get("fov", 55.0))
-	if wide:
+	cam.near = float(pose.get("near", 0.02))
+	if stand:
+		# Standing beside the table, where a player watching the step sees it from: a player's
+		# eye height (C.EYE_H) and field of view, on the operator's side of the patient.
+		cam.global_position = Vector3(site.origin.x + 0.08, C.EYE_H, site.origin.z + 0.62)
+		cam.look_at(site.origin, Vector3.UP)
+		cam.fov = 78.0
+	elif wide:
 		# Pulled back and to the side, to judge the body around the site (infection, severed limb).
 		cam.global_position = site.origin + Vector3(0.25, 0.75, 0.55)
 		cam.look_at(site.origin, Vector3.UP)
@@ -181,6 +190,9 @@ func _ready() -> void:
 		# The surgery system's work lamp (scripts/surgery/surgery_system.gd), riding on the camera.
 		# ORSCREEN HOOK: the real lamp, so tuning it in surgery_system.gd shows up here.
 		var work: SpotLight3D = (load("res://scripts/surgery/surgery_system.gd") as GDScript).make_work_lamp()
+		# The surgery system dims it for a step that asks (Minigame.lamp_scale): do the same, or a
+		# close-up step reads brighter here than it does in the OR.
+		work.light_energy *= float(mg.lamp_scale())
 		cam.add_child(work)
 
 	var layer := CanvasLayer.new()
@@ -320,7 +332,7 @@ func _stir_tick(delta: float) -> Vector2:
 		_stir_amp = strength
 		_stir_dir = Vector2.RIGHT.rotated(_stir_rng.randf() * TAU)
 		stir_count += 1
-		mg.on_jolt(_stir_dir * _stir_amp * STIR_SHAKE_M, strength, STIR_JOLT_TIME)
+		mg.on_jolt(_stir_dir * _stir_amp * STIR_SHAKE_M * _site_scale(), strength, STIR_JOLT_TIME)
 		if body != null and body.has_method("stir"):
 			body.stir(strength)
 		print("[lab] t=%.1f stir %.2f" % [t, strength])
@@ -328,7 +340,7 @@ func _stir_tick(delta: float) -> Vector2:
 		return Vector2.ZERO
 	_stir_jolt = maxf(0.0, _stir_jolt - delta)
 	var k := _stir_jolt / STIR_JOLT_TIME
-	return _stir_dir.rotated(sin(_stir_jolt * 45.0) * 0.9) * _stir_amp * STIR_SHAKE_M * k
+	return _stir_dir.rotated(sin(_stir_jolt * 45.0) * 0.9) * _stir_amp * STIR_SHAKE_M * k * _site_scale()
 
 
 ## `--selftest=<game>`: runs that minigame's static self_test() headless and quits.
@@ -346,6 +358,11 @@ func _run_self_test() -> void:
 		script.call("self_test")
 	print("[lab] self-test %s took %d ms" % [self_test, Time.get_ticks_msec() - started])
 	get_tree().quit(0)
+
+
+## Minigame.site_scale, the way the surgery system reads it.
+func _site_scale() -> float:
+	return float(mg.site_scale()) if mg != null and mg.has_method("site_scale") else 1.0
 
 
 func _clamp(p: Vector2) -> Vector2:

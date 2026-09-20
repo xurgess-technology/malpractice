@@ -30,6 +30,7 @@ const REPORT_INTERVAL := 0.05
 const WALK_AWAY_M := 3.0
 const NOISE_EVERY := 0.8
 const REBEGIN_COOLDOWN := 0.4
+const CAM_NEAR := 0.02
 const STIR_JOLT_TIME := 0.35
 const STIR_SHAKE_M := 0.09
 
@@ -61,6 +62,7 @@ var mg: Node3D = null
 var mg_key := ""
 var _mg_t := 0.0
 var _mg_step: Dictionary = {}
+var _mg_shown := true
 var _missing_warned := {}
 
 var _local_op := false
@@ -77,6 +79,7 @@ var _cam_dir := 0
 var _head_fov := 75.0
 var _last_pose := Transform3D()
 var _last_pose_fov := 55.0
+var _last_pose_near := 0.02
 
 var _stir_rng := RandomNumberGenerator.new()
 var _stir_timer := 0.0
@@ -99,7 +102,7 @@ func setup(g: Node) -> void:
 	game = g
 	_cam = Camera3D.new()
 	_cam.name = "SurgeryCamera"
-	_cam.near = 0.02
+	_cam.near = CAM_NEAR
 	_cam.far = 60.0
 	_cam.current = false
 	add_child(_cam)
@@ -345,6 +348,7 @@ func physics_tick(delta: float) -> void:
 
 	if mg != null:
 		_place_mg()
+		_show_mg(operator_id != 0)
 		if _local_op:
 			_drive(delta)
 		elif game.is_host():
@@ -493,6 +497,8 @@ func _spawn_mg() -> void:
 		if c.flags.has(k):
 			ctx[k] = c.flags[k]
 	mg.setup(ctx)
+	_mg_shown = true
+	_show_mg(operator_id != 0)
 	if _mg_state_key == mg_key and not _mg_state.is_empty():
 		mg.apply_net_state(_mg_state)
 
@@ -539,6 +545,7 @@ func _free_mg() -> void:
 	if mg != null and is_instance_valid(mg):
 		mg.queue_free()
 	mg = null
+	_mg_shown = true
 	mg_key = ""
 	_mg_step = {}
 
@@ -556,6 +563,23 @@ func _site_transform() -> Transform3D:
 func _place_mg() -> void:
 	if mg != null:
 		mg.global_transform = _site_transform()
+
+
+## Onlookers see a step's tool only while somebody is operating: with no operator the minigame
+## keeps building and ticking (warm materials, replicated progress) but draws nothing, so an idle
+## patient on a table shows only their own body and wound. Minigame.set_shown.
+func _show_mg(on: bool) -> void:
+	if mg == null or _mg_shown == on:
+		return
+	_mg_shown = on
+	if mg.has_method("set_shown"):
+		mg.set_shown(on)
+
+
+## How big this step's play space is (Minigame.site_scale): the plane metres the framework hands it
+## -- the stir jolt below -- scale with it.
+func _site_scale() -> float:
+	return float(mg.site_scale()) if mg != null and mg.has_method("site_scale") else 1.0
 
 
 func _table_pos() -> Vector3:
@@ -760,7 +784,7 @@ func _stir_tick(delta: float) -> Vector2:
 		_stir_dir = Vector2.RIGHT.rotated(_stir_rng.randf() * TAU)
 		_stir_flash = 1.2
 		if mg != null and mg.has_method("on_jolt"):
-			mg.on_jolt(_stir_dir * _stir_amp * STIR_SHAKE_M, strength, STIR_JOLT_TIME)
+			mg.on_jolt(_stir_dir * _stir_amp * STIR_SHAKE_M * _site_scale(), strength, STIR_JOLT_TIME)
 		_body_stir(strength)
 		_audio("surgery_stir", _table_pos(), -2.0)
 		game.send_operator_report({"k": mg_key, "stir": strength, "reliable": true, "tb": table_index})
@@ -769,7 +793,7 @@ func _stir_tick(delta: float) -> Vector2:
 	_stir_jolt = maxf(0.0, _stir_jolt - delta)
 	var k := _stir_jolt / STIR_JOLT_TIME
 	var shake := _stir_dir.rotated(sin(_stir_jolt * 45.0) * 0.9)
-	return shake * _stir_amp * STIR_SHAKE_M * k
+	return shake * _stir_amp * STIR_SHAKE_M * k * _site_scale()
 
 
 func _body_stir(strength: float) -> void:
@@ -791,6 +815,7 @@ func _pose() -> Transform3D:
 	var upv := -back if absf(up.dot(Vector3.UP)) > 0.9 else Vector3.UP
 	_last_pose = Transform3D(Basis.looking_at(site.origin - pos, upv), pos)
 	_last_pose_fov = float(pose.get("fov", 55.0))
+	_last_pose_near = float(pose.get("near", CAM_NEAR))
 	return _last_pose
 
 
@@ -807,6 +832,8 @@ func _update_camera(delta: float) -> void:
 	var e := smoothstep(0.0, 1.0, _cam_blend)
 	_cam.global_transform = head.interpolate_with(target, e)
 	_cam.fov = lerpf(_head_fov, _last_pose_fov, e)
+	# A step whose camera sits a few centimetres off the site asks for a closer near plane.
+	_cam.near = lerpf(CAM_NEAR, _last_pose_near, e)
 	_lamp.visible = e > 0.02
 	# A step may ask for less of the work lamp (Minigame.lamp_scale).
 	var scale: float = float(mg.lamp_scale()) if mg != null and mg.has_method("lamp_scale") else 1.0

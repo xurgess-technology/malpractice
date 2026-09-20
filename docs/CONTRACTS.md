@@ -217,6 +217,9 @@ func infection_start(site: String) -> float             # metres along the site'
 func make_severed_limb(parent: Node) -> Node3D          # adds a static copy of the limb an amputation removes, posed where it is; may be null
 func expose_site(site: String, centre: Vector2, radii: Vector2) -> void  # clear clothing inside an ellipse on the site plane (site X, Z) while a step is up
 func cover_site() -> void                               # undo expose_site
+# An exposed site also hands the step the body's own overlays there (`SITE_PARTS`: the gunshot
+# site gives up `wound` and `dress_wound`), because the step paints the wound itself, flush on the
+# skin, and two wounds in one place read as neither. cover_site gives them back.
 ```
 
 Sites every patient provides: `injection`, `gunshot`, `limb` (above the infection, where the
@@ -332,6 +335,25 @@ are easy to miss:
 - `on_jolt(offset, strength, duration)` is called on the operator's machine when an underdosed
   patient stirs; for `duration` seconds the cursor passed to `handle_cursor` carries a decaying
   shake of up to `offset`. React there rather than inferring jolts from cursor jumps.
+- **`site_scale() -> float`** (2026-09-20): how big this step's play space is compared with the
+  metres it would otherwise use. 1.0 by default; the gunshot steps (forceps, the gauze `pack`
+  variant) return 0.4, so their wound is a wound in the body rather than a plate laid on it. They
+  bring `camera_pose()` in by the same factor and dim `lamp_scale()` to match (the work lamp falls
+  off as 1/d), so on screen the step looks and plays exactly as it did. Anything the framework
+  hands a step in plane metres scales with it: `SurgerySystem.STIR_SHAKE_M` and `helper_light()`'s
+  `spot` clamp. A step that scales must scale **every** world distance it uses, including the
+  frequencies of any noise measured in plane metres.
+- **`set_shown(on: bool)`** (2026-09-20): the surgery system calls it on every machine whenever the
+  operator changes — shown while `operator_id != 0`, hidden otherwise. The minigame stays built and
+  ticking while hidden (warm materials, replicated progress); it just draws nothing, so an idle
+  patient on a table shows only their own body and wound instead of a tool floating over them. The
+  default toggles `visible` and calls `cover_site()` on hide; override `on_shown(on)` to do more
+  (the gunshot steps clear the gown again when they come back).
+- `camera_pose()` may add **`near`**: the near clip plane for a step whose camera sits a few
+  centimetres off the site. The surgery system blends to it with the rest of the pose.
+- `skin_tone(base: Color) -> Color`: `base` shaded by the body's live pallor and grey (read off
+  `PatientBody.skin_mats`), for a step that paints skin of its own so its patch does not drift pale
+  or flushed against the body around it.
 - `ctx.helper_lights` (optional Callable -> Array of SpotLight3D): the surgery system passes the
   flashlights of living players other than the operator. `helper_light()` turns them into
   `{amount, spot}` for this site (on, in range, aimed, clear line of sight). The forceps step lifts
@@ -373,7 +395,13 @@ stitches, should too):
   (gauze: a jolt while winding slips the wrap).
 - Forceps `net_state` keys: `x y i j g b st h dm p` plus `w` (0..1 how hard a wall is being
   forced) and `e` (jaws closed on nothing). `h` counts wall tears (each one spurts on every
-  machine).
+  machine). Tip and bullet positions quantise to `NET_Q` (0.0001 m times `SITE_SCALE`).
+- The gunshot wound art is drawn flush on the patient (no disc, no rim, no drape): a feathered
+  skin patch in the patient's live tone, riding `SKIN_LIFT` (1 cm, body-sized, NOT scaled) above
+  the site plane because the site marker sits under the skin, tucking back to the plane at its
+  edge. The kidney dish stands on an instrument tray on the table's steel beside the patient
+  (`forceps.TRAY_OFFSET`, in the body's frame, as `scripts/grafting/vats.gd` places a vat); the
+  slug still arcs to it and clinks, and `camera_pose()` no longer has to fit it.
 - Each game has a static `self_test()`: `godot --headless --path . tools/minigame_lab.tscn
   --fixed-fps 60 -- --selftest=<game>`. The lab re-places the minigame on the body's site every
   physics frame (as `surgery_system._place_mg` does), `--flags=sedation:0.4` makes stirs, and the

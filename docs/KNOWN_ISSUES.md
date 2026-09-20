@@ -515,6 +515,9 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   the shoulders) and its hem stands off the legs; the gunshot's gown window shows a flat rectangle of
   skin. The entry wound is moved from the model's flank site to 0.25 rad round the belly so the
   forceps' skin patch is level; the painted mask-B wound is not used (the game's wound overlay is).
+  The site marker sits a centimetre under the skin, so the gunshot steps' wound art rides
+  `SKIN_LIFT` (1 cm) above the work plane rather than truly flush; how far the skin is above the
+  plane has never been measured, it was found by eye in the lab.
 - **The stump cap reads dark** in the OR light (the flesh texture on the model's cap), and the
   infection tint stops short of the cap. The severed forearm is CPU-skinned once when the saw finishes
   (`BobModelBuilder._bake_skinned`), because `bake_mesh_from_current_skeleton_pose` refuses a skin that
@@ -749,7 +752,8 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   inside the skin patch's ellipse with a shaded fold round it, so no fold rises through the patch
   and the rectangular panel hole is gone while the step is up (`tools/lab_shots/gown_forceps_bob.png`,
   `gown_forceps_bob_wide.png`). The seal has no clothing; its patch was already clean
-  (`gown_forceps_seal*.png`). The gunshot gauze step covers the site with its drape.
+  (`gown_forceps_seal*.png`). 2026-09-20: the gunshot gauze step calls `expose_site` too (its
+  drape is gone), and an exposed site also hands the step the body's own wound overlay.
 - **A teammate's flashlight did not light the wound.** `ctx.helper_lights` / `Minigame.helper_light()`
   (see CONTRACTS): a teammate's flashlight that is on, within 4 m, aimed at the site and unblocked
   lifts the forceps channel's darkness (a warm pool where the beam lands, less gloom down the whole

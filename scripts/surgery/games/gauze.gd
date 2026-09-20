@@ -27,6 +27,12 @@ enum Stage { PACK, WRAP, DONE }
 enum Pull { NONE, LOOSE, GOOD, TIGHT }
 
 # -- pack ---------------------------------------------------------------------------------------
+## The gunshot play space in metres is this fraction of what it used to be, so the dressing reads
+## as a dressing on the body rather than a sterile board laid over it. It scales the PACK variant
+## only: the stump wrap is fitted to the real limb (site_section / _probe_limb) and stays at 1.0.
+## camera_pose() comes in by the same factor, so on screen nothing about playing the step changes.
+## See Minigame.site_scale.
+const SITE_SCALE := 0.4
 const WOUND_R := 0.03
 const ACCEPT_R := 0.06            # a press this close to the wound centre goes in
 const WADS := 8
@@ -37,7 +43,11 @@ const GUSH_BOTCH := 3.0
 const MISS_BOTCH := 1.2
 const HEART_HZ := 1.25
 const MAX_MISSES := 5
-const PATCH_Y := 0.021            # the drape and skin window sit this far above the site plane
+## The site plane sits a little under the patient's own skin, so the skin the dressing goes on
+## rides this far above the plane at the wound and tucks back down to it at the patch's edge.
+## Body-sized: it does not scale with SITE_SCALE.
+const SKIN_LIFT := 0.010
+const GOWN_WINDOW := 0.85          # the cleared gown window, as a fraction of the patch
 
 # -- wrap ---------------------------------------------------------------------------------------
 const R_IN := 0.03                # closer to the centre than this is not wrapping
@@ -69,7 +79,14 @@ var slips := 0
 var misses: Array = []            # where wads landed on the skin (plane metres), last MAX_MISSES
 
 var turns_needed := 3.0
+## Play-space sizes: the constants above times `sscale` (SITE_SCALE for pack, 1.0 for stump).
+var sscale := 1.0
+var wound_r := WOUND_R
+var accept_r := ACCEPT_R
+var r_in := R_IN
+var r_loose := R_LOOSE
 var r_tight := R_TIGHT
+var patch_r := 0.09
 var diff := 1.0
 var site_name := "gunshot"
 var limb_hu := 0.05               # limb section half height / half width at the cut, and its axis depth
@@ -123,6 +140,8 @@ var _blanch_mat: StandardMaterial3D
 var _root: Node3D                 # everything we draw; raised over the gown for the pack variant
 var _cap: MeshInstance3D
 var _cap_mat: StandardMaterial3D
+var _skin_mat: ShaderMaterial
+var _skin_sent := Color(0, 0, 0, 0)
 var _press_anim := 0.0
 var _vis_pull := 0.0              # -1 loose .. 0 good .. 1 tight, smoothed for the strip
 var _roll_pos := Vector3.ZERO
@@ -151,9 +170,15 @@ func setup(context: Dictionary) -> void:
 	limb_hu = r
 	limb_hs = r
 	limb_axis_y = -r
+	sscale = SITE_SCALE if variant == "pack" else 1.0
+	wound_r = WOUND_R * sscale
+	accept_r = ACCEPT_R * sscale
+	r_in = R_IN * sscale
+	r_loose = R_LOOSE * sscale
 	_probe_limb()
 	var flags: Dictionary = ctx.get("flags", {})
-	r_tight = maxf(R_LOOSE + 0.06, R_TIGHT - 0.04 * (diff - 1.0))
+	r_tight = maxf(R_LOOSE + 0.06, R_TIGHT - 0.04 * (diff - 1.0)) * sscale
+	patch_r = maxf(r_tight, R_LOOSE * 1.6 * sscale) + 0.03 * sscale
 	if variant == "stump":
 		stage = Stage.WRAP
 		turns_needed = ceilf(4.0 * sqrt(diff))
@@ -188,11 +213,21 @@ func _probe_limb() -> void:
 
 
 func plane_extent() -> Vector2:
-	return Vector2(0.28, 0.21)
+	return Vector2(0.28, 0.21) * sscale
 
 
+func site_scale() -> float:
+	return sscale
+
+
+## The camera comes in by site_scale, so the same screen movement is the same fraction of the play
+## space and the step plays exactly as it did; the lamp riding on it (attenuation 1/d) dims to match.
 func camera_pose() -> Dictionary:
-	return {"height": 0.42, "back": 0.14, "fov": 55.0}
+	return {"height": 0.42 * sscale, "back": 0.14 * sscale, "fov": 55.0, "near": 0.028 * sscale}
+
+
+func lamp_scale() -> float:
+	return sscale
 
 
 func wrap_frac() -> float:
@@ -201,9 +236,9 @@ func wrap_frac() -> float:
 
 func pull_at(p: Vector2) -> int:
 	var r := p.length()
-	if r < R_IN:
+	if r < r_in:
 		return Pull.NONE
-	if r < R_LOOSE:
+	if r < r_loose:
 		return Pull.LOOSE
 	if r > r_tight:
 		return Pull.TIGHT
@@ -232,7 +267,7 @@ func handle_cursor(p: Vector2, buttons: int, delta: float) -> void:
 
 func _pack(p: Vector2, primary: bool, delta: float) -> void:
 	bleed += BLEED_RISE * diff * delta * (1.0 - 0.08 * float(packed))
-	var on := p.length() <= ACCEPT_R
+	var on := p.length() <= accept_r
 	if primary and not _prev_primary:
 		_hold_t = 0.0
 		if on:
@@ -283,7 +318,7 @@ func on_jolt(_offset: Vector2, _strength: float, duration: float) -> void:
 
 func _wrap(p: Vector2, primary: bool, delta: float) -> void:
 	var r := p.length()
-	if not primary or r < R_IN:
+	if not primary or r < r_in:
 		_prev_valid = false
 		pull = Pull.NONE
 		tight = maxf(0.0, tight - delta * 0.8)
@@ -392,6 +427,7 @@ func tick(delta: float) -> void:
 	var body = ctx.get("body")
 	if body != null and is_instance_valid(body) and body.has_method("set_bleeding") and stage != Stage.DONE:
 		body.set_bleeding(site_name, clampf(_shown_bleed(), 0.0, 1.0))
+	_tick_skin()
 	_update_visuals(delta)
 	_effects(delta)
 
@@ -468,8 +504,8 @@ func bot_input(t: float, skill: float) -> Dictionary:
 			if t < 0.4:
 				return {"cursor": cursor.lerp(Vector2.ZERO, 0.1), "buttons": 0}
 			# A good surgeon holds the pad on the wound; a sloppy one jabs at it with a drifting hand.
-			var off := Vector2(sin(t * 1.7) + 0.5 * sin(t * 4.1), cos(t * 1.3) + 0.4 * sin(t * 3.7)) * 0.062 * sloppy
-			var c := Vector2(sin(t * 3.0), cos(t * 2.6)) * 0.006 + off
+			var off := Vector2(sin(t * 1.7) + 0.5 * sin(t * 4.1), cos(t * 1.3) + 0.4 * sin(t * 3.7)) * 0.062 * sscale * sloppy
+			var c := Vector2(sin(t * 3.0), cos(t * 2.6)) * 0.006 * sscale + off
 			var down := true
 			if sloppy > 0.3:
 				down = fmod(t, 0.85) < 0.08
@@ -486,8 +522,8 @@ func bot_input(t: float, skill: float) -> Dictionary:
 				rate = -0.8
 			_bot_angle += rate * TAU * dt
 			# How far out the roll is pulled: steady in the middle, or wandering in and out.
-			var rr := 0.11 + 0.008 * sin(wt * 0.7)
-			rr += sloppy * settle_k * (0.1 * sin(wt * 0.9 + 0.6) + 0.02 * sin(wt * 2.3))
+			var rr := (0.11 + 0.008 * sin(wt * 0.7)) * sscale
+			rr += sloppy * settle_k * (0.1 * sin(wt * 0.9 + 0.6) + 0.02 * sin(wt * 2.3)) * sscale
 			var bc := Vector2(cos(_bot_angle), sin(_bot_angle)) * rr
 			return {"cursor": bc, "buttons": BUTTON_PRIMARY}
 	return {"cursor": cursor, "buttons": 0}
@@ -539,7 +575,7 @@ static func _run_bot(g, skill: float, sed: float, seed_v: int) -> float:
 			if next_stir <= 0.0:
 				next_stir = lerpf(2.5, 11.0, sed / 0.75) * rng.randf_range(0.7, 1.3)
 				var strength := clampf((0.75 - sed) / 0.75, 0.0, 1.0) * 0.8 + 0.2
-				jolt = Vector2.RIGHT.rotated(rng.randf() * TAU) * strength * 0.09
+				jolt = Vector2.RIGHT.rotated(rng.randf() * TAU) * strength * 0.09 * g.site_scale()
 				jolt_t = 0.35
 				g.on_jolt(jolt, strength, 0.35)
 			if jolt_t > 0.0:
@@ -579,6 +615,108 @@ func _mesh_node(mesh: Mesh, mat: Material, parent: Node3D = null) -> MeshInstanc
 	return mi
 
 
+## Where the body's skin is at plane point p: the work plane is tangent to the body at the site, so
+## the body falls away from it. Keeps the patch (and so the dressing) ON the skin.
+func _skin_y(p: Vector2) -> float:
+	var r2 := p.length_squared() / maxf(patch_r * patch_r, 1e-8)
+	return -SKIN_LIFT * minf(r2, 1.0)
+
+
+## PACK: the skin the dressing goes on. Flush on the body, the patient's live tone, an iodine prep
+## stain, and an edge feathered out to nothing -- no disc, no rim, no drape rectangle.
+func _build_skin_patch() -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rings := 8
+	var segs := 44
+	for k in rings + 1:
+		for j in segs:
+			var r := float(k) / float(rings)
+			var a := float(j) / float(segs) * TAU
+			var q := Vector2(cos(a), sin(a)) * patch_r * r
+			st.set_uv(Vector2(r, 0.0))
+			st.set_normal(Vector3.UP)
+			st.add_vertex(Vector3(q.x, _skin_y(q), q.y))
+	for k in rings:
+		for j in segs:
+			var a0 := k * segs + j
+			var a1 := k * segs + (j + 1) % segs
+			var b0 := (k + 1) * segs + j
+			var b1 := (k + 1) * segs + (j + 1) % segs
+			st.add_index(a0); st.add_index(b0); st.add_index(a1)
+			st.add_index(a1); st.add_index(b0); st.add_index(b1)
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.name = "SkinPatch"
+	mi.mesh = st.commit()
+	var sh := cached_shader("""
+shader_type spatial;
+render_mode blend_mix, depth_draw_opaque, cull_disabled;
+uniform vec3 skin_color = vec3(0.5, 0.35, 0.27);
+uniform float patch_r = 0.09;
+varying vec2 pp;
+float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+	vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+void vertex() { pp = VERTEX.xz; }
+void fragment() {
+	float r = length(pp) / patch_r;
+	float ang = atan(pp.y, pp.x);
+	float wob = 0.06 * sin(ang * 5.0 + 1.3) + 0.04 * sin(ang * 11.0);
+	vec3 col = skin_color * (0.9 + 0.14 * vnoise(pp * 700.0));
+	float iod = 1.0 - smoothstep(0.42 + wob, 0.62 + wob, r);
+	col = mix(col, col * vec3(0.8, 0.5, 0.25), iod * 0.5);
+	// a bruise round the entry wound
+	col = mix(col, vec3(0.2, 0.06, 0.1), (1.0 - smoothstep(0.1, 0.34 + 0.06 * vnoise(pp * 90.0), r)) * 0.55);
+	ALBEDO = col * mix(1.0, 0.78, smoothstep(0.45, 0.85, r));
+	ROUGHNESS = 0.55;
+	ALPHA = 1.0 - smoothstep(0.85, 1.0, r);
+}
+""")
+	_skin_mat = ShaderMaterial.new()
+	_skin_mat.shader = sh
+	_skin_mat.set_shader_parameter("patch_r", patch_r)
+	_skin_mat.render_priority = -1
+	mi.material_override = _skin_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_root.add_child(mi)
+	_tick_skin()
+	_expose()
+
+
+## The step works on bare skin: have the body clear the gown under the patch while it is up
+## (PatientBody.expose_site), and let it back when nobody is operating (Minigame.set_shown).
+func _expose() -> void:
+	var body = ctx.get("body")
+	if variant == "pack" and body != null and is_instance_valid(body) and body.has_method("expose_site"):
+		body.expose_site(site_name, Vector2.ZERO, Vector2(patch_r, patch_r) * GOWN_WINDOW)
+
+
+func on_shown(on: bool) -> void:
+	if on and _built:
+		_expose()
+
+
+func _exit_tree() -> void:
+	var body = ctx.get("body")
+	if variant == "pack" and body != null and is_instance_valid(body) and body.has_method("cover_site"):
+		body.cover_site()
+
+
+## The patch follows the patient's live tone (pallor, then grey) so it never drifts against the
+## skin around it.
+func _tick_skin() -> void:
+	if _skin_mat == null:
+		return
+	var want := skin_tone(Color(0.2, 0.22, 0.25) if String(ctx.get("patient_id", "bob")) == "seal" else Color(0.5, 0.35, 0.27))
+	if want.is_equal_approx(_skin_sent):
+		return
+	_skin_sent = want
+	_skin_mat.set_shader_parameter("skin_color", want)
+
+
 ## A flat sheet with a round window: outer half sizes ax x az, window radius `hole` (0 = none).
 func _drape_mesh(hole: float, ax: float, az: float) -> ArrayMesh:
 	var st := SurfaceTool.new()
@@ -612,22 +750,17 @@ func _build() -> void:
 
 	_rolls = Node3D.new()
 	_rolls.name = "Rolls"
-	_rolls.position = Vector3(-0.2, 0.0, -0.13)
+	_rolls.position = Vector3(-0.2, 0.0, -0.13) * (1.0 if variant == "stump" else 1.6 * sscale)
 	_root.add_child(_rolls)
+	if variant == "pack":
+		_rolls.scale = Vector3.ONE * sscale
 	_set_rolls(maxi(1, int(ctx.get("step", {}).get("uses", 1))))
 
 	if variant == "pack":
-		# A sterile drape with a window of skin round the wound, raised over the gown's folds
-		# (they stand up to 2 cm off the site). White gauze and red blood read on the blue.
-		_root.position = Vector3(0, PATCH_Y, 0)
-		_mesh_node(_drape_mesh(0.07, 0.34, 0.26), _mat(Color(0.16, 0.42, 0.5), 0.9))
-		var skin := CylinderMesh.new()
-		skin.top_radius = 0.075
-		skin.bottom_radius = 0.075
-		skin.height = 0.002
-		skin.radial_segments = 32
-		var seal := String(ctx.get("patient_id", "bob")) == "seal"
-		_mesh_node(skin, _mat(Color(0.2, 0.22, 0.25) if seal else Color(0.5, 0.35, 0.27), 0.6)).position = Vector3(0, -0.001, 0)
+		# No drape and no board: the dressing goes on the patient's own skin, with the gown cleared
+		# under it (PatientBody.expose_site) and the patch's edge feathered out to nothing.
+		_root.position = Vector3(0, SKIN_LIFT, 0)
+		_build_skin_patch()
 		# Skin blanching round a dressing that is too tight.
 		var ring := TorusMesh.new()
 		ring.inner_radius = 0.55
@@ -636,8 +769,8 @@ func _build() -> void:
 		ring.ring_segments = 4
 		_blanch_mat = _unshaded(Color(0.97, 0.95, 0.93, 0.0))
 		_blanch_ring = _mesh_node(ring, _blanch_mat)
-		_blanch_ring.scale = Vector3(0.075, 0.002, 0.075)
-		_blanch_ring.position = Vector3(0, 0.0005, 0)
+		_blanch_ring.scale = Vector3(0.075, 0.002, 0.075) * sscale
+		_blanch_ring.position = Vector3(0, 0.0005 * sscale, 0)
 	else:
 		# Skin blanching above a stump wrapped too tight: a pale decal on the limb itself.
 		_blanch = Decal.new()
@@ -671,10 +804,10 @@ func _build() -> void:
 		bc.radial_segments = 28
 		_blood = _mesh_node(bc, _blood_mat)
 		var hole := CylinderMesh.new()
-		hole.top_radius = 0.012
-		hole.bottom_radius = 0.012
-		hole.height = 0.002
-		_mesh_node(hole, _mat(Color(0.12, 0.0, 0.01), 0.3)).position = Vector3(0, 0.0045, 0)
+		hole.top_radius = 0.012 * sscale
+		hole.bottom_radius = 0.012 * sscale
+		hole.height = 0.002 * sscale
+		_mesh_node(hole, _mat(Color(0.12, 0.0, 0.01), 0.3)).position = Vector3(0, 0.0045 * sscale, 0)
 		# The blood welling up out of the hole with every heartbeat.
 		var dm := SphereMesh.new()
 		dm.radius = 1.0
@@ -695,15 +828,15 @@ func _build() -> void:
 		rng.seed = int(ctx.get("seed", 7))
 		_wad_mat = _mat(Color(0.85, 0.55, 0.55), 1.0)
 		var sm := SphereMesh.new()
-		sm.radius = 0.015
-		sm.height = 0.015
+		sm.radius = 0.015 * sscale
+		sm.height = 0.015 * sscale
 		sm.radial_segments = 10
 		sm.rings = 5
 		for i in WADS:
 			var w := _mesh_node(sm, _wad_mat)
 			var a := rng.randf() * TAU
-			var rr := sqrt(rng.randf()) * WOUND_R * 0.6
-			w.position = Vector3(cos(a) * rr, 0.004 + i * 0.0009, sin(a) * rr)
+			var rr := sqrt(rng.randf()) * wound_r * 0.6
+			w.position = Vector3(cos(a) * rr, (0.004 + i * 0.0009) * sscale, sin(a) * rr)
 			w.rotation = Vector3(rng.randf(), rng.randf() * TAU, rng.randf())
 			w.scale = Vector3(1.0, 0.55, 0.8) * rng.randf_range(0.85, 1.15)
 			w.visible = false
@@ -719,18 +852,18 @@ func _build() -> void:
 		_pad = Node3D.new()
 		_root.add_child(_pad)
 		var pb := BoxMesh.new()
-		pb.size = Vector3(0.032, 0.008, 0.026)
+		pb.size = Vector3(0.032, 0.008, 0.026) * sscale
 		_mesh_node(pb, _cloth, _pad)
 		var fb := BoxMesh.new()
-		fb.size = Vector3(0.028, 0.005, 0.022)
+		fb.size = Vector3(0.028, 0.005, 0.022) * sscale
 		var fold := _mesh_node(fb, _mat(Color(0.9, 0.9, 0.86), 1.0), _pad)
-		fold.position = Vector3(0.002, 0.006, -0.001)
+		fold.position = Vector3(0.002, 0.006, -0.001) * sscale
 		fold.rotation_degrees = Vector3(0, 12, 4)
 		# A gush of blood when the pool gets too big.
 		_gush = CPUParticles3D.new()
 		var gm := SphereMesh.new()
-		gm.radius = 0.004
-		gm.height = 0.008
+		gm.radius = 0.004 * sscale
+		gm.height = 0.008 * sscale
 		gm.radial_segments = 5
 		gm.rings = 3
 		_gush.mesh = gm
@@ -742,10 +875,10 @@ func _build() -> void:
 		_gush.emitting = false
 		_gush.direction = Vector3.UP
 		_gush.spread = 40.0
-		_gush.initial_velocity_min = 0.5
-		_gush.initial_velocity_max = 1.2
-		_gush.gravity = Vector3(0, -5.0, 0)
-		_gush.position = Vector3(0, 0.01, 0)
+		_gush.initial_velocity_min = 0.5 * sscale
+		_gush.initial_velocity_max = 1.2 * sscale
+		_gush.gravity = Vector3(0, -5.0 * sscale, 0)
+		_gush.position = Vector3(0, 0.01 * sscale, 0)
 		_root.add_child(_gush)
 
 	var ribbon_mat := _cloth.duplicate() as StandardMaterial3D
@@ -774,7 +907,7 @@ func _build() -> void:
 	var roll: Node3D = ItemModelsScript.make("gauze", 1)
 	roll.position = Vector3(0, -0.032, 0)
 	_feed.add_child(roll)
-	_feed.scale = Vector3.ONE * 0.55
+	_feed.scale = Vector3.ONE * sscale
 	_root.add_child(_feed)
 
 	# The trail the roll leaves, coloured by the tension: green good, amber loose, red tight.
@@ -789,15 +922,15 @@ func _build() -> void:
 	path_ring.ring_segments = 4
 	_path_mat = _unshaded(Color(1, 1, 1, 0.0))
 	_path = _mesh_node(path_ring, _path_mat)
-	var pr := (R_LOOSE + r_tight) * 0.5
-	_path.scale = Vector3(pr, 0.02, pr)
-	_path.position = Vector3(0, 0.044, 0)
+	var pr := (r_loose + r_tight) * 0.5
+	_path.scale = Vector3(pr, 0.02 * sscale, pr)
+	_path.position = Vector3(0, 0.044 * sscale, 0)
 	_path.visible = false
 	_set_layers(self)
 	if _blanch_ring != null:
 		_blanch_ring.visible = false
 	_draw_trail()
-	_draw_strip(Vector3(0, 0.01, 0), Vector3(0.001, 0.01, 0.0), 0.0)
+	_draw_strip(Vector3(0, 0.01 * sscale, 0), Vector3(0.001 * sscale, 0.01 * sscale, 0.0), 0.0)
 
 
 ## Props go on the minigame's own layer so the patient's blood decals never paint them.
@@ -837,8 +970,8 @@ func _wrap_point(theta: float, bulge := 0.0) -> Array:
 		var pt := Vector3(x, limb_axis_y + (limb_hu * 1.08 + pad) * cos(theta), (limb_hs * 1.08 + pad) * sin(theta))
 		return [pt, n, Vector3(1, 0, 0)]
 	# A flat spiral dressing growing out from the wound.
-	var r := 0.014 + turns * 0.021
-	var h := 0.009 + turns * 0.0035 + bulge
+	var r := (0.014 + turns * 0.021) * sscale
+	var h := (0.009 + turns * 0.0035) * sscale + bulge
 	var radial := Vector3(cos(theta), 0, sin(theta))
 	return [Vector3(0, h, 0) + radial * r, Vector3.UP, radial]
 
@@ -858,7 +991,7 @@ func _rebuild_ribbon() -> void:
 		return
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var width := 0.028 if variant == "stump" else 0.016
+	var width := 0.028 if variant == "stump" else 0.016 * sscale
 	var steps := maxi(2, int(wrapped / 0.1))
 	var prev: Array = []
 	var prev_cols: Array = []
@@ -871,20 +1004,20 @@ func _rebuild_ribbon() -> void:
 		var edge := Color(0.5, 0.49, 0.45)
 		if mk == "l":
 			# Baggy, wrinkled and grey; bleeding soaks red through it.
-			bulge = 0.004 + 0.003 * sin(th * 7.0)
+			bulge = (0.004 + 0.003 * sin(th * 7.0)) * sscale
 			w = width * 1.2
 			mid = Color(0.82, 0.8, 0.74).lerp(Color(0.62, 0.08, 0.08), clampf(bleed * 1.4, 0.0, 0.8))
 			edge = mid.darkened(0.2)
 		elif mk == "t":
 			# Stretched thin, cutting in: pink edges.
-			bulge = -0.002
+			bulge = -0.002 * sscale
 			w = width * 0.7
 			edge = Color(0.95, 0.55, 0.55)
 		var wp := _wrap_point(th, bulge)
 		var side: Vector3 = wp[2] * (w * 0.5)
 		var n: Vector3 = wp[1]
 		var a: Vector3 = wp[0] - side
-		var m: Vector3 = wp[0] + n * 0.0015
+		var m: Vector3 = wp[0] + n * 0.0015 * sscale
 		var b: Vector3 = wp[0] + side
 		if not prev.is_empty():
 			var pe: Color = prev_cols[0]
@@ -907,17 +1040,17 @@ func _update_visuals(delta: float) -> void:
 	if variant == "pack":
 		var beat := fmod(_t * HEART_HZ, 1.0)
 		var pulse := exp(-beat * 6.0)
-		var br := 0.02 + 0.055 * clampf(shown, 0.0, 1.0)
-		_blood.scale = Vector3(br, 0.002, br * 0.85)
-		_blood.position = Vector3(0, 0.002, 0.003)
+		var br := (0.02 + 0.055 * clampf(shown, 0.0, 1.0)) * sscale
+		_blood.scale = Vector3(br, 0.002 * sscale, br * 0.85)
+		_blood.position = Vector3(0, 0.002 * sscale, 0.003 * sscale)
 		_blood.visible = stage != Stage.DONE or shown > 0.01
 		_blood_mat.albedo_color = Color(0.42 + 0.3 * clampf(shown, 0.0, 1.0), 0.02, 0.03, 0.9)
 		# Welling blood: tall, throbbing spurts when it bleeds hard, a flat film once packed.
 		var well := clampf(shown, 0.0, 1.0) * (1.0 - 0.09 * float(packed))
-		var dh := maxf(0.001, (0.004 + 0.022 * well) * (0.45 + 0.55 * pulse))
-		var dr := 0.012 + 0.012 * well
+		var dh := maxf(0.001 * sscale, (0.004 + 0.022 * well) * sscale * (0.45 + 0.55 * pulse))
+		var dr := (0.012 + 0.012 * well) * sscale
 		_dome.scale = Vector3(dr, dh, dr)
-		_dome.position = Vector3(0, 0.004, 0)
+		_dome.position = Vector3(0, 0.004 * sscale, 0)
 		_dome.visible = stage == Stage.PACK and well > 0.05
 		var n := packed
 		for i in _wads.size():
@@ -928,13 +1061,13 @@ func _update_visuals(delta: float) -> void:
 			var mn := _miss_nodes[i]
 			mn.visible = i < misses.size() and stage != Stage.DONE
 			if mn.visible:
-				mn.position = plane_to_local(misses[i], 0.006)
+				mn.position = plane_to_local(misses[i], 0.006 * sscale)
 		_pad.visible = stage == Stage.PACK
-		var over := cursor.length() <= ACCEPT_R
-		var lift := 0.035
+		var over := cursor.length() <= accept_r
+		var lift := 0.035 * sscale
 		if pressing:
-			lift = 0.012 if over else 0.008
-		lift = lerpf(lift, 0.006, _press_anim)
+			lift = (0.012 if over else 0.008) * sscale
+		lift = lerpf(lift, 0.006 * sscale, _press_anim)
 		_pad.position = _pad.position.lerp(plane_to_local(cursor, lift), 1.0 if delta <= 0.0 else clampf(delta * 20.0, 0.0, 1.0))
 		_pad.rotation = Vector3(0.0, 0.3, (-0.25 if over and not pressing else 0.0))
 		_glow.visible = stage == Stage.PACK
@@ -942,9 +1075,9 @@ func _update_visuals(delta: float) -> void:
 		if over:
 			ga = 0.55 + 0.25 * pulse
 		_glow_mat.albedo_color = Color(1.0, 0.82, 0.3, ga)
-		var gr := ACCEPT_R * 0.95
-		_glow.scale = Vector3(gr, 0.01, gr)
-		_glow.position = Vector3(0, 0.03, 0)
+		var gr := accept_r * 0.95
+		_glow.scale = Vector3(gr, 0.01 * sscale, gr)
+		_glow.position = Vector3(0, 0.03 * sscale, 0)
 	_rebuild_ribbon()
 	if _cap != null:
 		var f := wrap_frac()
@@ -969,8 +1102,8 @@ func _update_visuals(delta: float) -> void:
 	if _blanch_ring != null:
 		_blanch_mat.albedo_color = Color(0.97, 0.95, 0.93, blanch_a)
 		_blanch_ring.visible = blanch_a > 0.01
-		var rr := 0.03 + wrapped / TAU * 0.021 + 0.03
-		_blanch_ring.scale = Vector3(rr, 0.002, rr)
+		var rr := (0.03 + wrapped / TAU * 0.021 + 0.03) * sscale
+		_blanch_ring.scale = Vector3(rr, 0.002 * sscale, rr)
 
 	var wrapping := stage == Stage.WRAP
 	_feed.visible = wrapping
@@ -980,7 +1113,7 @@ func _update_visuals(delta: float) -> void:
 		var end_p: Vector3 = end[0]
 		var target: Vector3
 		var ang := atan2(cursor.y, cursor.x)
-		if variant == "stump" and pressing and cursor.length() >= R_IN:
+		if variant == "stump" and pressing and cursor.length() >= r_in:
 			# The roll goes round the limb with the winding; how far out it rides shows the pull.
 			var th := wrapped
 			var out := 0.03 + 0.02 * clampf(-_vis_pull, 0.0, 1.0) - 0.012 * clampf(_vis_pull, 0.0, 1.0)
@@ -989,7 +1122,7 @@ func _update_visuals(delta: float) -> void:
 		elif variant == "stump":
 			target = plane_to_local(cursor, 0.06)
 		else:
-			target = plane_to_local(cursor, 0.04)
+			target = plane_to_local(cursor, 0.04 * sscale)
 		var k := 1.0 if delta <= 0.0 else clampf(delta * 16.0, 0.0, 1.0)
 		_roll_pos = _roll_pos.lerp(target, k)
 		_feed.position = _roll_pos
@@ -998,8 +1131,9 @@ func _update_visuals(delta: float) -> void:
 		var yaw := 0.0
 		if variant == "pack":
 			var d := end_p - _roll_pos
-			yaw = atan2(-d.x, -d.z) if Vector2(d.x, d.z).length() > 0.005 else -ang
-		_feed.basis = Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, _feed_spin)
+			yaw = atan2(-d.x, -d.z) if Vector2(d.x, d.z).length() > 0.005 * sscale else -ang
+		# The basis carries the roll's size: writing it plain would reset the scale set in _build.
+		_feed.basis = (Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, _feed_spin)).scaled(Vector3.ONE * sscale)
 		if _strip.visible:
 			_draw_strip(end_p, _roll_pos, _vis_pull)
 	if variant == "stump" and stage != Stage.DONE:
@@ -1020,13 +1154,13 @@ func _update_visuals(delta: float) -> void:
 		_path_mat.albedo_color = Color(pc.r, pc.g, pc.b, pa)
 
 	# The trail.
-	if wrapping and pressing and cursor.length() >= R_IN:
+	if wrapping and pressing and cursor.length() >= r_in:
 		var col := Color(0.1, 0.95, 0.3)
 		if pull == Pull.LOOSE:
 			col = Color(1.0, 0.7, 0.0)
 		elif pull == Pull.TIGHT:
 			col = Color(1.0, 0.12, 0.08)
-		if _trail_pts.is_empty() or (_trail_pts[-1].p as Vector2).distance_to(cursor) > 0.004:
+		if _trail_pts.is_empty() or (_trail_pts[-1].p as Vector2).distance_to(cursor) > 0.004 * sscale:
 			_trail_pts.append({"p": cursor, "t": _t, "c": col})
 	while not _trail_pts.is_empty() and _t - float(_trail_pts[0].t) > TRAIL_LIFE:
 		_trail_pts.pop_front()
@@ -1041,11 +1175,11 @@ func _draw_strip(a: Vector3, b: Vector3, tension: float) -> void:
 	_strip_mesh.clear_surfaces()
 	var loose := clampf(-tension, 0.0, 1.0)
 	var taut := clampf(tension, 0.0, 1.0)
-	var width := 0.02 * (1.0 + 0.2 * loose - 0.45 * taut)
+	var width := 0.02 * sscale * (1.0 + 0.2 * loose - 0.45 * taut)
 	var col := Color(1, 1, 1).lerp(Color(0.8, 0.78, 0.72), loose).lerp(Color(1.0, 0.62, 0.6), taut)
 	var dir := b - a
-	if dir.length() < 0.002:
-		dir = Vector3(0.002, 0, 0)
+	if dir.length() < 0.002 * sscale:
+		dir = Vector3(0.002 * sscale, 0, 0)
 	var side := dir.normalized().cross(Vector3.UP)
 	if side.length() < 0.01:
 		side = Vector3(0, 0, 1)
@@ -1059,10 +1193,10 @@ func _draw_strip(a: Vector3, b: Vector3, tension: float) -> void:
 		var f := float(i) / segs
 		var p := a.lerp(b, f)
 		var bow := 4.0 * f * (1.0 - f)
-		p.y -= bow * 0.035 * loose
-		p += side * bow * loose * 0.016 * sin(_t * 19.0 + f * 7.0)
-		p.y += bow * taut * 0.0015 * sin(_t * 70.0)
-		var row := [p - side * width * 0.5, p + Vector3(0, 0.001, 0), p + side * width * 0.5]
+		p.y -= bow * 0.035 * sscale * loose
+		p += side * bow * loose * 0.016 * sscale * sin(_t * 19.0 + f * 7.0)
+		p.y += bow * taut * 0.0015 * sscale * sin(_t * 70.0)
+		var row := [p - side * width * 0.5, p + Vector3(0, 0.001 * sscale, 0), p + side * width * 0.5]
 		if not prev.is_empty():
 			for c in 2:
 				var ca: Color = edge if c == 0 else col
@@ -1078,7 +1212,7 @@ func _draw_strip(a: Vector3, b: Vector3, tension: float) -> void:
 func _draw_trail() -> void:
 	_trail_mesh.clear_surfaces()
 	_trail_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	var lift := 0.045
+	var lift := 0.045 * sscale
 	var n := _trail_pts.size()
 	if n < 2:
 		# An invisible sliver keeps the material drawn (and compiled) from the first frame.
@@ -1095,8 +1229,8 @@ func _draw_trail() -> void:
 			var nrm := Vector2(-d.y, d.x).normalized()
 			var age0 := clampf(1.0 - (_t - float(_trail_pts[i].t)) / TRAIL_LIFE, 0.0, 1.0)
 			var age1 := clampf(1.0 - (_t - float(_trail_pts[i + 1].t)) / TRAIL_LIFE, 0.0, 1.0)
-			var w0 := 0.002 + 0.006 * age0
-			var w1 := 0.002 + 0.006 * age1
+			var w0 := (0.002 + 0.006 * age0) * sscale
+			var w1 := (0.002 + 0.006 * age1) * sscale
 			var c0: Color = _trail_pts[i].c
 			var c1: Color = _trail_pts[i + 1].c
 			c0.a = minf(1.0, 1.3 * age0)

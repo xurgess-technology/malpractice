@@ -38,6 +38,8 @@ var ctx: Dictionary = {}
 ## 0..1, shown on the HUD and used by the surgery system to know how far along we are.
 var progress: float = 0.0
 var done: bool = false
+## False while nobody is operating this step: everything it draws is hidden (see set_shown).
+var shown: bool = true
 
 const BUTTON_PRIMARY := 1
 const BUTTON_SECONDARY := 2
@@ -60,12 +62,46 @@ func plane_extent() -> Vector2:
 	return Vector2(0.35, 0.25)
 
 
+## How big this step's play space is compared with the metres it would otherwise use. 1.0 is the
+## usual scale; the gunshot steps return 0.4, so their wound is a wound in the body rather than a
+## plate laid on it, and bring camera_pose() in by the same factor so nothing changes on screen.
+## The framework scales anything it hands a step in plane metres by this: the stir jolt
+## (SurgerySystem.STIR_SHAKE_M) and helper_light()'s spot.
+func site_scale() -> float:
+	return 1.0
+
+
 ## Where the operator's camera sits, relative to the site. The surgery system tweens to it.
 ##   height: metres above the plane along its +Y
 ##   back: metres pulled back along the plane's +Z so the view is slightly angled
 ##   fov: camera field of view
+##   near: optional near clip plane, for a step whose camera sits very close to the site
 func camera_pose() -> Dictionary:
 	return {"height": 0.55, "back": 0.18, "fov": 55.0}
+
+
+## Show or hide everything this step draws -- its tool, its affordances, its own wound art. The
+## surgery system calls it on every machine when the operator changes: a table with nobody
+## operating shows only the patient's own body and wound, never a tool floating over it. The
+## minigame stays built and ticking while hidden (that is what keeps its materials warm and its
+## progress replicated), so this only hides.
+func set_shown(on: bool) -> void:
+	if shown == on:
+		return
+	shown = on
+	visible = on
+	if not on:
+		# A hidden step is not working on bare skin any more: let the gown back (PatientBody).
+		var body = ctx.get("body")
+		if body != null and is_instance_valid(body) and body.has_method("cover_site"):
+			body.cover_site()
+	on_shown(on)
+
+
+## Override for a step that does more than hide its nodes -- the gunshot steps clear the patient's
+## gown under their wound art and have to ask for it again when they come back.
+func on_shown(_on: bool) -> void:
+	pass
 
 
 ## Operator only. `p` is the cursor on the plane in metres (clamped to plane_extent),
@@ -195,7 +231,7 @@ func helper_light() -> Dictionary:
 		if la.y < -0.05:
 			var t := -lf.y / la.y
 			spot = Vector2(lf.x + la.x * t, lf.z + la.z * t)
-		out = {"amount": k, "spot": spot.limit_length(0.25)}
+		out = {"amount": k, "spot": spot.limit_length(0.25 * site_scale())}
 	return out
 
 
@@ -212,6 +248,35 @@ func _helper_clear(light: Node, from: Vector3, to: Vector3, now: int) -> bool:
 		clear = space.intersect_ray(q).is_empty()
 	_helper_los[id] = [clear, now]
 	return clear
+
+
+## The patient's skin tone right now: `base` (the step's own colour for this patient) shaded by the
+## body's live pallor and grey, read off PatientBody.skin_mats, the same way the body's own skin
+## shaders do it. A step that paints skin of its own uses this so its patch does not drift pale or
+## flushed against the body around it as the vitals move.
+const PALLOR_TINT := Color(0.35, 0.45, 0.58)   # bob_skin.gdshader / seal_coat.gdshader, linearised
+
+func skin_tone(base: Color) -> Color:
+	var pallor := 0.0
+	var grey := 0.0
+	var body = ctx.get("body")
+	if body != null and is_instance_valid(body) and "skin_mats" in body:
+		for sm in body.skin_mats:
+			var m := sm as ShaderMaterial
+			if m == null:
+				continue
+			var p = m.get_shader_parameter(&"pallor")
+			var g = m.get_shader_parameter(&"grey")
+			if p != null:
+				pallor = maxf(pallor, float(p))
+			if g != null:
+				grey = maxf(grey, float(g))
+	var col := base
+	var lum := col.r * 0.3 + col.g * 0.55 + col.b * 0.15
+	col = col.lerp(PALLOR_TINT * (lum * 1.4 + 0.02), clampf(pallor, 0.0, 1.0) * 0.85)
+	var lum2 := col.r * 0.3 + col.g * 0.55 + col.b * 0.15
+	col = col.lerp(Color(0.82, 0.9, 1.05) * lum2 * 1.15, clampf(grey, 0.0, 1.0))
+	return Color(col.r, col.g, col.b, base.a)
 
 
 ## Plane-local 2D point (metres) to a local 3D position on the plane, lifted by `lift`.

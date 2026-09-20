@@ -1,4 +1,4 @@
-extends "res://scripts/surgery/minigame.gd"
+﻿extends "res://scripts/surgery/minigame.gd"
 ## Step "extract": pull the bullet out of a gunshot wound with forceps. Operation, in flesh.
 ##
 ## The work plane shows the wound opening and a winding wound channel generated from ctx.seed,
@@ -33,48 +33,68 @@ const BrainGameScript := preload("res://scripts/dissection/brain_forceps.gd")
 var _brain_game: Node3D = null
 
 # Channel ---------------------------------------------------------------------
-const SAMPLE := 0.001
+## The gunshot play space in metres is this fraction of what it used to be, so the wound reads as a
+## wound in the body rather than a plate laid on top of it (a 5 cm tract, not a 14 cm one). EVERY
+## world distance in this file is multiplied by it, camera_pose() comes in by the same factor, and
+## the framework scales what it hands the step -- the stir jolt, helper_light()'s spot -- through
+## Minigame.site_scale(). On screen nothing about playing the step changes.
+const SITE_SCALE := 0.4
+const SAMPLE := 0.001 * SITE_SCALE
 const RIM := 1.8               # rim width beyond the wall, in half-widths
-const PATCH_Y := 0.02          # exposed-skin window height above the plane (clears gown folds)
-const LIFT := 0.029            # wound rim height above the plane
-const DEPTH_NEAR := 0.0035     # trench depth at the opening
-const DEPTH_FAR := 0.0078      # trench depth at the bullet
-const DISH_Y := 0.012          # kidney dish base height on the plane
-const MOUTH_S := 0.008         # within this far of the opening the tips can leave the wound
+## The site plane sits a little under the patient's own skin (the marker is on the body, not on its
+## surface, and Bob's belly rises either side of it), so the wound art rides SKIN_LIFT above the
+## plane at the wound and tucks back down to it at the patch's edge, where the alpha has faded out.
+## Body-sized, not play-space-sized: it does not scale with SITE_SCALE.
+const SKIN_LIFT := 0.010
+const GOWN_WINDOW := 0.85       # the cleared gown window, as a fraction of the patch
+const SKIN_SINK := 0.004 * SITE_SCALE   # the wound mesh's outer edge dives under the skin patch
+const LIP := 0.0096 * SITE_SCALE        # the wound's own swollen edge, standing proud of the skin
+const RIM_ROLL := 0.0010 * SITE_SCALE   # the roll of flesh just outside the wall
+const DEPTH_NEAR := 0.0035 * SITE_SCALE # trench depth at the opening
+const DEPTH_FAR := 0.0078 * SITE_SCALE  # trench depth at the bullet
+const MOUTH_S := 0.008 * SITE_SCALE     # within this far of the opening the tips can leave the wound
+const HOVER := 0.028 * SITE_SCALE       # how high the tips ride over the skin outside the wound
+const NET_Q := 0.0001 * SITE_SCALE      # net_state quantisation of tip and bullet positions
 
 # Tool ------------------------------------------------------------------------
-const TOOL_R_OPEN := 0.0028    # half-width of the open jaws
-const BULLET_R := 0.0045
-const BULLET_LEN := 0.012
-const TOOL_R_GRIP := 0.0058    # half-width of jaws holding the slug
-const GRAB_R := 0.012          # tip within this of the slug centre can grip
+const TOOL_R_OPEN := 0.0028 * SITE_SCALE  # half-width of the open jaws
+const BULLET_R := 0.0045 * SITE_SCALE
+const BULLET_LEN := 0.012 * SITE_SCALE
+const TOOL_R_GRIP := 0.0058 * SITE_SCALE  # half-width of jaws holding the slug
+const GRAB_R := 0.012 * SITE_SCALE        # tip within this of the slug centre can grip
 const JAW_CLOSE_RATE := 3.5
 const JAW_OPEN_RATE := 6.0
 const JAW_ON_BULLET := 0.62
-const ARM_LEN := 0.125
+const ARM_LEN := 0.125 * SITE_SCALE
 const TOOL_PITCH := deg_to_rad(48.0)
 
 # Rules -----------------------------------------------------------------------
-const TIP_SPEED_OPEN := 0.12   # m/s the tips can move through flesh; the cursor may run ahead
-const TIP_SPEED_GRIP := 0.09
+const TIP_SPEED_OPEN := 0.12 * SITE_SCALE   # m/s the tips can move through flesh; the cursor may run ahead
+const TIP_SPEED_GRIP := 0.09 * SITE_SCALE
 const SPEED_TAU := 0.12
-const PUSH_SOFT := 0.0035      # the hand this far past a wall: the wall flushes and strains
-const PUSH_HARD := 0.010       # this far: it tears at once
+const PUSH_SOFT := 0.0035 * SITE_SCALE  # the hand this far past a wall: the wall flushes and strains
+const PUSH_HARD := 0.010 * SITE_SCALE   # this far: it tears at once
 const STRAIN_TIME := 0.35      # straining a wall this long tears it
 const TEAR_COST := 2.5
 const TEAR_COOLDOWN := 0.9
-const SLIDE_BACK := 0.022
-const SLIDE_SPEED := 0.05
+const SLIDE_BACK := 0.022 * SITE_SCALE
+const SLIDE_SPEED := 0.05 * SITE_SCALE
+
+# The kidney dish is not on the patient any more: it stands on an instrument tray on the table's
+# own steel beside them, a real prop at real size (nothing below scales with SITE_SCALE). The
+# offset is in the patient body's frame: X along the body toward the feet, y = 0 the table top,
+# +Z the side the operator stands on (scripts/grafting/vats.gd places a vat the same way).
+const TRAY_OFFSET := Vector3(0.20, 0.0, 0.40)
 
 # Channel data
 var pts := PackedVector2Array()
 var widths := PackedFloat32Array()
-var length := 0.14
-var hw_base := 0.012
+var length := 0.14 * SITE_SCALE
+var hw_base := 0.012 * SITE_SCALE
 var bends := 3
-var bullet_home := 0.13
-var dish_pos := Vector2(0.15, 0.0)
+var bullet_home := 0.13 * SITE_SCALE
 var bbox := Rect2()
+var _patch_r := Vector2(0.1, 0.08) * SITE_SCALE   # half-size of the skin the wound art paints
 
 # Simulation (operator)
 var inside := false
@@ -83,8 +103,8 @@ var tip_s := 0.0
 var jaw := 0.0
 var gripped := false
 var empty_closed := false
-var bullet_s := 0.13
-var slide_target := 0.13
+var bullet_s := 0.13 * SITE_SCALE
+var slide_target := 0.13 * SITE_SCALE
 var speed := 0.0
 var push := 0.0                # how far the hand is forcing the tips past a wall, metres
 var strain := 0.0
@@ -102,7 +122,7 @@ var _d_tip := Vector2.ZERO
 var _d_inside := false
 var _d_jaw := 0.0
 var _d_gripped := false
-var _d_bullet_s := 0.13
+var _d_bullet_s := 0.13 * SITE_SCALE
 var _d_stage: int = Stage.OUTSIDE
 var _d_hits := 0
 var _d_damage := 0.0
@@ -112,7 +132,7 @@ var _d_empty := false
 # Visuals
 var _vis_tip := Vector2.ZERO
 var _vis_s := 0.0
-var _vis_y := 0.03
+var _vis_y := 0.03 * SITE_SCALE
 var _vis_yaw := 0.0
 var _vis_jaw := 0.0
 var _seen_hits := 0
@@ -125,7 +145,7 @@ var _squelch_from := Vector2.ZERO
 var _was_closed := false
 var _done_anim := -1.0
 var _clinked := false
-var _dish_rest := Vector2.ZERO
+var _dish_rest := Vector3.ZERO   # where the slug lands in the dish, in this node's local frame
 var _vrng := RandomNumberGenerator.new()
 var _built := false
 
@@ -146,6 +166,10 @@ var _glint: MeshInstance3D
 var _glint_mat: StandardMaterial3D
 var _mouth: MeshInstance3D
 var _mouth_mat: StandardMaterial3D
+var _tray: Node3D              # the instrument tray with the kidney dish, standing beside the patient
+var _dish_jitter := Vector3.ZERO
+var _skin_mat: ShaderMaterial
+var _skin_sent := Color(0, 0, 0, 0)
 var _cue_t := 0.0
 var _tear_flash := 0.0
 
@@ -177,14 +201,14 @@ func setup(context: Dictionary) -> void:
 	hw_base = ch.hw
 	bends = ch.bends
 	bbox = ch.bbox
-	bullet_home = length - BULLET_LEN * 0.5 - 0.002
+	bullet_home = length - BULLET_LEN * 0.5 - 0.002 * SITE_SCALE
 	bullet_s = bullet_home
 	slide_target = bullet_home
 	_d_bullet_s = bullet_home
-	dish_pos = Vector2(bbox.end.x + 0.055, clampf(pts[0].y, -0.03, 0.03))
+	_patch_r = bbox.size * 0.5 + Vector2(0.05, 0.05) * SITE_SCALE
 	_vrng.seed = hash("forceps_fx|%d" % int(ctx.get("seed", 0)))
 	_b_rng.seed = hash("forceps_bot|%d" % int(ctx.get("seed", 0)))
-	_dish_rest = dish_pos + Vector2(_vrng.randf_range(-0.02, 0.02), _vrng.randf_range(-0.008, 0.008))
+	_dish_jitter = Vector3(_vrng.randf_range(-0.02, 0.02), 0.0, _vrng.randf_range(-0.008, 0.008))
 	tip = _bot_start()
 	_d_tip = tip
 	_vis_tip = tip
@@ -203,8 +227,8 @@ static func generate_channel(seed_value: int, difficulty: float) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("forceps|%d" % seed_value)
 	var dn := clampf((difficulty - 1.0) / 0.6, 0.0, 1.0)
-	var target := clampf((0.135 + 0.065 * dn) * rng.randf_range(0.92, 1.08), 0.12, 0.20)
-	var hw := clampf(0.0125 - 0.0045 * dn, 0.008, 0.0125)
+	var target := clampf((0.135 + 0.065 * dn) * rng.randf_range(0.92, 1.08), 0.12, 0.20) * SITE_SCALE
+	var hw := clampf(0.0125 - 0.0045 * dn, 0.008, 0.0125) * SITE_SCALE
 	var best := PackedVector2Array()
 	var nb := 3
 	var want := rng.randi_range(3, 5)
@@ -247,9 +271,9 @@ static func generate_channel(seed_value: int, difficulty: float) -> Dictionary:
 	w.resize(n)
 	for i in n:
 		var s := float(i) * SAMPLE
-		var f := 1.0 + 0.09 * sin(s * 70.0 + ph1) + 0.05 * sin(s * 190.0 + ph2)
-		f *= 1.0 + 0.3 * (1.0 - smoothstep(0.0, 0.012, s))
-		f *= 1.0 + 0.28 * smoothstep(L - 0.022, L - 0.006, s)
+		var f := 1.0 + 0.09 * sin(s * 70.0 / SITE_SCALE + ph1) + 0.05 * sin(s * 190.0 / SITE_SCALE + ph2)
+		f *= 1.0 + 0.3 * (1.0 - smoothstep(0.0, 0.012 * SITE_SCALE, s))
+		f *= 1.0 + 0.28 * smoothstep(L - 0.022 * SITE_SCALE, L - 0.006 * SITE_SCALE, s)
 		w[i] = hw * f
 	var r := Rect2(best[0], Vector2.ZERO)
 	for q in best:
@@ -339,7 +363,7 @@ static func _valid(p: PackedVector2Array, hw: float) -> bool:
 	var r := Rect2(p[0], Vector2.ZERO)
 	for q in p:
 		r = r.expand(q)
-	return r.size.x <= 0.19 and r.size.y <= 0.13
+	return r.size.x <= 0.19 * SITE_SCALE and r.size.y <= 0.13 * SITE_SCALE
 
 
 ## The rotation-independent half of _valid: no bend too tight, no two stretches too close.
@@ -352,10 +376,10 @@ static func _valid_shape(p: PackedVector2Array, hw: float) -> bool:
 		var a := (p[i] - p[i - 5]).normalized()
 		var b := (p[i + 5] - p[i]).normalized()
 		var ang := absf(a.angle_to(b))
-		if ang > 0.0 and 0.005 / ang < 0.014:
+		if ang > 0.0 and (5.0 * SAMPLE) / ang < 0.014 * SITE_SCALE:
 			return false
 	# wall-to-wall clearance between distant parts of the channel
-	var clear := 2.0 * hw * 1.3 + 0.014
+	var clear := 2.0 * hw * 1.3 + 0.014 * SITE_SCALE
 	for i in range(0, n, 3):
 		for j in range(i + 60, n, 3):
 			if p[i].distance_to(p[j]) < clear:
@@ -433,19 +457,35 @@ func plane_extent() -> Vector2:
 	if _brain_game != null:
 		return _brain_game.plane_extent()
 	var e :=Vector2(maxf(absf(bbox.position.x), absf(bbox.end.x)), maxf(absf(bbox.position.y), absf(bbox.end.y)))
-	return Vector2(maxf(e.x + 0.03, 0.10), maxf(e.y + 0.03, 0.08))
+	return Vector2(maxf(e.x + 0.03 * SITE_SCALE, 0.10 * SITE_SCALE), maxf(e.y + 0.03 * SITE_SCALE, 0.08 * SITE_SCALE))
 
+
+func site_scale() -> float:
+	return 1.0 if _brain_game != null else SITE_SCALE
+
+
+## The camera sits SITE_SCALE as far off the site as it used to, so the same screen movement is
+## SITE_SCALE as many metres on the plane: the wound is the same size on screen and the step plays
+## exactly as it did. FRAME_MARGIN is the room beside the channel the kidney dish used to need --
+## the dish is on a tray off the body now, but the framing it gave is what the step is tuned for.
+const FRAME_MARGIN := 0.105 * SITE_SCALE
 
 func camera_pose() -> Dictionary:
 	if _brain_game != null:
 		return _brain_game.camera_pose()
-	# Fit the channel vertically and the channel plus the dish horizontally in a 16:9 view.
 	var fov := 50.0
 	var half_v := tan(deg_to_rad(fov * 0.5))
-	var need_z := maxf(absf(bbox.position.y), absf(bbox.end.y)) + 0.012
-	var need_x := maxf(absf(bbox.position.x), dish_pos.x + 0.05)
+	var need_z := maxf(absf(bbox.position.y), absf(bbox.end.y)) + 0.012 * SITE_SCALE
+	var need_x := maxf(absf(bbox.position.x), absf(bbox.end.x)) + FRAME_MARGIN
 	var h := maxf(need_z / half_v, need_x / (half_v * 1.7)) * 1.06
-	return {"height": h, "back": h * 0.2, "fov": fov}
+	# A few centimetres off the skin: the default 2 cm near plane would clip the tool.
+	return {"height": h, "back": h * 0.2, "fov": fov, "near": h * 0.067}
+
+
+## The work lamp rides on the camera, and the camera is SITE_SCALE as far away: dim it by the same
+## factor (the lamp's attenuation is 1/d) so the site is lit exactly as brightly as before.
+func lamp_scale() -> float:
+	return 1.0 if _brain_game != null else SITE_SCALE
 
 
 func tool_radius() -> float:
@@ -462,7 +502,7 @@ func bullet_pos() -> Vector2:
 
 ## The tips are close enough to the slug for the jaws to take it.
 func in_reach() -> bool:
-	return inside and not gripped and tip.distance_to(bullet_pos()) < GRAB_R and absf(bullet_s - slide_target) < 0.001
+	return inside and not gripped and tip.distance_to(bullet_pos()) < GRAB_R and absf(bullet_s - slide_target) < 0.001 * SITE_SCALE
 
 
 ## A stir's shake drags the tips about but never tears a wall.
@@ -682,9 +722,9 @@ func net_state() -> Dictionary:
 	if _brain_game != null:
 		return _brain_game.net_state()
 	return {
-		"x":snappedf(_d_tip.x, 0.0001), "y": snappedf(_d_tip.y, 0.0001),
+		"x":snappedf(_d_tip.x, NET_Q), "y": snappedf(_d_tip.y, NET_Q),
 		"i": 1 if _d_inside else 0, "j": snappedf(_d_jaw, 0.01), "g": 1 if _d_gripped else 0,
-		"b": snappedf(_d_bullet_s, 0.0001), "st": _d_stage, "h": _d_hits,
+		"b": snappedf(_d_bullet_s, NET_Q), "st": _d_stage, "h": _d_hits,
 		"dm": snappedf(_d_damage, 0.1), "p": snappedf(progress, 0.001),
 		"w": snappedf(_d_push, 0.05), "e": 1 if _d_empty else 0,
 	}
@@ -712,7 +752,7 @@ func apply_net_state(s: Dictionary) -> void:
 # =============================================================================
 
 func _bot_start() -> Vector2:
-	return Vector2(dish_pos.x - 0.04, pts[0].y + 0.04)
+	return Vector2(bbox.end.x + 0.015 * SITE_SCALE, pts[0].y + 0.04 * SITE_SCALE)
 
 
 func bot_input(t: float, skill: float) -> Dictionary:
@@ -726,8 +766,8 @@ func bot_input(t: float, skill: float) -> Dictionary:
 	var sk := clampf(maxf(skill, (t - 32.0) / 10.0), 0.0, 1.0)
 	var sloppy := 1.0 - sk
 	var buttons := 0
-	var v_in := lerpf(0.036, 0.036, sk)
-	var v_out := lerpf(0.032, 0.028, sk)
+	var v_in := lerpf(0.036, 0.036, sk) * SITE_SCALE
+	var v_out := lerpf(0.032, 0.028, sk) * SITE_SCALE
 	_b_burst_cd -= dt
 	_b_burst -= dt
 	if sloppy > 0.3 and _b_burst_cd <= 0.0:
@@ -743,7 +783,7 @@ func bot_input(t: float, skill: float) -> Dictionary:
 	match _b_phase:
 		"enter":
 			var m := pts[0]
-			cur = cur.move_toward(m, 0.09 * dt)
+			cur = cur.move_toward(m, 0.09 * SITE_SCALE * dt)
 			if inside:
 				_b_phase = "descend"
 				_b_sb = tip_s
@@ -751,22 +791,22 @@ func bot_input(t: float, skill: float) -> Dictionary:
 			if not inside:
 				_b_phase = "enter"
 			_b_sb = minf(_b_sb + v_in * burst * dt, bullet_s)
-			_b_sb = minf(_b_sb, tip_s + 0.006)
+			_b_sb = minf(_b_sb, tip_s + 0.006 * SITE_SCALE)
 			lateral = wob * (hw_at(_b_sb) - TOOL_R_OPEN) * lerpf(3.4, 0.0, sk)
-			if _b_sb >= bullet_s - 0.0005:
+			if _b_sb >= bullet_s - 0.0005 * SITE_SCALE:
 				_b_phase = "settle"
 				_b_wait = lerpf(0.15, 0.3, sk)
 			# A sloppy hand aims ahead in a straight line, cutting the bends into the walls.
-			var aim := minf(_b_sb + sloppy * 0.03, bullet_s)
-			cur = cur.move_toward(point_at(aim) + _normal(_b_sb) * lateral, lerpf(0.3, 0.06, sk) * dt)
+			var aim := minf(_b_sb + sloppy * 0.03 * SITE_SCALE, bullet_s)
+			cur = cur.move_toward(point_at(aim) + _normal(_b_sb) * lateral, lerpf(0.3, 0.06, sk) * SITE_SCALE * dt)
 		"settle":
-			_b_sb = move_toward(_b_sb, bullet_s, 0.02 * dt)
-			cur = cur.move_toward(bullet_pos(), 0.03 * dt)
+			_b_sb = move_toward(_b_sb, bullet_s, 0.02 * SITE_SCALE * dt)
+			cur = cur.move_toward(bullet_pos(), 0.03 * SITE_SCALE * dt)
 			_b_wait -= dt
 			if _b_wait <= 0.0 and in_reach():
 				_b_phase = "grip"
 		"grip":
-			cur = cur.move_toward(bullet_pos(), 0.02 * dt)
+			cur = cur.move_toward(bullet_pos(), 0.02 * SITE_SCALE * dt)
 			buttons = BUTTON_PRIMARY
 			if gripped:
 				_b_phase = "extract"
@@ -783,16 +823,16 @@ func bot_input(t: float, skill: float) -> Dictionary:
 				buttons = 0
 			else:
 				_b_sb = maxf(_b_sb - v_out * burst * dt, 0.0)
-				_b_sb = maxf(_b_sb, tip_s - 0.005)
+				_b_sb = maxf(_b_sb, tip_s - 0.005 * SITE_SCALE)
 				lateral = wob * (hw_at(_b_sb) - TOOL_R_GRIP) * lerpf(3.0, 0.0, sk)
-				var aim_out := maxf(_b_sb - sloppy * 0.03, 0.0)
-				cur = cur.move_toward(point_at(aim_out) + _normal(_b_sb) * lateral, lerpf(0.3, 0.05, sk) * dt)
+				var aim_out := maxf(_b_sb - sloppy * 0.03 * SITE_SCALE, 0.0)
+				cur = cur.move_toward(point_at(aim_out) + _normal(_b_sb) * lateral, lerpf(0.3, 0.05, sk) * SITE_SCALE * dt)
 				if sloppy > 0.5 and not _b_dropped_once and _b_sb < bullet_home * 0.5:
 					_b_dropped_once = true
 					_b_phase = "release"
 					_b_wait = 0.45
 					buttons = 0
-				elif _b_sb <= 0.0005:
+				elif _b_sb <= 0.0005 * SITE_SCALE:
 					_b_phase = "exit"
 		"release":
 			_b_wait -= dt
@@ -801,7 +841,7 @@ func bot_input(t: float, skill: float) -> Dictionary:
 				_b_sb = tip_s
 		"exit":
 			buttons = BUTTON_PRIMARY
-			cur = cur - tangent_at(0.0) * 0.03 * dt
+			cur = cur - tangent_at(0.0) * 0.03 * SITE_SCALE * dt
 			if not gripped and not done:
 				_b_phase = "descend" if inside else "enter"
 				_b_sb = tip_s
@@ -818,23 +858,37 @@ func _normal(s: float) -> Vector2:
 # Visuals
 # =============================================================================
 
+## The base tone of this patient's skin, shaded by their live pallor and grey (Minigame.skin_tone)
+## so the wound's own skin never drifts pale or flushed against the body around it.
 func _skin_color() -> Color:
-	return Color(0.2, 0.22, 0.25) if String(ctx.get("patient_id", "bob")) == "seal" else Color(0.52, 0.36, 0.28)
+	return skin_tone(Color(0.2, 0.22, 0.25) if String(ctx.get("patient_id", "bob")) == "seal" else Color(0.52, 0.36, 0.28))
+
+
+## Where the patient's skin is at plane point p: SKIN_LIFT over the site plane at the wound,
+## tucking back down to the plane at the patch's edge. Everything the step draws is built on this,
+## so the wound sits IN the skin instead of on a disc standing over it.
+func _skin_y(p: Vector2) -> float:
+	var c := bbox.get_center()
+	var r2 := Vector2((p.x - c.x) / maxf(_patch_r.x, 1e-5), (p.y - c.y) / maxf(_patch_r.y, 1e-5)).length_squared()
+	return SKIN_LIFT * (1.0 - minf(r2, 1.0))
 
 
 func _depth_at(s: float) -> float:
 	return lerpf(DEPTH_NEAR, DEPTH_FAR, clampf(s / length, 0.0, 1.0))
 
 
-## Height of the wound surface at arc length s and signed cross position u (in half-widths).
-func _surface_y(s: float, u: float) -> float:
+## Height of the wound surface at arc length s and cross position u (in half-widths), sinking into
+## the skin at `at` (the plane point; derived from s and u when it is not handed over).
+func _surface_y(s: float, u: float, at = null) -> float:
+	var p: Vector2 = at if at is Vector2 else point_at(s) + _normal(s) * u * hw_at(s)
+	var base := _skin_y(p) + LIP
 	var a := absf(u)
 	if a <= 1.0:
-		return LIFT + 0.0006 - _depth_at(s) * pow(1.0 - a * a, 0.35)
+		return base - _depth_at(s) * pow(1.0 - a * a, 0.35)
 	if a <= 1.3:
-		return LIFT + 0.0006 + 0.0010 * sin((a - 1.0) / 0.3 * PI * 0.5)
-	# the outer slope dives under the skin patch, so the two meet along a smooth crossing line
-	return lerpf(LIFT + 0.0006, PATCH_Y - 0.004, smoothstep(1.3, RIM + 1.5, a))
+		return base + RIM_ROLL * sin((a - 1.0) / 0.3 * PI * 0.5)
+	# past the roll the outer slope dives under the skin, so the two meet along a hidden crossing line
+	return lerpf(base, _skin_y(p) - SKIN_SINK, smoothstep(1.3, RIM + 1.5, a))
 
 
 func _build_visuals() -> void:
@@ -851,8 +905,8 @@ func _build_visuals() -> void:
 	_splat_mat.roughness = 0.12
 	_splat_mat.metallic_specular = 0.8
 	_drop_mesh = SphereMesh.new()
-	_drop_mesh.radius = 0.0012
-	_drop_mesh.height = 0.0024
+	_drop_mesh.radius = 0.0012 * SITE_SCALE
+	_drop_mesh.height = 0.0024 * SITE_SCALE
 	_drop_mesh.radial_segments = 6
 	_drop_mesh.rings = 3
 	_splat_mesh = CylinderMesh.new()
@@ -930,18 +984,22 @@ uniform vec3 skin_color = vec3(0.8, 0.62, 0.5);
 uniform vec2 mouth = vec2(0.0);
 uniform vec2 patch_c = vec2(0.0);
 uniform vec2 patch_r = vec2(0.1);
+// Plane metres shrank with SITE_SCALE; the grain and the bruise did not, so both are measured in
+// the design units the numbers below were chosen in.
+uniform float site_scale = 1.0;
 float patch_radius(vec2 p) { return length((p - patch_c) / patch_r); }
 vec3 skin_at(vec2 p) {
 	float r = patch_radius(p);
-	float n = vnoise(p * 90.0);
-	float n2 = vnoise(p * 700.0);
+	vec2 q = p / site_scale;
+	float n = vnoise(q * 90.0);
+	float n2 = vnoise(q * 700.0);
 	vec3 col = skin_color * (0.9 + 0.14 * n2);
 	vec2 d = p - patch_c;
 	float ang = atan(d.y, d.x);
 	float wob = 0.06 * sin(ang * 5.0 + 1.3) + 0.04 * sin(ang * 11.0);
 	float iod = 1.0 - smoothstep(0.62 + wob, 0.8 + wob, r);
 	col = mix(col, col * vec3(0.8, 0.5, 0.25), iod * 0.5);
-	float dm = distance(p, mouth);
+	float dm = distance(p, mouth) / site_scale;
 	col = mix(col, vec3(0.2, 0.06, 0.1), (1.0 - smoothstep(0.015, 0.045 + 0.01 * n, dm)) * 0.6);
 	return col * mix(1.0, 0.6, smoothstep(0.9, 0.99, r));
 }
@@ -960,7 +1018,8 @@ func _skin_params(m: ShaderMaterial) -> void:
 	m.set_shader_parameter("skin_color", _skin_color())
 	m.set_shader_parameter("mouth", pts[0])
 	m.set_shader_parameter("patch_c", bbox.get_center())
-	m.set_shader_parameter("patch_r", bbox.size * 0.5 + Vector2(0.05, 0.05))
+	m.set_shader_parameter("patch_r", _patch_r)
+	m.set_shader_parameter("site_scale", SITE_SCALE)
 
 
 ## The skin patch sits a little above the body, and a gown's folds rise higher still: have the body
@@ -977,11 +1036,15 @@ func _cover_body() -> void:
 		body.cover_site()
 
 
+## The skin the wound is in: it follows _skin_y, has no disc and no rim, and its edge feathers out
+## to nothing so it never draws a border of its own. The work plane stays invisible maths.
 func _build_skin() -> void:
 	var c := bbox.get_center()
-	var rx := bbox.size.x * 0.5 + 0.05
-	var rz := bbox.size.y * 0.5 + 0.05
-	_expose_body(c, Vector2(rx, rz))
+	var rx := _patch_r.x
+	var rz := _patch_r.y
+	# The gown's window is a little inside the patch, so its edge always lands on skin that is still
+	# solid: the patch's own edge fades out under the gown and is never a border of its own.
+	_expose_body(c, _patch_r * GOWN_WINDOW)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var rings := 10
@@ -990,10 +1053,10 @@ func _build_skin() -> void:
 		for j in segs:
 			var r := float(k) / float(rings)
 			var a := float(j) / float(segs) * TAU
-			var y := PATCH_Y * (1.0 - smoothstep(0.93, 1.0, r))
+			var q := Vector2(c.x + cos(a) * rx * r, c.y + sin(a) * rz * r)
 			st.set_uv(Vector2(r, 0.0))
 			st.set_normal(Vector3.UP)
-			st.add_vertex(Vector3(c.x + cos(a) * rx * r, y, c.y + sin(a) * rz * r))
+			st.add_vertex(Vector3(q.x, _skin_y(q), q.y))
 	for k in rings:
 		for j in segs:
 			var a0 := k * segs + j
@@ -1016,7 +1079,8 @@ void fragment() {
 	float r = patch_radius(pp);
 	ALBEDO = skin_at(pp);
 	ROUGHNESS = 0.55;
-	ALPHA = 1.0 - smoothstep(0.985, 1.0, r);
+	// Feathered out at the rim: no edge, no disc -- it dissolves into the body around it.
+	ALPHA = 1.0 - smoothstep(0.85, 1.0, r);
 }
 """)
 	var m := ShaderMaterial.new()
@@ -1024,6 +1088,7 @@ void fragment() {
 	m.set_shader_parameter("skin_color", _skin_color())
 	_skin_params(m)
 	m.render_priority = -1
+	_skin_mat = m
 	mi.material_override = m
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
@@ -1053,8 +1118,9 @@ void vertex() { pp = VERTEX.xz; }
 void fragment() {
 	float s = UV.x;
 	float u = abs(UV.y);
-	float n1 = vnoise(pp * 420.0);
-	float n2 = vnoise(pp * 260.0 + 7.0);
+	vec2 q = pp / site_scale;
+	float n1 = vnoise(q * 420.0);
+	float n2 = vnoise(q * 260.0 + 7.0);
 	float n4 = vnoise(vec2(s * 60.0, UV.y * 2.0) + 11.0);
 	// darkness: light reaching into the tract falls off with depth
 	float vis = mix(1.0, dark_floor, smoothstep(0.03, 0.85, s));
@@ -1108,7 +1174,7 @@ var _channel_task := -1
 var _channel_mat: ShaderMaterial
 var _help := 0.0                 # smoothed teammate light, 0..1
 var _help_spot := Vector2.ZERO
-const HELP_SPOT_R := 0.045       # radius of the warm pool where a teammate's beam lands
+const HELP_SPOT_R := 0.045 * SITE_SCALE   # radius of the warm pool where a teammate's beam lands
 
 
 func _exit_tree() -> void:
@@ -1127,7 +1193,7 @@ func _build_channel_geometry(mi: MeshInstance3D) -> void:
 	# 2.5 mm cells (was 1.25 mm): a quarter of the vertices and a quarter of the search area
 	# per sample. At the operator camera's distance the difference does not show, and the
 	# step now builds in a few tens of milliseconds instead of a quarter of a second.
-	var cell := 0.0025
+	var cell := 0.0025 * SITE_SCALE
 	var hw_max := 0.0
 	for w in widths:
 		hw_max = maxf(hw_max, w)
@@ -1176,8 +1242,9 @@ func _build_channel_geometry(mi: MeshInstance3D) -> void:
 			remap[k] = used
 			used += 1
 			var sv := best_s[k]
+			var gp := Vector2(origin.x + gx * cell, origin.y + gz * cell)
 			st.set_uv(Vector2(sv / length, u))
-			st.add_vertex(Vector3(origin.x + gx * cell, _surface_y(sv, u), origin.y + gz * cell))
+			st.add_vertex(Vector3(gp.x, _surface_y(sv, u, gp), gp.y))
 	for gz in nz - 1:
 		for gx in nx - 1:
 			var a0 := remap[gz * nx + gx]
@@ -1235,7 +1302,41 @@ func _build_bullet() -> void:
 	add_child(_bullet)
 
 
+## The kidney dish used to sit on the patient, which is most of why the site read as a tray of
+## geometry. It stands on an instrument tray beside them now: a world prop at real size, placed in
+## the patient body's own frame (scripts/grafting/vats.gd stands a vat on a table the same way) and
+## kept there while the work plane breathes under it. It does not have to be in frame; the slug
+## still arcs to it and still clinks.
 func _build_dish() -> void:
+	_tray = Node3D.new()
+	_tray.name = "InstrumentTray"
+	_tray.top_level = true
+	add_child(_tray)
+	var steel := StandardMaterial3D.new()
+	steel.albedo_color = Color(0.46, 0.49, 0.52)
+	steel.metallic = 0.6
+	steel.roughness = 0.35
+	var top := MeshInstance3D.new()
+	var tb := BoxMesh.new()
+	tb.size = Vector3(0.3, 0.008, 0.2)
+	top.mesh = tb
+	top.material_override = steel
+	top.position = Vector3(0, 0.004, 0)
+	_tray.add_child(top)
+	for e in [[Vector3(0.146, 0.012, 0.0), Vector3(0.008, 0.024, 0.2)], [Vector3(-0.146, 0.012, 0.0), Vector3(0.008, 0.024, 0.2)],
+			[Vector3(0.0, 0.012, 0.096), Vector3(0.3, 0.024, 0.008)], [Vector3(0.0, 0.012, -0.096), Vector3(0.3, 0.024, 0.008)]]:
+		var lip := MeshInstance3D.new()
+		var lb := BoxMesh.new()
+		lb.size = e[1]
+		lip.mesh = lb
+		lip.material_override = steel
+		lip.position = e[0]
+		_tray.add_child(lip)
+	_build_kidney_dish(_tray)
+	_place_tray()
+
+
+func _build_kidney_dish(parent: Node3D) -> void:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var a := 0.052
@@ -1268,9 +1369,31 @@ func _build_dish() -> void:
 	m.roughness = 0.28
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mi.material_override = m
-	mi.position = Vector3(dish_pos.x, DISH_Y, dish_pos.y)
-	mi.rotation.y = PI * 0.5 if bbox.size.y > 0.2 else 0.0
-	add_child(mi)
+	mi.position = Vector3(0.0, 0.008, 0.0)
+	parent.add_child(mi)
+
+
+## The tray stands on the table's steel beside the patient. Its place is in the body's frame, so
+## it holds still while the site plane breathes and stirs under it; with no body (the headless
+## self-test) it sits off the end of the wound on the plane instead.
+func _place_tray() -> void:
+	if _tray == null or not is_inside_tree():
+		return
+	var body = ctx.get("body")
+	if body != null and is_instance_valid(body) and body is Node3D:
+		var at: Transform3D = (body as Node3D).global_transform.orthonormalized()
+		_tray.global_transform = Transform3D(at.basis, at * TRAY_OFFSET)
+	else:
+		_tray.top_level = false
+		_tray.transform = Transform3D(Basis(), Vector3(bbox.end.x + 0.2, -0.05, 0.0))
+
+
+## Where the slug comes to rest in the dish, in this node's own frame.
+func _dish_rest_local() -> Vector3:
+	if _tray == null:
+		return plane_to_local(Vector2(bbox.end.x + 0.2, 0.0), 0.0)
+	var world: Vector3 = _tray.global_transform * (Vector3(0, 0.012 + BULLET_R * 0.8, 0) + _dish_jitter)
+	return global_transform.affine_inverse() * world
 
 
 func _build_forceps() -> void:
@@ -1290,12 +1413,14 @@ func _build_forceps() -> void:
 	_tool.add_child(pitched)
 	for side in [-1.0, 1.0]:
 		var arm := Node3D.new()
-		arm.position = Vector3(ARM_LEN, 0, side * 0.0034)
+		arm.position = Vector3(ARM_LEN, 0, side * 0.0034 * SITE_SCALE)
 		pitched.add_child(arm)
 		# tapered blade from the joint (x = 0) to the tip (x = -ARM_LEN)
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
-		var prof := [[0.0, 0.0034, 0.0019], [-0.07, 0.0030, 0.0017], [-0.105, 0.0016, 0.0014], [-ARM_LEN + 0.004, 0.0009, 0.0012], [-ARM_LEN, 0.0007, 0.0011]]
+		var prof := [[0.0, 0.0034 * SITE_SCALE, 0.0019 * SITE_SCALE], [-0.07 * SITE_SCALE, 0.0030 * SITE_SCALE, 0.0017 * SITE_SCALE],
+			[-0.105 * SITE_SCALE, 0.0016 * SITE_SCALE, 0.0014 * SITE_SCALE], [-ARM_LEN + 0.004 * SITE_SCALE, 0.0009 * SITE_SCALE, 0.0012 * SITE_SCALE],
+			[-ARM_LEN, 0.0007 * SITE_SCALE, 0.0011 * SITE_SCALE]]
 		var verts: Array[Vector3] = []
 		for pr in prof:
 			var x: float = pr[0]
@@ -1323,26 +1448,26 @@ func _build_forceps() -> void:
 		for g in 7:
 			var ridge := MeshInstance3D.new()
 			var bm := BoxMesh.new()
-			bm.size = Vector3(0.0022, 0.0006, 0.0058)
+			bm.size = Vector3(0.0022, 0.0006, 0.0058) * SITE_SCALE
 			ridge.mesh = bm
 			ridge.material_override = grip
-			ridge.position = Vector3(-0.022 - g * 0.0055, 0.0019, 0)
+			ridge.position = Vector3(-0.022 - g * 0.0055, 0.0019, 0) * SITE_SCALE
 			arm.add_child(ridge)
 		# inward-bent jaw teeth at the tip
 		var tooth := MeshInstance3D.new()
 		var tb := BoxMesh.new()
-		tb.size = Vector3(0.005, 0.0022, 0.0016)
+		tb.size = Vector3(0.005, 0.0022, 0.0016) * SITE_SCALE
 		tooth.mesh = tb
 		tooth.material_override = steel
-		tooth.position = Vector3(-ARM_LEN + 0.0025, -0.0004, -side * 0.0008)
+		tooth.position = Vector3(-ARM_LEN + 0.0025 * SITE_SCALE, -0.0004 * SITE_SCALE, -side * 0.0008 * SITE_SCALE)
 		arm.add_child(tooth)
 		_arms.append(arm)
 	var joint := MeshInstance3D.new()
 	var jb := BoxMesh.new()
-	jb.size = Vector3(0.009, 0.004, 0.0078)
+	jb.size = Vector3(0.009, 0.004, 0.0078) * SITE_SCALE
 	joint.mesh = jb
 	joint.material_override = steel
-	joint.position = Vector3(ARM_LEN + 0.005, 0, 0)
+	joint.position = Vector3(ARM_LEN + 0.005 * SITE_SCALE, 0, 0)
 	pitched.add_child(joint)
 	add_child(_tool)
 
@@ -1365,13 +1490,13 @@ func tick(delta: float) -> void:
 	_vis_jaw = move_toward(_vis_jaw, _d_jaw, delta * 8.0)
 
 	# Where the tips sit: on the channel floor inside, hovering above the skin outside.
-	var target_y := LIFT + 0.028
+	var target_y := _skin_y(_vis_tip) + LIP + HOVER
 	var tip_s_vis := 0.0
 	if _d_inside and _d_stage != Stage.DONE:
 		var pr := project(_vis_tip, _vis_s)
 		_vis_s = pr.s
 		tip_s_vis = pr.s
-		target_y = _surface_y(pr.s, pr.d / maxf(hw_at(pr.s), 1e-4)) + 0.0014
+		target_y = _surface_y(pr.s, pr.d / maxf(hw_at(pr.s), 1e-4), _vis_tip) + 0.0014 * SITE_SCALE
 	else:
 		_vis_s = 0.0
 	_vis_y = lerpf(_vis_y, target_y, 1.0 - exp(-delta * 14.0))
@@ -1380,7 +1505,7 @@ func tick(delta: float) -> void:
 	var yaw := _default_yaw()
 	if _d_inside:
 		var to_mouth := pts[0] - _vis_tip
-		if to_mouth.length() > 0.012:
+		if to_mouth.length() > 0.012 * SITE_SCALE:
 			var a := atan2(-to_mouth.y, to_mouth.x)
 			yaw = lerp_angle(a, _default_yaw(), 0.8)
 	_vis_yaw = lerp_angle(_vis_yaw, yaw, 1.0 - exp(-delta * 6.0))
@@ -1393,15 +1518,15 @@ func tick(delta: float) -> void:
 	elif _d_hits < _seen_hits:
 		_seen_hits = _d_hits
 	_shake = maxf(_shake - delta * 4.0, 0.0)
-	var jitter := Vector3(_vrng.randf_range(-1, 1), _vrng.randf_range(0, 1) * 0.3, _vrng.randf_range(-1, 1)) * _shake * 0.0022
+	var jitter := Vector3(_vrng.randf_range(-1, 1), _vrng.randf_range(0, 1) * 0.3, _vrng.randf_range(-1, 1)) * _shake * 0.0022 * SITE_SCALE
 
 	_tool.position = plane_to_local(_vis_tip, _vis_y) + jitter
 	_tool.basis = Basis(Vector3.UP, _vis_yaw)
-	var spread := lerpf(0.0062, 0.0006, _vis_jaw)
+	var spread := lerpf(0.0062, 0.0006, _vis_jaw) * SITE_SCALE
 	for i in _arms.size():
 		var side := -1.0 if i == 0 else 1.0
 		# the arm pivots at the joint; aim its tip at +-spread across the shaft
-		var dz := side * spread - side * 0.0034
+		var dz := side * spread - side * 0.0034 * SITE_SCALE
 		_arms[i].basis = Basis(Vector3.UP, -atan2(dz, ARM_LEN))
 
 	# Sounds from the displayed state, so spectators hear the same thing.
@@ -1410,29 +1535,30 @@ func tick(delta: float) -> void:
 		_sfx("surgery_forceps_click", -4.0 if _d_gripped else -9.0)
 	_was_closed = closed
 	_squelch_cd -= delta
-	if _d_inside and _squelch_cd <= 0.0 and _vis_tip.distance_to(_squelch_from) > 0.005:
-		_sfx("surgery_forceps_squelch", -12.0 + clampf(_vis_tip.distance_to(_squelch_from) * 900.0, 0.0, 8.0), 0.12)
+	if _d_inside and _squelch_cd <= 0.0 and _vis_tip.distance_to(_squelch_from) > 0.005 * SITE_SCALE:
+		_sfx("surgery_forceps_squelch", -12.0 + clampf(_vis_tip.distance_to(_squelch_from) * 900.0 / SITE_SCALE, 0.0, 8.0), 0.12)
 		_squelch_from = _vis_tip
 		_squelch_cd = 0.3
 	if not _d_inside:
 		_squelch_from = _vis_tip
 
-	# Bullet: in the jaws, lying in the channel, or flying to the dish.
+	# Bullet: in the jaws, lying in the channel, or arcing across to the dish on the tray.
 	var depth_vis := 1.0
 	if _d_stage == Stage.DONE:
 		if _done_anim < 0.0:
 			_done_anim = 0.0
 		_done_anim += delta
 		var t := clampf(_done_anim / 0.55, 0.0, 1.0)
-		var from := pts[0]
-		var p2 := from.lerp(_dish_rest, t)
-		var y := lerpf(LIFT + 0.02, DISH_Y + 0.003 + BULLET_R * 0.8, t) + sin(t * PI) * 0.06
+		var from := plane_to_local(pts[0], _skin_y(pts[0]) + LIP + 0.02 * SITE_SCALE)
+		_dish_rest = _dish_rest_local()
+		var at := from.lerp(_dish_rest, t)
+		at.y += sin(t * PI) * 0.09   # a real toss across the room, not a hop inside the wound
 		if t >= 1.0:
-			y = DISH_Y + 0.003 + BULLET_R * 0.8
+			at = _dish_rest
 			if not _clinked:
 				_clinked = true
 				_sfx("surgery_forceps_clink", -2.0)
-		_bullet.position = plane_to_local(p2, y)
+		_bullet.position = at
 		_bullet.rotation = Vector3(0, _done_anim * (0.0 if t >= 1.0 else 9.0) + 0.6, 0)
 	elif _d_gripped:
 		_bullet.position = _tool.position + Vector3(0, BULLET_R * 0.6, 0)
@@ -1442,7 +1568,7 @@ func tick(delta: float) -> void:
 		var bs := _d_bullet_s
 		var bp := point_at(bs)
 		var tg := tangent_at(bs)
-		_bullet.position = plane_to_local(bp, _surface_y(bs, 0.0) + BULLET_R * 0.55)
+		_bullet.position = plane_to_local(bp, _surface_y(bs, 0.0, bp) + BULLET_R * 0.55)
 		_bullet.basis = Basis(Vector3.UP, atan2(tg.y, -tg.x))
 		depth_vis = _vis_dark(bs)
 	depth_vis = lerpf(depth_vis, 1.0, _help_lift(_bullet.position))
@@ -1458,9 +1584,11 @@ func tick(delta: float) -> void:
 		body.set_bleeding("gunshot", _bleed)
 		_bleed_sent = _bleed
 		_bleed_cd = 0.2
+	_place_tray()
 	_tick_cues(delta)
 	_tick_droplets(delta)
 	_tick_helper(delta)
+	_tick_skin()
 
 
 func _tick_cues(delta: float) -> void:
@@ -1474,9 +1602,9 @@ func _tick_cues(delta: float) -> void:
 		var pr := project(_vis_tip, _vis_s)
 		var hw := hw_at(pr.s)
 		var at: Vector2 = pr.centre + pr.dir * hw * 0.95
-		_press.position = plane_to_local(at, _surface_y(pr.s, 0.95) + 0.0015)
-		var r := 0.003 + 0.006 * _press_vis
-		_press.scale = Vector3(r, 0.0006, r)
+		_press.position = plane_to_local(at, _surface_y(pr.s, 0.95, at) + 0.0015 * SITE_SCALE)
+		var r := (0.003 + 0.006 * _press_vis) * SITE_SCALE
+		_press.scale = Vector3(r, 0.0006 * SITE_SCALE, r)
 		var c := Color(1.0, 0.45, 0.4).lerp(Color(0.95, 0.02, 0.02), _press_vis)
 		c.a = clampf(0.3 + 0.6 * _press_vis, 0.0, 0.9)
 		_press_mat.albedo_color = c
@@ -1485,21 +1613,21 @@ func _tick_cues(delta: float) -> void:
 	_glint.visible = show_glint
 	if show_glint:
 		var bp := point_at(_d_bullet_s)
-		_glint.position = plane_to_local(bp, _surface_y(_d_bullet_s, 0.0) + BULLET_R * 1.4)
+		_glint.position = plane_to_local(bp, _surface_y(_d_bullet_s, 0.0, bp) + BULLET_R * 1.4)
 		if _d_stage == Stage.AT_BULLET:
-			var s := 0.0085 + 0.0006 * sin(_cue_t * 8.0)
+			var s := (0.0085 + 0.0006 * sin(_cue_t * 8.0)) * SITE_SCALE
 			_glint.scale = Vector3(s, s * 0.3, s)
 			_glint_mat.albedo_color = Color(0.25, 1.0, 0.45, 0.9)
 		else:
 			var beat := fmod(_cue_t * 0.9, 1.0)
-			var s2 := 0.005 + 0.006 * beat
+			var s2 := (0.005 + 0.006 * beat) * SITE_SCALE
 			_glint.scale = Vector3(s2, s2 * 0.3, s2)
 			_glint_mat.albedo_color = Color(1.0, 0.93, 0.75, 0.7 * (1.0 - beat))
 	# While the slug is held, the opening glows green: bring it here.
 	_mouth.visible = _d_gripped and _d_stage != Stage.DONE
 	if _mouth.visible:
 		var m := hw_at(0.0) * (1.35 + 0.15 * sin(_cue_t * 5.0))
-		_mouth.position = plane_to_local(pts[0], LIFT + 0.002)
+		_mouth.position = plane_to_local(pts[0], _skin_y(pts[0]) + LIP + 0.002 * SITE_SCALE)
 		_mouth.scale = Vector3(m, m * 0.3, m)
 		_mouth_mat.albedo_color = Color(0.25, 1.0, 0.45, 0.55 + 0.25 * sin(_cue_t * 5.0))
 
@@ -1515,6 +1643,27 @@ func _tick_helper(delta: float) -> void:
 	if _channel_mat != null:
 		_channel_mat.set_shader_parameter("helper", _help)
 		_channel_mat.set_shader_parameter("helper_spot", _help_spot)
+
+
+## The patient's tone moves with their vitals (pallor, then grey): keep the wound's own skin with
+## it, or the patch drifts flushed against a fading body.
+func _tick_skin() -> void:
+	var want := _skin_color()
+	if want.is_equal_approx(_skin_sent):
+		return
+	_skin_sent = want
+	if _channel_mat != null:
+		_channel_mat.set_shader_parameter("skin_color", want)
+	if _skin_mat != null:
+		_skin_mat.set_shader_parameter("skin_color", want)
+
+
+## The gown comes back when nobody is operating, and is cleared again when someone does.
+func on_shown(on: bool) -> void:
+	if _brain_game != null or not _built:
+		return
+	if on:
+		_expose_body(bbox.get_center(), _patch_r * GOWN_WINDOW)
 
 
 ## The shader's lift at a local position (for the bullet's own darkening).
@@ -1536,7 +1685,7 @@ func _on_hit(at: Vector2) -> void:
 	var body = ctx.get("body")
 	if body != null and is_instance_valid(body) and body.has_method("stir"):
 		body.stir(0.35)
-	var origin := plane_to_local(at, _vis_y + 0.002)
+	var origin := plane_to_local(at, _vis_y + 0.002 * SITE_SCALE)
 	for i in 7:
 		var mi := MeshInstance3D.new()
 		mi.mesh = _drop_mesh
@@ -1544,8 +1693,8 @@ func _on_hit(at: Vector2) -> void:
 		mi.position = origin
 		mi.layers = VIS_LAYER
 		add_child(mi)
-		var dir := Vector2.from_angle(_vrng.randf() * TAU) * _vrng.randf_range(0.08, 0.3)
-		_drops_nodes.append({"node": mi, "vel": Vector3(dir.x, _vrng.randf_range(0.25, 0.55), dir.y)})
+		var dir := Vector2.from_angle(_vrng.randf() * TAU) * _vrng.randf_range(0.08, 0.3) * SITE_SCALE
+		_drops_nodes.append({"node": mi, "vel": Vector3(dir.x, _vrng.randf_range(0.25, 0.55) * SITE_SCALE, dir.y)})
 
 
 func _tick_droplets(delta: float) -> void:
@@ -1553,12 +1702,12 @@ func _tick_droplets(delta: float) -> void:
 	for d in _drops_nodes:
 		var mi: MeshInstance3D = d.node
 		var v: Vector3 = d.vel
-		v.y -= 9.8 * delta
+		v.y -= 9.8 * SITE_SCALE * delta   # scaled with the rest, so the spray arcs as it used to on screen
 		mi.position += v * delta
 		d.vel = v
 		var p2 := Vector2(mi.position.x, mi.position.z)
 		var pr := project(p2, _vis_s)
-		var ground := _surface_y(pr.s, pr.d / maxf(hw_at(pr.s), 1e-4)) + 0.0003 if pr.d < hw_at(pr.s) * (RIM + 1.0) else PATCH_Y
+		var ground := _surface_y(pr.s, pr.d / maxf(hw_at(pr.s), 1e-4), p2) + 0.0003 * SITE_SCALE if pr.d < hw_at(pr.s) * (RIM + 1.0) else _skin_y(p2)
 		if v.y < 0.0 and mi.position.y <= ground:
 			mi.queue_free()
 			_add_splat(Vector3(mi.position.x, ground, mi.position.z))
@@ -1571,10 +1720,10 @@ func _add_splat(at: Vector3) -> void:
 	var s := MeshInstance3D.new()
 	s.mesh = _splat_mesh
 	s.material_override = _splat_mat
-	var r := _vrng.randf_range(0.0012, 0.0035)
-	s.scale = Vector3(r * _vrng.randf_range(1.0, 1.8), 0.0004, r)
+	var r := _vrng.randf_range(0.0012, 0.0035) * SITE_SCALE
+	s.scale = Vector3(r * _vrng.randf_range(1.0, 1.8), 0.0004 * SITE_SCALE, r)
 	s.rotation.y = _vrng.randf() * TAU
-	s.position = at + Vector3(0, 0.0002, 0)
+	s.position = at + Vector3(0, 0.0002 * SITE_SCALE, 0)
 	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	s.layers = VIS_LAYER
 	add_child(s)
@@ -1592,7 +1741,7 @@ func _sfx(cue: String, vol_db := 0.0, jitter := 0.05) -> void:
 		return
 	var at = null
 	if is_inside_tree():
-		at = global_transform * plane_to_local(_vis_tip, LIFT)
+		at = global_transform * plane_to_local(_vis_tip, _skin_y(_vis_tip) + LIP)
 	a.play(cue, at, vol_db, jitter)
 
 
@@ -1638,7 +1787,7 @@ static func self_test(parent: Node, count: int = 20) -> Dictionary:
 				if m[2]:
 					jolt_t -= dt
 					if jolt_t <= 0.0 and rng.randf() < dt / 4.0:
-						jolt = Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(0.02, 0.04)
+						jolt = Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(0.02, 0.04) * SITE_SCALE
 						jolt_t = 0.2
 						g.on_jolt(jolt, 0.6, 0.2)
 					if jolt_t <= 0.0:

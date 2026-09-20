@@ -151,12 +151,22 @@ func make_severed_limb(parent: Node) -> Node3D:
 ## A surgery step works on bare skin here: the builder clears the patient's clothing (Bob's gown)
 ## inside the ellipse at `centre` with `radii` (metres on the site plane: site X, Z) until cover_site.
 ## Every machine showing the step calls it; bodies without clothing ignore it.
+## The body also hands the step its own overlays at that site (SITE_PARTS): the step paints the
+## wound itself, flush on the skin, and two wounds in one place read as neither.
 func expose_site(site: String, centre: Vector2, radii: Vector2) -> void:
 	exposure = {"site": site, "centre": centre, "radii": radii}
+	_apply_visuals()
 
 
 func cover_site() -> void:
+	if exposure.is_empty():
+		return
 	exposure = {}
+	_apply_visuals()
+
+
+## Which of `parts` a step takes over while its site is exposed.
+const SITE_PARTS := {"gunshot": ["wound", "dress_wound"]}
 
 
 func set_vitals(v: float) -> void:
@@ -222,12 +232,13 @@ func _apply_visuals() -> void:
 	var tq := float(_flags.get("tourniquet", 0.0)) if not (_flags.get("tourniquet") is bool) else (1.0 if _flags["tourniquet"] else 0.0)
 	var amputated := _flag("amputated") or (amputation and dressed)
 
+	var taken: Array = SITE_PARTS.get(String(exposure.get("site", "")), [])
 	var wound: Dictionary = parts.get("wound", {})
 	if not wound.is_empty():
-		wound.root.visible = gunshot and not dressed
+		wound.root.visible = gunshot and not dressed and not taken.has("wound")
 		wound.bullet.visible = not removed
 		wound.emptied.visible = removed
-	_vis("dress_wound", gunshot and dressed)
+	_vis("dress_wound", gunshot and dressed and not taken.has("dress_wound"))
 	_vis("tourniquet", tq > 0.0)
 	var t: Node3D = parts.get("tourniquet")
 	if t != null:
