@@ -66,12 +66,23 @@ add("gauze", "Gauze", "surgery", { count: "x2", body: `
 <path d="M104 76 L104 194" stroke="#5aa0e0" stroke-width="9"/><path d="M128 196 L128 228" stroke="#5aa0e0" stroke-width="6"/>` });
 
 add("suture_kit", "Suture kit", "surgery", { count: "x2", body: `
-${line("M70 150 A62 62 0 1 1 186 118", STEEL, 14)}
-<path d="M72 146 A58 58 0 0 1 104 76" fill="none" stroke="${STEEL_HI}" stroke-width="5"/>
-<path d="M186 118 L194 100 L176 108 Z" fill="${STEEL}" stroke="${O}" stroke-width="6"/>
-<ellipse cx="70" cy="150" rx="6" ry="9" fill="#0b1416"/>
-<path d="M68 162 Q56 196 92 200 Q128 204 122 176 Q116 150 150 164 Q180 178 170 212" fill="none" stroke="${O}" stroke-width="14"/>
-<path d="M68 162 Q56 196 92 200 Q128 204 122 176 Q116 150 150 164 Q180 178 170 212" fill="none" stroke="${BLUE}" stroke-width="6"/>` });
+<g transform="rotate(-14 128 128)">
+<rect x="26" y="78" width="204" height="104" rx="14" fill="${WHITE}" stroke="${O}" stroke-width="9"/>
+<path d="M30 82 L30 178" stroke="${O}" stroke-width="0"/>
+<rect x="26" y="78" width="40" height="104" rx="14" fill="${BLUE}" stroke="${O}" stroke-width="9"/>
+<rect x="78" y="90" width="142" height="80" rx="12" fill="${PALE}" fill-opacity="0.55" stroke="${O}" stroke-width="7"/>
+<path d="M136 152 A30 30 0 1 1 186 120" fill="none" stroke="${O}" stroke-width="20"/>
+<path d="M136 152 A30 30 0 1 1 186 120" fill="none" stroke="${STEEL}" stroke-width="10"/>
+<path d="M186 120 L198 108 L182 112 Z" fill="${STEEL_HI}" stroke="${O}" stroke-width="5"/>
+<circle cx="110" cy="128" r="18" fill="none" stroke="${O}" stroke-width="20"/>
+<circle cx="110" cy="128" r="18" fill="none" stroke="#2a2733" stroke-width="10"/>
+<path d="M124 134 Q132 146 136 152" fill="none" stroke="#2a2733" stroke-width="7"/>
+<path d="M86 108 L150 108" stroke="${O}" stroke-width="17"/><path d="M86 108 L150 108" stroke="${STEEL}" stroke-width="8"/>
+<circle cx="86" cy="108" r="11" fill="none" stroke="${O}" stroke-width="13"/>
+<circle cx="86" cy="108" r="11" fill="none" stroke="${STEEL}" stroke-width="6"/>
+<path d="M150 108 L166 104" stroke="${O}" stroke-width="13"/><path d="M150 108 L166 104" stroke="${STEEL_HI}" stroke-width="6"/>
+<path d="M40 96 L40 164" stroke="#8fb9ea" stroke-width="6"/>
+</g>` });
 
 add("forceps", "Forceps", "surgery", { body: `
 <g transform="translate(-6 0)">

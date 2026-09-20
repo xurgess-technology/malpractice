@@ -28,6 +28,8 @@ const SETUPS := {
 	# 2026-09-19: both eye procedures at once -- a Hive strapped to one table with an empty vat on
 	# it (Eyeball Extraction), and you strapped to another with a Hive's eye in its vat (Grafting).
 	"eyes": {"seed": 4242, "stage": "_eyes"},
+	# PANEL TESTBED (docs/PANEL_STYLE.md): a deep laceration on the table, a suture kit in hand.
+	"panel": {"seed": 4242, "stage": "_panel"},
 }
 
 
@@ -188,6 +190,25 @@ static func _items(game: Game) -> void:
 		floor_item(game, row[i], base + out * 2.0 + side * (float(i) - 2.0) * 0.55, 1, 100)
 	print("[review] items: standing among %d loot stacks; trinkets on the floor ahead, an EpiPen in hand" % best_n)
 
+
+
+## PANEL (docs/PANEL_STYLE.md): Bob is on the first table with a deep laceration, already sedated,
+## and you are standing over him with a suture kit in hand. Look at the wound from standing height
+## first -- there should be nothing on him but the cut -- then aim at the table and press E: the
+## panel pops in over the wound and you stitch on it. Press and hold left mouse where the needle
+## goes in, drag across the gash, let go. E again steps back and the panel goes with you.
+static func _panel(game: Game) -> void:
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	game.add_case({"patient_id": "bob", "ailment_id": "laceration", "table": table, "state": "on_table"})
+	var t: Vector3 = game.table_position(table)
+	place(game, t + Vector3(0.0, 0, 1.15), t + Vector3(0, 1.05, 0))
+	clear_hands(game)
+	give(game, "suture_kit", 2)
+	game.local_player().selected = 0
+	game.stock_storage("suture_kit", 2)
+	print("[review] panel: a deep laceration on table %d, suture kits in hand" % table)
 
 
 ## GRAFT (docs/GRAFTING.md, chunk C): you are strapped to a free OR table with a vat holding a

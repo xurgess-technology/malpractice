@@ -1948,3 +1948,39 @@ Rebuilt around that:
 - Ruled out (A/B, same pose): the crematorium's brick and junk, its fixture, bloom, SSIL, the
   furnace's spot light and its fog energy. Not yet tested: the aim highlight (`aim_highlight.gd`,
   the crosshair was on something in every bad shot), and the glass material itself.
+
+## Panel surgery testbed and the deep laceration (2026-09-20, open)
+
+The panel presentation and its one step ([docs/PANEL_STYLE.md](PANEL_STYLE.md)). It is a testbed:
+`laceration` is `test_only`, so a shift never rolls one. Everything here is open by design until
+Zach has played it.
+
+- **`laceration` borrows the `gunshot` site marker.** No new markers were added, so the deep cut
+  sits exactly where the bullet wound would. It wants a generic torso site (`torso`? `trunk`?) that
+  every patient body places, and `gunshot` should then become one of several things that happen
+  there. Doing that means touching every builder (`bob_model_builder`, `seal_model_builder`,
+  `bob_builder`, `seal_builder`, `dummy_builder`, `monster_builder`) and `Procedures.SITES`.
+- **The body's cut and the panel's gash are different shapes.** The panel generates its gash from
+  the case seed; `PatientKit.make_laceration` draws its own from `hash("laceration|<patient>")`, so
+  the bend on the patient does not match the bend on the diagram. Nobody compares them millimetre
+  for millimetre, but they could share a seed.
+- **The body overlay floats 7 mm off the site** (`PatientKit.LAC_LIFT`). An 8 cm cut laid flat on
+  the site plane sinks into a rounded belly at its ends and only the middle shows. The lift is a
+  blunt fix: on a flatter patient it will read as hovering. A proper fix follows the local surface.
+- **`test_only` needed a second ailment list.** `Procedures.patient_ailments()` is what a shift
+  rolls and what three tests assert on exactly (`dissectiontest`, `downedtest`, `grafttest`), so
+  the dev panel and the warmup use the new `dev_ailments()` instead, which adds the test-only ones.
+  If test-only procedures become a normal thing, those tests want revisiting.
+- **The seep rate is tuned against the bot, not a person.** `suture.gd`'s `seep_rate` (0.095) was
+  set so the self-test can show that closing the widest stretch first costs about one gush less
+  than going end to end. A slow first-timer taking 40 s eats several gushes; that may be too
+  punishing, and it is one export away from not being.
+- **The self-test's order check is on the total across six seeds, not per seed.** On a wound whose
+  widest stretch happens to sit near the near end, the two orders are almost the same run, and the
+  difference is noise. That is a property of the wound, not a bug, but it means the assertion
+  cannot be per-seed.
+- **No sounds of the panel's own.** `open_sound` / `close_sound` are empty `AudioStream` exports.
+  The step reuses `downed_stitch`, `downed_tug`, `surgery_tear`, `surgery_tourniquet_cinch` and
+  `surgery_done`; nothing was added to `tools/gen_audio.mjs`.
+- **A panel is one more SubViewport per operating table.** It renders only while open, at the frame
+  rate, 1200x800. Two tables operating at once is two of them. Not measured.

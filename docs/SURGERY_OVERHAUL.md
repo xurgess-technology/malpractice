@@ -1,5 +1,10 @@
 # The surgery overhaul
 
+> **2026-09-20: nothing here has been started.** A separate panel testbed
+> ([PANEL_STYLE.md](PANEL_STYLE.md)) now exists on `main`: a flat 2D diagram that pops in over the
+> wound and is played instead of a board laid on the patient, proved out on a new one-step
+> procedure. The phase 3 decisions below are pending Zach's evaluation of it.
+
 Brief for the orchestrator. Agreed with Zach on 2026-09-18 (theory session). This is big, so it
 comes in phases. This file has the overview, the decisions, and detailed briefs for **phases 0
 and 1**. Phases 2 to 5 get their own detailed briefs once 0 and 1 are in and Zach has played them;

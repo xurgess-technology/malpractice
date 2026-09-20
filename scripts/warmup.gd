@@ -341,6 +341,11 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 					"no_fail": true, "eye_kind": "eye_surgeon", "eye_kind_in": "eye_hive",
 					"eye_radius": Grafts.EYE_RADIUS,
 				})
+				# PANEL TESTBED: a panel step only builds its diagram once the panel opens, which
+				# happens on the first tick. One tick here compiles the panel shader and draws the
+				# first SubViewport frame behind the launch printout.
+				if mg.has_method("uses_panel") and bool(mg.uses_panel()):
+					mg.tick(1.0 / 60.0)
 				games.append(mg)
 				await _slice(slice)
 

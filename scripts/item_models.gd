@@ -607,39 +607,67 @@ static func _eye_spoon(root: Node3D) -> void:
 	_add(root, bowl, Vector3(0.085, 0.008, 0))
 
 
-## downed (sweep 2 wave 3): sterile suture packs, a stack of flat peel pouches. Each shows the curved
-## needle and a coil of dark thread through its clear window.
+## Sterile suture packs: a white paper peel-pack with a translucent blue blister over it, and the
+## kit laid out inside where you can see it -- a curved needle, a coil of thread and the needle
+## driver that holds the needle. A stack of N is N packs laid on each other, contents on the top
+## one (the rest are edge-on anyway).
+## PANEL TESTBED: redrawn from the old flat pouch so what the `suture` step uses is recognisable in
+## the hand before you get to the table.
 static func _suture_kits(root: Node3D, n: int) -> void:
-	var paper := _mat(Color(0.93, 0.94, 0.95), 0.85)
-	var band := _mat(Color(0.2, 0.45, 0.75), 0.6)
-	var window := _mat(Color(0.8, 0.88, 0.92), 0.2)
-	var steel := _mat(Color(0.82, 0.85, 0.88), 0.3, 0.5)
-	var thread := _mat(Color(0.12, 0.1, 0.18), 0.7)
+	var paper := _mat(Color(0.94, 0.95, 0.96), 0.85)
+	var band := _mat(Color(0.17, 0.42, 0.72), 0.55)
+	var blister := _glass(Color(0.52, 0.76, 0.93))
+	var steel := _mat(Color(0.84, 0.88, 0.91), 0.25, 0.6)
+	var thread := _mat(Color(0.14, 0.13, 0.2), 0.75)
 	for i in n:
 		var pack := Node3D.new()
-		var y := 0.006 + i * 0.013
-		_add(pack, _box(Vector3(0.14, 0.012, 0.095), Color.WHITE), Vector3.ZERO).material_override = paper
-		_add(pack, _box(Vector3(0.022, 0.0125, 0.096), Color.WHITE), Vector3(-0.055, 0, 0)).material_override = band
-		_add(pack, _box(Vector3(0.075, 0.0128, 0.06), Color.WHITE), Vector3(0.018, 0, 0)).material_override = window
+		var y := 0.005 + i * 0.012
+		_add(pack, _box(Vector3(0.145, 0.009, 0.092), Color.WHITE), Vector3.ZERO).material_override = paper
+		# The peel tab at one end, and the sterile stripe across the paper.
+		_add(pack, _box(Vector3(0.026, 0.0095, 0.093), Color.WHITE), Vector3(-0.0595, 0, 0)).material_override = band
+		_add(pack, _box(Vector3(0.112, 0.0098, 0.006), Color.WHITE), Vector3(0.014, 0, -0.038)).material_override = band
 		if i == n - 1:
+			# The curved needle, nose down toward the tab.
 			var needle := MeshInstance3D.new()
 			var t := TorusMesh.new()
-			t.inner_radius = 0.016
-			t.outer_radius = 0.0185
-			t.rings = 12
+			t.inner_radius = 0.0145
+			t.outer_radius = 0.0175
+			t.rings = 14
 			t.ring_segments = 4
 			needle.mesh = t
 			needle.material_override = steel
-			_add(pack, needle, Vector3(0.012, 0.0075, 0.004)).scale = Vector3(1, 0.3, 1)
+			_add(pack, needle, Vector3(-0.012, 0.0095, -0.018)).scale = Vector3(1, 0.22, 1)
+			# The coil of thread beside it.
 			var coil := MeshInstance3D.new()
 			var ct := TorusMesh.new()
 			ct.inner_radius = 0.008
-			ct.outer_radius = 0.011
-			ct.rings = 10
+			ct.outer_radius = 0.0125
+			ct.rings = 12
 			ct.ring_segments = 4
 			coil.mesh = ct
 			coil.material_override = thread
-			_add(pack, coil, Vector3(0.035, 0.0072, -0.012)).scale = Vector3(1, 0.25, 1)
+			_add(pack, coil, Vector3(0.042, 0.0093, -0.017)).scale = Vector3(1, 0.22, 1)
+			# A run of thread from the coil to the needle's eye.
+			_add(pack, _box(Vector3(0.042, 0.0014, 0.0014), Color.WHITE), Vector3(0.014, 0.0095, -0.026)).material_override = thread
+			# The needle driver, lying along the pack: two crossed arms, ring handles and short jaws.
+			var driver := Node3D.new()
+			_add(pack, driver, Vector3(0.006, 0.0095, 0.021))
+			for side in [-1.0, 1.0]:
+				_add(driver, _box(Vector3(0.058, 0.0035, 0.0035), Color.WHITE),
+					Vector3(-0.014, 0.0, side * 0.005), Vector3(0, side * 6.0, 0)).material_override = steel
+				var ring := MeshInstance3D.new()
+				var rt := TorusMesh.new()
+				rt.inner_radius = 0.005
+				rt.outer_radius = 0.0075
+				rt.rings = 10
+				rt.ring_segments = 4
+				ring.mesh = rt
+				ring.material_override = steel
+				_add(driver, ring, Vector3(-0.048, 0.0, side * 0.009)).scale = Vector3(1, 0.3, 1)
+			_add(driver, _box(Vector3(0.028, 0.004, 0.004), Color.WHITE), Vector3(0.028, 0, 0)).material_override = steel
+			_add(driver, _box(Vector3(0.007, 0.006, 0.009), Color.WHITE), Vector3(0.012, 0, 0)).material_override = steel
+			# The blister goes on last: everything above shows through it.
+			_add(pack, _box(Vector3(0.108, 0.013, 0.07), Color.WHITE), Vector3(0.014, 0.0095, 0)).material_override = blister
 		_add(root, pack, Vector3(i * 0.004, y, i * 0.003), Vector3(0, (i * 11) % 14 - 7, 0))
 
 

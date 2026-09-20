@@ -222,6 +222,76 @@ static func make_wound(parent: Node3D, radius: float) -> Dictionary:
 	return {"root": root, "bullet": bullet, "emptied": empty}
 
 
+## PANEL TESTBED (docs/PANEL_STYLE.md): the deep laceration the `suture` step closes. Built at a
+## site frame, running along the site's +X, about 8 cm end to end with a gentle seeded bend.
+##
+##   marks == ""   the open cut: a dark gap with raw lips, gaping wider in the middle stretches.
+##   marks != ""   closed, with one stitch per character -- "g" straight and even, "s" crooked,
+##                 with seeded jitter. Bad work is visibly bad on the patient walking out.
+##
+## The panel's own gash is generated from the case seed and will not match this one bend for bend;
+## it does not have to. This is the scar, not the diagram.
+const LAC_LEN := 0.078
+const LAC_BEND := 0.005
+## The site origin sits on a rounded belly; a cut this long sinks into the skin at its ends unless
+## the whole overlay is floated a few millimetres clear of it.
+const LAC_LIFT := 0.007
+
+static func make_laceration(parent: Node3D, marks: String, seed_v: int) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Laceration"
+	parent.add_child(root)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var phase := rng.randf() * TAU
+	var lip := mat("lac_lip", Color(0.55, 0.12, 0.13), 0.75)
+	var dark := mat("lac_dark", Color(0.10, 0.015, 0.02), 0.9)
+	var thread := mat("lac_thread", Color(0.13, 0.12, 0.16), 0.7)
+	var closed := marks != ""
+	var segs := 18
+	var pts: Array[Vector3] = []
+	for i in segs + 1:
+		var t := float(i) / float(segs)
+		var z: float = sin(t * PI * 1.7 + phase) * LAC_BEND
+		pts.append(Vector3(lerpf(-LAC_LEN * 0.5, LAC_LEN * 0.5, t), 0.0, z))
+	# The cut itself: short flat slabs following the line, wide and dark while it is open, a thin
+	# seam once it is stitched.
+	for i in segs:
+		var a: Vector3 = pts[i]
+		var b: Vector3 = pts[i + 1]
+		var t := (float(i) + 0.5) / float(segs)
+		var taper: float = sin(t * PI)
+		var w: float = (0.0016 if closed else lerpf(0.0018, 0.0085, taper * taper)) + 0.0004
+		var d: Vector3 = b - a
+		var mid: Vector3 = (a + b) * 0.5
+		var yaw: float = atan2(-d.z, d.x)
+		var xf := Transform3D(Basis(Vector3.UP, yaw), mid + Vector3(0, LAC_LIFT + 0.0013, 0))
+		add_mesh(root, box(Vector3(d.length() * 1.25, 0.0022, w)), dark, xf)
+		if not closed:
+			for side: float in [-1.0, 1.0]:
+				var out := Vector3(sin(yaw), 0.0, cos(yaw)) * side * (w * 0.5 + 0.0016)
+				var lxf := Transform3D(Basis(Vector3.UP, yaw), mid + Vector3(0, LAC_LIFT, 0) + out)
+				add_mesh(root, box(Vector3(d.length() * 1.25, 0.0026, 0.0028)), lip, lxf)
+	if not closed:
+		return root
+	# One stitch per mark, evenly along the cut. A sloppy one goes in crooked and off-centre.
+	for i in marks.length():
+		var t := (float(i) + 0.5) / float(marks.length())
+		var at: Vector3 = pts[clampi(int(round(t * float(segs))), 0, segs)]
+		var sloppy := marks[i] == "s"
+		var skew: float = rng.randf_range(-0.55, 0.55) if sloppy else 0.0
+		var slip: float = rng.randf_range(-0.004, 0.004) if sloppy else 0.0
+		var length: float = 0.016 + (rng.randf_range(-0.003, 0.004) if sloppy else 0.0)
+		var xf := Transform3D(Basis(Vector3.UP, PI * 0.5 + skew), at + Vector3(slip, LAC_LIFT + 0.001, 0.0))
+		add_mesh(root, box(Vector3(length, 0.0016, 0.0016)), thread, xf)
+		# The knot, and the two little puckers the thread pulls up either side.
+		add_mesh(root, sphere(0.0013, 6, 4), thread, Transform3D(Basis(), at + Vector3(slip, LAC_LIFT + 0.0016, 0)))
+		for side in [-1.0, 1.0]:
+			add_mesh(root, box(Vector3(0.0042, 0.0016, 0.0030)), lip,
+				Transform3D(Basis(Vector3.UP, skew), at + Vector3(slip, LAC_LIFT + 0.0002, side * 0.0036)))
+	return root
+
+
 ## Black strap round an elliptical limb section (half sizes up/side), with a red windlass on top.
 ## `depth` is how far below the site origin the limb axis runs.
 static func make_tourniquet(parent: Node3D, half_up: float, half_side: float, depth: float, boxy := false) -> Node3D:

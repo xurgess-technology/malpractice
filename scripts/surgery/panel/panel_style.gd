@@ -11,9 +11,9 @@ extends Resource
 
 # -- surface ------------------------------------------------------------------------------------
 ## Near-black desaturated teal.
-@export var bg := Color(0.031, 0.059, 0.063)
+@export var bg := Color(0.042, 0.081, 0.086)
 ## A shade lighter, under the frame, so the panel reads as a lit plate and not a hole.
-@export var bg_inner := Color(0.047, 0.082, 0.086)
+@export var bg_inner := Color(0.058, 0.105, 0.111)
 @export var frame := Color(0.62, 0.93, 0.95)
 @export var frame_width := 3.0
 @export var frame_inset := 10.0
@@ -29,7 +29,7 @@ extends Resource
 ## Inside the wound: dark, so the bright outline is what the eye lands on.
 @export var blood_dark := Color(0.29, 0.045, 0.072)
 ## Blood pooling on the panel.
-@export var blood := Color(0.62, 0.09, 0.12)
+@export var blood := Color(0.40, 0.035, 0.055)
 ## Good work.
 @export var good := Color(0.38, 0.93, 0.55)
 ## Work that holds but is untidy.
@@ -52,7 +52,7 @@ extends Resource
 @export var header_size := 22
 @export var header_color := Color(0.62, 0.93, 0.95, 0.85)
 @export var header_dim := Color(0.40, 0.60, 0.63, 0.75)
-@export var header_margin := Vector2(26.0, 38.0)
+@export var header_margin := Vector2(34.0, 48.0)
 
 ## The light the panel throws on the patient and the operator's hands.
 @export var glow_light := Color(0.45, 0.88, 0.95)
@@ -79,8 +79,10 @@ func draw_chrome(c: CanvasItem, size: Vector2, header: String, right_text: Strin
 		c.draw_string(font, Vector2(header_margin.x, header_margin.y), header,
 			HORIZONTAL_ALIGNMENT_LEFT, -1.0, header_size, header_color)
 	if right_text != "":
-		c.draw_string(font, Vector2(size.x - header_margin.x, header_margin.y), right_text,
-			HORIZONTAL_ALIGNMENT_RIGHT, -1.0, header_size, header_dim)
+		# draw_string only right-aligns inside a given width, so give it the whole strip.
+		var w := size.x - header_margin.x * 2.0
+		c.draw_string(font, Vector2(header_margin.x, header_margin.y), right_text,
+			HORIZONTAL_ALIGNMENT_RIGHT, w, header_size, header_dim)
 
 
 ## A soft glow behind a line: the same line again, wider and faint, a few times over.

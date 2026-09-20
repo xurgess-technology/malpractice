@@ -32,12 +32,12 @@ enum Grade { MISS, TEAR, SLOPPY, GOOD }
 
 # -- the wound ---------------------------------------------------------------------------------
 @export_range(20.0, 110.0, 1.0) var wound_len := 84.0          ## mm, end to end
-@export_range(0.0, 20.0, 0.5) var curve_amp := 6.0             ## mm, how far the centreline bends
+@export_range(0.0, 20.0, 0.5) var curve_amp := 4.5             ## mm, how far the centreline bends
 @export_range(1, 3) var curve_bends := 2
 @export_range(3.0, 20.0, 0.5) var gape_max := 11.0             ## mm at the widest point
 @export_range(0.5, 8.0, 0.1) var gape_min := 3.0               ## mm across the narrow stretches
 @export_range(1, 3) var hot_stretches := 2                     ## how many wide stretches (1..this)
-@export_range(0.0, 1.0, 0.01) var profile_smooth := 0.45       ## how much the gape profile is blurred
+@export_range(0.0, 1.0, 0.01) var profile_smooth := 0.8        ## how much the gape profile is blurred
 @export_range(2.0, 14.0, 0.5) var bite := 7.0                  ## mm from the wound edge to its ring
 
 # -- grading -----------------------------------------------------------------------------------
@@ -54,6 +54,7 @@ enum Grade { MISS, TEAR, SLOPPY, GOOD }
 @export_range(0.05, 1.5, 0.01) var tie_time := 0.4             ## the knot at the end
 @export_range(0.0, 0.5, 0.01) var min_hold := 0.12             ## shorter than this is a misclick
 @export_range(0.0, 2.0, 0.05) var tear_cooldown := 0.5
+@export_range(0.05, 2.0, 0.05) var tear_flash_time := 0.45   ## how long the panel flashes red
 
 # -- pressure ----------------------------------------------------------------------------------
 @export_range(0.0, 0.5, 0.005) var seep_rate := 0.095          ## pool per second at difficulty 1, wound fully open
@@ -84,6 +85,7 @@ var pressed := false
 var drag_from := Vector2.ZERO      ## mm, where the current press started
 var dragging := false
 var tears := 0
+var last_tear := Vector2.ZERO    ## mm, where the last thread ripped through
 var gushes := 0
 var stitches_done := 0
 var _result: Dictionary = {}
@@ -255,8 +257,8 @@ func _centreline(seed_v: int) -> void:
 		pts[i] = Vector2(lerpf(-wound_len * 0.5, wound_len * 0.5, t), y / peak * curve_amp)
 	nrm.resize(SAMPLES)
 	for i in SAMPLES:
-		var a: Vector2 = pts[maxi(0, i - 1)]
-		var b: Vector2 = pts[mini(SAMPLES - 1, i + 1)]
+		var a: Vector2 = pts[maxi(0, i - 3)]
+		var b: Vector2 = pts[mini(SAMPLES - 1, i + 3)]
 		var tang := (b - a).normalized()
 		nrm[i] = Vector2(-tang.y, tang.x)
 
@@ -274,7 +276,7 @@ func _gape_profile(rng: RandomNumberGenerator) -> PackedFloat32Array:
 			if absf(c - float(other)) < 0.26:
 				c = clampf(float(other) + (0.3 if c >= float(other) else -0.3), 0.14, 0.86)
 		centres.append(c)
-		widths.append(rng.randf_range(0.055, 0.105))
+		widths.append(rng.randf_range(0.085, 0.14))
 	var floor_k: float = clampf(gape_min / maxf(0.5, gape_max), 0.05, 0.8)
 	var out: PackedFloat32Array = PackedFloat32Array()
 	out.resize(SAMPLES)
@@ -291,7 +293,7 @@ func _gape_profile(rng: RandomNumberGenerator) -> PackedFloat32Array:
 		out[i] = v * taper
 		peak = maxf(peak, out[i])
 	# Blur, then scale so the widest point is exactly gape_max.
-	var passes := int(round(lerpf(0.0, 4.0, clampf(profile_smooth, 0.0, 1.0))))
+	var passes := int(round(lerpf(0.0, 9.0, clampf(profile_smooth, 0.0, 1.0))))
 	for p in passes:
 		var prev: PackedFloat32Array = out.duplicate()
 		for i in range(1, SAMPLES - 1):
@@ -470,7 +472,8 @@ func _place(a: Vector2, b: Vector2) -> void:
 	# Into the gap, or not enough skin either side: the thread rips through.
 	if _tears_at(a) or _tears_at(b):
 		tears += 1
-		_flash = 0.4
+		last_tear = b if _tears_at(b) else a
+		_flash = tear_flash_time
 		_cd = tear_cooldown
 		botch(tear_botch, "The stitch tore through the edge")
 		return
@@ -633,7 +636,7 @@ func _react() -> void:
 	var has_body: bool = body != null and is_instance_valid(body)
 	if tears > _seen_tears:
 		_seen_tears = tears
-		_flash = 0.4
+		_flash = tear_flash_time
 		_audio("surgery_tear", at, -3.0, 0.1)
 		if has_body and body.has_method("stir"):
 			body.stir(0.5)
@@ -649,7 +652,9 @@ func _react() -> void:
 	if stage != Stage.STITCH and _seen_tie == 0:
 		_seen_tie = 1
 		_audio("surgery_tourniquet_cinch", at, -6.0)
-	if has_body and body.has_method("set_bleeding"):
+	# Blood on the gown only while somebody is at the table: with nobody operating, the only thing
+	# on the patient is the body's own laceration.
+	if has_body and body.has_method("set_bleeding") and bool(ctx.get("operating", ctx.get("operator", false))):
 		var b: float = clampf(open_share() * 0.55 + pool * 0.3 + _flash * 0.6, 0.0, 1.0)
 		body.set_bleeding(String(ctx.get("step", {}).get("site", "gunshot")), 0.05 if stage == Stage.DONE else b)
 
@@ -711,11 +716,21 @@ func _paint(c: CanvasItem) -> void:
 	_paint_stitches(c, st)
 	_paint_tool(c, st)
 	if _flash > 0.0:
-		c.draw_rect(Rect2(Vector2.ZERO, _panel.tex_size()), Color(st.danger, _flash * 0.35))
+		var f: float = _flash / maxf(0.01, tear_flash_time)
+		var px: Vector2 = _panel.tex_size()
+		c.draw_rect(Rect2(Vector2.ZERO, px), Color(st.danger, f * 0.16))
+		# A red rim round the whole panel, and a burst where the thread went through.
+		c.draw_rect(Rect2(Vector2(6, 6), px - Vector2(12, 12)), Color(st.danger, f * 0.75), false, 14.0)
+		var at: Vector2 = _panel.mm_to_px(last_tear)
+		var r: float = _panel.mm_len_px(lerpf(11.0, 3.0, f))
+		c.draw_circle(at, r, Color(st.danger, f * 0.45))
+		for k in 8:
+			var d := Vector2.RIGHT.rotated(TAU * float(k) / 8.0)
+			c.draw_line(at + d * r * 0.6, at + d * r * 1.9, Color(st.danger, f * 0.9), st.outline)
 
 
-## Blood welling from the open sections, spreading from the wide ones. Always behind the dots and
-## the tool, so it never hides a target.
+## Blood welling from the open sections, spreading from the wide ones. Always behind the wound, the
+## dots and the tool, and soft enough that it never hides a target.
 func _paint_pool(c: CanvasItem, st: StyleScript) -> void:
 	if pool <= 0.005:
 		return
@@ -724,11 +739,12 @@ func _paint_pool(c: CanvasItem, st: StyleScript) -> void:
 		if open <= 0.02:
 			continue
 		var share: float = start_gape[i] / maxf(0.1, gape_max)
-		var r: float = _panel.mm_len_px((5.0 + 26.0 * pool) * share * open)
+		var r: float = _panel.mm_len_px((4.0 + 30.0 * pool) * share * open)
 		var at: Vector2 = _panel.mm_to_px(pts[stitch_at[i]])
-		for ring in 3:
-			var k := 1.0 - float(ring) / 3.0
-			c.draw_circle(at, r * (0.45 + 0.55 * k), Color(st.blood, 0.10 + 0.13 * pool * open))
+		# Concentric rings, faint and falling off outward: a soft stain rather than a stack of discs.
+		for ring in 7:
+			var k := 1.0 - float(ring) / 7.0
+			c.draw_circle(at, r * (0.18 + 0.82 * k), Color(st.blood, (0.035 + 0.05 * pool) * open))
 
 
 func _paint_wound(c: CanvasItem, st: StyleScript, beat: float) -> void:
@@ -740,12 +756,12 @@ func _paint_wound(c: CanvasItem, st: StyleScript, beat: float) -> void:
 		var g := shown_gape(i, beat) * 0.5
 		upper[i] = _panel.mm_to_px(pts[i] - nrm[i] * g)
 		lower[i] = _panel.mm_to_px(pts[i] + nrm[i] * g)
-	# Dark red interior.
-	var fill: PackedVector2Array = PackedVector2Array()
-	fill.append_array(upper)
-	for i in range(SAMPLES - 1, -1, -1):
-		fill.append(lower[i])
-	c.draw_colored_polygon(fill, st.blood_dark)
+	# Dark red interior, one quad per segment. A single ring polygon round the whole wound pinches
+	# to a point at both ends and Godot's triangulator rejects it, once per frame, loudly.
+	for i in SAMPLES - 1:
+		if upper[i].distance_to(lower[i]) < 0.7 and upper[i + 1].distance_to(lower[i + 1]) < 0.7:
+			continue
+		c.draw_colored_polygon(PackedVector2Array([upper[i], upper[i + 1], lower[i + 1], lower[i]]), st.blood_dark)
 	# Bright outline, glowing.
 	st.glow_poly(c, upper, st.danger, st.outline)
 	st.glow_poly(c, lower, st.danger, st.outline)
@@ -813,29 +829,34 @@ func _paint_stitches(c: CanvasItem, st: StyleScript) -> void:
 		c.draw_circle(_panel.mm_to_px(drag_from), st.outline, st.thread)
 
 
-## The needle driver, holding a curved needle, trailing the cursor.
+## The needle driver, holding a curved needle, trailing the cursor. Drawn from the tip back, so the
+## needle is at the cursor and the handle runs off up and to the right, out of the way of the wound.
 func _paint_tool(c: CanvasItem, st: StyleScript) -> void:
 	var tip: Vector2 = _panel.mm_to_px(_tool)
-	var lean := Vector2(0.78, -0.62).normalized()
+	var lean := Vector2(0.72, -0.69).normalized()
 	var side := Vector2(-lean.y, lean.x)
-	var jaw: float = _panel.mm_len_px(9.0)
-	var handle: float = _panel.mm_len_px(30.0)
-	var back: Vector2 = tip + lean * handle
-	# Two arms of the driver.
-	for s: float in [-1.0, 1.0]:
-		var a: Vector2 = tip + side * (st.outline * 0.9 * s)
-		var b: Vector2 = back + side * (_panel.mm_len_px(3.2) * s)
-		c.draw_line(a, b, st.steel, st.outline)
-	c.draw_line(back + side * _panel.mm_len_px(3.2), back - side * _panel.mm_len_px(3.2), st.steel, st.outline)
-	# The curved needle in its jaws.
+	var mm: float = _panel.mm_len_px(1.0)
+	# The needle: a bright curved hook with its point at the cursor.
 	var arc: PackedVector2Array = PackedVector2Array()
-	var centre: Vector2 = tip - lean * jaw * 0.2 + side * jaw * 0.55
-	for s in 11:
-		var ang: float = lerpf(-0.5, 2.1, float(s) / 10.0)
-		arc.append(centre + (side * cos(ang) - lean * sin(ang)) * jaw * 0.62)
-	st.glow_poly(c, arc, st.steel, st.thin)
-	c.draw_polyline(arc, st.steel, st.thin)
-	c.draw_circle(tip, st.hair * 2.0, st.line)
+	var r := 5.6 * mm
+	var centre: Vector2 = tip + side * r
+	for i in 13:
+		var ang: float = lerpf(0.0, 2.5, float(i) / 12.0)
+		arc.append(centre - (side * cos(ang) + lean * sin(ang)) * r)
+	st.glow_poly(c, arc, st.line, st.outline)
+	c.draw_polyline(arc, st.line, st.outline)
+	c.draw_circle(tip, st.thin, st.line)
+	# The jaws holding it, then the two arms and their ring handles.
+	var hinge: Vector2 = tip + lean * 7.2 * mm + side * 9.6 * mm
+	var jaw_a: Vector2 = arc[arc.size() - 1]
+	c.draw_line(jaw_a, hinge, st.steel, st.outline * 1.7)
+	c.draw_circle(hinge, st.outline * 1.3, st.steel)
+	for s: float in [-1.0, 1.0]:
+		var elbow: Vector2 = hinge + lean * 6.0 * mm + side * (2.0 * mm * s)
+		var hand: Vector2 = hinge + lean * 14.0 * mm + side * (4.2 * mm * s)
+		c.draw_line(hinge, elbow, st.steel, st.outline)
+		c.draw_line(elbow, hand, st.steel, st.outline)
+		c.draw_arc(hand + lean * 2.4 * mm + side * (1.0 * mm * s), 2.5 * mm, 0.0, TAU, 14, st.steel, st.thin)
 
 
 # ---------------------------------------------------------------------------- net
@@ -851,7 +872,7 @@ func net_state() -> Dictionary:
 		# would quantise the rise away to nothing.
 		"sd": profile_seed, "st": st, "pl": pool,
 		"c": cursor.snappedf(0.2), "pr": pressed, "sg": stage,
-		"tr": tears, "gu": gushes, "p": snappedf(progress, 0.01),
+		"tr": tears, "tp": last_tear.snappedf(0.2), "gu": gushes, "p": snappedf(progress, 0.01),
 	}
 	if dragging:
 		out["dr"] = drag_from.snappedf(0.2)
@@ -884,6 +905,7 @@ func apply_net_state(s: Dictionary) -> void:
 	pressed = bool(s.get("pr", pressed))
 	stage = int(s.get("sg", stage))
 	tears = int(s.get("tr", tears))
+	last_tear = s.get("tp", last_tear)
 	gushes = int(s.get("gu", gushes))
 	progress = float(s.get("p", progress))
 	if s.has("dr"):

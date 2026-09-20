@@ -66,6 +66,11 @@ var _rng := RandomNumberGenerator.new()
 var _bleed := {}
 ## expose_site: {site, centre: Vector2, radii: Vector2}, or {} when covered
 var exposure := {}
+## PANEL TESTBED: the deep laceration overlay and the marks it was last built for (null / "-" when
+## it has not been built). It is the body's own, not the minigame's: it is there before anyone
+## operates and it walks out of the hospital on the patient.
+var _lac: Node3D = null
+var _lac_marks := "-"
 
 
 static func create(id: String) -> Node3D:
@@ -156,7 +161,15 @@ func expose_site(site: String, centre: Vector2, radii: Vector2) -> void:
 
 
 func cover_site() -> void:
-	exposure = {}
+	exposure = _own_exposure()
+
+
+## PANEL TESTBED: a wound the body owns keeps the gown open over it whether or not a step is
+## running -- the laceration is there when the patient arrives and when he walks out.
+func _own_exposure() -> Dictionary:
+	if _lac != null and is_instance_valid(_lac) and _lac.visible:
+		return {"site": "gunshot", "centre": Vector2.ZERO, "radii": Vector2(0.058, 0.036)}
+	return {}
 
 
 func set_vitals(v: float) -> void:
@@ -235,6 +248,7 @@ func _apply_visuals() -> void:
 		if band != null:
 			var sq := lerpf(1.06, 0.97, clampf(tq, 0.0, 1.0))
 			band.scale = Vector3(1.0, sq, sq)
+	_laceration(ailment_id == "laceration", String(_flags.get("stitch_marks", "")))
 	_vis("stump", amputated and not dressed)
 	_vis("dress_stump", amputated and dressed and amputation)
 	if amputated != _limb_removed:
@@ -243,6 +257,32 @@ func _apply_visuals() -> void:
 	_infect = 1.0 if amputation else 0.0
 	for s in skin_mats:
 		s.set_shader_parameter(&"infect", _infect)
+
+
+## PANEL TESTBED: the cut, open before the step and stitched after it. Rebuilt only when the marks
+## change, so it survives the per-frame flag churn.
+func _laceration(on: bool, marks: String) -> void:
+	if not on:
+		if _lac != null and is_instance_valid(_lac):
+			_lac.visible = false
+		return
+	if _lac == null or not is_instance_valid(_lac) or marks != _lac_marks:
+		if _lac != null and is_instance_valid(_lac):
+			# Out of the tree first: a freed-but-still-parented node keeps its name, and the
+			# replacement would be renamed "Laceration2" out from under anything looking it up.
+			if _lac.get_parent() != null:
+				_lac.get_parent().remove_child(_lac)
+			_lac.queue_free()
+		_lac = null
+		var anchor = anchors.get("gunshot")
+		if anchor == null or not is_instance_valid(anchor):
+			return
+		_lac = Kit.make_laceration(anchor, marks, hash("laceration|" + patient_id))
+		_lac_marks = marks
+	if _lac != null:
+		_lac.visible = true
+		if exposure.is_empty():
+			exposure = _own_exposure()
 
 
 func _vis(key: String, on: bool) -> void:

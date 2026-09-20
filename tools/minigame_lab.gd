@@ -5,6 +5,7 @@ extends Node3D
 ##         [--ailment=gunshot|amputation] [--variant=pack|stump] [--bot=1.0] [--seconds=40]
 ##         [--shot=res://tools/lab_shots/forceps.png] [--shot-at=6.0] [--flags=sedation:0.6,tourniquet:0.9]
 ##         [--seed=N] [--wide] [--nohud] [--look=or] [--selftest=<game>] [--sedation=0.4]
+##         [--cam=op|stand|wide|site] [--idle] [--marks=ggsgg]
 ##         [--teammate-light[=nohelp|away]] [--teammate-aim=dx,dz]
 ##
 ## --flags with sedation under 0.75 makes the patient stir the way the surgery system does.
@@ -12,6 +13,13 @@ extends Node3D
 ## --look=or lights it like the game: the hospital environment and post effects, a dim ceiling
 ##   light and the surgery system's work lamp on the camera (the default lab light is much brighter).
 ## --nohud hides the lab's text overlay (to judge a screenshot without the hint).
+## --cam picks the camera: `op` (the step's own operating pose, the default), `stand` (a player's eye
+##   height beside the table, to judge what an onlooker sees), `site` (close over the site, looking
+##   straight down, to judge what the step leaves on the body) or `wide` (the same as --wide).
+## --idle sets up the step but nobody operates: no cursor, no bot, and a PANEL step keeps its panel
+##   shut, so the shot shows what is on the patient when the table is left alone.
+## --marks=ggsgg puts a finished step's result on the body (the laceration's stitch marks), to judge
+##   the overlay the patient walks out with. Implies --idle.
 ## --selftest=<game> runs that minigame's static self_test() and quits.
 ## --teammate-light puts a teammate's flashlight (a player's SpotLight3D) beside the table, aimed at the
 ##   site (plus --teammate-aim metres on the plane) and handed to the step as ctx.helper_lights, the way
@@ -40,6 +48,8 @@ var wide := false
 var self_test := ""
 var nohud := false
 var look := ""
+var cam_mode := ""
+var idle := false
 var teammate_light := ""
 var teammate_aim := Vector2.ZERO
 var _teammate: SpotLight3D
@@ -89,6 +99,11 @@ func _ready() -> void:
 			"nohud": nohud = true
 			"look": look = v
 			"sedation": flags["sedation"] = float(v)
+			"cam": cam_mode = v
+			"idle": idle = true
+			"marks":
+				flags["stitch_marks"] = v
+				idle = true
 			"teammate-light": teammate_light = v if v != "" else "help"
 			"teammate-aim":
 				var av := v.split(",")
@@ -155,7 +170,8 @@ func _ready() -> void:
 		"shift": 1, "difficulty": Procedures.difficulty(1), "flags": flags,
 		"seed": seed_value if seed_value >= 0 else hash(game_id + patient_id), "body": body, "operator": true,
 		# PANEL TESTBED: somebody IS at the table in the lab, so a panel step opens its panel.
-		"operating": true,
+		# --idle is nobody at the table: the panel stays shut and only the body shows.
+		"operating": not idle,
 	}
 	if ailment_id == "eye_graft":
 		# GRAFTING chunk C: the knobs grafts.gd puts in the case's flags, so the lab plays the eye
@@ -175,7 +191,21 @@ func _ready() -> void:
 	var shot: Array = MinigameBase.pose_camera(site, mg.camera_pose())
 	cam.global_transform = shot[0]
 	cam.fov = float(shot[1])
-	if wide:
+	if cam_mode == "" and wide:
+		cam_mode = "wide"
+	if cam_mode == "stand":
+		# A player standing at the table, eye height, a step back: what an onlooker sees.
+		var up := site.basis.y.normalized()
+		var back := site.basis.z.normalized()
+		cam.global_position = site.origin + up * 0.62 + back * 0.88 + site.basis.x.normalized() * 0.12
+		cam.look_at(site.origin + up * 0.12, Vector3.UP)
+		cam.fov = 70.0
+	if cam_mode == "site":
+		# Straight down onto the site, close: for judging what a step leaves on the patient.
+		cam.global_position = site.origin + site.basis.y.normalized() * 0.42
+		cam.look_at(site.origin, -site.basis.z.normalized())
+		cam.fov = 38.0
+	if cam_mode == "wide":
 		# Pulled back and to the side, to judge the body around the site (infection, severed limb).
 		cam.global_position = site.origin + Vector3(0.25, 0.75, 0.55)
 		cam.look_at(site.origin, Vector3.UP)
@@ -280,7 +310,7 @@ func _physics_process(delta: float) -> void:
 	# Follow the site as the body breathes and stirs, as the surgery system's _place_mg does.
 	if body != null and body.has_method("site_transform") and step_site != "":
 		mg.global_transform = body.site_transform(step_site).orthonormalized()
-	if not mg.done:
+	if not mg.done and not idle:
 		var shake := _stir_tick(delta)
 		if bot_skill >= 0.0:
 			var inp: Dictionary = mg.bot_input(t, bot_skill)
