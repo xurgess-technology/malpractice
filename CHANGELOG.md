@@ -3,6 +3,25 @@
 Everything that changes in **Malpractice**, newest first. One minor version per day of work, one
 patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog).
 
+**2026-09-21 (0.9.x)**
+
+- **0.9.0**: EVERY SURGERY STEP IS AN ARCADE GAME NOW 🕹️🫀
+    - Added: DOSE! -- an old golf power meter, twice. Stop the needle on the vein, then fill the syringe by eye. The dose is still by weight and still never a number.
+    - Added: DODGE! -- the forceps grip the bullet on their own and you fly it back out of the wound tract, in the dark, while the walls pinch on every heartbeat. A teammate's flashlight doubles how far you can see.
+    - Added: WHACK! then WRAP! -- whack-a-mole over the tract you just tore, then Snake with a roll of bandage. Every wall you clipped on the way out comes back as its own bleeder.
+    - Added: SQUEEZE! -- the fishing bar. Slide the strap up a limb while the rot creeps toward you, then hold a pressure bar over a wandering pulse until the windlass locks.
+    - Added: SAW! -- Pong. The blade is the ball and it goes straight through the limb. Bone makes it heavy and makes it chatter.
+    - Added: WRAP! the stump -- Snake round a ring, two layers on everything, and a finite roll.
+    - Added: STEER! -- a ring race round an eye that watches the blade and lunges at it.
+    - Added: PRY! -- lockpicking. Feel for the quiet spot on each tether and lever until it pops.
+    - Added: CUT THE RIGHT ONE! -- bomb defusal. The rule shows for a second and a half, the strands come out knotted, and combing them out is the thing that hurts the patient.
+    - Added: GRAB! -- a claw machine, with an eyeball swinging on its nerve.
+    - Added: STITCH! the graft in -- the suture ring round a socket, dots hidden under the blood you spilled driving round it.
+    - Added: Your mistakes follow you. A bad tourniquet blinds you in the saw, a torn tract becomes more bleeders, a bad dose leaves them stirring all case, and the wrong dose in the seal leaves it half awake.
+    - Added: Step away mid-game and it freezes exactly where it was; whoever picks it up gets a READY countdown instead of a free failure.
+    - Added: Every step opens with a one-word order slammed across the panel. SAW!
+    - Note: All of them are on. The dev panel's Arcade surgery checkboxes turn any of them back off, and every old version is still there underneath.
+
 **2026-09-20 (0.8.x)**
 
 - **0.8.2**: THE MACHINE RUNS ARCADE SOFTWARE 🕹️🦴

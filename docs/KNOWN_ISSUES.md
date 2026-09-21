@@ -2016,3 +2016,36 @@ Phase 0 and 1 of [docs/ARCADE_SURGERY.md](ARCADE_SURGERY.md). Every arcade game 
   the tick is the only thing left to keep time by.
 - **The command card's `ready_cue` and `card_cue` exports are wired but never played.** They are
   there for when the cues exist.
+
+## Arcade surgery: all eleven games (2026-09-21, open)
+
+Phases 0 to 7 of [docs/ARCADE_SURGERY.md](ARCADE_SURGERY.md); the full write-up with numbers is
+[docs/MORNING_REPORT.md](MORNING_REPORT.md). Every arcade rebuild is switched ON in
+`Procedures.ARCADE_ENABLED`; the dev panel turns any of them off.
+
+- **A hopeless player now kills a gunshot patient.** Bot at skill 0.0 through a whole case: legacy
+  leaves them stable on 68 vitals, arcade kills them during the dressing. The amputation is fine
+  (legacy 60, arcade 55). The cause is the carry-forward compounding -- seven tears in DODGE! become
+  the capped seven bleeders in WHACK! and a bad hand cannot clear them before the blood does. Every
+  step is inside its own 15-25 band; it is the chain that is lethal. Dials: `pack_arcade.gd`'s
+  `max_bleeders`, `dodge_arcade.gd`'s `tear_botch`, the flood rate.
+- **Two sloppy runs sit outside 15-25 on their own** and pass on the two-patient mean: DODGE! costs
+  Bob 32.5, and PRY! on a waking Hive at sedation 0.2 costs 46 over 45.6 s.
+- **WHACK! is thin at high skill** -- about 3 s for a good player. The gunshot dressing only makes
+  its 8 s floor because the Snake stage after it carries the clock.
+- **Most of these panels have never had a design pass.** Headless Godot issues the draw calls but
+  rasterises nothing, so seven of the eleven were written without their author seeing them.
+  Screenshots exist under `docs/screens/` and nothing is obviously broken.
+- **SQUEEZE! stage A draws the limb as two plain rectangles.** Reads as boxes, not a limb.
+- **A dev-panel flag takes effect at the next step**, not the one on the table, and a client joining
+  after the host flips one gets the old value (`dev_room._rpc_arcade` broadcasts on the flip only).
+- **`dress_marks` and `eye_offset_deg` are emitted and nothing reads them.** Both WRAP variants
+  produce a `g`/`l`/`t` string per wound cell and GRAB! records how far off straight the eye was
+  released; wiring those to the dressing mesh and the player model are separate jobs. The stump's
+  marks string is 18 or 20 characters depending on the seed, so read its length.
+- **CUT THE RIGHT ONE!'s rule card is not on the OR wall monitor.** Section 5.10 asks for it; it
+  needs `scripts/orscreen/*`. The seam exists: `rule_text`, `strand_rows()`, `net_pack()["rl"]`.
+- **The arcade self-tests leak 24-60 ObjectDB instances at process exit.** Shared frame, not any one
+  game.
+- **Agent worktrees are cut from a stale base.** All eight overnight worktrees arrived on `2cf8e95`
+  (0.6.14), months behind `main`. Every agent noticed and reset, but it is worth finding out why.

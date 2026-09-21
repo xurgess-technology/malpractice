@@ -5,20 +5,12 @@ what exists, what it is really called, and what was decided along the way.
 
 ## Status
 
-| Phase | What | State |
-|---|---|---|
-| 0 | Shared frame | **Built** (2026-09-20) |
-| 1 | SAW! | **Built** (2026-09-20), flag off, waiting on Zach |
-| 2 | GRAB! | not started |
-| 3 | DODGE! + WHACK! | not started |
-| 4 | WRAP! | not started |
-| 5 | SQUEEZE! | not started |
-| 6 | DOSE! | not started |
-| 7 | STEER!, PRY!, CUT THE RIGHT ONE!, STITCH! ring | not started |
-| 8 | Remove the legacy games | on Zach's explicit say-so only |
+**Phases 0 to 7 are done (2026-09-20/21). Eleven games, all switched on.** Read
+[MORNING_REPORT.md](MORNING_REPORT.md) first: it has the status table, the lab and quick-start
+commands for every game, what to look at first, every judgment call and the known issues.
 
-Nothing is live. Every arcade game is behind `Procedures.ARCADE_ENABLED`, which is all `false`, so
-every step still plays its legacy game until Zach flips a flag.
+Phase 8 has NOT been touched and needs Zach's explicit say-so. Every legacy game is still present,
+unedited, and still passes its own self-test.
 
 ## The real names
 
