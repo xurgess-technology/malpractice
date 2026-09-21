@@ -38,6 +38,11 @@ var shake_time := 0.3
 var shake_px := 14.0
 var flash_alpha := 0.5
 
+## No blob smaller than this (reference px): tinier ones collapse into slivers the triangulator refuses.
+const MIN_BLOB_R := 1.2
+## Splats start growing from this share of their size, not from a point.
+const GROW_FROM := 0.2
+
 var _bursts: Array = []          # [word, at, born]
 var _splats: Array = []          # [centre, polys: Array[[PackedVector2Array, Color]], born]
 var _shake := 0.0
@@ -60,6 +65,13 @@ func tick(delta: float) -> void:
 ## A mistake lands on the page: the burst word at `at` (layout px; off the page means the middle), the
 ## splats for mistake number `index`, and for a serious one the shake and the wash.
 func mistake(word: String, at: Vector2, serious: bool, index: int) -> void:
+	burst(word, at, serious, index)
+	_throw_splats(index)
+
+
+## A burst on its own, no blood: for a warning that is not a mistake (DODGE!'s SQUIRM!). `serious`
+## still shakes and washes the page; `shake_seed` just varies the shake.
+func burst(word: String, at: Vector2, serious := false, shake_seed := 0) -> void:
 	if not area.has_point(at):
 		at = area.get_center()
 	# Keep the burst on the sheet.
@@ -68,10 +80,9 @@ func mistake(word: String, at: Vector2, serious: bool, index: int) -> void:
 	_bursts.append([word, at, t])
 	if _bursts.size() > 4:
 		_bursts.pop_front()
-	_throw_splats(index)
 	if serious:
 		_shake = shake_time
-		_shake_seed = index
+		_shake_seed = shake_seed
 
 
 ## The splats of mistake `index`: 2-4, each its own shape, kind, tone and drip, at random places.
@@ -89,12 +100,20 @@ func _throw_splats(index: int) -> void:
 		var kind := rng.randi_range(0, 2)   # 0 speckle cluster, 1 round splat, 2 streaky
 		var polys: Array = []
 		var blob := func(ctr: Vector2, r: float) -> PackedVector2Array:
+			# Vertices at strictly rising angles round the centre, radius jittered: a star-shaped outline
+			# that cannot cross itself. The squash and the turn are affine, so it stays simple.
+			r = maxf(r, MIN_BLOB_R * ink.unit)
 			var pts := PackedVector2Array()
 			var verts := rng.randi_range(10, 14)
 			for v in verts:
-				var ang := TAU * float(v) / float(verts)
+				var ang := TAU * (float(v) + rng.randf_range(-0.3, 0.3)) / float(verts)
 				var rr := r * rng.randf_range(0.55, 1.45)
 				pts.append(ctr + Vector2(cos(ang) * rr, sin(ang) * rr * squash).rotated(rot))
+			if Geometry2D.triangulate_polygon(pts).is_empty():
+				pts = PackedVector2Array()
+				for v in 10:
+					var ang2 := TAU * float(v) / 10.0
+					pts.append(ctr + Vector2(cos(ang2), sin(ang2)) * r)
 			return pts
 		match kind:
 			0:
@@ -123,6 +142,20 @@ func _throw_splats(index: int) -> void:
 		_splats.append([centre, polys, t])
 
 
+## Test hook (the self-test): throw the splats of mistakes [from, from + n) and return every polygon.
+func splat_polys_for(from: int, n: int) -> Array:
+	var keep := _splats.duplicate()
+	_splats.clear()
+	for i in range(from, from + n):
+		_throw_splats(i)
+	var out: Array = []
+	for sp in _splats:
+		for pc in sp[1]:
+			out.append(pc[0])
+	_splats = keep
+	return out
+
+
 ## Everything thrown so far, scaling up over splat_grow and then staying.
 func draw_splats(c: CanvasItem) -> void:
 	for sp in _splats:
@@ -134,7 +167,7 @@ func draw_splats(c: CanvasItem) -> void:
 			if k < 1.0:
 				var scaled := PackedVector2Array()
 				for q in pts:
-					scaled.append(ctr + (q - ctr) * maxf(0.05, k))
+					scaled.append(ctr + (q - ctr) * lerpf(GROW_FROM, 1.0, k))
 				pts = scaled
 			c.draw_colored_polygon(pts, pc[1])
 			ink.ops += 1

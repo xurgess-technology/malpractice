@@ -143,6 +143,13 @@ What every step's sheet has in common (spec Part One, sections 2-4), driven by A
   step, for a serious one a +/-14 px shake and a red wash, the `mistake_made(kind, word)` signal, and
   `cost()` with the reason. The mistake count and the last one's word ride the state blob, and the
   splats come from the step's seed and the mistake's index, so every onlooker gets the same mess.
+- **Warnings that are not mistakes.** `burst(word, at, serious)`: the burst (and, if serious, the
+  shake and wash) with no blood, no bill and no `mistake_made`, replicated the same way (DODGE!'s
+  SQUIRM!). The shell's state-blob keys start with `~`, so they cannot collide with a game's own.
+- **Splats always triangulate:** each blob's vertices go round the centre at rising angles (it
+  cannot cross itself), no blob is smaller than 1.2 px, growth starts at 20% size, and a blob the
+  triangulator still refuses falls back to a plain round one. The self-test throws 1,500 mistakes'
+  worth and checks every polygon.
 
 A game opts in with `ArcadeGame.use_ink() -> true` (and `ink_unit()`). The framework then turns the
 panel's teal chrome off (`SurgeryPanel.chrome = false`), draws the page, the header in the page's top

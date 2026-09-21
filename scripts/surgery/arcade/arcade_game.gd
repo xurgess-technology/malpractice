@@ -83,6 +83,12 @@ var mistake_word := ""
 var mistake_at := Vector2(-1, -1)
 var mistake_serious := false
 var _mistakes_seen := 0
+## Bursts without blood so far (burst()), replicated the same way.
+var bursts := 0
+var burst_word := ""
+var burst_at := Vector2(-1, -1)
+var burst_serious := false
+var _bursts_seen := 0
 ## Seconds the current stamp card has been up (for its pop).
 var _card_up := 0.0
 
@@ -283,6 +289,9 @@ func tick(delta: float) -> void:
 		while _mistakes_seen < mistakes:
 			shell.mistake(mistake_word, mistake_at, mistake_serious, _mistakes_seen)
 			_mistakes_seen += 1
+		while _bursts_seen < bursts:
+			shell.burst(burst_word, burst_at, burst_serious, _bursts_seen)
+			_bursts_seen += 1
 	# The operator is the authority: only their machine simulates, so a botch is never counted
 	# twice. Everyone else animates from the replicated state and is corrected 20 times a second.
 	if armed() and bool(ctx.get("operator", false)):
@@ -450,6 +459,21 @@ func mistake(word: String, vitals: float, reason: String, kind: String, at := Ve
 		cost(vitals, reason)
 
 
+## A WARNING on the page, not a mistake (operator only): the burst `word` at `at` (layout px), a shake
+## and wash if `serious`, but no blood, no bill and no mistake_made. DODGE!'s SQUIRM! is one.
+## Onlookers get it through the state blob.
+func burst(word: String, at := Vector2(-1, -1), serious := false) -> void:
+	bursts += 1
+	burst_word = word
+	burst_at = at
+	burst_serious = serious
+	if shell != null:
+		shell.burst(word, at, serious, bursts - 1)
+	_bursts_seen = bursts
+	if serious:
+		shake(0.5)
+
+
 ## The step's diagram, in panel pixels. Override.
 func paint_game(_c: CanvasItem) -> void:
 	pass
@@ -513,11 +537,16 @@ func net_state() -> Dictionary:
 	s["fz"] = frozen
 	s["pt"] = play_t
 	s["q"] = snappedf(quality, 0.01)
+	# The shell's keys start with "~" so they can never collide with a game's own.
 	if shell != null:
-		s["mk"] = mistakes
-		s["mw"] = mistake_word
-		s["ma"] = mistake_at
-		s["mz"] = mistake_serious
+		s["~mk"] = mistakes
+		s["~mw"] = mistake_word
+		s["~ma"] = mistake_at
+		s["~mz"] = mistake_serious
+		s["~bk"] = bursts
+		s["~bw"] = burst_word
+		s["~ba"] = burst_at
+		s["~bz"] = burst_serious
 	s["p"] = snappedf(progress, 0.01)
 	return s
 
@@ -531,11 +560,16 @@ func apply_net_state(s: Dictionary) -> void:
 	frozen = bool(s.get("fz", frozen))
 	play_t = float(s.get("pt", play_t))
 	quality = float(s.get("q", quality))
-	if s.has("mk"):
-		mistake_word = String(s.get("mw", mistake_word))
-		mistake_at = s.get("ma", mistake_at)
-		mistake_serious = bool(s.get("mz", mistake_serious))
-		mistakes = int(s.get("mk", mistakes))
+	if s.has("~mk"):
+		mistake_word = String(s.get("~mw", mistake_word))
+		mistake_at = s.get("~ma", mistake_at)
+		mistake_serious = bool(s.get("~mz", mistake_serious))
+		mistakes = int(s.get("~mk", mistakes))
+	if s.has("~bk"):
+		burst_word = String(s.get("~bw", burst_word))
+		burst_at = s.get("~ba", burst_at)
+		burst_serious = bool(s.get("~bz", burst_serious))
+		bursts = int(s.get("~bk", bursts))
 	progress = float(s.get("p", progress))
 	net_apply(s)
 
