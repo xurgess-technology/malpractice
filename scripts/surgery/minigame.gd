@@ -34,6 +34,7 @@ signal item_used(kind: String, count: int)
 ##   body: Node3D, the PatientBody on the table (may be null in the lab)
 ##   operator: bool, true on the machine whose player is doing this step
 ## Optional:
+##   vitals: Callable -> float, this patient's vitals right now (the shell's corner number).
 ##   hand_count: Callable(kind: String) -> int, how many of `kind` the operator holds in their hands
 ##     right now (0 with nobody operating). For a step that can spend an extra item (use_item).
 ##   helper_lights: Callable -> Array of SpotLight3D, the flashlights of teammates standing by (on,

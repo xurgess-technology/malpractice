@@ -34,10 +34,6 @@ extends "res://scripts/surgery/arcade/arcade_game.gd"
 ##
 ## Space: the spec's 960 x 600 reference px ("rpx") laid on the paper; the tract is drawn at 6 px/mm.
 
-## A moment the rest of the game may want to hang off (audio, co-op reactions, a monitor): "tear",
-## "squirm". Emitted on the operator's machine.
-signal spiked(kind: String)
-
 const REF := Vector2(960.0, 600.0)
 ## Reference px per millimetre of tract.
 const PX_MM := 6.0
@@ -53,8 +49,6 @@ const STRIP_X1 := 810.0
 const SEG_MM := 2.0
 ## How far ahead the bot's hand thinks, seconds.
 const BOT_TAU := 0.12
-
-enum Gate { NONE, START, TORN }
 
 # -- the tract ------------------------------------------------------------------------------------
 @export_group("Tract")
@@ -133,6 +127,8 @@ enum Gate { NONE, START, TORN }
 @export_range(0.0, 5.0, 0.1) var torn_lock := 2.0
 ## Blinking and untouchable after the resume, s.
 @export_range(0.0, 3.0, 0.05) var invuln_time := 0.9
+## The corner VITALS number goes deep red under this.
+@export_range(0.0, 100.0, 1.0) var vitals_trouble := 40.0
 ## Per tear off the step's quality, and its floor.
 @export_range(0.0, 0.5, 0.01) var quality_per_tear := 0.15
 @export_range(0.0, 1.0, 0.01) var quality_floor := 0.05
@@ -160,8 +156,7 @@ var s_slug := 0.0                 ## the slug's position along the tract, mm: tr
 var fly_y := 0.0                  ## its height, mm off the lane's middle, +down
 var fly_v := 0.0                  ## mm/s, +down
 var fly_t := 0.0                  ## seconds actually flown (not cards, not frozen): drives the squirms
-var gate: int = Gate.START        ## a card the game is waiting behind
-var gate_lock := 0.0              ## seconds Space is still ignored behind it
+var torn_pending := false         ## a TORN! card is up: the press that takes it down also buys the blink
 var invuln := 0.0
 var out_left := 0.0               ## the arc into the dish
 var tears: Array = []             ## THE CARRY-FORWARD: position 0..1 of every wall contact
@@ -186,7 +181,6 @@ var tear_flash := 0.0
 var _seen := {}
 var _puff := 0.0
 var _puff_at := Vector2.ZERO
-var _gate_age := 0.0
 var _warm := false
 
 # ---- bot ----
@@ -209,9 +203,49 @@ func ink_unit() -> float:
 	return _u()
 
 
-## No timed card: DODGE! waits behind its own card for Space (the gate).
+## The opening stamp card waits for Space; that press starts the run and is its first flap.
 func card_word_for_start() -> String:
-	return ""
+	return "DODGE!"
+
+
+## The shell's stamp cards: the goal and the hazard, never the controls.
+func stamp_for(word: String) -> Dictionary:
+	var I := ink
+	match word:
+		"DODGE!":
+			var lines := ["Keep it off the walls: every touch tears the wound."]
+			if squirm_mm > 0.0:
+				lines.append("The patient isn't fully under: now and then the walls squeeze in.")
+			else:
+				lines.append("Each tear drags it back, and bleeds in the next step.")
+			return {"goal": "Fly the slug out along its own tract.", "lines": lines, "prompt": "SPACE to start",
+				"color": I.ink if I != null else Color.BLACK}
+		"TORN!":
+			return {"goal": "You tore the tract.", "lines": ["Dragged back %d mm. It will bleed when you pack it." % int(knock_mm)],
+				"prompt": "SPACE to go on", "wait": "Hold on...", "lock": torn_lock,
+				"color": I.deep_red if I != null else Color.DARK_RED}
+	return {"prompt": "SPACE"}
+
+
+## The corner HUD: the controls, top left.
+func hud_line() -> String:
+	if landed or play_state == Play.DONE:
+		return ""
+	return "SPACE: flap"
+
+
+## The corner HUD's number: the patient's vitals, deep red when they are in trouble.
+func hud_value() -> Array:
+	var v := vitals_now()
+	return ["VITALS %d" % int(round(v)), v < vitals_trouble]
+
+
+## This patient's vitals (the surgery system's, live), or in the lab 100 less what the tears cost.
+func vitals_now() -> float:
+	var f = ctx.get("vitals")
+	if f is Callable and (f as Callable).is_valid():
+		return float((f as Callable).call())
+	return 100.0 - tear_cost * float(tears.size())
 
 
 func build_game() -> void:
@@ -226,8 +260,6 @@ func build_game() -> void:
 	s_slug = tract_mm
 	fly_y = lane_at(s_slug)
 	fly_v = 0.0
-	gate = Gate.START
-	gate_lock = 0.0
 	_update_progress()
 
 
@@ -395,7 +427,7 @@ func ty(off: float) -> float:
 
 
 func flying() -> bool:
-	return gate == Gate.NONE and out_left <= 0.0 and not landed and play_state != Play.DONE
+	return not stamp_waiting() and out_left <= 0.0 and not landed and play_state != Play.DONE
 
 
 func _update_progress() -> void:
@@ -436,44 +468,37 @@ func on_jolt(_offset: Vector2, _strength: float, _duration: float) -> void:
 func keys() -> Array:
 	if play_state == Play.DONE or landed:
 		return []
-	if gate == Gate.TORN and gate_lock > 0.0:
-		return [["Wait", "%.1f s" % gate_lock]]
-	if gate != Gate.NONE:
-		return [["Space", "go (and flap)"]]
 	return [["Space", "flap"]]
 
 
 func hint() -> String:
+	if stamp_waiting():
+		if card_word == "TORN!":
+			return "Torn. Wait for it..." if card_left > 0.0 else "Space to go on."
+		return "The forceps have the slug. Fly it out along the tract: keep it off the walls."
 	var base := super.hint()
 	if base != "":
 		return base
 	if landed or play_state == Play.DONE:
 		return "Out, and into the dish."
-	match gate:
-		Gate.START:
-			return "The forceps have the slug. Fly it out along the tract: keep it off the walls."
-		Gate.TORN:
-			return "Torn. Wait for it..." if gate_lock > 0.0 else "Space to go on."
 	if pinch() > 0.05:
 		return "The patient is squirming: the walls are closing in."
 	return "Tap Space to lift. Stay off the walls."
 
 
+## Space is the only control: the mouse (and Enter) do nothing at all, not even take a card down.
+func handle_cursor(p: Vector2, buttons: int, delta: float) -> void:
+	super.handle_cursor(p, buttons & ~(BUTTON_PRIMARY | BUTTON_SECONDARY | BUTTON_ENTER), delta)
+
+
+## The shell has already taken a stamp card down on this press if one was up: the same press flaps.
 func play(_p: Vector2, _buttons: int, edges: int, _delta: float) -> void:
-	# Space is the only control: the mouse buttons do nothing at all.
-	if (edges & BUTTON_ACTION) == 0:
+	if (edges & BUTTON_ACTION) == 0 or not flying():
 		return
-	if gate != Gate.NONE:
-		if gate_lock > 0.0:
-			return
-		# The press that starts or resumes the run also performs its first action: a flap.
-		if gate == Gate.TORN:
-			invuln = invuln_time
-		gate = Gate.NONE
-		_flap()
-		return
-	if flying():
-		_flap()
+	if torn_pending:
+		torn_pending = false
+		invuln = invuln_time
+	_flap()
 
 
 func _flap() -> void:
@@ -483,9 +508,6 @@ func _flap() -> void:
 
 func advance(delta: float) -> void:
 	delta = minf(delta, dt_cap)
-	if gate != Gate.NONE:
-		gate_lock = maxf(0.0, gate_lock - delta)
-		return
 	if landed:
 		return
 	if out_left > 0.0:
@@ -496,7 +518,7 @@ func advance(delta: float) -> void:
 	var before := squirms_begun()
 	fly_t += delta
 	if squirms_begun() > before:
-		spiked.emit("squirm")
+		mistake("SQUIRM!", 0.0, "", "squirm", cv(Vector2(tx(s_slug) + 150.0, ty(fly_y) - 70.0)))
 	invuln = maxf(0.0, invuln - delta)
 	fly_v = minf(fly_v + gravity_mm * delta, max_fall_mm)
 	fly_y += fly_v * delta
@@ -517,14 +539,14 @@ func advance(delta: float) -> void:
 func _tear(side: float) -> void:
 	tears.append(snappedf(clampf(s_slug / maxf(1.0, tract_mm), 0.0, 1.0), 0.001))
 	tear_side.append(side)
-	cost(tear_cost, "Forced the bullet into the wall")
-	spiked.emit("tear")
+	mistake("TORN!", tear_cost, "Forced the bullet into the wall", "tear",
+		cv(Vector2(tx(s_slug) + 60.0, ty(fly_y) + side * 60.0)), true)
 	s_slug = minf(tract_mm, s_slug + knock_mm)
 	fly_y = lane_at(s_slug)
 	fly_v = 0.0
 	invuln = 0.0
-	gate = Gate.TORN
-	gate_lock = torn_lock
+	torn_pending = true
+	show_card("TORN!", torn_lock)
 	_update_progress()
 
 
@@ -545,13 +567,10 @@ func extract_quality() -> float:
 func animate(delta: float) -> void:
 	tear_flash = maxf(0.0, tear_flash - delta * 2.0)
 	_puff = maxf(0.0, _puff - delta * 3.0)
-	_gate_age = 0.0 if gate == Gate.NONE else _gate_age + delta
 	if bool(ctx.get("operator", false)) or not armed():
 		return
 	delta = minf(delta, dt_cap)
-	if gate != Gate.NONE:
-		gate_lock = maxf(0.0, gate_lock - delta)
-	elif out_left > 0.0:
+	if out_left > 0.0:
 		out_left = maxf(0.0, out_left - delta)
 	elif not landed:
 		fly_t += delta
@@ -577,7 +596,6 @@ func react() -> void:
 	if int(now.tears) > int(_seen.tears):
 		audio(tear_cue, -6.0, 0.15)
 		audio(blood_cue, -7.0, 0.15)
-		shake(0.85)
 		tear_flash = 0.5
 		if b != null and b.has_method("stir"):
 			b.stir(0.7)
@@ -607,27 +625,10 @@ func paint_game(c: CanvasItem) -> void:
 	_paint_dish(c)
 	_paint_slug(c)
 	_paint_strip(c)
-	if tear_flash > 0.0:
-		c.draw_rect(Rect2(cv(Vector2.ZERO), REF * _u()), Color(ink.deep_red, tear_flash * 0.5))
 	if _warm:
 		ink.warm(c)
 		c.draw_string(InkScript.font_upright(), Vector2(-100, -100), "DODGE! TORN! SQUIRM!",
 			HORIZONTAL_ALIGNMENT_LEFT, -1.0, 110, ink.ink)
-
-
-## INTERIM, until the shared shell's stamp card lands: the card the game waits behind, over the page.
-func _paint_inner(c: CanvasItem) -> void:
-	super._paint_inner(c)
-	if ink == null or panel == null or play_state == Play.DONE or play_state == Play.READY:
-		return
-	if gate == Gate.NONE and not _warm:
-		return
-	var torn := gate == Gate.TORN or (_warm and gate == Gate.NONE)
-	var sub := "Space: go, and flap"
-	if torn and gate_lock > 0.0:
-		sub = "wait %.1f" % gate_lock
-	ink.card(c, panel.tex_size(), "TORN!" if torn else "DODGE!", clampf(1.0 - _gate_age / 0.5, 0.0, 1.0), 96,
-		ink.deep_red if torn else Color(-1, 0, 0), sub)
 
 
 ## The s values to draw the tract at, from the left edge of the page to the right: both page edges
@@ -771,9 +772,9 @@ func _paint_dish(c: CanvasItem) -> void:
 		if q.y < 0.0:
 			q.y += 16.0 * pow(1.0 - absf(cos(a)), 2.0)
 		pts.append(cv(d + q))
-	ink.shape(c, pts, ink.ink, 3.0, 4301, ink.clip_steel)
+	ink.shape(c, pts, ink.ink, 3.0, 4301, ink.clip_loop)
 	ink.ellipse(c, cv(d + Vector2(0.0, 6.0)), Vector2(cl(54.0), cl(11.0)), Color(ink.ink, 0.6), 1.8, 4302,
-		Color(ink.clip_dark, 0.35))
+		Color(ink.clip_body, 0.35))
 	ink.text(c, cv(d + Vector2(0.0, 50.0)), "kidney dish", 13.0, Color(ink.label, 0.8), 1)
 
 
@@ -817,7 +818,7 @@ func _paint_slug(c: CanvasItem) -> void:
 
 func _paint_forceps(c: CanvasItem, at: Vector2) -> void:
 	var h := slug_half_mm * PX_MM
-	var steel := ink.clip_steel
+	var steel := ink.clip_loop
 	var reach := 250.0
 	for side: float in [-1.0, 1.0]:
 		# A jaw hooked over the base, then the shank running back to the box joint.
@@ -837,7 +838,7 @@ func _paint_forceps(c: CanvasItem, at: Vector2) -> void:
 		ink.line(c, hand, ink.ink, 5.0, 4424 + int(side))
 		ink.line(c, hand, steel, 2.4, 4426 + int(side))
 		ink.circle(c, cv(at + Vector2(reach + 10.0, side * 26.0)), cl(10.0), ink.ink, 2.4, 4428 + int(side))
-	ink.circle(c, cv(at + Vector2(124.0, 0.0)), cl(6.0), ink.ink, 2.2, 4430, ink.clip_dark)
+	ink.circle(c, cv(at + Vector2(124.0, 0.0)), cl(6.0), ink.ink, 2.2, 4430, ink.clip_body)
 
 
 ## The whole tract end to end along the bottom: the bed on the left, the way out on the right, where
@@ -873,6 +874,8 @@ func warm_all() -> void:
 	tears = [0.5]
 	tear_side = [1.0]
 	_puff = 1.0
+	if shell != null:
+		shell.mistake("TORN!", shell.area.get_center(), true, 0)
 	if panel != null:
 		panel.redraw()
 
@@ -883,7 +886,7 @@ func warm_all() -> void:
 ## THAT CREEPS IS SNAPPED (the lab round-trips this every frame).
 func net_pack() -> Dictionary:
 	return {
-		"s": s_slug, "y": fly_y, "v": fly_v, "ft": fly_t, "g": gate, "gl": gate_lock, "iv": invuln,
+		"s": s_slug, "y": fly_y, "v": fly_v, "ft": fly_t, "tp": torn_pending, "iv": invuln,
 		"ol": out_left, "tr": PackedFloat32Array(tears), "td": PackedFloat32Array(tear_side),
 		"fp": flaps, "ld": landed,
 	}
@@ -894,8 +897,7 @@ func net_apply(s: Dictionary) -> void:
 	fly_y = float(s.get("y", fly_y))
 	fly_v = float(s.get("v", fly_v))
 	fly_t = float(s.get("ft", fly_t))
-	gate = int(s.get("g", gate))
-	gate_lock = float(s.get("gl", gate_lock))
+	torn_pending = bool(s.get("tp", torn_pending))
 	invuln = float(s.get("iv", invuln))
 	out_left = float(s.get("ol", out_left))
 	var tr = s.get("tr", null)
@@ -923,7 +925,7 @@ func bot_input(t: float, skill: float) -> Dictionary:
 	_bt = t
 	skill = clampf(skill, 0.0, 1.0)
 	var none := {"cursor": Vector2.ZERO, "buttons": 0}
-	if not armed() or landed or out_left > 0.0:
+	if (not armed() and not (stamp_waiting() and not frozen)) or landed or out_left > 0.0:
 		_b_up = false
 		return none
 	if _b_up:
@@ -931,8 +933,8 @@ func bot_input(t: float, skill: float) -> Dictionary:
 		_b_up = false
 		return none
 	var press := false
-	if gate != Gate.NONE:
-		if gate_lock > 0.0:
+	if stamp_waiting():
+		if card_left > 0.0:
 			_b_gate_wait = -1.0
 			return none
 		if _b_gate_wait < 0.0:
@@ -986,7 +988,7 @@ static func self_test() -> Array:
 				var tally := {"n": 0, "v": 0.0, "done": false, "tears": [], "spikes": {}}
 				g.botched.connect(func(a, _r): tally.n += 1; tally.v += a)
 				g.finished.connect(func(r): tally.done = true; tally.tears = r.get("tears", []))
-				g.spiked.connect(func(kd): tally.spikes[kd] = int(tally.spikes.get(kd, 0)) + 1)
+				g.mistake_made.connect(func(kd, _w): tally.spikes[kd] = int(tally.spikes.get(kd, 0)) + 1)
 				g.setup(_case(pid, sed, 1))
 				var t: float = run_bot(g, skill, sed, hash(pid) + int(skill * 100))
 				var sq: int = int(tally.spikes.get("squirm", 0))
@@ -1061,9 +1063,10 @@ static func self_test() -> Array:
 		ok = false
 	# An onlooker sees what the operator sees.
 	var net := _net_check(script)
-	print("[dodge self-test] spectator drift: worst %.2f mm along, %.2f mm up/down between updates; at the end %.3f / %.3f; tears %d vs %d" % [
-		net[0], net[1], net[2], net[3], net[4], net[5]])
-	if net[0] > 1.5 or net[1] > 2.5 or net[2] > 0.01 or net[3] > 0.01 or net[4] != net[5]:
+	print("[dodge self-test] spectator drift: worst %.2f mm along, %.2f mm up/down between updates; at the end %.3f / %.3f; tears %d vs %d; splats %d vs %d" % [
+		net[0], net[1], net[2], net[3], net[4], net[5], net[6], net[7]])
+	# Between updates an onlooker can be one 20 Hz tick behind a flap; at every update it is exact.
+	if net[0] > 1.5 or net[1] > 4.0 or net[2] > 0.01 or net[3] > 0.01 or net[4] != net[5] or net[6] != net[7] or net[6] == 0:
 		print("[dodge self-test] MISS: a spectator does not see what the operator sees")
 		ok = false
 	# Walking away and somebody else picking it up.
@@ -1140,36 +1143,36 @@ static func _card_check(script: GDScript) -> Dictionary:
 	for i in 180:
 		_step(g, 0, dt)
 	r.drift = absf(g.s_slug - s0)
-	# The mouse does nothing, on the card or off it.
+	# The mouse and Enter do nothing, on the card or off it: not even take the card down.
 	for i in 20:
-		_step(g, BUTTON_PRIMARY if i % 2 == 0 else 0, dt)
-	r.mouse += g.flaps
+		_step(g, (BUTTON_PRIMARY | BUTTON_ENTER) if i % 2 == 0 else 0, dt)
+	r.mouse += g.flaps + (0 if g.stamp_waiting() else 1)
 	_step(g, BUTTON_ACTION, dt)
-	r.first_flap = g.gate == 0 and g.flaps == 1 and g.fly_v < 0.0
+	r.first_flap = not g.stamp_waiting() and g.flaps == 1 and g.fly_v < 0.0
 	_step(g, 0, dt)
 	var f0: int = g.flaps
 	for i in 20:
-		_step(g, (BUTTON_PRIMARY | BUTTON_SECONDARY) if i % 2 == 0 else 0, dt)
+		_step(g, (BUTTON_PRIMARY | BUTTON_SECONDARY | BUTTON_ENTER) if i % 2 == 0 else 0, dt)
 	r.mouse += g.flaps - f0
 	# Fly straight into the floor: no presses.
 	var guard := 0
-	while g.gate != 2 and guard < 600:
+	while g.card_word != "TORN!" and guard < 600:
 		guard += 1
 		_step(g, 0, dt)
 	var counted := 0.0
 	var pressed := 0
-	while g.gate == 2 and g.gate_lock > 0.0 and counted < 5.0:
+	while g.card_word == "TORN!" and g.card_left > 0.0 and counted < 5.0:
 		counted += dt
 		var b: int = BUTTON_ACTION if int(counted * 60.0) % 6 == 0 else 0
 		if b != 0:
 			pressed += 1
 		_step(g, b, dt)
-	r.ignored = pressed if g.gate == 2 else 0
+	r.ignored = pressed if g.card_word == "TORN!" else 0
 	r.lock = counted
 	var f1: int = g.flaps
 	_step(g, 0, dt)
 	_step(g, BUTTON_ACTION, dt)
-	r.resume_flap = g.gate == 0 and g.flaps == f1 + 1 and g.fly_v < 0.0
+	r.resume_flap = not g.stamp_waiting() and g.flaps == f1 + 1 and g.fly_v < 0.0
 	r.invuln = g.invuln + dt
 	g.free()
 	return r
@@ -1227,11 +1230,13 @@ static func _net_check(script: GDScript) -> Array:
 		n += 1
 		if n % 3 == 0:
 			spec.apply_net_state(op.net_state())
-		elif op.gate == 0 and spec.gate == 0 and op.out_left <= 0.0:
+		elif not op.stamp_waiting() and not spec.stamp_waiting() and op.out_left <= 0.0:
 			worst_s = maxf(worst_s, absf(spec.s_slug - op.s_slug))
 			worst_y = maxf(worst_y, absf(spec.fly_y - op.fly_y))
 	spec.apply_net_state(op.net_state())
-	var r := [worst_s, worst_y, absf(spec.s_slug - op.s_slug), absf(spec.fly_y - op.fly_y), spec.tears.size(), op.tears.size()]
+	spec.tick(dt)
+	var r := [worst_s, worst_y, absf(spec.s_slug - op.s_slug), absf(spec.fly_y - op.fly_y), spec.tears.size(), op.tears.size(),
+		op.shell._splats.size(), spec.shell._splats.size()]
 	op.free()
 	spec.free()
 	return r
