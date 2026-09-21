@@ -59,6 +59,8 @@ const BUTTON_ACTION := 64
 ## frame per notch, and several notches in one frame come out one frame each. Bots set it the same way.
 const BUTTON_SCROLL_UP := 128
 const BUTTON_SCROLL_DOWN := 256
+## Enter (either Enter key), held. The shell's "move on" key (docs/SURGERY_SHELL_AND_DODGE_SPEC.md 5).
+const BUTTON_ENTER := 512
 
 ## Render layer 20, reserved for a minigame's own props (tools, straps, raised wound models).
 ## Every decal, the patient's and the minigames', projects only onto layer 1 (cull_mask = 1),

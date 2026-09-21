@@ -26,6 +26,11 @@ extends "res://scripts/surgery/minigame.gd"
 const PanelScript := preload("res://scripts/surgery/panel/surgery_panel.gd")
 const StyleScript := preload("res://scripts/surgery/panel/panel_style.gd")
 const InkScript := preload("res://scripts/surgery/panel/ink.gd")
+const ShellScript := preload("res://scripts/surgery/panel/shell.gd")
+
+## A mistake on a game with the shell (see mistake()): `kind` names it for audio, co-op reactions or
+## a future monitor, `word` is the burst on the page. Emitted on the operator's machine.
+signal mistake_made(kind: String, word: String)
 
 # -- the panel --------------------------------------------------------------------------------
 ## How much of the view's height the panel fills. The rest is the real patient, table and room.
@@ -69,6 +74,17 @@ var panel: PanelScript = null
 ## teal look. The page, its border and the command card come from it.
 var ink: InkScript = null
 var _ink_t := 0.0
+## The shared surgery shell (scripts/surgery/panel/shell.gd): stamp cards, the corner HUD, bursts,
+## blood and the shake. Built with the ink look; null on the teal look.
+var shell: ShellScript = null
+## Mistakes so far and the last one's burst (replicated, so onlookers get the same bursts and splats).
+var mistakes := 0
+var mistake_word := ""
+var mistake_at := Vector2(-1, -1)
+var mistake_serious := false
+var _mistakes_seen := 0
+## Seconds the current stamp card has been up (for its pop).
+var _card_up := 0.0
 
 var _was_operating := false
 
@@ -90,6 +106,10 @@ func setup(context: Dictionary) -> void:
 		panel.brightness = ink_brightness
 	add_child(panel)
 	build_game()
+	if ink != null:
+		shell = ShellScript.new(ink)
+		shell.area = ink._content(panel.tex_size())
+		shell.seed_v = int(ctx.get("seed", 1))
 	show_card(card_word_for_start())
 
 
@@ -182,12 +202,36 @@ func view_mm() -> Vector2:
 # ---------------------------------------------------------------------------- the command card
 
 ## Put a one-word order up. Play stops until it clears.
+##
+## With the shell (the ink look) the card is a STAMP CARD instead: it stays up over the live game until
+## the player presses the action key, Enter or a mouse button, and that press is the first action of
+## the stage (Enter only dismisses). `seconds` (or the card's own "lock") is a lockout first, counted
+## down on the card: an interruption the player has to take in before going on.
 func show_card(word: String, seconds := -1.0) -> void:
 	if word == "":
 		return
 	card_word = word
-	card_left = card_time if seconds < 0.0 else seconds
 	play_state = Play.CARD
+	_card_up = 0.0
+	if shell != null:
+		card_left = seconds if seconds >= 0.0 else float(stamp_for(word).get("lock", 0.0))
+		return
+	card_left = card_time if seconds < 0.0 else seconds
+
+
+## A stamp card's text for `word`: {goal, lines: Array, prompt, color, lock, wait}. Worked out from the
+## word alone, so an onlooker (who only gets the word) draws the same card. Override.
+func stamp_for(_word: String) -> Dictionary:
+	return {"prompt": "SPACE"}
+
+
+## The mouse and key bits that take a stamp card down.
+const DISMISS_BITS := 1 | 64 | 512   # BUTTON_PRIMARY | BUTTON_ACTION | BUTTON_ENTER
+
+
+## True while a stamp card is up and waiting for its press (every machine: it is in the state blob).
+func stamp_waiting() -> bool:
+	return shell != null and play_state == Play.CARD
 
 
 ## True while the game is actually being played: not on a card, not counting down, not frozen.
@@ -201,6 +245,13 @@ func armed() -> bool:
 ## freeze so no game has to.
 func handle_cursor(p: Vector2, buttons: int, delta: float) -> void:
 	var edges := pressed_edges(buttons)
+	if stamp_waiting() and not frozen:
+		if card_left > 0.0 or (edges & DISMISS_BITS) == 0:
+			return
+		# The press that takes the card down is the stage's first action (Enter only dismisses).
+		play_state = Play.RUNNING
+		card_word = ""
+		edges &= ~BUTTON_ENTER
 	if not armed():
 		return
 	play_t += delta
@@ -218,11 +269,20 @@ func play(_p: Vector2, _buttons: int, _edges: int, _delta: float) -> void:
 func tick(delta: float) -> void:
 	var operating: bool = bool(ctx.get("operating", ctx.get("operator", false)))
 	_freeze_check(operating)
+	_card_up += delta
 	if play_state == Play.CARD or play_state == Play.READY:
-		card_left = maxf(0.0, card_left - delta)
-		if card_left <= 0.0:
+		if not frozen or play_state == Play.READY:
+			card_left = maxf(0.0, card_left - delta)
+		# A stamp card waits for its press; the plain card and READY clear themselves.
+		if card_left <= 0.0 and not stamp_waiting():
 			play_state = Play.RUNNING
 			card_word = ""
+	if shell != null:
+		shell.tick(delta)
+		# Mistakes an onlooker has only heard about through the state blob.
+		while _mistakes_seen < mistakes:
+			shell.mistake(mistake_word, mistake_at, mistake_serious, _mistakes_seen)
+			_mistakes_seen += 1
 	# The operator is the authority: only their machine simulates, so a botch is never counted
 	# twice. Everyone else animates from the replicated state and is corrected 20 times a second.
 	if armed() and bool(ctx.get("operator", false)):
@@ -328,20 +388,66 @@ func _paint_inner(c: CanvasItem) -> void:
 	if ink != null:
 		var size: Vector2 = panel.tex_size()
 		ink.t = _ink_t
-		ink.begin_page(c, size)
+		var sh: Vector2 = shell.shake_offset() if shell != null else Vector2.ZERO
+		ink.begin_page(c, size, sh)
+		if shell != null:
+			shell._page_xf_now = Transform2D().translated(sh) * ink.page_transform(size)
+			shell.draw_splats(c)
 		paint_game(c)
+		if shell != null:
+			var hv: Array = hud_value()
+			shell.draw_hud(c, hud_line(), String(hv[0]) if hv.size() > 0 else "", bool(hv[1]) if hv.size() > 1 else false)
+			var ec: Dictionary = enter_cap()
+			if not ec.is_empty():
+				shell.draw_enter(c, ec.at, String(ec.get("label", "")), bool(ec.get("ready", false)))
+			shell.draw_fx(c)
+			if card_word != "":
+				if play_state == Play.READY:
+					shell.draw_stamp(c, "READY", {"prompt": "", "wait": "Taking over in", "color": ink.good}, card_left, _card_up)
+				else:
+					shell.draw_stamp(c, card_word, stamp_for(card_word), card_left, _card_up)
 		# The step's name goes on the clip, the table small in the board's corner.
-		ink.end_page(c, size, clip_title(), panel.right_text)
-		if card_word != "":
-			var ready_now := play_state == Play.READY
-			var total: float = ready_time if ready_now else card_time
-			ink.card(c, size, card_word, clampf(card_left / maxf(0.01, total), 0.0, 1.0),
-				ready_size if ready_now else card_size, ink.good if ready_now else Color(-1, 0, 0),
-				("%.1f" % card_left) if ready_now else "")
+		ink.end_page(c, size, clip_title(), panel.right_text, sh)
 		return
 	paint_game(c)
 	if card_word != "":
 		_paint_card(c)
+
+
+## The shell's corner HUD: the controls for what you are doing now (top left). Override.
+func hud_line() -> String:
+	return ""
+
+
+## The shell's corner HUD: [the one number that decides the grade, whether it is in trouble] (top
+## right). Override.
+func hud_value() -> Array:
+	return ["", false]
+
+
+## The shell's ENTER key cap: {at: layout px, label, ready} while there is a "you may go on" moment,
+## else {}. Override.
+func enter_cap() -> Dictionary:
+	return {}
+
+
+## MISTAKES ON THE PAGE, in one call (operator only): the burst `word` at `at` (layout px, i.e. the
+## panel canvas; off the page for the middle), 2-4 blood splats that stay for the rest of the step, a
+## shake and a red wash if `serious`, the `mistake_made` signal, and `vitals` charged with `reason` said
+## aloud (nothing when 0). Onlookers get the same bursts and splats through the state blob.
+func mistake(word: String, vitals: float, reason: String, kind: String, at := Vector2(-1, -1), serious := false) -> void:
+	mistakes += 1
+	mistake_word = word
+	mistake_at = at
+	mistake_serious = serious
+	if shell != null:
+		shell.mistake(word, at, serious, mistakes - 1)
+	_mistakes_seen = mistakes
+	if serious:
+		shake(0.5)
+	mistake_made.emit(kind, word)
+	if vitals > 0.0:
+		cost(vitals, reason)
 
 
 ## The step's diagram, in panel pixels. Override.
@@ -407,6 +513,11 @@ func net_state() -> Dictionary:
 	s["fz"] = frozen
 	s["pt"] = play_t
 	s["q"] = snappedf(quality, 0.01)
+	if shell != null:
+		s["mk"] = mistakes
+		s["mw"] = mistake_word
+		s["ma"] = mistake_at
+		s["mz"] = mistake_serious
 	s["p"] = snappedf(progress, 0.01)
 	return s
 
@@ -420,6 +531,11 @@ func apply_net_state(s: Dictionary) -> void:
 	frozen = bool(s.get("fz", frozen))
 	play_t = float(s.get("pt", play_t))
 	quality = float(s.get("q", quality))
+	if s.has("mk"):
+		mistake_word = String(s.get("mw", mistake_word))
+		mistake_at = s.get("ma", mistake_at)
+		mistake_serious = bool(s.get("mz", mistake_serious))
+		mistakes = int(s.get("mk", mistakes))
 	progress = float(s.get("p", progress))
 	net_apply(s)
 

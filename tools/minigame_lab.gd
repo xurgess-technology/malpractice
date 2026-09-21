@@ -357,6 +357,7 @@ func _physics_process(delta: float) -> void:
 				if Input.is_action_pressed("move_right"): b |= MinigameBase.BUTTON_RIGHT
 				if Input.is_action_pressed("move_back"): b |= MinigameBase.BUTTON_DOWN
 				if Input.is_action_pressed("jump"): b |= MinigameBase.BUTTON_ACTION
+				if Input.is_physical_key_pressed(KEY_ENTER) or Input.is_physical_key_pressed(KEY_KP_ENTER): b |= MinigameBase.BUTTON_ENTER
 				if _wheel > 0:
 					b |= MinigameBase.BUTTON_SCROLL_UP
 					_wheel -= 1

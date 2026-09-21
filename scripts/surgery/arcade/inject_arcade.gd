@@ -56,7 +56,6 @@ const NEEDLE_TIP_Y := 104.0
 const HUB_Y := 214.0
 const TRAY := Vector2(127.0, 106.0)
 const TRAY_R := Vector2(96.0, 40.0)
-const DONE_BTN := Rect2(712.0, 498.0, 170.0, 52.0)
 const TQ_BTN := Rect2(772.0, 26.0, 168.0, 50.0)
 const TQ_BAR := Rect2(34.0, 20.0, 190.0, 10.0)
 ## The PUSH bar's size, rpx. It sits beside the locked-in needle (meter_rect()).
@@ -133,9 +132,9 @@ const ASM_TIP := 126.0
 ## Needle speed into the skin (times difficulty) and how far it can go.
 @export_range(5.0, 150.0, 1.0) var insert_speed := 38.0
 @export_range(20.0, 80.0, 1.0) var insert_max := 55.0
-## The flash wants the tip past this, within tip_tol of a vein (divided by difficulty), at an angle
+## The flash wants the tip past this (about a quarter of the needle, so a graze does not flash), within tip_tol of a vein (divided by difficulty), at an angle
 ## to the vein inside [window_lo, window_hi] (the window narrows about its middle with difficulty).
-@export_range(0.0, 40.0, 0.5) var flash_min := 14.0
+@export_range(0.0, 40.0, 0.5) var flash_min := 15.5
 @export_range(2.0, 30.0, 0.5) var tip_tol := 9.0
 @export_range(0.0, 45.0, 0.5) var window_lo := 14.0
 @export_range(5.0, 60.0, 0.5) var window_hi := 32.0
@@ -420,23 +419,29 @@ func pad_y() -> float:
 
 # ---------------------------------------------------------------------------- rules
 
-func _spike(kind: String, vitals: float, reason: String) -> void:
+## A spike() site from the spec: the `spiked` signal always, and when it has a burst `word` it is a
+## mistake on the page (ArcadeGame.mistake: the burst at `at` (rpx), blood, the bill); otherwise just
+## the bill, if any.
+func _spike(kind: String, vitals: float, reason: String, word := "", at := Vector2(-1, -1), serious := false) -> void:
 	spiked.emit(kind)
-	if vitals > 0.0:
+	if word != "":
+		mistake(word, vitals, reason, kind, cv(at) if at.x >= 0.0 else at, serious)
+	elif vitals > 0.0:
 		cost(vitals, reason)
 
 
+## The framework HUD's controls line (the shell's corner line says the same, shorter).
 func keys() -> Array:
 	match phase:
 		Phase.DRAW:
-			return [["Hold LMB", "draw"], ["RMB / wheel", "put back"], ["Space", "done"]]
+			return [["Hold Space", "draw"], ["RMB / wheel", "put back"], ["Enter", "done"]]
 		Phase.DEBUBBLE:
-			return [["Click barrel", "flick"], ["Click pad", "purge"], ["Space", "continue"]]
+			return [["Click barrel", "flick"], ["Space", "purge"], ["Enter", "continue"]]
 		Phase.INJECT:
 			if locked:
-				return [["Hold LMB", "push, gently"]]
+				return [["Hold Space", "push, gently"]]
 			if held:
-				return [["Wheel / A D", "angle"], ["Hold LMB", "needle in"], ["Let go", "at the flash"]]
+				return [["Wheel / A D", "angle"], ["Hold Space", "needle in"], ["Let go", "at the flash"]]
 			return [["Click skin", "slap"], ["Click tray", "take syringe"]]
 	return []
 
@@ -447,18 +452,75 @@ func hint() -> String:
 		return base
 	match phase:
 		Phase.DRAW:
-			return "Land the level in the green band. It speeds up the longer you hold."
+			return "Land the level in the green band."
 		Phase.DEBUBBLE:
-			return "Flick the bubbles up and purge them at the needle. Amber ones need a flick right beside them."
+			return "Get the air out before it goes in."
 		Phase.INJECT:
 			if locked:
-				return "Dose delivered." if deliver_t >= 0.0 else "In. Push it slow: keep the meter out of the red."
-			if flashed:
-				return "In the vein. Let go."
+				return "Push it slowly."
 			if held:
-				return "Shallow to the vein, and stop at the red flash."
-			return "Slap the arm to raise a vein, then take the syringe from the tray."
+				return "Shallow to the vein; let go at the flash."
+			return "Slap the arm to raise a vein, then take the syringe."
 	return ""
+
+
+## The shell's corner line: what the keys do right now.
+func hud_line() -> String:
+	match phase:
+		Phase.DRAW:
+			return "SPACE hold: draw   ·   right click / wheel: put back   ·   ENTER: done"
+		Phase.DEBUBBLE:
+			return "click the barrel: flick   ·   SPACE: purge   ·   ENTER: continue"
+		Phase.INJECT:
+			if locked:
+				return "SPACE hold: push the plunger"
+			if held:
+				return "wheel / A D: angle   ·   SPACE hold: needle in, let go at the flash   ·   click tray: put down"
+			return "click the arm: slap   ·   click the tray: take the syringe"
+	return ""
+
+
+## The shell's grade number: the dose, in mL, deep red while it is off the band.
+func hud_value() -> Array:
+	var f := dose if locked else fluid
+	if phase == Phase.DONE:
+		f = dose
+	return ["%.1f mL" % (f * barrel_ml), absf(f - target) > band]
+
+
+## The shell's ENTER cap: in the first two stages, lit once you may go on (the level in the band; the
+## barrel clear of bubbles). Bottom right, clear of the syringe, the pad and the barrel.
+func enter_cap() -> Dictionary:
+	var at := cv(Vector2(840.0, 540.0))
+	match phase:
+		Phase.DRAW:
+			return {"at": at, "label": "done drawing", "ready": absf(fluid - target) <= band}
+		Phase.DEBUBBLE:
+			return {"at": at, "label": "to the arm", "ready": bubbles.is_empty()}
+	return {}
+
+
+## The stamp cards: DRAW! / FLICK! / STICK! / PUSH!. The goal and the hazard; never the controls.
+func stamp_for(word: String) -> Dictionary:
+	var I := ink
+	match word:
+		"DRAW!":
+			return {"goal": "Draw this patient's dose into the green band.",
+				"lines": ["It speeds up the longer you hold.", "Hold too long and it pulls in air."],
+				"prompt": "SPACE to start", "color": I.band_edge if I != null else Color.DARK_GREEN}
+		"FLICK!":
+			return {"goal": "Get the air out before it goes in.",
+				"lines": ["Loose bubbles rise to the needle: purge them.", "Amber ones are stuck: flick right beside them."],
+				"prompt": "SPACE or click to start", "color": I.amber if I != null else Color.ORANGE}
+		"STICK!":
+			return {"goal": "Find a vein and put the dose in it.",
+				"lines": ["Slap the arm to raise one; they fade fast.", "About half the needle in. Stop at the flash."],
+				"prompt": "click or SPACE to start", "color": I.deep_red if I != null else Color.DARK_RED}
+		"PUSH!":
+			return {"goal": "In the vein. Now push the plunger.",
+				"lines": ["Slowly: past the red mark it hurts."],
+				"prompt": "SPACE to push", "color": I.deep_red if I != null else Color.DARK_RED}
+	return {"prompt": "SPACE"}
 
 
 func play(p_mm: Vector2, buttons: int, edges: int, delta: float) -> void:
@@ -485,17 +547,15 @@ func play(p_mm: Vector2, buttons: int, edges: int, delta: float) -> void:
 		_press_t = -1.0
 	match phase:
 		Phase.DRAW:
-			_play_draw(p, buttons, edges, lmb, down, notches, delta)
+			_play_draw(buttons, edges, notches, delta)
 		Phase.DEBUBBLE:
 			_play_debubble(p, edges, down)
 		Phase.INJECT:
-			_play_inject(p, buttons, edges, lmb, down, released, press_len, notches, delta)
+			_play_inject(p, buttons, edges, down, released, press_len, notches, delta)
 
 
-## What a press at `p` landed on, so a press that starts on a button never also draws or stabs.
+## What a mouse press at `p` landed on.
 func _what_at(p: Vector2) -> String:
-	if phase != Phase.INJECT and DONE_BTN.grow(6.0).has_point(p):
-		return "done"
 	if phase == Phase.INJECT:
 		if not locked and TQ_BTN.grow(6.0).has_point(p):
 			return "tq"
@@ -504,8 +564,6 @@ func _what_at(p: Vector2) -> String:
 		if on_skin(p):
 			return "skin"
 	if phase == Phase.DEBUBBLE:
-		if Rect2(SYR_X - 60.0, pad_y() - 24.0, 120.0, 48.0).has_point(p):
-			return "pad"
 		if Rect2(SYR_X - BARREL_HALF - 34.0, BARREL_Y0 - 10.0, BARREL_HALF * 2.0 + 68.0, BARREL_Y1 - BARREL_Y0 + 14.0).has_point(p):
 			return "barrel"
 	return ""
@@ -513,11 +571,11 @@ func _what_at(p: Vector2) -> String:
 
 # -- DRAW --------------------------------------------------------------------------------------
 
-func _play_draw(p: Vector2, buttons: int, edges: int, lmb: bool, down: bool, notches: int, delta: float) -> void:
-	if (edges & BUTTON_ACTION) != 0 or (down and _press_what == "done"):
+func _play_draw(buttons: int, edges: int, notches: int, delta: float) -> void:
+	if (edges & BUTTON_ENTER) != 0:
 		_to_debubble()
 		return
-	drawing = lmb and _press_what != "done"
+	drawing = (buttons & BUTTON_ACTION) != 0
 	if drawing:
 		_hold += delta
 		var speed := draw_base + _hold * draw_accel * k
@@ -531,7 +589,7 @@ func _play_draw(p: Vector2, buttons: int, edges: int, lmb: bool, down: bool, not
 				_air_this_hold = true
 				air_drawn += 1
 				bubbles.append([SYR_X + _rng.randf_range(-12.0, 12.0), FLUID_TOP + air_r + 2.0, air_r, 0.0, 0.0, 0, _rng.randf() * TAU])
-				_spike("air", cost_air, "Drew air into the syringe")
+				_spike("air", cost_air, "Drew air into the syringe", "AIR!", Vector2(SYR_X + 120.0, FLUID_TOP + 20.0))
 		else:
 			_air_acc = 0.0
 	else:
@@ -575,14 +633,13 @@ func _to_debubble() -> void:
 # -- DEBUBBLE ----------------------------------------------------------------------------------
 
 func _play_debubble(p: Vector2, edges: int, down: bool) -> void:
-	if (edges & BUTTON_ACTION) != 0 or (down and _press_what == "done"):
+	if (edges & BUTTON_ENTER) != 0:
 		_to_inject()
 		return
-	if not down:
-		return
-	if _press_what == "pad":
+	# Space taps the plunger: purge.
+	if (edges & BUTTON_ACTION) != 0:
 		_purge()
-	elif _press_what == "barrel":
+	if down and _press_what == "barrel":
 		_flick(p)
 
 
@@ -615,6 +672,8 @@ func _purge() -> void:
 	else:
 		fluid = maxf(0.0, fluid - squirt_cost)
 		squirts += 1
+		# Nothing at the needle: that was drug, out on the floor.
+		_spike("squirt", 0.0, "Squirted the dose out", "WASTED!", Vector2(SYR_X + 130.0, HUB_Y - 40.0))
 	var low := fluid < target - band
 	if low and not _purge_low_warned:
 		_purge_low_warned = true
@@ -631,7 +690,8 @@ func _to_inject() -> void:
 	bubbles.clear()
 	_shown.clear()
 	billed = 0
-	_need_release = true
+	_need_release = false
+	_space_t = 0.0
 	show_card("STICK!")
 
 
@@ -674,20 +734,21 @@ func _step_bubbles(delta: float) -> void:
 
 # -- INJECT ------------------------------------------------------------------------------------
 
-func _play_inject(p: Vector2, buttons: int, edges: int, lmb: bool, down: bool, released: bool,
+## Stage 3. The mouse aims, slaps, uses the tray and the tourniquet button; the wheel (or A/D) sets
+## the angle; Space pushes the needle in and, once it is locked in, the plunger.
+func _play_inject(p: Vector2, buttons: int, edges: int, down: bool, released: bool,
 		press_len: float, notches: int, delta: float) -> void:
+	var sp: bool = (buttons & BUTTON_ACTION) != 0
 	if locked:
-		return   # the plunger is advance()'s; lmb is read there through _push_held
+		return   # the plunger is advance()'s; Space is read there through _push_held
 	if down and _press_what == "tq":
 		_press_tourniquet()
-		_need_release = true
 		return
 	if not held:
 		# Bare-handed: take the syringe, or slap the arm.
 		if down and _press_what == "tray":
 			held = true
 			grip = _grip_for(p)
-			_need_release = true
 			return
 		if released and _press_what == "skin" and press_len < slap_max:
 			_slap(_press_at)
@@ -700,27 +761,34 @@ func _play_inject(p: Vector2, buttons: int, edges: int, lmb: bool, down: bool, r
 			angle += key_deg
 		angle = clampf(angle + float(notches) * scroll_deg, angle_min, angle_max)
 		grip = _grip_for(p)
+		if down and _press_what == "tray":
+			held = false   # a click back on the tray sets it down
+			_space_t = 0.0
+			return
 	if _need_release:
-		if not lmb:
+		if not sp:
 			_need_release = false
 		return
-	if released and not inserting:
-		if _press_what == "tray" and press_len < pickup_quick:
-			held = false   # a quick click back on the tray sets it down
-		return
-	if lmb and not inserting and _press_t >= push_hold and _press_what != "tray":
-		var t0 := grip + dir() * ASM_TIP
-		if on_skin(t0):
-			inserting = true
-			entry = t0
-			sink = 0.0
-			flashed = false
+	if sp and not inserting:
+		_space_t += delta
+		if _space_t >= push_hold:
+			var t0 := grip + dir() * ASM_TIP
+			if on_skin(t0):
+				inserting = true
+				entry = t0
+				sink = 0.0
+				flashed = false
+	elif not sp:
+		_space_t = 0.0
 	if inserting:
-		if lmb:
+		if sp:
 			sink = minf(insert_max, sink + insert_speed * k * delta)
 			_check_flash()
 		else:
 			_release_needle()
+
+
+var _space_t := 0.0
 
 
 func _check_flash() -> void:
@@ -742,7 +810,7 @@ func _check_flash() -> void:
 		blown_ranges.append([vi, snappedf(t.x - blown_half_x, 0.5), snappedf(t.x + blown_half_x, 0.5)])
 		bruises.append([snappedf(t.x, 0.5), snappedf(t.y, 0.5)])
 		blown += 1
-		_spike("blown", pts_blown * vitals_per_point, "Blew the vein: the vein map reads like a bruise atlas")
+		_spike("blown", pts_blown * vitals_per_point, "Blew the vein: the vein map reads like a bruise atlas", "BLOWN!", t + Vector2(0.0, -40.0), true)
 		_retract()
 		_need_release = true
 
@@ -761,7 +829,7 @@ func _release_needle() -> void:
 		if punctures.size() > 10:
 			punctures.pop_front()
 		misses += 1
-		_spike("miss", pts_miss * vitals_per_point, "Missed the vein: the arm has more holes than the chart explains")
+		_spike("miss", pts_miss * vitals_per_point, "Missed the vein: the arm has more holes than the chart explains", "MISS!", t + Vector2(0.0, -40.0))
 	_retract()
 
 
@@ -862,7 +930,7 @@ func advance(delta: float) -> void:
 var _push_held := false
 
 func handle_cursor(p: Vector2, buttons: int, delta: float) -> void:
-	_push_held = (buttons & BUTTON_PRIMARY) != 0
+	_push_held = (buttons & BUTTON_ACTION) != 0
 	super.handle_cursor(p, buttons, delta)
 
 
@@ -882,7 +950,7 @@ func _advance_push(delta: float) -> void:
 		if _fast_acc >= fast_every:
 			_fast_acc -= fast_every
 			fast_pushes += 1
-			_spike("fast_push", pts_fast * vitals_per_point, "Pushed it too fast, like the elevator was waiting")
+			_spike("fast_push", pts_fast * vitals_per_point, "Pushed it too fast, like the elevator was waiting", "TOO FAST!", meter_rect().get_center() + Vector2(0.0, -60.0))
 	else:
 		_fast_acc = 0.0
 	# The bubbles left in the barrel go in, one by one, as the plunger passes them.
@@ -890,7 +958,7 @@ func _advance_push(delta: float) -> void:
 	while billed < carried.size() and gone >= float(billed + 1) / float(carried.size() + 1):
 		var units := 2 if float(carried[billed]) > big_bubble_r else 1
 		billed += 1
-		_spike("bubble", float(units) * pts_bubble * vitals_per_point, "Air in the line: something extra is on its way to the heart")
+		_spike("bubble", float(units) * pts_bubble * vitals_per_point, "Air in the line: something extra is on its way to the heart", "AIR!", entry + Vector2(40.0, -70.0))
 	if fluid <= 0.0:
 		fluid = 0.0
 		rate = 0.0
@@ -909,9 +977,9 @@ func _complete() -> void:
 	if absf(err) > band:
 		dose_pts = minf(pts_dose_max, (absf(err) - band) * pts_dose_slope)
 		if err < 0.0:
-			_spike("dose", dose_pts * vitals_per_point, "Underdosed: the patient may wake up mid-surgery")
+			_spike("dose", dose_pts * vitals_per_point, "Underdosed: the patient may wake up mid-surgery", "UNDERDOSE!", Vector2(480.0, 200.0))
 		else:
-			_spike("dose", dose_pts * vitals_per_point, "Overdosed: that is a deeper sleep than anyone scheduled")
+			_spike("dose", dose_pts * vitals_per_point, "Overdosed: that is a deeper sleep than anyone scheduled", "OVERDOSE!", Vector2(480.0, 200.0), true)
 	var units := 0
 	for rr in carried:
 		units += 2 if float(rr) > big_bubble_r else 1
@@ -1126,8 +1194,6 @@ func _paint_syringe(c: CanvasItem, debubble: bool) -> void:
 		I.rect(c, Rect2(cv(Vector2(SYR_X - 19.0, VIAL_NECK_Y - 6.0)), Vector2(38.0, 12.0) * _u()), I.ink, I.detail, 34, Color(I.label, 0.35))
 		I.rect(c, Rect2(cv(Vector2(VIAL.position.x + 4.0, VIAL.position.y + 10.0)), Vector2(VIAL.size.x - 8.0, 24.0) * _u()), I.ink_soft, I.detail, 35, Color(I.paper, 0.9))
 		I.text(c, cv(Vector2(SYR_X, VIAL.position.y + 27.0)), "SOMNUL-9", 10.5, I.ink, 1)
-		if vial <= 0.002:
-			I.text(c, cv(Vector2(VIAL.end.x + 14.0, VIAL.position.y + 40.0)), "vial empty", 14.0, I.deep_red)
 	# The needle, up through the neck.
 	var needle_top := NEEDLE_TIP_Y if not debubble else HUB_Y - 70.0
 	I.seg(c, cv(Vector2(SYR_X, HUB_Y)), cv(Vector2(SYR_X, needle_top)), I.ink, I.detail, 36)
@@ -1161,13 +1227,6 @@ func _paint_syringe(c: CanvasItem, debubble: bool) -> void:
 	I.seg(c, cv(Vector2(SYR_X, sy + 10.0)), cv(Vector2(SYR_X, py)), I.ink, I.outline, 46)
 	I.rect(c, Rect2(cv(Vector2(SYR_X - 40.0, py)), Vector2(80.0, 12.0) * _u()), I.ink, I.outline, 47, Color(I.paper.darkened(0.1)))
 	I.seg(c, cv(Vector2(bx0 + 4.0, FLUID_TOP)), cv(Vector2(bx1 - 4.0, FLUID_TOP)), I.meniscus, I.detail * 0.7, 48)
-	# Level readout.
-	I.text(c, cv(Vector2(bx0 - 16.0, sy + 5.0)), "%.1f mL" % (fluid * barrel_ml), 13.0, I.label, 2)
-	if not debubble:
-		if air_drawn > 0 and _t < 99999.0 and bubbles.size() > 0:
-			I.text(c, cv(Vector2(bx0 - 16.0, FLUID_TOP + 30.0)), "air drawn in", 14.0, I.deep_red, 2)
-		I.text(c, cv(Vector2(bx0 - 20.0, b0 - 8.0)), "the band", 12.0, I.band_edge, 2)
-		_button(c, DONE_BTN, "Done", 101)
 	# Bubbles.
 	for i in _shown.size():
 		var bv: Vector3 = _shown[i]
@@ -1184,12 +1243,6 @@ func _paint_syringe(c: CanvasItem, debubble: bool) -> void:
 			var age: float = play_t - float(rp[2])
 			if age >= 0.0 and age < 0.35:
 				I.circle(c, cv(Vector2(float(rp[0]), float(rp[1]))), (8.0 + age * 110.0) * _u(), Color(I.ink, 1.0 - age / 0.35), I.detail, 300)
-		if fluid < target - band:
-			I.text(c, cv(Vector2(bx1 + 70.0, FLUID_TOP + 20.0)), "(!) level below target band", 15.0, I.deep_red)
-		# The purge target: the thumb pad, ringed.
-		I.ellipse(c, cv(Vector2(SYR_X, py + 6.0)), Vector2(58.0, 20.0) * _u(), Color(I.ink, 0.35), I.detail, 49)
-		I.text(c, cv(Vector2(SYR_X + 66.0, py + 12.0)), "tap to purge", 12.0)
-		_button(c, DONE_BTN, "Continue", 102)
 
 
 func _paint_legend(c: CanvasItem) -> void:
@@ -1275,8 +1328,6 @@ func _paint_inject(c: CanvasItem) -> void:
 	if not locked:
 		var live := tq_avail or tq_on
 		_button(c, TQ_BTN, "Release" if tq_on else "Tourniquet", 580, live)
-		if not live:
-			I.text(c, cv(Vector2(TQ_BTN.get_center().x, TQ_BTN.end.y + 16.0)), "none to spare", 12.0, Color(I.label, 0.6), 1)
 	# The tray and, when it is not in the hand, the syringe lying on it.
 	I.ellipse(c, cv(TRAY), TRAY_R * _u(), I.ink, I.outline, 590, Color(I.paper.darkened(0.08)))
 	var tray_low := PackedVector2Array()
@@ -1288,13 +1339,10 @@ func _paint_inject(c: CanvasItem) -> void:
 	tp0 = Time.get_ticks_usec()
 	if not held and not locked:
 		_paint_assembly(c, TRAY + Vector2(-60.0, -4.0), 4.0, 0.0, false)
-		I.text(c, cv(TRAY + Vector2(0.0, TRAY_R.y + 18.0)), "tray", 12.0, I.label, 1)
 	elif held or locked:
 		_paint_assembly(c, drawn_grip(), angle, sink if (inserting or locked) else 0.0, true)
 	if locked:
 		_paint_meter(c)
-	if deliver_t >= 0.0:
-		I.text(c, cv(Vector2(480.0, 250.0)), "dose delivered...", 18.0, I.ink, 1)
 
 
 ## Where every part of the syringe assembly is, in rpx, for a grip `g`, an angle and how far the needle
@@ -1370,8 +1418,6 @@ func _paint_assembly(c: CanvasItem, g: Vector2, ang: float, adv: float, live: bo
 			I.text(c, cv(vis_end + Vector2(14.0, -12.0)), "depth %d%%" % int(round(depth * 100.0)), 13.0, I.deep_red if red else I.label)
 	if live:
 		I.text(c, cv(g + Vector2(-34.0, -14.0)), "%d°" % int(round(ang)), 13.0, Color(I.label, 0.55), 1)
-	if flashed and not locked:
-		I.text(c, cv(tp + Vector2(18.0, 26.0)), "in the vein: stop", 15.0, I.deep_red)
 
 
 ## The spec's section 7 debug overlay (`debug_overlay`, or --inject-debug on the command line): the
@@ -1446,6 +1492,8 @@ func _paint_meter(c: CanvasItem) -> void:
 ## one draws nothing new.
 func warm_all() -> void:
 	_warm = true
+	if shell != null:
+		shell.mistake("MISS!", shell.area.get_center(), true, 0)
 	vis = 1.0
 	held = true
 	flashed = true
@@ -1539,6 +1587,14 @@ func bot_input(t: float, skill: float) -> Dictionary:
 	if _b.is_empty():
 		_b = {"t": 0.0, "wait": 0.0, "st": 0, "tries": 0, "blows": 0, "aim_i": 0, "click": false, "prev_lmb": false}
 	var out := {"cursor": metres_of_ref(Vector2(SYR_X, 360.0)), "buttons": 0}
+	# A stamp card: take it down with Enter (which is not an action) once it will go.
+	if stamp_waiting():
+		if card_left <= 0.0 and not frozen:
+			if not bool(_b.get("ent", false)):
+				out.buttons = BUTTON_ENTER
+			_b.ent = not bool(_b.get("ent", false))
+		_b.click = false
+		return out
 	if not armed():
 		_b.click = false
 		return out
@@ -1571,9 +1627,9 @@ func _bot_draw(skill: float, out: Dictionary) -> Dictionary:
 	var aim := target + lerpf(0.10, 0.0, skill)
 	if skill < 0.5:
 		if fluid < aim and vial > 0.0:
-			out.buttons = BUTTON_PRIMARY
+			out.buttons = BUTTON_ACTION
 			return out
-		out.buttons = BUTTON_ACTION if not bool(_b.click) else 0
+		out.buttons = BUTTON_ENTER if not bool(_b.click) else 0
 		_b.click = not bool(_b.click)
 		return out
 	# A good hand draws in holds it lets go of before they run away, then trims with the wheel. It
@@ -1583,7 +1639,7 @@ func _bot_draw(skill: float, out: Dictionary) -> Dictionary:
 	var speed := draw_base + _hold * draw_accel * k
 	if fluid < aim - band * 0.35 - speed * 0.06:
 		if _hold < air_hold / k - 0.4 and float(_b.wait) <= 0.0:
-			out.buttons = BUTTON_PRIMARY
+			out.buttons = BUTTON_ACTION
 		elif _hold > 0.0:
 			_b.wait = 0.08
 		return out
@@ -1594,7 +1650,7 @@ func _bot_draw(skill: float, out: Dictionary) -> Dictionary:
 		return out
 	if float(_b.wait) > 0.0:
 		return out
-	out.buttons = BUTTON_ACTION if not bool(_b.click) else 0
+	out.buttons = BUTTON_ENTER if not bool(_b.click) else 0
 	_b.click = not bool(_b.click)
 	return out
 
@@ -1608,7 +1664,7 @@ func _bot_debubble(skill: float, out: Dictionary) -> Dictionary:
 		_b.t = 0.0
 		since = 0.0
 	if bubbles.is_empty() or since > patience:
-		out.buttons = BUTTON_ACTION if not bool(_b.click) else 0
+		out.buttons = BUTTON_ENTER if not bool(_b.click) else 0
 		_b.click = not bool(_b.click)
 		return out
 	if float(_b.wait) > 0.0 and not bool(_b.click):
@@ -1621,8 +1677,14 @@ func _bot_debubble(skill: float, out: Dictionary) -> Dictionary:
 	# One at the needle end: purge it.
 	for b in bubbles:
 		if float(b[1]) - float(b[2]) - FLUID_TOP <= purge_reach / k * 0.8:
+			# A tap of Space on the plunger.
 			_b.wait = 0.2
-			return _bot_click(Vector2(SYR_X, pad_y() + 6.0), out)
+			if bool(_b.click):
+				_b.click = false
+				return out
+			_b.click = true
+			out.buttons = BUTTON_ACTION
+			return out
 	# Otherwise a flick every so often to hurry them up.
 	_b.wait = 0.7
 	return _bot_click(Vector2(SYR_X, BARREL_Y1 - 30.0), out)
@@ -1681,7 +1743,7 @@ func _bot_inject(skill: float, out: Dictionary) -> Dictionary:
 			pushing = true
 		_b.prev_lmb = pushing
 		if pushing:
-			out.buttons = BUTTON_PRIMARY
+			out.buttons = BUTTON_ACTION
 		return out
 	var st := int(_b.st)
 	if st < 10:
@@ -1743,7 +1805,7 @@ func _bot_inject(skill: float, out: Dictionary) -> Dictionary:
 				_b.st = 15   # nothing there: let go (a miss)
 				return out
 			_b.hold_for = float(_b.get("hold_for", 0.0)) + 1.0 / 60.0
-			out.buttons = BUTTON_PRIMARY
+			out.buttons = BUTTON_ACTION
 			return out
 		14:
 			# Let go at the flash: it locks in.
@@ -1834,6 +1896,14 @@ static func self_test() -> Array:
 		al.n, al.grip, al.tip, al.mark, al.dimple, al.line, al.holes, al.bruises, al.flashes])
 	if al.n < 10 or al.grip > 1.0 or al.tip > 1.0 or al.mark > 1.0 or al.dimple > 1.0 or al.line > 1.0 or al.holes + al.bruises < 3:
 		print("[inject self-test] MISS: the needle, the vein test and the marks must land on the same point")
+		ok = false
+	# The shell: a stamp card waits for its press and that press is the first action (Enter only takes
+	# it down), and an onlooker gets the same bursts and splats as the operator.
+	var sc := _shell_check(script)
+	print("[inject self-test] shell: card waits %s, Space dismisses and draws %s, Enter dismisses without advancing %s, spectator splats %d/%d same %s" % [
+		sc.waits, sc.space_draws, sc.enter_only, sc.spec_splats, sc.op_splats, sc.same])
+	if not sc.waits or not sc.space_draws or not sc.enter_only or not sc.same or sc.op_splats < 2:
+		print("[inject self-test] MISS: the shell's cards and mistakes")
 		ok = false
 	# An onlooker sees what the operator sees.
 	var drift := _net_round_trip(script)
@@ -1958,7 +2028,7 @@ static func _alignment_check(script: GDScript) -> Dictionary:
 			while frames < 240:
 				frames += 1
 				var before: Vector2 = g.tip()
-				g.handle_cursor(cursor, 1, dt)
+				g.handle_cursor(cursor, 64, dt)
 				g.tick(dt)
 				if g.bruises.size() > bruises0:
 					worst.mark = maxf(worst.mark, on_page.call(Vector2(g.bruises[-1][0], g.bruises[-1][1])).distance_to(on_page.call(before)))
@@ -1989,6 +2059,49 @@ static func _alignment_check(script: GDScript) -> Dictionary:
 			worst.n += 1
 			g.free()
 	return worst
+
+
+static func _shell_check(script: GDScript) -> Dictionary:
+	var dt := 1.0 / 60.0
+	var r := {"waits": false, "space_draws": false, "enter_only": false, "op_splats": 0, "spec_splats": 0, "same": false}
+	var g = script.new()
+	g.setup(_ctx("bob", 1, 0))
+	for i in 90:
+		g.handle_cursor(Vector2.ZERO, 0, dt)
+		g.tick(dt)
+	r.waits = g.stamp_waiting() and g.card_word == "DRAW!"
+	g.handle_cursor(Vector2.ZERO, 64, dt)
+	g.tick(dt)
+	r.space_draws = not g.stamp_waiting() and g.fluid > 0.0
+	g.free()
+	var e = script.new()
+	e.setup(_ctx("bob", 1, 0))
+	for i in 3:
+		e.handle_cursor(Vector2.ZERO, 0, dt)
+		e.tick(dt)
+	e.handle_cursor(Vector2.ZERO, 512, dt)
+	e.tick(dt)
+	r.enter_only = not e.stamp_waiting() and e.phase == 0
+	e.free()
+	# Two mistakes on the operator; the onlooker hears of them through the state blob only.
+	var op = script.new()
+	op.setup(_ctx("bob", 1, 0))
+	var sctx := _ctx("bob", 1, 0)
+	sctx["operator"] = false
+	var spec = script.new()
+	spec.setup(sctx)
+	op.mistake("MISS!", 0.0, "", "miss", Vector2(400, 400))
+	op.mistake("BLOWN!", 0.0, "", "blown", Vector2(600, 400), true)
+	op.tick(dt)
+	spec.apply_net_state(op.net_state())
+	spec.tick(dt)
+	r.op_splats = op.shell._splats.size()
+	r.spec_splats = spec.shell._splats.size()
+	r.same = r.op_splats == r.spec_splats and r.op_splats > 0 \
+		and (op.shell._splats[-1][0] as Vector2).is_equal_approx(spec.shell._splats[-1][0])
+	op.free()
+	spec.free()
+	return r
 
 
 ## Operator and onlooker side by side: one plays, the other only ever sees net_state at 20 Hz.
@@ -2027,13 +2140,13 @@ static func _hand_over(script: GDScript) -> Array:
 	var t := 0.0
 	while t < 1.4:
 		t += dt
-		a.handle_cursor(a.metres_of_ref(Vector2(430.0, 380.0)), 1 if t > 0.6 else 0, dt)
+		a.handle_cursor(a.metres_of_ref(Vector2(430.0, 380.0)), 64 if t > 0.6 else 0, dt)
 		a.tick(dt)
 	a.ctx["operating"] = false
 	a.tick(dt)
 	var parked: float = a.fluid
 	for i in 30:
-		a.handle_cursor(Vector2.ZERO, 1, dt)
+		a.handle_cursor(Vector2.ZERO, 64, dt)
 		a.tick(dt)
 	var drift := absf(a.fluid - parked)
 	var b = script.new()
