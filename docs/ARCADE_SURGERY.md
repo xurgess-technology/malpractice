@@ -506,7 +506,7 @@ Rhyme: a side-scroller back out along the bullet's own channel. The forceps alre
   `Minigame.stirs_itself()`, which the surgery system, the lab and `run_bot` honour). Only when the
   carried-forward `sedation` is under 0.75. Scheduled from the seed: first at 4-10 s of flying, then
   every 8-14 s. The walls close in over 0.35 s, hold 0.8 s, let go over 0.6 s, by 2.5 mm for a patient
-  with no sedation at all, down to 60% of that at the threshold. A SQUIRM! burst beside the slug,
+  with no sedation at all, down to 60% of that at the threshold. A SQUIRM! burst beside the slug (a warning: burst(), no blood, no cost),
   inward red arrows on both walls while it lasts, a brief shake and a flinch on the body.
 - **Tearing.** A wall touch is a live botch: `mistake("TORN!", 2.5, "Forced the bullet into the wall",
   "tear", ..., serious)` -- the burst, 2-4 blood splats, the shake and red wash, the cost. The slug is

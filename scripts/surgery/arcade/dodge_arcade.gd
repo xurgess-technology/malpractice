@@ -518,7 +518,7 @@ func advance(delta: float) -> void:
 	var before := squirms_begun()
 	fly_t += delta
 	if squirms_begun() > before:
-		mistake("SQUIRM!", 0.0, "", "squirm", cv(Vector2(tx(s_slug) + 150.0, ty(fly_y) - 70.0)))
+		burst("SQUIRM!", cv(Vector2(tx(s_slug) + 150.0, ty(fly_y) - 70.0)))
 	invuln = maxf(0.0, invuln - delta)
 	fly_v = minf(fly_v + gravity_mm * delta, max_fall_mm)
 	fly_y += fly_v * delta
@@ -991,7 +991,7 @@ static func self_test() -> Array:
 				g.mistake_made.connect(func(kd, _w): tally.spikes[kd] = int(tally.spikes.get(kd, 0)) + 1)
 				g.setup(_case(pid, sed, 1))
 				var t: float = run_bot(g, skill, sed, hash(pid) + int(skill * 100))
-				var sq: int = int(tally.spikes.get("squirm", 0))
+				var sq: int = g.squirms_begun()
 				print("[dodge self-test] %-4s skill=%.1f sed=%.1f  %s  tract=%3dmm  tears=%2d  squirms=%d  time=%5.1fs  vitals=%5.1f  quality=%.2f" % [
 					pid, skill, sed, "DONE" if tally.done else "UNFINISHED", int(g.tract_mm), g.tears.size(), sq, t, tally.v, g.quality])
 				out.append({"patient": pid, "skill": skill, "sed": sed, "done": tally.done, "time": t,
