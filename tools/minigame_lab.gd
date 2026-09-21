@@ -389,6 +389,12 @@ func _run_self_test() -> void:
 		push_error("No minigame '%s'" % self_test)
 		get_tree().quit(2)
 		return
+	# `eye_ops.gd` has no self_test(), and calling a method that is not there does nothing at all --
+	# the lab then sits there until somebody kills it. Say so and leave instead.
+	if not script.has_method("self_test"):
+		print("[lab] '%s' has no self_test()" % self_test)
+		get_tree().quit(3)
+		return
 	var started := Time.get_ticks_msec()
 	if gid == "forceps" and not arcade:
 		script.call("self_test", self, 12)
