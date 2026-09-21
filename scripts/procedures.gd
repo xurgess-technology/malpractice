@@ -203,7 +203,7 @@ static var ARCADE_ENABLED := {
 	"saw:skull": false,       # the monster table's skull cut: legacy until it gets its own
 	"eye:cut": false,
 	"eye:scoop": true,
-	"eye:snip": false,
+	"eye:snip": true,
 	"eye:place": true,
 	"eye:grab": true,
 	"eye:stitch": false,
