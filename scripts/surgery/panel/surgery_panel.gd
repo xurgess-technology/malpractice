@@ -86,6 +86,13 @@ enum State { SHUT, OPENING, OPEN, CLOSING }
 @export_range(0.02, 1.0, 0.01) var ghost_in := 0.09
 @export_range(0.05, 2.0, 0.01) var ghost_out := 0.45
 
+# -- shake --------------------------------------------------------------------------------------
+## ARCADE (docs/ARCADE_SURGERY.md): the panel is bolted to something, and when the patient jerks or
+## a tool binds it rattles. `shake()` asks for it; strength is 0..1.
+@export_range(0.0, 0.05, 0.001) var shake_throw := 0.014   ## metres at full strength
+@export_range(0.05, 1.5, 0.01) var shake_time := 0.3
+@export_range(4.0, 80.0, 1.0) var shake_hz := 26.0
+
 # -- contents --------------------------------------------------------------------------------------
 ## Small header, top-left inside the frame.
 var header := ""
@@ -105,6 +112,9 @@ var _light: OmniLight3D
 var _oriented := false
 var _ghost := 0.0                 # 0..1, how far out of the way it is right now
 var _ghost_hold := 0.0            # seconds still to stay there
+var _shake := 0.0                 # seconds of rattle left
+var _shake_k := 0.0               # 0..1 strength of the current rattle
+var _rest := Vector3.ZERO         # where the panel hangs when it is not rattling
 
 static var _shader: Shader = null
 
@@ -200,6 +210,7 @@ func open(camera_local: Vector3) -> void:
 			var g := global_transform
 			top_level = true
 			global_transform = g
+			_rest = g.origin
 	state = State.OPENING
 	_k = 0.0
 	visible = true
@@ -229,10 +240,21 @@ func ghost(hold: float) -> void:
 	_ghost_hold = maxf(_ghost_hold, hold)
 
 
+## Rattle the whole panel for a moment. `strength` 0..1; calling it again while it is still going
+## takes the louder of the two.
+func shake(strength: float) -> void:
+	_shake_k = maxf(_shake_k, clampf(strength, 0.0, 1.0))
+	_shake = maxf(_shake, shake_time * _shake_k)
+
+
 ## Every frame, from the minigame's tick. Redraws the diagram while the panel is open.
 func tick(delta: float) -> void:
 	if state == State.SHUT:
 		return
+	if _shake > 0.0:
+		_shake = maxf(0.0, _shake - delta)
+		if _shake <= 0.0:
+			_shake_k = 0.0
 	if _ghost_hold > 0.0:
 		_ghost_hold = maxf(0.0, _ghost_hold - delta)
 		_ghost = move_toward(_ghost, 1.0, delta / maxf(0.01, ghost_in))
@@ -272,6 +294,14 @@ func _apply_anim() -> void:
 		s = lerpf(1.0, open_scale + 0.06, _k)
 		fade = 1.0 - _k
 	scale = Vector3(s, s, 1.0)
+	if _oriented and top_level:
+		if _shake > 0.0:
+			var k: float = (_shake / maxf(0.01, shake_time)) * _shake_k
+			var ph: float = _shake * shake_hz
+			var off: Vector3 = global_basis.x * sin(ph * TAU) + global_basis.y * sin(ph * TAU * 1.37 + 1.1)
+			global_position = _rest + off * shake_throw * k
+		elif not global_position.is_equal_approx(_rest):
+			global_position = _rest
 	var clear: float = lerpf(1.0, ghost_alpha, _ghost)
 	if _mat != null:
 		_mat.set_shader_parameter("fade", fade * clear)

@@ -1,6 +1,12 @@
 # The surgery overhaul
 
-> **2026-09-20: nothing here has been started.** A separate panel testbed
+> **2026-09-20: the step redesigns in this document are SUPERSEDED by
+> [ARCADE_SURGERY.md](ARCADE_SURGERY.md)**, which moves every surgery step onto the raised panel as
+> its own short arcade minigame. Do not execute the phases below. What is still live here is the
+> non-step material (the tables, the bodies, the syringe item, the camera decisions); the step
+> designs are not.
+>
+> **Nothing here has been started.** A separate panel testbed
 > ([PANEL_STYLE.md](PANEL_STYLE.md)) now exists on `main`: a flat 2D diagram that pops in over the
 > wound and is played instead of a board laid on the patient, proved out on a new one-step
 > procedure. The phase 3 decisions below are pending Zach's evaluation of it.

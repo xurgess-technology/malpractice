@@ -5,7 +5,7 @@ extends Node3D
 ##         [--ailment=gunshot|amputation] [--variant=pack|stump] [--bot=1.0] [--seconds=40]
 ##         [--shot=res://tools/lab_shots/forceps.png] [--shot-at=6.0] [--flags=sedation:0.6,tourniquet:0.9]
 ##         [--seed=N] [--wide] [--nohud] [--look=or] [--selftest=<game>] [--sedation=0.4]
-##         [--cam=op|stand|wide|site] [--idle] [--marks=ggsgg]
+##         [--cam=op|stand|wide|site] [--idle] [--marks=ggsgg] [--arcade]
 ##         [--teammate-light[=nohelp|away]] [--teammate-aim=dx,dz]
 ##
 ## --flags with sedation under 0.75 makes the patient stir the way the surgery system does.
@@ -20,7 +20,9 @@ extends Node3D
 ##   shut, so the shot shows what is on the patient when the table is left alone.
 ## --marks=ggsgg puts a finished step's result on the body (the laceration's stitch marks), to judge
 ##   the overlay the patient walks out with. Implies --idle.
-## --selftest=<game> runs that minigame's static self_test() and quits.
+## --selftest=<game> runs that minigame's static self_test() and quits; --selftest=<game>:arcade runs
+##   the arcade rebuild's instead (docs/ARCADE_SURGERY.md).
+## --arcade plays the step's arcade rebuild whatever Procedures.ARCADE_ENABLED says.
 ## --teammate-light puts a teammate's flashlight (a player's SpotLight3D) beside the table, aimed at the
 ##   site (plus --teammate-aim metres on the plane) and handed to the step as ctx.helper_lights, the way
 ##   the surgery system hands it teammates' lights. =nohelp: the same light but not handed over (how
@@ -50,6 +52,7 @@ var nohud := false
 var look := ""
 var cam_mode := ""
 var idle := false
+var arcade_force := false
 var teammate_light := ""
 var teammate_aim := Vector2.ZERO
 var _teammate: SpotLight3D
@@ -101,6 +104,7 @@ func _ready() -> void:
 			"sedation": flags["sedation"] = float(v)
 			"cam": cam_mode = v
 			"idle": idle = true
+			"arcade": arcade_force = true
 			"marks":
 				flags["stitch_marks"] = v
 				idle = true
@@ -134,6 +138,9 @@ func _ready() -> void:
 	if game_id == "gauze" and variant == "stump" and not flags.has("amputated"):
 		flags["amputated"] = true
 
+	if arcade_force:
+		Procedures.ARCADE_ENABLED[game_id] = true
+		Procedures.ARCADE_ENABLED["%s:%s" % [game_id, variant]] = true
 	_build_room()
 	body = PlayerBodyScript.create(1, Color("3d8f80")) if patient_id == "player" else BodyScript.create(patient_id)
 	add_child(body)
@@ -148,7 +155,7 @@ func _ready() -> void:
 	site = body.site_transform(step.site) if body.has_method("site_transform") else Transform3D(Basis(), Vector3(0, 1.2, 0))
 	step_site = String(step.site)
 
-	var path: String = Procedures.MINIGAME_SCRIPTS.get(game_id, "")
+	var path: String = Procedures.minigame_script(game_id, variant)
 	if path == "" or not ResourceLoader.exists(path):
 		push_error("No minigame script for '%s' at '%s'" % [game_id, path])
 		get_tree().quit(2)
@@ -366,14 +373,18 @@ func _stir_tick(delta: float) -> Vector2:
 
 ## `--selftest=<game>`: runs that minigame's static self_test() headless and quits.
 func _run_self_test() -> void:
-	var path: String = Procedures.MINIGAME_SCRIPTS.get(self_test, "")
-	var script := load(path) as GDScript if path != "" else null
+	# --selftest=<game> runs the legacy game's checks; --selftest=<game>:arcade runs the arcade one's,
+	# whichever way the ARCADE_ENABLED flag happens to be set.
+	var arcade := self_test.ends_with(":arcade")
+	var gid := self_test.trim_suffix(":arcade")
+	var path: String = String(Procedures.ARCADE_SCRIPTS.get(gid, "")) if arcade else String(Procedures.MINIGAME_SCRIPTS.get(gid, ""))
+	var script := load(path) as GDScript if path != "" and ResourceLoader.exists(path) else null
 	if script == null:
 		push_error("No minigame '%s'" % self_test)
 		get_tree().quit(2)
 		return
 	var started := Time.get_ticks_msec()
-	if self_test == "forceps":
+	if gid == "forceps" and not arcade:
 		script.call("self_test", self, 12)
 	else:
 		script.call("self_test")

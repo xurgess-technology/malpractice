@@ -318,36 +318,43 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	for ail in Procedures.AILMENTS.keys():
 		for i in Procedures.steps(ail).size():
 			var step: Dictionary = Procedures.step(ail, i)
-			var path: String = Procedures.MINIGAME_SCRIPTS.get(step.game, "")
+			var path: String = Procedures.minigame_script(String(step.game), String(step.get("variant", "")))
 			if path == "" or not ResourceLoader.exists(path):
 				continue
 			# SWEEP 3 HOOK (dissection): the skull saw and brain forceps on the monster bodies.
 			var pids: Array = ["player"] if Procedures.is_player_only(ail) else (Procedures.monster_patients() if Procedures.is_monster_only(ail) else Procedures.human_patients())
+			# ARCADE: build the legacy game AND the arcade rebuild where one exists, so the first
+			# open never hitches whichever way ARCADE_ENABLED happens to be set.
+			var paths: Array = [path]
+			var arcade_path := String(Procedures.ARCADE_SCRIPTS.get(String(step.game), ""))
+			if arcade_path != "" and arcade_path != path and ResourceLoader.exists(arcade_path):
+				paths.append(arcade_path)
 			for pid in pids:
-				var body: Node3D = bodies["%s|%s" % [pid, ail]]
-				var mg: Node3D = (load(path) as GDScript).new()
-				shelf.add_child(mg)
-				mg.global_transform = body.site_transform(step.site)
-				mg.setup({
-					"patient_id": pid, "patient": Procedures.patient(pid), "ailment_id": ail,
-					"step": step, "variant": step.get("variant", ""), "shift": 1,
-					"difficulty": 1.0, "flags": {"sedation": 1.0, "tourniquet": 0.4},
-					"seed": 7 + i, "body": body, "operator": false,
-					# PANEL TESTBED: a panel step builds and draws its panel while somebody operates,
-					# so warm it here or the first real open compiles the shader mid-step.
-					"operating": true,
-					# GRAFTING chunk C: the graft's own knobs, so the eye steps build the eye going IN
-					# (the Hive eyeball's shader) and the forceps seat step's tray, nerve and cues here.
-					"no_fail": true, "eye_kind": "eye_surgeon", "eye_kind_in": "eye_hive",
-					"eye_radius": Grafts.EYE_RADIUS,
-				})
-				# PANEL TESTBED: a panel step only builds its diagram once the panel opens, which
-				# happens on the first tick. One tick here compiles the panel shader and draws the
-				# first SubViewport frame behind the launch printout.
-				if mg.has_method("uses_panel") and bool(mg.uses_panel()):
-					mg.tick(1.0 / 60.0)
-				games.append(mg)
-				await _slice(slice)
+				for mg_path in paths:
+					var body: Node3D = bodies["%s|%s" % [pid, ail]]
+					var mg: Node3D = (load(mg_path) as GDScript).new()
+					shelf.add_child(mg)
+					mg.global_transform = body.site_transform(step.site)
+					mg.setup({
+						"patient_id": pid, "patient": Procedures.patient(pid), "ailment_id": ail,
+						"step": step, "variant": step.get("variant", ""), "shift": 1,
+						"difficulty": 1.0, "flags": {"sedation": 1.0, "tourniquet": 0.4},
+						"seed": 7 + i, "body": body, "operator": false,
+						# PANEL TESTBED: a panel step builds and draws its panel while somebody operates,
+						# so warm it here or the first real open compiles the shader mid-step.
+						"operating": true,
+						# GRAFTING chunk C: the graft's own knobs, so the eye steps build the eye going IN
+						# (the Hive eyeball's shader) and the forceps seat step's tray, nerve and cues here.
+						"no_fail": true, "eye_kind": "eye_surgeon", "eye_kind_in": "eye_hive",
+						"eye_radius": Grafts.EYE_RADIUS,
+					})
+					# PANEL TESTBED: a panel step only builds its diagram once the panel opens, which
+					# happens on the first tick. One tick here compiles the panel shader and draws the
+					# first SubViewport frame behind the launch printout.
+					if mg.has_method("uses_panel") and bool(mg.uses_panel()):
+						mg.tick(1.0 / 60.0)
+					games.append(mg)
+					await _slice(slice)
 
 	# Some steps build their geometry on a worker thread (the forceps wound channel). Wait for
 	# it to land, or its material is never drawn here and compiles when the real step begins.

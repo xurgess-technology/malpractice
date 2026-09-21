@@ -189,7 +189,7 @@ func can_begin(player) -> String:
 	var last: float = float(_exit_times.get(player.peer_id, -99.0))
 	if float(game.world_time) - last < REBEGIN_COOLDOWN:
 		return "Stepping back from the table."
-	if not ResourceLoader.exists(String(Procedures.MINIGAME_SCRIPTS.get(String(s.game), ""))):
+	if not ResourceLoader.exists(Procedures.minigame_script(String(s.game), String(s.get("variant", "")))):
 		return "This step is not ready yet."
 	return ""
 
@@ -446,7 +446,8 @@ func _sync_minigame() -> void:
 
 func _spawn_mg() -> void:
 	var step := _step()
-	var path := String(Procedures.MINIGAME_SCRIPTS.get(String(step.get("game", "")), ""))
+	# ARCADE (docs/ARCADE_SURGERY.md): the arcade rebuild when its flag is on, else the legacy game.
+	var path := Procedures.minigame_script(String(step.get("game", "")), String(step.get("variant", "")))
 	if path == "" or not ResourceLoader.exists(path):
 		if not _missing_warned.has(path):
 			_missing_warned[path] = true
@@ -661,6 +662,16 @@ func _drive(delta: float) -> void:
 			buttons |= MinigameBase.BUTTON_SECONDARY
 		if Input.is_action_pressed("move_forward"):
 			buttons |= MinigameBase.BUTTON_UP
+		# ARCADE: the rest of the movement keys are free while operating (the player is locked in
+		# place at the table), so the arcade steps play on them.
+		if Input.is_action_pressed("move_left"):
+			buttons |= MinigameBase.BUTTON_LEFT
+		if Input.is_action_pressed("move_right"):
+			buttons |= MinigameBase.BUTTON_RIGHT
+		if Input.is_action_pressed("move_back"):
+			buttons |= MinigameBase.BUTTON_DOWN
+		if Input.is_action_pressed("jump"):
+			buttons |= MinigameBase.BUTTON_ACTION
 	var c := _cursor + _stir_tick(delta)
 	var ext: Vector2 = mg.plane_extent()
 	c = Vector2(clampf(c.x, -ext.x, ext.x), clampf(c.y, -ext.y, ext.y))

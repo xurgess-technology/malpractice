@@ -44,6 +44,12 @@ const BUTTON_SECONDARY := 2
 ## The forward key (W) held, for steps that use it (the eye steps' "pull the eyeball up"). Bots set it in
 ## bot_input's `buttons` too.
 const BUTTON_UP := 4
+## ARCADE (docs/ARCADE_SURGERY.md): the rest of the movement keys, free while operating because the
+## framework locks the player in place at the table. A / Left, D / Right, S / Down and Space.
+const BUTTON_LEFT := 8
+const BUTTON_RIGHT := 16
+const BUTTON_DOWN := 32
+const BUTTON_ACTION := 64
 
 ## Render layer 20, reserved for a minigame's own props (tools, straps, raised wound models).
 ## Every decal, the patient's and the minigames', projects only onto layer 1 (cull_mask = 1),
@@ -99,6 +105,21 @@ static func pose_camera(site: Transform3D, pose: Dictionary) -> Array:
 ## `buttons` is a bitmask of BUTTON_* currently held.
 func handle_cursor(_p: Vector2, _buttons: int, _delta: float) -> void:
 	pass
+
+
+## ARCADE: which of `buttons` went down since the last call, for steps that care about the press and
+## not the hold. Call it ONCE per handle_cursor, at the top, and keep the result.
+var _edge_prev := 0
+
+func pressed_edges(buttons: int) -> int:
+	var e: int = buttons & ~_edge_prev
+	_edge_prev = buttons
+	return e
+
+
+## The edge state again without consuming it (spectators and bots that peek).
+func held_last() -> int:
+	return _edge_prev
 
 
 ## Operator only. The patient just jerked (an underdosed stir): for the next `duration` seconds

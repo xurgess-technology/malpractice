@@ -585,6 +585,13 @@ func request(action: String, args: Dictionary = {}) -> void:
 		_rpc_request.rpc_id(Net.HOST_ID, action, args)
 
 
+## ARCADE: the host telling everyone which steps play their arcade rebuild.
+@rpc("authority", "reliable", "call_remote")
+func _rpc_arcade(key: String, on: bool) -> void:
+	if Procedures.ARCADE_ENABLED.has(key):
+		Procedures.ARCADE_ENABLED[key] = on
+
+
 @rpc("any_peer", "reliable", "call_remote")
 func _rpc_request(action: String, args: Dictionary) -> void:
 	if is_host() and game.dev_on():
@@ -636,6 +643,15 @@ func _apply_request(sender: int, action: String, a: Dictionary) -> void:
 			_set_flag(gun, sender, bool(a.get("on", not gun.has(sender))))
 		"time_scale":
 			time_scale = clampf(float(a.get("v", 1.0)), 0.05, 4.0)
+		"arcade":
+			# ARCADE (docs/ARCADE_SURGERY.md): which steps play their arcade rebuild. Every machine
+			# has to agree or they would build different minigames, so the host broadcasts it.
+			var akey := String(a.get("key", ""))
+			if Procedures.ARCADE_ENABLED.has(akey):
+				var aon := bool(a.get("on", not bool(Procedures.ARCADE_ENABLED[akey])))
+				Procedures.ARCADE_ENABLED[akey] = aon
+				if Net.active:
+					_rpc_arcade.rpc(akey, aon)
 		"lights":
 			lights_on = bool(a.get("on", not lights_on))
 		"pen":

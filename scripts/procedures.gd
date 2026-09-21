@@ -167,6 +167,40 @@ const MINIGAME_SCRIPTS := {
 	"suture": "res://scripts/surgery/games/suture.gd", # PANEL TESTBED: the deep laceration
 }
 
+## ARCADE (docs/ARCADE_SURGERY.md): the arcade rebuild of a step, played on the raised panel. Keyed
+## by "<game>" or "<game>:<variant>"; the variant key wins when it exists, so flipping "saw" moves
+## the limb to the arcade version and leaves the monster table's "saw:skull" on the legacy one.
+const ARCADE_SCRIPTS := {
+	"saw": "res://scripts/surgery/arcade/saw_arcade.gd",
+}
+
+## Which arcade rebuilds are live. FALSE means the legacy game still plays that step, unchanged.
+## Zach flips these one at a time as he approves them; the dev panel's "Arcade surgery" checkboxes
+## flip them at runtime (host-authoritative: the host broadcasts, so every machine agrees).
+## A `static var` so the lab, the warmup and the headless tests can set it without a Game.
+static var ARCADE_ENABLED := {
+	"saw": false,
+	"saw:skull": false,   # the monster table's skull cut keeps the legacy saw until it gets its own
+}
+
+
+## True when this step's arcade rebuild should play instead of the legacy game.
+static func arcade_on(game: String, variant := "") -> bool:
+	var key := "%s:%s" % [game, variant]
+	if variant != "" and ARCADE_ENABLED.has(key):
+		return bool(ARCADE_ENABLED[key])
+	return bool(ARCADE_ENABLED.get(game, false)) and ARCADE_SCRIPTS.has(game)
+
+
+## The script the framework should load for a step: the arcade rebuild when it is on and exists,
+## otherwise the legacy game. Everything that spawns a minigame goes through here.
+static func minigame_script(game: String, variant := "") -> String:
+	if arcade_on(game, variant):
+		var path := String(ARCADE_SCRIPTS.get("%s:%s" % [game, variant], ARCADE_SCRIPTS.get(game, "")))
+		if path != "" and ResourceLoader.exists(path):
+			return path
+	return String(MINIGAME_SCRIPTS.get(game, ""))
+
 
 ## One patient and one ailment per shift, chosen from the shift seed.
 static func roll(seed_value: int, shift: int) -> Dictionary:

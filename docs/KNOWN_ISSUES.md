@@ -1984,3 +1984,34 @@ Zach has played it.
   `surgery_done`; nothing was added to `tools/gen_audio.mjs`.
 - **A panel is one more SubViewport per operating table.** It renders only while open, at the frame
   rate, 1200x800. Two tables operating at once is two of them. Not measured.
+
+## Arcade surgery: the shared frame and SAW! (2026-09-20, open)
+
+Phase 0 and 1 of [docs/ARCADE_SURGERY.md](ARCADE_SURGERY.md). Every arcade game is behind
+`Procedures.ARCADE_ENABLED`, all `false`, so nothing here is live yet.
+
+- **The dev panel's arcade checkboxes do not survive a step already in flight.** Flipping a key
+  changes what the framework builds at the NEXT step; the one on the table now keeps playing.
+  That is deliberate (swapping mid-step would throw away the state blob) but it reads as the
+  checkbox not working.
+- **A client that joins after the host flipped a key gets the old value.** `_rpc_arcade` broadcasts
+  on the flip; there is no snapshot for a late joiner, so they would build the other game and
+  desync that step. Fine for a dev toggle, wrong if these ever become player-facing.
+- **`ARCADE_ENABLED` is a `static var`**, so a headless test that flips it leaks the change into
+  whatever runs next in the same process. `tools/minigame_lab.gd --arcade` does exactly that on
+  purpose. Nothing runs two labs in one process today.
+- **The arcade saw's sloppy-bot band is tight.** At skill 0.0 Bob loses 24 vitals and the seal 15,
+  against a 15-25 target: both inside, but a small tuning change to `tear_per_rush` pushes one end
+  or the other out. The botch threshold is discrete (a tear costs 3.0 when the meter fills), so the
+  numbers step rather than slide.
+- **`saw:skull` is pinned to the legacy saw.** The arcade saw can play it (its own layers, a depth
+  band instead of bone circles) but it has never been looked at, and the monster table's fiction is
+  not the same joke. Flipping that key is untested.
+- **The blood that hides the pendulum is flat hard-edged circles.** Readable and unmistakable, but
+  crude next to the rest of the panel style.
+- **No arcade sounds of its own.** SAW! reuses `surgery_saw_rasp`, `surgery_saw_grind`,
+  `surgery_saw_squelch`, `surgery_saw_thunk`, `surgery_forceps_clink` and `surgery_click`. The
+  brief asks for an audible cadence tick; the pendulum is currently silent, because there is no cue
+  short and quiet enough and `tools/gen_audio.mjs` was left alone.
+- **The command card's `ready_cue` and `card_cue` exports are wired but never played.** They are
+  there for when the cues exist.

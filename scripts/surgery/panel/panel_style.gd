@@ -38,6 +38,8 @@ extends Resource
 @export var thread := Color(0.98, 0.95, 0.86)
 ## Steel: the needle and the driver.
 @export var steel := Color(0.74, 0.84, 0.88)
+## Bone: hard and pale, so a cross-section reads as bone and not as a hole.
+@export var bone := Color(0.80, 0.80, 0.72)
 
 # -- weights ------------------------------------------------------------------------------------
 @export var outline := 3.0

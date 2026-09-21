@@ -225,6 +225,19 @@ func _build() -> void:
 	_c["pen"] = _check(g3, "Pen gate open", func(on): _req("pen", {"open": on}))
 	_label(col, "The dev room is behind the locked door in the OR supply closet.", 11, DIM)
 
+	# ---- ARCADE (docs/ARCADE_SURGERY.md): which steps play their arcade rebuild
+	_section(col, "Arcade surgery")
+	var ar := _row(col)
+	var n := 0
+	for key in Procedures.ARCADE_ENABLED.keys():
+		if n > 0 and n % 3 == 0:
+			ar = _row(col)
+		var k := String(key)
+		_c["arcade_" + k] = _check(ar, k, func(on): _req("arcade", {"key": k, "on": on}))
+		(_c["arcade_" + k] as CheckBox).button_pressed = bool(Procedures.ARCADE_ENABLED[k])
+		n += 1
+	_label(col, "Off plays the legacy step. The host sets it for everyone; it takes effect at the next step.", 11, DIM)
+
 	# ---- the shift loop
 	_section(col, "Shift")
 	var sh1 := _row(col)
