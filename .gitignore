@@ -8,6 +8,9 @@ builds/
 
 # Generated screenshots from tools/*.tscn (regenerate with gameshot/perfprobe etc.)
 tools/*_shots/
+# ARCADE: the morning report's screenshots. On disk to look at, not in the repo: about 1 MB each
+# and a hundred of them (docs/MORNING_REPORT.md says how to regenerate any of them).
+docs/screens/
 
 # Web prototype build output
 deprecated/prototype-web/node_modules/
