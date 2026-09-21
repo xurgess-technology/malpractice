@@ -145,6 +145,9 @@ difficulty factor k = difficulty ^ `difficulty_gain` (0.5):
 | `angle_min` / `angle_max` | 8 / 80 deg | the needle's range |
 | `scroll_deg` / `key_deg` | 3 / 2 | per wheel notch / per A or D |
 | `push_hold` | 0.15 s | hold this long before the needle goes in |
+| `cursor_at_tip` | true | the mouse holds the syringe by the needle tip (false: the spec's grip) |
+| `buried_alpha` | 0.5 | how strongly the needle shows under the skin |
+| `debug_overlay` | false | the section 7 overlay (or `--inject-debug`) |
 | `insert_speed` / `insert_max` | 38 x k / 55 px | needle speed and reach |
 | `flash_min` / `tip_tol` | 14 / 9 / k px | the flash wants the tip this deep and this close to a vein |
 | `window_lo` / `window_hi` | 14 / 32 deg | the angle to the vein that flashes (half-width / k) |
@@ -362,10 +365,17 @@ split top and bottom. Everything below is in reference px.
 ink edge; 2-3 seeded veins across it; the instrument tray top left.
 - Bare-handed, click (under 0.3 s) the skin to slap it: the veins show fully and fade out over
   1.5 s / difficulty. Click the tray to take the syringe; a quick click back on it sets it down.
-- Held, the syringe follows the mouse; wheel +/-3 degrees, A/D +/-2 (8-80 degrees below
-  horizontal). Hold LMB for 0.15 s with the tip on the skin and the needle goes in at
-  38 px/s x difficulty (max 55), visibly sinking in: the buried part is a faint dashed ghost, with
-  a depth readout that goes red past 65%.
+- Held, the syringe hangs from the mouse **by its needle tip** (`cursor_at_tip`; the spec held it
+  by the grip, 126 px back, and a miss's hole then landed far from the pointer); wheel +/-3
+  degrees, A/D +/-2 (8-80 degrees below horizontal), turning about the tip. Hold LMB for 0.15 s with
+  the tip on the skin and the needle goes in there at 38 px/s x difficulty (max 55): solid down to
+  the entry dimple, then dashed (`buried_alpha` 0.5; the spec's 0.15 hid it) to a ringed tip, which
+  is the exact point the vein test uses and where a miss leaves its hole. A depth readout goes red
+  past 65%. The self-test checks pointer, drawn tip, hit-test tip, hole and dimple land within 1 px,
+  through the page's tilt, at twelve grips and angles.
+- The spec's section 7 debug overlay: `debug_overlay`, or `--inject-debug` on the command line (it
+  works after `--setup=sedate` too). Veins in green, blown stretches in red, the angle window as
+  dashed rays, a cross at the hit-test tip, and a readout.
 - **The flash**: tip past 14 px, within 9 px / difficulty of a vein, at 14-32 degrees to it (the
   window narrows about its middle with difficulty). The hub fills red. Let go: locked in.
 - Push on 12 px / difficulty past the flash and the vein blows (a bruise; that vein is dead for

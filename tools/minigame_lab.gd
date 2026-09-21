@@ -345,7 +345,8 @@ func _physics_process(delta: float) -> void:
 			var inp: Dictionary = mg.bot_input(t, bot_skill)
 			mg.handle_cursor(_clamp(inp.get("cursor", Vector2.ZERO) + shake), int(inp.get("buttons", 0)), delta)
 		elif cam != null:
-			var hit = MinigameBase.screen_to_plane(cam, get_viewport().get_mouse_position(), mg.global_transform)
+			# A panel step's mouse lands on its panel, as in the surgery system, not on the work plane.
+			var hit = MinigameBase.screen_to_plane(cam, get_viewport().get_mouse_position(), mg.input_plane())
 			if hit != null:
 				var b := 0
 				if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): b |= MinigameBase.BUTTON_PRIMARY
