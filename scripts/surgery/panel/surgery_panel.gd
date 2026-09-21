@@ -103,6 +103,9 @@ var painter: Callable = Callable()
 ## False when the game draws its own surface (the ink/paper look, scripts/surgery/panel/ink.gd):
 ## the teal background, frame and header are then not drawn under it.
 var chrome := true
+## True when the texture has holes: where nothing is drawn the panel is see-through (the ink look's
+## clipboard stands in the room with nothing round it). Set before the panel enters the tree.
+var transparent := false
 var style: StyleScript = null
 
 var state: int = State.SHUT
@@ -345,7 +348,7 @@ func _build() -> void:
 	_vp.name = "Viewport"
 	_vp.size = Vector2i(int(px.x), int(px.y))
 	_vp.disable_3d = true
-	_vp.transparent_bg = false
+	_vp.transparent_bg = transparent
 	_vp.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
 	_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	_vp.gui_disable_input = true
@@ -369,6 +372,7 @@ func _build() -> void:
 	_mat.set_shader_parameter("fade", 0.0)
 	_mat.set_shader_parameter("brightness", brightness)
 	_mat.set_shader_parameter("back_dim", back_dim)
+	_mat.set_shader_parameter("tex_alpha", 1.0 if transparent else 0.0)
 	_quad.material_override = _mat
 	_quad.layers = OWN_LAYER
 	_quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -398,14 +402,16 @@ static func _panel_shader() -> Shader:
 		+ "uniform float fade = 1.0;\n" \
 		+ "uniform float brightness = 1.0;\n" \
 		+ "uniform float back_dim = 0.12;\n" \
+		+ "uniform float tex_alpha = 0.0;\n" \
 		+ "void fragment() {\n" \
-		+ "	vec3 c = texture(panel_tex, UV).rgb * brightness;\n" \
+		+ "	vec4 t = texture(panel_tex, UV);\n" \
+		+ "	vec3 c = t.rgb * brightness;\n" \
 		+ "	// The back of the panel is a dim plate, never a mirrored diagram.\n" \
 		+ "	if (!FRONT_FACING) {\n" \
 		+ "		c = vec3(dot(c, vec3(0.3, 0.6, 0.1))) * back_dim + vec3(0.01, 0.03, 0.03);\n" \
 		+ "	}\n" \
 		+ "	ALBEDO = c;\n" \
-		+ "	ALPHA = fade;\n" \
+		+ "	ALPHA = fade * mix(1.0, t.a, tex_alpha);\n" \
 		+ "}\n"
 	return _shader
 

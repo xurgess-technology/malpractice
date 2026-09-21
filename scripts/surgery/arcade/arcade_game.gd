@@ -85,6 +85,7 @@ func setup(context: Dictionary) -> void:
 		ink = InkScript.new()
 		ink.unit = ink_unit()
 		panel.chrome = false
+		panel.transparent = true
 		panel.style.glow_light = ink_glow
 		panel.brightness = ink_brightness
 	add_child(panel)
@@ -96,6 +97,11 @@ func setup(context: Dictionary) -> void:
 ## diagram. Override.
 func use_ink() -> bool:
 	return false
+
+
+## The word on the ink look's clip: the step's id ("SEDATE").
+func clip_title() -> String:
+	return String(ctx.get("step", {}).get("id", "")).to_upper()
 
 
 ## Canvas pixels per reference pixel, for a game on the ink look laid out on its own reference size.
@@ -324,11 +330,8 @@ func _paint_inner(c: CanvasItem) -> void:
 		ink.t = _ink_t
 		ink.begin_page(c, size)
 		paint_game(c)
-		# The framework's own labels, small, in the page's top corners.
-		ink.text(c, Vector2(26.0, 30.0), panel.header, 12.0)
-		if panel.right_text != "":
-			ink.text(c, Vector2(size.x - 26.0, 30.0), panel.right_text, 12.0, Color(-1, 0, 0), 2)
-		ink.end_page(c, size)
+		# The step's name goes on the clip, the table small in the board's corner.
+		ink.end_page(c, size, clip_title(), panel.right_text)
 		if card_word != "":
 			var ready_now := play_state == Play.READY
 			var total: float = ready_time if ready_now else card_time

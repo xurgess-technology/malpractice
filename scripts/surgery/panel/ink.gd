@@ -5,8 +5,8 @@ extends Resource
 ## is to move onto it later, so everything here is shared and knows nothing about syringes. The teal
 ## X-ray look (panel_style.gd) stays for the games that have not moved yet.
 ##
-## The look, in one breath: a paper page in a thick ink border, tilted a hair, on a flat printed
-## drop shadow. Every outline is a polyline whose vertices are nudged by seeded noise that changes
+## The look, in one breath: a paper sheet on a clipboard -- brown board, steel clip, heavy ink
+## outlines, a hard flat shadow on the room -- with the sheet a hair crooked. Every outline is a polyline whose vertices are nudged by seeded noise that changes
 ## about seven times a second, so lines "boil" like hand-inked animation but hold still inside a
 ## frame. Fills are flat and never wobble. No gradients; shading is a halftone dot tile; the page
 ## carries a few faint grime smudges.
@@ -19,15 +19,14 @@ extends Resource
 ##     var ink: InkScript = InkScript.new()
 ##     ink.unit = 1.25
 ##     ink.t = seconds             # every frame, before drawing: drives the boil
-##     ink.begin_page(c, size)     # mat, shadow, then the tilted page; everything after is on it
+##     ink.content = Rect2(...)    # optional: the part of the canvas the game lays out in
+##     ink.begin_page(c, size)     # shadow, board, paper; everything after is on the paper
 ##     ink.line(c, pts, ink.ink, ink.outline, 17)
-##     ink.end_page(c, size)       # the page's own border, and back to untilted drawing
+##     ink.end_page(c, size, "SEDATE", "TABLE 1")   # outlines, the clip with its title; plain drawing again
 
 # -- palette ------------------------------------------------------------------------------------
 @export var paper := Color("efe9dc")
 @export var mat := Color("e9e3d6")
-## The flat drop under the page.
-@export var shadow := Color(0.13, 0.11, 0.09, 0.85)
 @export var ink := Color("221d18")
 @export var ink_soft := Color("2a241d")
 @export var label := Color("3a332a")
@@ -55,14 +54,34 @@ extends Resource
 @export var good := Color("4c6b3c")
 @export var grime := Color(0.42, 0.38, 0.22)
 
-# -- the page -----------------------------------------------------------------------------------
-## Degrees the page is turned. Negative tips it anticlockwise.
+# -- the clipboard ------------------------------------------------------------------------------
+## The page frame is a clipboard: a brown hardboard, square to the panel, with rounded corners and a
+## heavy ink outline; the paper sheet on it, a hair crooked; a steel clip at the top centre with the
+## step's name on it; and a hard flat shadow the board casts on the room. Everywhere else the panel
+## is transparent (SurgeryPanel.transparent), so the clipboard is the one object you see.
+@export var board := Color("7a5a3a")
+@export var board_edge := Color("4f3a24")
+@export var clip_steel := Color("a8adb0")
+@export var clip_dark := Color("6f7477")
+## The flat shadow the board casts behind it, and how far, canvas px.
+@export var shadow := Color(0.0, 0.0, 0.0, 0.55)
+@export var shadow_offset := Vector2(14.0, 16.0)
+## The board's place on the canvas, canvas px: clear of the sides, well clear of the top
+## (the clip stands above the board, and the screen's caption bar is up there), and room for the
+## shadow at the bottom right.
+@export var board_side := 36.0
+@export var board_top := 70.0
+@export var board_bottom := 22.0
+@export_range(0.0, 60.0, 0.5) var board_radius := 22.0
+@export_range(2.0, 10.0, 0.1) var board_line := 4.5
+## The paper's margin on the board: sides, top (under the clip) and bottom.
+@export var paper_margin := Vector3(20.0, 28.0, 18.0)
+@export_range(1.0, 6.0, 0.1) var border := 2.6
+## Degrees the paper sits crooked on the board. Negative tips it anticlockwise.
 @export_range(-5.0, 5.0, 0.05) var tilt_deg := -0.65
-## The drop shadow's offset, reference px.
-@export var shadow_offset := Vector2(9.0, 11.0)
-## The page's share of the canvas it is drawn on, so the border and the shadow stay on the texture.
-@export_range(0.8, 1.0, 0.005) var page_scale := 0.965
-@export_range(1.0, 6.0, 0.1) var border := 3.0
+## The clip: width at its base, how far it stands above the board, how far it reaches down onto
+## the paper.
+@export var clip_size := Vector3(250.0, 30.0, 58.0)
 
 # -- line work ----------------------------------------------------------------------------------
 @export_range(0.5, 5.0, 0.1) var detail := 2.1
@@ -83,6 +102,10 @@ extends Resource
 
 ## Canvas pixels per reference pixel.
 var unit := 1.0
+## The part of the canvas the game lays its diagram out in; it is fitted onto the paper at one uniform
+## scale (page_fit()), so a millimetre on the diagram is the same everywhere. The whole canvas unless
+## the game says otherwise.
+var content := Rect2()
 ## Seconds, for the boil. Set it every frame before drawing.
 var t := 0.0
 ## Profiling: draw commands issued since reset (every draw_* call counts one).
@@ -380,55 +403,135 @@ static func make_grime(rng: RandomNumberGenerator, area: Rect2) -> Array:
 
 # ---------------------------------------------------------------------------- the page
 
-## Where the page sits on a canvas of `size`, before the tilt.
+## The board, on a canvas of `size`.
+func board_rect(size: Vector2) -> Rect2:
+	return Rect2(Vector2(board_side, board_top), size - Vector2(board_side * 2.0, board_top + board_bottom))
+
+
+## The room on the board for the paper.
+func _paper_room(size: Vector2) -> Rect2:
+	var br := board_rect(size)
+	return Rect2(br.position + Vector2(paper_margin.x, paper_margin.y),
+		br.size - Vector2(paper_margin.x * 2.0, paper_margin.y + paper_margin.z))
+
+
+func _content(size: Vector2) -> Rect2:
+	return content if content.size.x > 0.0 else Rect2(Vector2.ZERO, size)
+
+
+## How much the game's layout is scaled to fit the paper (uniform, so the diagram is honest).
+func page_fit(size: Vector2) -> float:
+	var room := _paper_room(size)
+	var ct := _content(size)
+	return minf(room.size.x / ct.size.x, room.size.y / ct.size.y)
+
+
+## The paper sheet before its tilt: the game's content, fitted.
 func page_rect(size: Vector2) -> Rect2:
-	var s := size * page_scale
-	return Rect2((size - s) * 0.5, s)
+	var room := _paper_room(size)
+	var sz := _content(size).size * page_fit(size)
+	return Rect2(room.get_center() - sz * 0.5, sz)
 
 
-## The mat, the flat drop shadow, then the page itself, turned by `tilt_deg`. Everything drawn until
-## end_page() is on the page, in canvas pixels as if it were not turned.
+## The game's layout -> the paper as it lies on the board (fitted, then turned about its middle).
+func page_transform(size: Vector2) -> Transform2D:
+	var ct := _content(size)
+	var pr := page_rect(size)
+	return Transform2D().translated(pr.get_center()) * Transform2D(deg_to_rad(tilt_deg), Vector2.ZERO) \
+		* Transform2D().scaled(Vector2.ONE * page_fit(size)) * Transform2D().translated(-ct.get_center())
+
+
+## Corners of a rounded rectangle, for filled and outlined shapes.
+static func rounded(r: Rect2, radius: float, seg := 5) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var rad := minf(radius, minf(r.size.x, r.size.y) * 0.5)
+	var centres := [Vector2(r.end.x - rad, r.position.y + rad), Vector2(r.end.x - rad, r.end.y - rad),
+		Vector2(r.position.x + rad, r.end.y - rad), Vector2(r.position.x + rad, r.position.y + rad)]
+	for ci in 4:
+		var start := -PI * 0.5 + PI * 0.5 * float(ci)
+		for i in seg + 1:
+			var ang := start + PI * 0.5 * float(i) / float(seg)
+			out.append((centres[ci] as Vector2) + Vector2(cos(ang), sin(ang)) * rad)
+	return out
+
+
+## The shadow, the board and the paper; everything drawn until end_page() lands on the paper, in the
+## game's own layout coordinates.
 func begin_page(c: CanvasItem, size: Vector2) -> void:
-	c.draw_rect(Rect2(Vector2.ZERO, size), mat)
-	var r := page_rect(size)
-	var centre := size * 0.5
-	c.draw_set_transform(centre, deg_to_rad(tilt_deg), Vector2.ONE)
-	c.draw_rect(Rect2(r.position - centre + shadow_offset * unit, r.size), shadow)
-	c.draw_rect(Rect2(r.position - centre, r.size), paper)
-	# Everything the game draws is laid out on the whole canvas; squeeze it onto the page.
-	_page_xf(c, size)
-
-
-func _page_xf(c: CanvasItem, size: Vector2) -> void:
-	var centre := size * 0.5
-	var xf := Transform2D(deg_to_rad(tilt_deg), Vector2.ZERO)
-	xf = Transform2D().translated(centre) * xf * Transform2D().scaled(Vector2.ONE * page_scale) * Transform2D().translated(-centre)
+	var br := board_rect(size)
+	var shape_pts := rounded(br, board_radius * unit)
+	var shadow_pts := PackedVector2Array()
+	for q in shape_pts:
+		shadow_pts.append(q + shadow_offset * unit)
+	c.draw_colored_polygon(shadow_pts, shadow)
+	c.draw_colored_polygon(shape_pts, board)
+	# A little tooth on the hardboard: a faint halftone, so it is board and not a flat brown slab.
+	halftone_poly(c, shape_pts, 0.18, board_edge)
+	var xf := page_transform(size)
+	var ct := _content(size)
+	var sheet := PackedVector2Array([xf * ct.position, xf * Vector2(ct.end.x, ct.position.y), xf * ct.end, xf * Vector2(ct.position.x, ct.end.y)])
+	c.draw_colored_polygon(sheet, paper)
 	c.draw_set_transform_matrix(xf)
 
 
-## The page's border, over whatever was drawn on it, and back to plain drawing.
-func end_page(c: CanvasItem, size: Vector2) -> void:
-	_page_xf(c, size)
-	var inset := border * unit * 0.5
-	rect(c, Rect2(Vector2(inset, inset), size - Vector2(inset, inset) * 2.0), ink, border, 9001)
+## The paper's outline, the board's heavy outline, the clip with `title` on it and `corner` (the
+## table) small in ink on the board; then back to plain drawing.
+func end_page(c: CanvasItem, size: Vector2, title := "", corner := "") -> void:
 	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+	var xf := page_transform(size)
+	var ct := _content(size)
+	var sheet := PackedVector2Array([xf * ct.position, xf * Vector2(ct.end.x, ct.position.y), xf * ct.end, xf * Vector2(ct.position.x, ct.end.y)])
+	line(c, sheet, ink, border, 9001, true)
+	var br := board_rect(size)
+	line(c, rounded(br, board_radius * unit), ink, board_line, 9002, true)
+	if corner != "":
+		# On the board's top strip, left of the clip, clear of the paper.
+		text(c, Vector2(br.position.x + 24.0 * unit, br.position.y + 17.0 * unit), corner, 10.0, Color(ink, 0.85))
+	_clip(c, size, title)
 
 
-## Canvas pixels as they land on the turned, squeezed page -> the unturned layout they were drawn
-## in. For input: a point the player aims at on the page, back in the game's own layout.
+## The steel clip at the top centre, over the paper's top edge, with the step's name stamped on it.
+func _clip(c: CanvasItem, size: Vector2, title: String) -> void:
+	var br := board_rect(size)
+	var w := clip_size.x * unit
+	var top := br.position.y - clip_size.y * unit
+	var bottom := br.position.y + clip_size.z * unit
+	var cx := br.get_center().x
+	# The jaw: a wide plate across the paper's top edge.
+	var jaw := Rect2(Vector2(cx - w * 0.5, br.position.y + 4.0 * unit), Vector2(w, bottom - br.position.y - 4.0 * unit))
+	var jaw_pts := rounded(jaw, 8.0 * unit, 3)
+	var jaw_shadow := PackedVector2Array()
+	for q in jaw_pts:
+		jaw_shadow.append(q + Vector2(4.0, 6.0) * unit)
+	c.draw_colored_polygon(jaw_shadow, Color(shadow, shadow.a * 0.6))
+	c.draw_colored_polygon(jaw_pts, clip_steel)
+	# The spring housing standing up above the board.
+	var hw := w * 0.42
+	var housing := PackedVector2Array([Vector2(cx - hw, br.position.y + 10.0 * unit), Vector2(cx - hw * 0.8, top),
+		Vector2(cx + hw * 0.8, top), Vector2(cx + hw, br.position.y + 10.0 * unit)])
+	c.draw_colored_polygon(housing, clip_dark)
+	line(c, housing, ink, outline, 9101, true)
+	line(c, jaw_pts, ink, outline, 9102, true)
+	# Rivets.
+	for sx: float in [-1.0, 1.0]:
+		var rv := Vector2(cx + sx * (w * 0.5 - 16.0 * unit), br.position.y + 16.0 * unit)
+		circle(c, rv, 4.0 * unit, ink, detail, 9103 + int(sx), clip_dark)
+	if title != "":
+		var f := font_upright()
+		var px := int(round(19.0 * unit))
+		var tw := f.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+		c.draw_string(f, Vector2(cx - tw * 0.5, jaw.get_center().y + px * 0.35), title, HORIZONTAL_ALIGNMENT_LEFT, -1.0, px, ink)
+		ops += 1
+
+
+## Canvas pixels as they land on the paper -> the game's own layout. For input.
 func unpage(p: Vector2, size: Vector2) -> Vector2:
-	var centre := size * 0.5
-	var xf := Transform2D(deg_to_rad(tilt_deg), Vector2.ZERO)
-	xf = Transform2D().translated(centre) * xf * Transform2D().scaled(Vector2.ONE * page_scale) * Transform2D().translated(-centre)
-	return xf.affine_inverse() * p
+	return page_transform(size).affine_inverse() * p
 
 
-## The layout -> where it lands on the page (for a bot aiming in the game's layout).
+## The game's layout -> where it lands on the paper (for a bot aiming in the game's layout).
 func onpage(p: Vector2, size: Vector2) -> Vector2:
-	var centre := size * 0.5
-	var xf := Transform2D(deg_to_rad(tilt_deg), Vector2.ZERO)
-	xf = Transform2D().translated(centre) * xf * Transform2D().scaled(Vector2.ONE * page_scale) * Transform2D().translated(-centre)
-	return xf * p
+	return page_transform(size) * p
 
 
 # ---------------------------------------------------------------------------- type
@@ -470,17 +573,21 @@ func text(c: CanvasItem, at: Vector2, s: String, size: float, col := Color(-1, 0
 ## it, turned a few degrees. `k` 0..1 is how far through the card is (for the pop), `sub` a small line
 ## under it (READY's countdown). Replaces the teal card for a game on the ink look.
 func card(c: CanvasItem, size: Vector2, word: String, k: float, big: int, col := Color(-1, 0, 0), sub := "") -> void:
-	var band_h := size.y * 0.30
-	var y0 := size.y * 0.5 - band_h * 0.5
-	c.draw_rect(Rect2(Vector2(0, y0), Vector2(size.x, band_h)), Color(paper, 0.93))
-	line(c, PackedVector2Array([Vector2(0, y0), Vector2(size.x, y0)]), ink, heavy, 7101)
-	line(c, PackedVector2Array([Vector2(0, y0 + band_h), Vector2(size.x, y0 + band_h)]), ink, heavy, 7102)
+	# Across the paper only: past it is the board and then the room.
+	var pr := page_rect(size)
+	var band_h := pr.size.y * 0.32
+	var y0 := pr.get_center().y - band_h * 0.5
+	var x0 := pr.position.x
+	var x1 := pr.end.x
+	c.draw_rect(Rect2(Vector2(x0, y0), Vector2(x1 - x0, band_h)), Color(paper, 0.93))
+	line(c, PackedVector2Array([Vector2(x0, y0), Vector2(x1, y0)]), ink, heavy, 7101)
+	line(c, PackedVector2Array([Vector2(x0, y0 + band_h), Vector2(x1, y0 + band_h)]), ink, heavy, 7102)
 	var pop: float = 1.0 - pow(1.0 - clampf((1.0 - k) * 6.0, 0.0, 1.0), 3.0)
 	var px := int(round(big * lerpf(0.82, 1.0, pop)))
 	var f := font_upright()
 	var w := f.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
 	var cc: Color = ink if col.r < 0.0 else col
-	c.draw_set_transform(size * 0.5, deg_to_rad(-6.0), Vector2.ONE)
+	c.draw_set_transform(pr.get_center(), deg_to_rad(-6.0), Vector2.ONE)
 	# The stamp's double border.
 	var box := Rect2(Vector2(-w * 0.5 - 28.0, -px * 0.62), Vector2(w + 56.0, px * 1.05))
 	rect(c, box, Color(cc, 0.9), 3.5, 7103)

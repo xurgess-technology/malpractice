@@ -96,11 +96,20 @@ look above stays for everything else until each game is moved over.
 Everything lives in `scripts/surgery/panel/ink.gd` (a Resource, like `panel_style.gd`), and knows
 nothing about any one game:
 
-- **The page.** `begin_page(c, size)` draws the mat (#e9e3d6), a flat printed drop shadow (9, 11 px,
-  no blur) and the paper page (#efe9dc) turned -0.65 degrees; everything the game draws after it lands
-  on the turned page (squeezed to `page_scale` 0.965 so the border and shadow stay on the texture).
-  `end_page()` draws the 3 px ink border. `unpage()` / `onpage()` convert a point between the page as
-  seen and the game's own layout, for input and for bots.
+- **The clipboard** (Zach's pick, 2026-09-21). The panel texture IS a clipboard and is transparent
+  everywhere else (`SurgeryPanel.transparent`: a transparent SubViewport and the texture's alpha in
+  the quad's shader), so the room shows round it. `begin_page(c, size)` draws a hard flat shadow
+  (`shadow_offset` 14, 16 x unit) the board casts on the room, the brown hardboard (#7a5a3a,
+  rounded corners, square to the panel, a faint halftone tooth) and the paper sheet (#efe9dc) a hair
+  crooked on it (`tilt_deg` -0.65); everything the game draws after it lands on the paper.
+  `end_page(c, size, title, corner)` draws the paper's ink outline, the board's heavy boiling outline
+  (4.5 x unit), the steel clip (#a8adb0) at the top centre over the paper's edge with `title` (the
+  step's id, "SEDATE") stamped on it, and `corner` (the table) small in ink on the board's top strip.
+  The board sits `board_top` (70 px) down the texture so the clip stays clear of the screen's caption
+  bar. **The layout is honest:** the game's `content` rectangle is fitted onto the paper at ONE
+  uniform scale (`page_fit()`; 0.89 for the injection, so its 120 x 80 mm diagram is 8.9 px/mm on the
+  texture), and `unpage()` / `onpage()` convert between the paper as seen and the game's layout, for
+  input and bots. The command card is stamped across the paper only.
 - **Boiling lines.** `line()`, `seg()`, `rect()` (four samples an edge), `circle()` / `ellipse()` (18
   segments), `shape()`: every vertex is nudged +/-1.3 px by integer-hash noise seeded with the shape
   and floor(t x 7), so lines boil at 7 fps and hold still in between. Round joins and caps. Fills are

@@ -59,7 +59,8 @@ const TRAY_R := Vector2(96.0, 40.0)
 const DONE_BTN := Rect2(712.0, 498.0, 170.0, 52.0)
 const TQ_BTN := Rect2(772.0, 26.0, 168.0, 50.0)
 const TQ_BAR := Rect2(34.0, 20.0, 190.0, 10.0)
-const METER := Rect2(900.0, 318.0, 24.0, 220.0)
+## The PUSH bar's size, rpx. It sits beside the locked-in needle (meter_rect()).
+const METER_SIZE := Vector2(270.0, 30.0)
 const ASM_BARREL := 64.0
 const ASM_NEEDLE := 62.0
 const ASM_TIP := 126.0
@@ -303,6 +304,9 @@ func card_word_for_start() -> String:
 
 func build_game() -> void:
 	k = pow(diff, difficulty_gain)
+	# The diagram is the reference 960 x 600 laid across the canvas; that is what goes on the paper.
+	if ink != null:
+		ink.content = Rect2(Vector2(0.0, _top()), REF * _u())
 	var seed_v := int(ctx.get("seed", 1))
 	_rng.seed = seed_v ^ 0x1a5e
 	seal = String(ctx.get("patient_id", "bob")) == "seal"
@@ -1404,17 +1408,38 @@ func _paint_debug(c: CanvasItem) -> void:
 	c.draw_string(ThemeDB.fallback_font, cv(Vector2(30.0, 590.0)), info, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16, Color(0.1, 0.5, 0.15))
 
 
+## Where the PUSH bar goes: just above the skin line, beside the needle where the eye already is.
+## The syringe always lies up and to the left of where it went in (it points down and right), so the
+## bar goes to the right of the entry; with no room there, to the left of the whole syringe.
+func meter_rect() -> Rect2:
+	var ex := entry.x
+	var x0 := ex + 36.0
+	if x0 + METER_SIZE.x > 930.0:
+		x0 = minf(drawn_grip().x, ex) - 40.0 - METER_SIZE.x
+	x0 = clampf(x0, 30.0, 930.0 - METER_SIZE.x)
+	var y1 := minf(skin_top(ex), skin_top(x0 + METER_SIZE.x * 0.5)) - 18.0
+	return Rect2(Vector2(x0, y1 - METER_SIZE.y), METER_SIZE)
+
+
+## The spec's PUSH meter, lying down: green for the first 55% from the left, red past it, with the
+## fast-push threshold marked and a heavy needle for the push rate.
 func _paint_meter(c: CanvasItem) -> void:
 	var I := ink
-	var r := Rect2(cv(METER.position), METER.size * _u())
-	var green := r.size.y * 0.55
-	c.draw_rect(Rect2(Vector2(r.position.x, r.end.y - green), Vector2(r.size.x, green)), Color(I.good, 0.35))
-	c.draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y - green)), Color(I.deep_red, 0.3))
-	I.halftone(c, Rect2(r.position, Vector2(r.size.x, r.size.y - green)), 0.6, I.deep_red)
+	var mr := meter_rect()
+	var r := Rect2(cv(mr.position), mr.size * _u())
+	var green := r.size.x * 0.55
+	c.draw_rect(Rect2(r.position, Vector2(green, r.size.y)), Color(I.good, 0.4))
+	c.draw_rect(Rect2(Vector2(r.position.x + green, r.position.y), Vector2(r.size.x - green, r.size.y)), Color(I.deep_red, 0.3))
+	I.halftone(c, Rect2(Vector2(r.position.x + green, r.position.y), Vector2(r.size.x - green, r.size.y)), 0.6, I.deep_red)
 	I.rect(c, r, I.ink, I.outline, 610)
-	var y := r.end.y - r.size.y * clampf(rate / 1.0, 0.0, 1.0)
-	I.seg(c, Vector2(r.position.x - 10.0, y), Vector2(r.end.x + 10.0, y), I.ink, I.heavy, 611)
-	I.text(c, Vector2(r.get_center().x, r.position.y - 10.0), "PUSH", 13.0, I.ink, 1)
+	# The fast-push threshold.
+	var tx := r.position.x + r.size.x * clampf(fast_rate / k, 0.0, 1.0)
+	I.seg(c, Vector2(tx, r.position.y - 7.0 * _u()), Vector2(tx, r.end.y + 7.0 * _u()), I.deep_red, I.detail, 612)
+	# The push rate.
+	var x := r.position.x + r.size.x * clampf(rate / 1.0, 0.0, 1.0)
+	I.seg(c, Vector2(x, r.position.y - 10.0 * _u()), Vector2(x, r.end.y + 10.0 * _u()), I.ink, I.heavy, 611)
+	I.text(c, Vector2(r.position.x, r.position.y - 9.0 * _u()), "PUSH", 16.0, I.ink)
+	I.text(c, Vector2(r.end.x, r.position.y - 9.0 * _u()), "too fast", 12.0, I.deep_red, 2)
 
 
 ## Warmup (scripts/warmup.gd): draw every stage at once from now on, so the first real open of each
@@ -1946,7 +1971,7 @@ static func _alignment_check(script: GDScript) -> Dictionary:
 					# The dimple is on the line through the tip along the needle.
 					var d: Vector2 = geo.d
 					var rel: Vector2 = geo.vis_end - g.tip()
-					worst.line = maxf(worst.line, absf(rel.cross(d)) * g._u() * g.ink.page_scale)
+					worst.line = maxf(worst.line, absf(rel.cross(d)) * g._u() * g.ink.page_fit(g.panel.tex_size()))
 					last_tip = g.tip()
 					if g.flashed:
 						worst.flashes += 1

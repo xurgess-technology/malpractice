@@ -338,7 +338,8 @@ won wherever it disagreed with the handoff. It pilots the ink/paper look (PANEL_
 look") that every other panel is to move onto later.
 
 Space: the spec's 960 x 600 reference px on the 120 x 80 mm diagram at 8 px/mm, the spare 5 mm
-split top and bottom. Everything below is in reference px.
+split top and bottom. Everything below is in reference px. On screen that diagram is the paper on
+the ink look's clipboard (PANEL_STYLE.md), fitted at one uniform scale.
 
 **DRAW!** The syringe hangs needle-up in an upside-down vial ("SOMNUL-9", 0.9 of a barrel in it).
 - Hold LMB to draw: speed = 0.05 + seconds held x 0.22 x difficulty (barrel shares per second).
@@ -386,8 +387,10 @@ ink edge; 2-3 seeded veins across it; the instrument tray top left.
   still needs the one you hold (the amputation's step 2 does). Click it again to take it off early.
 
 **PUSH!** Hold LMB to build the push rate (+0.55/s, -0.9/s let go, capped at 1.2); the drug drains
-at rate x 0.09/s. The PUSH meter is green below 0.55 / difficulty and red above; every 0.9 s in the
-red is a fast push. The bubbles still in the barrel go in one by one as the plunger passes them. At
+at rate x 0.09/s. The PUSH meter lies horizontally just above the skin line beside the needle, where
+the eye already is (right of the entry, or left of the whole syringe when there is no room): green
+for the first 55% from the left, red past it, with the fast-push threshold (0.55 / difficulty)
+marked; every 0.9 s past it is a fast push. The bubbles still in the barrel go in one by one as the plunger passes them. At
 empty: "dose delivered...", a 0.9 s beat, done.
 
 **Costs are live** (no results card, no Retry): every mistake is `cost()` the moment it happens,
