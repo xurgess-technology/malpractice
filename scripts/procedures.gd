@@ -193,7 +193,7 @@ const ARCADE_SCRIPTS := {
 ## A key is "<game>" or "<game>:<variant>"; the variant key wins where it exists, which is how the
 ## monster table keeps the legacy saw and brain forceps while the patient tables move over.
 static var ARCADE_ENABLED := {
-	"anesthetic": false,
+	"anesthetic": true,
 	"forceps": false,
 	"forceps:brain": false,   # the monster table's brain harvest: legacy, no arcade rebuild
 	"gauze:pack": false,
