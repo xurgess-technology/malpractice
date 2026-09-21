@@ -5,6 +5,12 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-20 (0.8.x)**
 
+- **0.8.2**: THE MACHINE RUNS ARCADE SOFTWARE 🕹️🦴
+    - Added: Surgery steps can be short arcade minigames on the panel: a one-word command card to start, and the game freezes if you walk off so whoever picks it up gets a READY countdown instead of a free failure.
+    - Added: SAW! -- alternating A and D to a cadence, through a cross-section of the actual limb. A pendulum keeps the beat for whatever the blade is in, and it changes the moment the blade meets bone.
+    - Added: Rush the saw and it jumps, tears and costs you. Nearly through, the card says EASY -- come off the last strokes too fast and you saw into the table.
+    - Added: The artery in the muscle answers to your tourniquet. A good one dribbles. A bad one sprays across the panel, buries the pendulum, and you finish the cut by ear.
+    - Note: Off by default. The dev panel's Arcade surgery checkboxes turn each one on; every step still plays its old version until you do.
 - **0.8.1**: The panel stands up and gets out of the way
     - Changed: The panel is bigger and stands up off the patient instead of lying nearly flat over him, so onlookers can actually read it from where they are standing. It looks the same size to whoever is operating.
     - Added: When something goes wrong -- a torn stitch, a gush, a patient jerking -- the panel goes see-through for half a second so you watch him take it, then comes back.
