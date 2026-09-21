@@ -32,6 +32,12 @@ const SETUPS := {
 	"panel": {"seed": 4242, "stage": "_panel"},
 	# ARCADE (docs/ARCADE_SURGERY.md) phase 1: an amputation at the saw step, arcade saw switched on.
 	"arcade_saw": {"seed": 4242, "stage": "_arcade_saw"},
+	# ARCADE: a whole case with every arcade step that passed its checks switched on. `gw` is the
+	# gunshot wound from the top (dose, dodge, whack + wrap), `am` the amputation (dose, squeeze,
+	# saw, wrap) and `eyes` the two eye tables (steer, pry, nerve, grab, stitch).
+	"arcade_gw": {"seed": 4242, "stage": "_arcade_gw"},
+	"arcade_am": {"seed": 4242, "stage": "_arcade_am"},
+	"arcade_eyes": {"seed": 4242, "stage": "_arcade_eyes"},
 }
 
 
@@ -192,6 +198,70 @@ static func _items(game: Game) -> void:
 		floor_item(game, row[i], base + out * 2.0 + side * (float(i) - 2.0) * 0.55, 1, 100)
 	print("[review] items: standing among %d loot stacks; trinkets on the floor ahead, an EpiPen in hand" % best_n)
 
+
+
+## ARCADE: switch on every arcade step whose self-test passed. The morning report says which those
+## are; the dev panel's "Arcade surgery" checkboxes (F1) turn any of them back off.
+static func arcade_all_on() -> void:
+	for key in Procedures.ARCADE_ENABLED.keys():
+		var k := String(key)
+		# The two monster-table steps have no arcade rebuild of their own and stay legacy.
+		if k == "saw:skull" or k == "forceps:brain":
+			continue
+		if ResourceLoader.exists(String(Procedures.ARCADE_SCRIPTS.get(k, Procedures.ARCADE_SCRIPTS.get(k.get_slice(":", 0), "")))):
+			Procedures.ARCADE_ENABLED[k] = true
+
+
+## ARCADE GW: a gunshot wound on the table from the first step, every arcade step on, and all three
+## tools in hand. DOSE! then DODGE! then WHACK! and WRAP!, and the mistakes in each one follow you
+## into the next: the tract you tore shows up as bleeders, and how you packed shows up as the cells
+## that soak through.
+static func _arcade_gw(game: Game) -> void:
+	arcade_all_on()
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	game.add_case({"patient_id": "bob", "ailment_id": "gunshot", "table": table, "state": "on_table"})
+	var t: Vector3 = game.table_position(table)
+	place(game, t + Vector3(0.0, 0, 1.15), t + Vector3(0, 1.05, 0))
+	clear_hands(game)
+	give(game, "anesthetic", 3)
+	give(game, "forceps", 1)
+	give(game, "gauze", 3)
+	game.local_player().selected = 0
+	game.stock_storage("anesthetic", 3)
+	game.stock_storage("gauze", 3)
+	print("[review] arcade_gw: gunshot on table %d, every arcade step ON" % table)
+
+
+## ARCADE AM: an amputation from the first step, every arcade step on, all four tools in hand. DOSE!
+## then SQUEEZE! then SAW! then WRAP!. Put a bad tourniquet on and the saw's artery will blind you,
+## and the stump will bleed through the dressing.
+static func _arcade_am(game: Game) -> void:
+	arcade_all_on()
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	game.add_case({"patient_id": "seal", "ailment_id": "amputation", "table": table, "state": "on_table"})
+	var t: Vector3 = game.table_position(table)
+	place(game, t + Vector3(0.0, 0, 1.15), t + Vector3(0, 1.05, 0))
+	clear_hands(game)
+	give(game, "anesthetic", 3)
+	give(game, "tourniquet", 1)
+	give(game, "bone_saw", 1)
+	give(game, "gauze", 4)
+	game.local_player().selected = 0
+	game.stock_storage("gauze", 4)
+	print("[review] arcade_am: amputation on table %d, every arcade step ON" % table)
+
+
+## ARCADE EYES: the same two tables as the `eyes` setup -- a strapped Hive with its vat, and you
+## strapped to the other with a Hive eye waiting -- but with every arcade eye step switched on.
+## STEER! then PRY! then CUT THE RIGHT ONE! then GRAB!, and on yours GRAB! then STITCH!.
+static func _arcade_eyes(game: Game) -> void:
+	arcade_all_on()
+	await _eyes(game)
+	print("[review] arcade_eyes: both eye tables, every arcade eye step ON")
 
 
 ## ARCADE SAW (docs/ARCADE_SURGERY.md 5.5): Bob is on the table sedated with a tourniquet already
