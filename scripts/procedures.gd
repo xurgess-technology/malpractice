@@ -171,16 +171,42 @@ const MINIGAME_SCRIPTS := {
 ## by "<game>" or "<game>:<variant>"; the variant key wins when it exists, so flipping "saw" moves
 ## the limb to the arcade version and leaves the monster table's "saw:skull" on the legacy one.
 const ARCADE_SCRIPTS := {
-	"saw": "res://scripts/surgery/arcade/saw_arcade.gd",
+	"anesthetic": "res://scripts/surgery/arcade/dose_arcade.gd",        # DOSE!
+	"forceps": "res://scripts/surgery/arcade/dodge_arcade.gd",          # DODGE!
+	"gauze:pack": "res://scripts/surgery/arcade/pack_arcade.gd",        # WHACK! then WRAP!
+	"gauze:stump": "res://scripts/surgery/arcade/wrap_stump_arcade.gd", # WRAP!
+	"tourniquet": "res://scripts/surgery/arcade/squeeze_arcade.gd",     # SQUEEZE!
+	"saw": "res://scripts/surgery/arcade/saw_arcade.gd",                # SAW!
+	"eye:cut": "res://scripts/surgery/arcade/steer_arcade.gd",          # STEER!
+	"eye:scoop": "res://scripts/surgery/arcade/pry_arcade.gd",          # PRY!
+	"eye:snip": "res://scripts/surgery/arcade/nerve_arcade.gd",         # CUT THE RIGHT ONE!
+	"eye:place": "res://scripts/surgery/arcade/grab_arcade.gd",         # GRAB! (eye into the vat)
+	"eye:grab": "res://scripts/surgery/arcade/grab_arcade.gd",          # GRAB! (vat into the socket)
+	"eye:stitch": "res://scripts/surgery/arcade/ring_arcade.gd",        # STITCH! the ring variant
 }
 
 ## Which arcade rebuilds are live. FALSE means the legacy game still plays that step, unchanged.
 ## Zach flips these one at a time as he approves them; the dev panel's "Arcade surgery" checkboxes
 ## flip them at runtime (host-authoritative: the host broadcasts, so every machine agrees).
 ## A `static var` so the lab, the warmup and the headless tests can set it without a Game.
+##
+## A key is "<game>" or "<game>:<variant>"; the variant key wins where it exists, which is how the
+## monster table keeps the legacy saw and brain forceps while the patient tables move over.
 static var ARCADE_ENABLED := {
+	"anesthetic": false,
+	"forceps": false,
+	"forceps:brain": false,   # the monster table's brain harvest: legacy, no arcade rebuild
+	"gauze:pack": false,
+	"gauze:stump": false,
+	"tourniquet": false,
 	"saw": false,
-	"saw:skull": false,   # the monster table's skull cut keeps the legacy saw until it gets its own
+	"saw:skull": false,       # the monster table's skull cut: legacy until it gets its own
+	"eye:cut": false,
+	"eye:scoop": false,
+	"eye:snip": false,
+	"eye:place": false,
+	"eye:grab": false,
+	"eye:stitch": false,
 }
 
 
@@ -188,7 +214,7 @@ static var ARCADE_ENABLED := {
 static func arcade_on(game: String, variant := "") -> bool:
 	var key := "%s:%s" % [game, variant]
 	if variant != "" and ARCADE_ENABLED.has(key):
-		return bool(ARCADE_ENABLED[key])
+		return bool(ARCADE_ENABLED[key]) and (ARCADE_SCRIPTS.has(key) or ARCADE_SCRIPTS.has(game))
 	return bool(ARCADE_ENABLED.get(game, false)) and ARCADE_SCRIPTS.has(game)
 
 
