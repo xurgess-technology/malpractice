@@ -127,8 +127,8 @@ const BOT_TAU := 0.12
 @export_range(0.0, 5.0, 0.1) var torn_lock := 2.0
 ## Blinking and untouchable after the resume, s.
 @export_range(0.0, 3.0, 0.05) var invuln_time := 0.9
-## The corner VITALS number goes deep red under this.
-@export_range(0.0, 100.0, 1.0) var vitals_trouble := 40.0
+## The corner VITALS number goes deep red under this (where the framework HUD turns it red).
+@export_range(0.0, 100.0, 1.0) var vitals_trouble := 25.0
 ## Per tear off the step's quality, and its floor.
 @export_range(0.0, 0.5, 0.01) var quality_per_tear := 0.15
 @export_range(0.0, 1.0, 0.01) var quality_floor := 0.05
@@ -236,8 +236,8 @@ func hud_line() -> String:
 
 ## The corner HUD's number: the patient's vitals, deep red when they are in trouble.
 func hud_value() -> Array:
-	var v := vitals_now()
-	return ["VITALS %d" % int(round(v)), v < vitals_trouble]
+	var v := maxf(0.0, vitals_now())
+	return ["VITALS %d" % ceili(v), v < vitals_trouble]
 
 
 ## This patient's vitals (the surgery system's, live), or in the lab 100 less what the tears cost.

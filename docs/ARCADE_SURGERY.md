@@ -7,7 +7,8 @@ what exists, what it is really called, and what was decided along the way.
 
 **Phases 0 to 7 are done (2026-09-20/21). Eleven games, all switched on.** On 2026-09-21 DOSE! and
 the legacy anaesthetic were replaced by the Anesthetic Injection (5.1), the only sedation game, which
-has no switch. Read
+has no switch; and the first DODGE! and the legacy forceps step were replaced by the new DODGE! (5.2),
+which has none either (the monster table's brain harvest keeps the legacy forceps game). Read
 [MORNING_REPORT.md](MORNING_REPORT.md) first: it has the status table, the lab and quick-start
 commands for every game, what to look at first, every judgment call and the known issues.
 
@@ -27,6 +28,7 @@ unedited, and still passes its own self-test.
 | the lab | `godot --path . tools/minigame_lab.tscn -- --game=saw --arcade` |
 | its self-test | `--selftest=saw:arcade` (`--selftest=saw` still runs the legacy one) |
 | the sedation game | `scripts/surgery/arcade/inject_arcade.gd`, in `MINIGAME_SCRIPTS` (no legacy twin, no switch); `--selftest=anesthetic` |
+| DODGE! (the bullet) | `scripts/surgery/arcade/dodge_arcade.gd`, in `MINIGAME_SCRIPTS` (no switch; `forceps:brain` keeps the legacy `forceps.gd`); `--selftest=forceps` |
 | the ink look | `scripts/surgery/panel/ink.gd`, see PANEL_STYLE.md |
 
 `--quick` does **not** exist on `main` (it is on the unmerged `quick-start` branch), so nothing was
@@ -166,6 +168,54 @@ difficulty factor k = difficulty ^ `difficulty_gain` (0.5):
 
 `ArcadeGame` grew `use_ink()`, `ink_unit()`, `ink_glow` (warm) and `ink_brightness` (0.82) for games
 on the ink look.
+
+`DodgeArcade` (5.2; exports grouped in the inspector). A "shift 1 / shift 6" pair is lerped by
+(difficulty - 1) / (`hard_at` - 1), so shift 6 (difficulty 1.6) is the second value and later shifts
+carry on past it:
+
+| Export | Start | What |
+|---|---|---|
+| `length_mm` / `length_mm_hard` / `length_jitter` | 135 / 192 / +/-8 mm | the tract's length |
+| `half_mm` / `half_mm_hard` | 12.5 / 8 mm | its half-width |
+| `half_wobble` / `bed_flare` / `mouth_flare` / `flare_mm` / `half_floor` | 0.14 / 0.28 / 0.30 / 12 mm / 3.6 mm | the wobble, the flares and the floor |
+| `cavity_widen` | 0.18 mm per mm | behind the bed, towards the page edge |
+| `sines_min` / `sines_max`, `sine_amp_min` / `_max`, `sine_freq_min` / `_max` | 3-5, 6-18 mm, 0.02-0.07 rad/mm | the centreline |
+| `lane_mm` / `slope_max` | 16 mm / 1.0 | what the one scale factor fits it to |
+| `stop_mm` | 70 mm | the page stops scrolling when the mouth is this close |
+| `scroll_mm` / `scroll_mm_hard` | 12 / 12 mm/s (6-24) | scroll speed |
+| `gravity_mm` | 90 mm/s^2 (40-160) | |
+| `flap_mm` | 26 mm/s (14-40) | the speed a flap sets |
+| `max_fall_mm` | 90 mm/s | terminal fall |
+| `slug_half_mm` / `clear_floor` | 3.1 / 0.4 mm | the collision |
+| `dt_cap` | 0.05 s | |
+| `stir_below` | 0.75 | squirm only under this sedation |
+| `squirm_depth` / `squirm_depth_hard` / `squirm_floor` | 2.5 / 2.5 mm (0.5-5), 0.6 | how far the walls close in, at no sedation; the share at the threshold |
+| `squirm_first_min` / `_max`, `squirm_every_min` / `_max` | 4-10 s, 8-14 s | the schedule |
+| `squirm_in` / `squirm_hold` / `squirm_out` | 0.35 / 0.8 / 0.6 s | the envelope (tune the depth, not these) |
+| `tear_cost` / `knock_mm` | 2.5 vitals / 22 mm | a tear |
+| `torn_lock` / `invuln_time` | 2.0 / 0.9 s | the TORN! lockout, and the blink after it |
+| `quality_per_tear` / `quality_floor` | 0.15 / 0.05 | |
+| `vitals_trouble` | 25 | the corner number goes red under this |
+| `exit_time` | 0.8 s | the arc into the dish |
+| `hard_at` | 1.6 | the difficulty that counts as shift 6 |
+| audio cues | forceps click / scrape / squelch / clink, stir | all existing cues |
+
+`--selftest=forceps` (2026-09-21), **PASS**, shift 1:
+
+| | skill 1.0 | skill 0.5 | skill 0.0 | target |
+|---|---|---|---|---|
+| Bob, sedated | 12.4 s, 0 tears | 16.7 s, 1 tear (2.5) | 52.2 s, 9 tears (22.5) | 8-20 s / 0-2, and <40 s / 15-25 |
+| seal, sedated | 11.7 s, 0 | 16.1 s, 1 (2.5) | 34.0 s, 5 (12.5) | |
+| Bob, sedation 0.4 | 12.4 s, 0, 1 squirm | 16.7 s, 1, 1 squirm | 69.8 s, 13 (32.5), 3 squirms | |
+| seal, sedation 0.4 | 11.7 s, 0, 1 squirm | 16.1 s, 1, 1 squirm | 34.0 s, 5 (12.5), 1 squirm | |
+
+Sloppy mean 17.5 vitals. The sloppy time runs over 40 s whenever it tears more than about six times,
+because every tear costs about 4 s (the 2 s lockout, the reaction, 22 mm flown again); the self-test
+allows 60 s. Also checked: the tract (40 seeds x 6 shifts: inside +/-16 mm, never steeper than 1,
+every sample raw x one factor, lengths 129-143 and 186-200 mm), the cards (nothing moves before the
+first press, which flaps; Space ignored through the 2.02 s lockout; the resuming press flaps and blinks
+0.9 s; the mouse and Enter do nothing), the squirm's shape and depth, a spectator (exact at every
+update, at most 2.6 mm behind a flap between them, same tears and splats) and the hand-over.
 
 Layer cadences, resistances and tear factors are in `SawArcade.LAYERS` (skin 0.22 s / 0.45 / 0.5,
 muscle 0.30 / 1.0 / 0.8, bone 0.50 / 2.2 / 1.2, far side 0.25 / 0.9 / 0.8), as the brief specifies.
@@ -422,28 +472,64 @@ bubbles, slaps, sticks at the window's middle and pushes in pulses. Self-test
 
 ### 5.2 DODGE! - Remove the bullet
 `forceps` x0, site `gunshot`. GW step 2.
-Rhyme: Flappy-style side-scroller through the wound tract.
+`scripts/surgery/arcade/dodge_arcade.gd`. **The only bullet extraction** (2026-09-21): it replaced the
+first arcade DODGE! and the legacy `forceps.gd` for this step, so it has no `ARCADE_*` entry and no
+dev-panel switch. The monster table's brain harvest is a different game and still plays the legacy
+`forceps.gd`, through its own `MINIGAME_SCRIPTS["forceps:brain"]` key (`minigame_script()` now looks a
+`"<game>:<variant>"` key up there too). Built from Zach's handoff,
+`docs/SURGERY_SHELL_AND_DODGE_SPEC.md` Part Two; that file's "Decisions" section won wherever it
+disagreed, and the brief this section used to hold (dark tract, flashlight, brake, heartbeat) is
+superseded.
 
-- 1.0 s intro: the forceps slide down the tract and grip the slug on
-  their own. You play the way OUT.
-- The level is the existing `generate_channel(seed, difficulty)`
-  output: arc length along the centreline becomes X, lateral offset
-  becomes Y, so bends become climbs and dips. Channel half-width as
-  today (12.5 mm -> 8 mm with difficulty); the gripped slug's
-  half-width is 5.8 mm.
-- Scroll 12 mm/s. Gravity pulls the slug down; tap LMB or Space for an
-  upward impulse. Hold RMB to brake to 50% scroll speed (vitals are
-  draining, so braking has a price).
-- Walls pinch inward 0.6 mm on each heartbeat (1.25 Hz).
-- CO-OP: it's dark. You see 30 mm ahead. A teammate's flashlight on
-  the wound (existing `ctx.helper_lights`) doubles that to 60 mm.
-- Wall contact = tear: botch 2.5 "Forced the bullet into the wall",
-  blood spurt and flinch on the body, knocked back 22 mm, re-centred,
-  0.9 s of blinking grace. Record the tear's arc position.
-- Leaving the mouth: the bullet arcs into a kidney dish at the panel
-  edge and clinks.
-- Result: {"bullet_removed": true, "tears": [arc positions]}.
-- Jolt: random vertical kick plus 0.35 s wall forgiveness.
+Space: the spec's 960 x 600 reference px on the ink look's clipboard, the tract drawn at 6 px/mm.
+Rhyme: a side-scroller back out along the bullet's own channel. The forceps already have the slug.
+
+- **Controls.** Space is the only control. The mouse and Enter do nothing, not even take a card down.
+- **Cards** (the shell's stamp cards). DODGE! waits for Space, and that press starts the run and is
+  its first flap. The slug sits at the bed at the left of the page, the tract drawn behind it to the
+  page edge (the cavity keeps widening there) and the forceps on its base, so you can read it first.
+- **The tract** comes from the case seed alone, so every machine builds the same one: a centreline
+  that is the sum of 3-5 sines (amplitude 6-18 mm, 0.02-0.07 rad/mm, random phase), sampled every mm,
+  centred, then scaled by ONE factor so it fits +/-16 mm of lane and never climbs more than 1 mm per mm
+  (scaled, never clipped; the self-test checks every sample is raw x the same factor). Length 135 mm
+  +/- 8 at shift 1 to 192 at shift 6; half-width 12.5 mm to 8, with a +/-14% wobble, a 28% flare over
+  the last 12 mm at the bed and 30% at the mouth, floored at 3.6 mm. Drawn in 2 mm segments: flesh red
+  over a darker wash, boiling 3 px ink walls (the boil is pinned to the flesh, so it scrolls with it),
+  a pale dashed centreline.
+- **Flight.** The slug holds at x = 100 px while the tract scrolls at 12 mm/s. Gravity 90 mm/s^2,
+  terminal fall 90 mm/s. A flap SETS the vertical speed to -26 mm/s (mashing does not stack lift).
+  Collision is one-dimensional: |slug - centreline| against half-width - 3.1 mm - the squirm's pinch,
+  floored at 0.4 mm. The slug's nose points into the wound; the forceps grip its base and trail right.
+  A puff ring marks each flap. Once the mouth is 70 mm away the page stops scrolling and you fly the
+  last stretch towards it; the slug arcs into the kidney dish over 0.8 s and clinks.
+- **Squirm** (replaces the heartbeat, and the framework's stir jolts for this step:
+  `Minigame.stirs_itself()`, which the surgery system, the lab and `run_bot` honour). Only when the
+  carried-forward `sedation` is under 0.75. Scheduled from the seed: first at 4-10 s of flying, then
+  every 8-14 s. The walls close in over 0.35 s, hold 0.8 s, let go over 0.6 s, by 2.5 mm for a patient
+  with no sedation at all, down to 60% of that at the threshold. A SQUIRM! burst beside the slug,
+  inward red arrows on both walls while it lasts, a brief shake and a flinch on the body.
+- **Tearing.** A wall touch is a live botch: `mistake("TORN!", 2.5, "Forced the bullet into the wall",
+  "tear", ..., serious)` -- the burst, 2-4 blood splats, the shake and red wash, the cost. The slug is
+  dragged 22 mm back down the tract and re-centred at zero speed, the wall is marked with a red X over
+  a blood dot and the strip along the bottom gets a tick. Then the TORN! stamp card freezes the game
+  and ignores Space for 2 s, counting down; the press that takes it down flaps, and the slug blinks,
+  untouchable, for 0.9 s.
+- **No results card, no Retry** (Decision 1). The corner HUD: `SPACE: flap` top left, the patient's
+  live `VITALS` top right (`ctx.vitals`, from the surgery system; deep red under 25).
+- **Result** `{"bullet_removed": true, "tears": [positions]}`: one float per tear, in order, 0 at the
+  mouth and 1 at the bed. WHACK! (5.3) already reads it and puts a bleeder on the wound per tear.
+  `quality` = 1.0 - 0.15 per tear, floor 0.05.
+- **The flashlight and the dark are cut** (Decision 6): `helper_light()` does nothing in this step. A
+  possible later bonus, as the spec says: a teammate's light widening a still-visible tract.
+- **Onlookers** rebuild the tract from the seed and get a small blob at 20 Hz (slug, speed, flown
+  time, tears, flaps, the exit); they dead-reckon the flight between updates, and the squirms follow
+  from the flown time. Bursts and splats come across through the shell.
+- **Bot**: taps whenever it predicts it is about to drop below the line ahead; skill sets how often it
+  looks and how far its hand drifts, and it takes a card down after a reaction delay. Self-test
+  `--selftest=forceps` (`forceps:arcade` is the same; `--selftest=forceps:brain` runs the legacy brain
+  harvest's).
+- **Review**: `tools\review.bat 2 "DODGE: fly the bullet out" -Front --setup=dodge` (add
+  `--undersedated` to see squirm, `--patient=seal` for the seal).
 
 ### 5.3 WHACK! then WRAP! - Pack and dress the wound
 `gauze` x1, variant `pack`, site `gunshot`. GW step 3. One step, two

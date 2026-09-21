@@ -2042,6 +2042,16 @@ Phases 0 to 7 of [docs/ARCADE_SURGERY.md](ARCADE_SURGERY.md); the full write-up 
   marks string is 18 or 20 characters depending on the seed, so read its length.
 - **CUT THE RIGHT ONE!'s rule card is not on the OR wall monitor.** Section 5.10 asks for it; it
   needs `scripts/orscreen/*`. The seam exists: `rule_text`, `strand_rows()`, `net_pack()["rl"]`.
+- **DODGE! (rebuilt 2026-09-21, 5.2): the flashlight no longer helps.** The dark is cut, so
+  `helper_light()` does nothing in this step (the spec's Decision 6). A possible later bonus: a
+  teammate's light widening a still-visible tract. The resolved 2026-09-17 entry about the flashlight
+  lighting the wound is about the legacy forceps step, which no longer plays the bullet.
+- **DODGE!'s sloppy bot runs long.** Every tear costs about 4 s (the 2 s TORN! lockout, a reaction,
+  22 mm flown again), so a run with more than about six tears is over the 40 s target: Bob at skill
+  0.0 takes 52 s for 9 tears. The dials are `torn_lock` and `knock_mm`.
+- **The legacy `forceps.gd` still carries its gunshot game**, now unreachable in a shift (only
+  `forceps:brain` loads it). It could be cut down to the brain harvest's wrapper; `brain_forceps.gd`
+  borrows its `_build_forceps`, `_tool` and `_arms`, so that is not a straight delete.
 - **The arcade self-tests leak 24-60 ObjectDB instances at process exit.** Shared frame, not any one
   game.
 - **Agent worktrees are cut from a stale base.** All eight overnight worktrees arrived on `2cf8e95`
