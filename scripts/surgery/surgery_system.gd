@@ -814,6 +814,8 @@ func _sedation() -> float:
 
 
 func _stirs_now() -> bool:
+	if mg != null and mg.has_method("stirs_itself") and bool(mg.stirs_itself()):
+		return false
 	return String(_mg_step.get("game", "")) != "anesthetic" and _sedation() < 0.75
 
 

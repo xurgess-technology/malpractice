@@ -138,6 +138,12 @@ func on_jolt(_offset: Vector2, _strength: float, _duration: float) -> void:
 	pass
 
 
+## True for a step that makes an under-sedated patient's stirs itself (DODGE!'s squirm), so the
+## framework's own stir jolts, their body jerk and their sound stay out of it.
+func stirs_itself() -> bool:
+	return false
+
+
 ## How much of the operating camera's work lamp this step wants (1.0 = the usual amount). A step
 ## whose camera sits very close to a bright surface -- the graft's eye steps, 30 cm off a surgeon's
 ## pale face -- turns it down so the site does not bleach out.
