@@ -85,9 +85,19 @@ extends Resource
 var unit := 1.0
 ## Seconds, for the boil. Set it every frame before drawing.
 var t := 0.0
+## Profiling: draw commands issued since reset (every draw_* call counts one).
+var ops := 0
+## Jittered outlines, kept for the rest of their boil frame: seed -> [frame, input, output]. A shape
+## that has not moved is not re-jittered until the next 7 fps tick.
+var _jit := {}
 
 static var _font: Font = null
 static var _font_up: Font = null
+## A soft white dot (round joins, caps, speckles) and the halftone tile, built once. Every dot is a
+## textured quad with the same texture, so the canvas batches them into one draw instead of one
+## polygon each; the halftone is ONE textured polygon however big it is.
+static var _dot_tex: ImageTexture = null
+static var _tiles := {}
 
 
 # ---------------------------------------------------------------------------- noise
@@ -138,11 +148,23 @@ func jittered(pts: PackedVector2Array, shape_seed: int, closed := false) -> Pack
 	return out
 
 
+## jittered(), remembered until the boil ticks or the shape moves.
+func jittered_cached(pts: PackedVector2Array, shape_seed: int, closed := false) -> PackedVector2Array:
+	var f := frame()
+	var key := shape_seed * 2 + (1 if closed else 0)
+	var rec = _jit.get(key)
+	if rec != null and int(rec[0]) == f and rec[1] == pts:
+		return rec[2]
+	var j := jittered(pts, shape_seed, closed)
+	_jit[key] = [f, pts, j]
+	return j
+
+
 ## A hand-inked line through `pts`. Round joins and caps: a dot at every vertex.
 func line(c: CanvasItem, pts: PackedVector2Array, col: Color, width: float, shape_seed: int, closed := false) -> void:
 	if pts.size() < 2:
 		return
-	var j := jittered(pts, shape_seed, closed)
+	var j := jittered_cached(pts, shape_seed, closed)
 	stroke(c, j, col, width)
 
 
@@ -150,10 +172,13 @@ func line(c: CanvasItem, pts: PackedVector2Array, col: Color, width: float, shap
 func stroke(c: CanvasItem, pts: PackedVector2Array, col: Color, width: float) -> void:
 	var w := width * unit
 	c.draw_polyline(pts, col, w)
+	ops += 1
 	if w >= 2.0:
 		var r := w * 0.5
+		var tex := dot_texture()
 		for p in pts:
-			c.draw_circle(p, r, col)
+			c.draw_texture_rect(tex, Rect2(p.x - r, p.y - r, w, w), false, col)
+		ops += 1
 
 
 func seg(c: CanvasItem, a: Vector2, b: Vector2, col: Color, width: float, shape_seed: int) -> void:
@@ -165,17 +190,25 @@ func seg(c: CanvasItem, a: Vector2, b: Vector2, col: Color, width: float, shape_
 func rect(c: CanvasItem, r: Rect2, col: Color, width: float, shape_seed: int, fill := Color(0, 0, 0, 0)) -> void:
 	if fill.a > 0.0:
 		c.draw_rect(r, fill)
-	var pts := PackedVector2Array()
-	var corners := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
-	for i in 4:
-		var a: Vector2 = corners[i]
-		var b: Vector2 = corners[(i + 1) % 4]
-		for s in 4:
-			pts.append(a.lerp(b, float(s) / 4.0))
-	var j := PackedVector2Array()
-	for i in pts.size():
-		j.append(wob(pts[i], shape_seed, i))
-	j.append(j[0])
+	var key := PackedVector2Array([r.position, r.size])
+	var f := frame()
+	var rec = _jit.get(-shape_seed - 1)
+	var j: PackedVector2Array
+	if rec != null and int(rec[0]) == f and rec[1] == key:
+		j = rec[2]
+	else:
+		var pts := PackedVector2Array()
+		var corners := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+		for i in 4:
+			var a: Vector2 = corners[i]
+			var b: Vector2 = corners[(i + 1) % 4]
+			for sg in 4:
+				pts.append(a.lerp(b, float(sg) / 4.0))
+		j = PackedVector2Array()
+		for i in pts.size():
+			j.append(wob(pts[i], shape_seed, i))
+		j.append(j[0])
+		_jit[-shape_seed - 1] = [f, key, j]
 	stroke(c, j, col, width)
 
 
@@ -185,18 +218,30 @@ func circle(c: CanvasItem, at: Vector2, r: float, col: Color, width: float, shap
 
 func ellipse(c: CanvasItem, at: Vector2, radii: Vector2, col: Color, width: float, shape_seed: int, fill := Color(0, 0, 0, 0), rot := 0.0) -> void:
 	var n: int = circle_segments if maxf(radii.x, radii.y) > 6.0 * unit else 10
-	var flat := PackedVector2Array()
-	for i in n:
-		var a := TAU * float(i) / float(n)
-		flat.append(at + Vector2(cos(a) * radii.x, sin(a) * radii.y).rotated(rot))
+	var key := PackedVector2Array([at, radii, Vector2(rot, float(n))])
+	var f := frame()
+	var ck := -shape_seed - 500000
+	var rec = _jit.get(ck)
+	var flat: PackedVector2Array
+	var j: PackedVector2Array
+	if rec != null and int(rec[0]) == f and rec[1] == key:
+		flat = rec[2]
+		j = rec[3]
+	else:
+		flat = PackedVector2Array()
+		for i in n:
+			var a := TAU * float(i) / float(n)
+			flat.append(at + Vector2(cos(a) * radii.x, sin(a) * radii.y).rotated(rot))
+		j = PackedVector2Array()
+		for i in n:
+			j.append(wob(flat[i], shape_seed, i))
+		j.append(j[0])
+		_jit[ck] = [f, key, flat, j]
 	if fill.a > 0.0:
 		c.draw_colored_polygon(flat, fill)
+		ops += 1
 	if col.a <= 0.0 or width <= 0.0:
 		return
-	var j := PackedVector2Array()
-	for i in n:
-		j.append(wob(flat[i], shape_seed, i))
-	j.append(j[0])
 	stroke(c, j, col, width)
 
 
@@ -226,41 +271,101 @@ func dashed(c: CanvasItem, a: Vector2, b: Vector2, col: Color, width: float, das
 
 # ---------------------------------------------------------------------------- shading
 
-## The halftone tile over `r`: two ink dots per tile. `inside(p)` (optional) keeps only the dots in
-## a shape, e.g. under a wavy skin edge.
-func halftone(c: CanvasItem, r: Rect2, alpha: float, inside := Callable(), col := Color(-1, 0, 0)) -> void:
+## The halftone tile over `r`: two ink dots per `halftone_tile`, as ONE textured rectangle.
+func halftone(c: CanvasItem, r: Rect2, alpha: float, col := Color(-1, 0, 0)) -> void:
+	halftone_poly(c, PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]), alpha, col)
+
+
+## The halftone clipped to a shape (under a wavy skin edge, the bottom of a tray): one textured
+## polygon, the tile repeating in canvas space so neighbouring patches line up.
+func halftone_poly(c: CanvasItem, pts: PackedVector2Array, alpha: float, col := Color(-1, 0, 0)) -> void:
+	if pts.size() < 3:
+		return
 	var tile := halftone_tile * unit
-	var dot := halftone_dot * unit
+	var tex := _tile_texture(int(round(tile)), halftone_dot * unit)
 	var cc: Color = ink if col.r < 0.0 else col
 	cc.a = halftone_alpha * alpha
-	var y := r.position.y
-	while y < r.end.y:
-		var x := r.position.x
-		while x < r.end.x:
-			for o: Vector2 in [Vector2(0.25, 0.25), Vector2(0.75, 0.75)]:
-				var p := Vector2(x, y) + o * tile
-				if inside.is_valid() and not bool(inside.call(p)):
-					continue
-				c.draw_circle(p, dot, cc)
-			x += tile
-		y += tile
+	var uvs := PackedVector2Array()
+	uvs.resize(pts.size())
+	var inv := 1.0 / float(tex.get_width())
+	for i in pts.size():
+		uvs[i] = pts[i] * inv
+	if c.texture_repeat != CanvasItem.TEXTURE_REPEAT_ENABLED:
+		c.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	c.draw_colored_polygon(pts, cc, uvs, tex)
+	ops += 1
+
+
+## A filled round dot as a batched textured quad (speckles, droplets, highlights).
+func dot(c: CanvasItem, at: Vector2, r: float, col: Color) -> void:
+	c.draw_texture_rect(dot_texture(), Rect2(at.x - r, at.y - r, r * 2.0, r * 2.0), false, col)
+	ops += 1
+
+
+static func dot_texture() -> ImageTexture:
+	if _dot_tex == null:
+		var n := 32
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		var c := (float(n) - 1.0) * 0.5
+		for y in n:
+			for x in n:
+				var d := Vector2(float(x) - c, float(y) - c).length()
+				img.set_pixel(x, y, Color(1, 1, 1, clampf(c + 0.5 - d, 0.0, 1.0)))
+		_dot_tex = ImageTexture.create_from_image(img)
+	return _dot_tex
+
+
+## The halftone tile at `size` canvas px: two dots of radius `r` at a quarter and three quarters,
+## anti-aliased by supersampling, so it draws 1:1 on the panel.
+static func _tile_texture(size: int, r: float) -> ImageTexture:
+	size = maxi(2, size)
+	var key := "%d|%.2f" % [size, r]
+	if _tiles.has(key):
+		return _tiles[key]
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var centres := [Vector2(0.25, 0.25) * float(size), Vector2(0.75, 0.75) * float(size)]
+	for y in size:
+		for x in size:
+			var cover := 0.0
+			for sy in 4:
+				for sx in 4:
+					var p := Vector2(float(x) + (float(sx) + 0.5) / 4.0, float(y) + (float(sy) + 0.5) / 4.0)
+					for ctr: Vector2 in centres:
+						if p.distance_to(ctr) <= r:
+							cover += 1.0 / 16.0
+							break
+			img.set_pixel(x, y, Color(1, 1, 1, clampf(cover, 0.0, 1.0)))
+	var tex := ImageTexture.create_from_image(img)
+	_tiles[key] = tex
+	return tex
 
 
 ## Soft olive-brown smudges on the page. `spots` is Array of [centre, radii, alpha], made once per run
 ## by make_grime() so they hold still.
 func draw_grime(c: CanvasItem, spots: Array) -> void:
-	for s in spots:
-		var at: Vector2 = s[0]
-		var rr: Vector2 = s[1]
-		var a: float = s[2]
-		for k in 4:
-			var f := 1.0 - float(k) * 0.22
-			var col := Color(grime, a * 0.4)
-			var pts := PackedVector2Array()
-			for i in 14:
-				var ang := TAU * float(i) / 14.0
-				pts.append(at + Vector2(cos(ang) * rr.x, sin(ang) * rr.y) * f)
-			c.draw_colored_polygon(pts, col)
+	# One soft textured quad per smudge: they share a texture, so they batch into a single draw.
+	var tex := _blob_texture()
+	for sp in spots:
+		var at: Vector2 = sp[0]
+		var rr: Vector2 = sp[1]
+		c.draw_texture_rect(tex, Rect2(at - rr, rr * 2.0), false, Color(grime, float(sp[2]) * 1.6))
+	ops += 1
+
+
+static var _blob: ImageTexture = null
+
+## A round smudge that fades out to its edge.
+static func _blob_texture() -> ImageTexture:
+	if _blob == null:
+		var n := 64
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		var ctr := (float(n) - 1.0) * 0.5
+		for y in n:
+			for x in n:
+				var d := Vector2(float(x) - ctr, float(y) - ctr).length() / ctr
+				img.set_pixel(x, y, Color(1, 1, 1, clampf(1.0 - d, 0.0, 1.0) ** 0.7))
+		_blob = ImageTexture.create_from_image(img)
+	return _blob
 
 
 ## 6-8 smudges inside `area` (canvas px), from `rng`.
@@ -358,6 +463,7 @@ func text(c: CanvasItem, at: Vector2, s: String, size: float, col := Color(-1, 0
 	var w := f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
 	var x := at.x - (w * 0.5 if align == 1 else (w if align == 2 else 0.0))
 	c.draw_string(f, Vector2(x, at.y), s, HORIZONTAL_ALIGNMENT_LEFT, -1.0, px, cc)
+	ops += 1
 
 
 ## The command card, in ink: a paper strip with heavy rules across the page and the word stamped on

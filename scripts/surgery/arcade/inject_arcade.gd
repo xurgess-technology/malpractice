@@ -257,6 +257,19 @@ var _warm := false
 var _shown: Array = []            ## bubbles as drawn (spectators ease toward the 20 Hz state)
 var _shown_grip := Vector2(480.0, 200.0)
 
+# ---- profiling (the lab's --fps reads prof_line) ----
+var prof_line := ""
+var _prof := {}
+var _prof_frames := 0
+var _prof_ops := 0
+
+func _prof_mark(key: String, t0: int) -> void:
+	var rec: Array = _prof.get(key, [0, 0])
+	rec[0] = int(rec[0]) + Time.get_ticks_usec() - t0
+	rec[1] = int(rec[1]) + ink.ops - _prof_ops
+	_prof_ops = ink.ops
+	_prof[key] = rec
+
 # ---- bot ----
 var _bt := 0.0
 var _b := {}
@@ -1031,13 +1044,18 @@ func _spray(at: Vector2, col: Color, n: int) -> void:
 func paint_game(c: CanvasItem) -> void:
 	if panel == null or ink == null:
 		return
+	var t0 := Time.get_ticks_usec()
+	ink.ops = 0
+	_prof_ops = 0
 	ink.draw_grime(c, grime_spots)
+	_prof_mark("grime", t0)
 	if _warm:
 		# Warmup: one of everything, so nothing draws for the first time mid-step.
 		_paint_syringe(c, true)
 		_paint_inject(c)
 		ink.warm(c)
 		return
+	t0 = Time.get_ticks_usec()
 	match phase:
 		Phase.DRAW:
 			_paint_syringe(c, false)
@@ -1045,9 +1063,18 @@ func paint_game(c: CanvasItem) -> void:
 			_paint_syringe(c, true)
 		Phase.INJECT, Phase.DONE:
 			_paint_inject(c)
+	_prof_mark("stage", t0)
+	_prof_frames += 1
+	if _prof_frames >= 30:
+		var parts := []
+		for key in _prof:
+			parts.append("%s %.2fms/%dops" % [key, float(_prof[key][0]) / 1000.0 / 30.0, int(_prof[key][1]) / 30])
+		prof_line = ", ".join(parts)
+		_prof.clear()
+		_prof_frames = 0
 	for d in _drops:
 		var a: float = 1.0 - float(d[2]) / 0.8
-		c.draw_circle(cv(d[0]), cl(2.6), Color(d[3], (d[3] as Color).a * a))
+		ink.dot(c, cv(d[0]), cl(2.6), Color(d[3], (d[3] as Color).a * a))
 
 
 ## The needle-up syringe in its inverted vial: stages 1 and 2.
@@ -1091,7 +1118,7 @@ func _paint_syringe(c: CanvasItem, debubble: bool) -> void:
 	c.draw_rect(Rect2(cv(Vector2(bx0, b0)), Vector2(BARREL_HALF * 2.0, b1 - b0) * _u()), I.band)
 	I.seg(c, cv(Vector2(bx0 - 8.0, b0)), cv(Vector2(bx1 + 8.0, b0)), I.band_edge, I.detail, 41)
 	I.seg(c, cv(Vector2(bx0 - 8.0, b1)), cv(Vector2(bx1 + 8.0, b1)), I.band_edge, I.detail, 42)
-	I.halftone(c, Rect2(cv(Vector2(bx0, b0)), Vector2(BARREL_HALF * 2.0, b1 - b0) * _u()), 0.35, Callable(), I.band_edge)
+	I.halftone(c, Rect2(cv(Vector2(bx0, b0)), Vector2(BARREL_HALF * 2.0, b1 - b0) * _u()), 0.35, I.band_edge)
 	var ml_px := TRAVEL / barrel_ml
 	var n := int(barrel_ml)
 	for i in n + 1:
@@ -1124,7 +1151,7 @@ func _paint_syringe(c: CanvasItem, debubble: bool) -> void:
 			I.ellipse(c, at, Vector2(bv.z * 0.55, bv.z) * _u(), I.amber, I.detail, 200 + i, I.amber_fill)
 		else:
 			I.circle(c, at, bv.z * _u(), I.ink, I.detail, 200 + i, Color(1, 1, 1, 0.55))
-			c.draw_circle(at + Vector2(-bv.z * 0.35, -bv.z * 0.35) * _u(), bv.z * 0.22 * _u(), Color(1, 1, 1, 0.9))
+			I.dot(c, at + Vector2(-bv.z * 0.35, -bv.z * 0.35) * _u(), bv.z * 0.22 * _u(), Color(1, 1, 1, 0.9))
 	if debubble:
 		_paint_legend(c)
 		for rp in ripples:
@@ -1157,6 +1184,7 @@ func _button(c: CanvasItem, r: Rect2, label: String, sd: int, live := true) -> v
 ## Stage 3: the arm, the veins, the tray and the needle.
 func _paint_inject(c: CanvasItem) -> void:
 	var I := ink
+	var tp0 := Time.get_ticks_usec()
 	# The arm below its wavy top edge.
 	var top := PackedVector2Array()
 	var x := 0.0
@@ -1169,11 +1197,11 @@ func _paint_inject(c: CanvasItem) -> void:
 	c.draw_colored_polygon(poly, I.hide_seal if seal else I.skin_human)
 	if redness > 0.001:
 		c.draw_colored_polygon(poly, Color(I.redness, I.redness.a * redness / 0.22 * 0.22))
-	I.halftone(c, Rect2(cv(Vector2(0.0, 235.0)), Vector2(960.0, 110.0) * _u()), 0.35,
-		func(p: Vector2) -> bool:
-			var rp := Vector2(p.x / _u(), (p.y - _top()) / _u())
-			var d := rp.y - skin_top(rp.x)
-			return d > 0.0 and d < 34.0)
+	# The halftone shading just under the skin's edge: one polygon along the edge, 34 px deep.
+	var under := top.duplicate()
+	for i in range(top.size() - 1, -1, -1):
+		under.append(top[i] + Vector2(0.0, cl(34.0)))
+	I.halftone_poly(c, under, 0.35)
 	if seal:
 		for ri in 3:
 			var ridge := PackedVector2Array()
@@ -1183,8 +1211,10 @@ func _paint_inject(c: CanvasItem) -> void:
 				xx += 48.0
 			I.line(c, ridge, Color(I.ink, 0.45), I.detail, 500 + ri)
 		for s in speckles:
-			c.draw_circle(cv(s), 1.6 * _u(), Color(I.ink, 0.35))
+			I.dot(c, cv(s), 1.6 * _u(), Color(I.ink, 0.35))
 	I.line(c, top, I.ink, I.heavy, 510)
+	_prof_mark("arm", tp0)
+	tp0 = Time.get_ticks_usec()
 	# The veins: only as visible as the last slap (or the tourniquet) leaves them.
 	var vcol: Color = I.vein_seal if seal else I.vein_human
 	if vis > 0.01:
@@ -1194,6 +1224,8 @@ func _paint_inject(c: CanvasItem) -> void:
 				pts.append(cv(q))
 			I.line(c, pts, Color(vcol, 0.35 * vis), 9.0, 520 + vi)
 			I.line(c, pts, Color(vcol, 0.9 * vis), 3.2, 530 + vi)
+	_prof_mark("veins", tp0)
+	tp0 = Time.get_ticks_usec()
 	# What went wrong on this arm stays on it.
 	for br in bruises:
 		var at := cv(Vector2(float(br[0]), float(br[1])))
@@ -1220,10 +1252,13 @@ func _paint_inject(c: CanvasItem) -> void:
 			I.text(c, cv(Vector2(TQ_BTN.get_center().x, TQ_BTN.end.y + 16.0)), "none to spare", 12.0, Color(I.label, 0.6), 1)
 	# The tray and, when it is not in the hand, the syringe lying on it.
 	I.ellipse(c, cv(TRAY), TRAY_R * _u(), I.ink, I.outline, 590, Color(I.paper.darkened(0.08)))
-	I.halftone(c, Rect2(cv(TRAY - TRAY_R), TRAY_R * 2.0 * _u()), 0.3,
-		func(p: Vector2) -> bool:
-			var rp := Vector2(p.x / _u(), (p.y - _top()) / _u())
-			return ((rp - TRAY) / TRAY_R).length() < 0.85 and rp.y > TRAY.y)
+	var tray_low := PackedVector2Array()
+	for i in 13:
+		var ang := PI * float(i) / 12.0
+		tray_low.append(cv(TRAY + Vector2(cos(ang) * TRAY_R.x, sin(ang) * TRAY_R.y) * 0.85))
+	I.halftone_poly(c, tray_low, 0.3)
+	_prof_mark("marks+tray", tp0)
+	tp0 = Time.get_ticks_usec()
 	if not held and not locked:
 		_paint_assembly(c, TRAY + Vector2(-60.0, -4.0), 4.0, 0.0, false)
 		I.text(c, cv(TRAY + Vector2(0.0, TRAY_R.y + 18.0)), "tray", 12.0, I.label, 1)
@@ -1297,7 +1332,7 @@ func _paint_meter(c: CanvasItem) -> void:
 	var green := r.size.y * 0.55
 	c.draw_rect(Rect2(Vector2(r.position.x, r.end.y - green), Vector2(r.size.x, green)), Color(I.good, 0.35))
 	c.draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y - green)), Color(I.deep_red, 0.3))
-	I.halftone(c, Rect2(r.position, Vector2(r.size.x, r.size.y - green)), 0.6, Callable(), I.deep_red)
+	I.halftone(c, Rect2(r.position, Vector2(r.size.x, r.size.y - green)), 0.6, I.deep_red)
 	I.rect(c, r, I.ink, I.outline, 610)
 	var y := r.end.y - r.size.y * clampf(rate / 1.0, 0.0, 1.0)
 	I.seg(c, Vector2(r.position.x - 10.0, y), Vector2(r.end.x + 10.0, y), I.ink, I.heavy, 611)

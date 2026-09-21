@@ -58,6 +58,10 @@ var teammate_aim := Vector2.ZERO
 ## --tourniquets=N: how many tourniquets the operator holds (ctx.hand_count), for the anaesthetic's
 ## tourniquet button. 1 by default.
 var tourniquets := 1
+## --fps: print frames drawn per second and the panel's paint cost once a second.
+var fps_report := false
+var _fps_t := 0.0
+var _fps_frames := 0
 var _wheel := 0
 var _teammate: SpotLight3D
 
@@ -110,6 +114,7 @@ func _ready() -> void:
 			"idle": idle = true
 			"arcade": arcade_force = true
 			"tourniquets": tourniquets = int(v)
+			"fps": fps_report = true
 			"marks":
 				flags["stitch_marks"] = v
 				idle = true
@@ -359,6 +364,15 @@ func _physics_process(delta: float) -> void:
 					_wheel += 1
 				mg.handle_cursor(_clamp(hit + shake), b, delta)
 	mg.tick(delta)
+	if fps_report:
+		_fps_t += delta
+		if _fps_t >= 1.0:
+			var frames := Engine.get_frames_drawn() - _fps_frames
+			_fps_frames = Engine.get_frames_drawn()
+			var ps: Array = mg.take_paint_stats() if mg.has_method("take_paint_stats") else [0, 0]
+			print("[lab] fps t=%.0f frames=%d paints=%d paint_ms_each=%.2f phase=%s %s" % [t, frames, int(ps[1]),
+				float(ps[0]) / 1000.0 / maxf(1.0, float(ps[1])), str(mg.get("phase")), str(mg.get("prof_line")) if mg.get("prof_line") != null else ""])
+			_fps_t = 0.0
 	# Round-trip the net state every frame so a broken apply_net_state shows up in the lab.
 	mg.apply_net_state(mg.net_state())
 	_draw_hud()

@@ -296,7 +296,27 @@ func ghost(seconds: float) -> void:
 # ---------------------------------------------------------------------------- drawing
 
 ## The panel's painter: the game's diagram, then anything it queued on top, then the card.
+## Profiling (the lab's --fps): microseconds spent in the painter since the last read, and how many
+## paints that was. Reading resets them.
+var paint_usec := 0
+var paint_count := 0
+
+
+func take_paint_stats() -> Array:
+	var r := [paint_usec, paint_count]
+	paint_usec = 0
+	paint_count = 0
+	return r
+
+
 func _paint(c: CanvasItem) -> void:
+	var t0 := Time.get_ticks_usec()
+	_paint_inner(c)
+	paint_usec += Time.get_ticks_usec() - t0
+	paint_count += 1
+
+
+func _paint_inner(c: CanvasItem) -> void:
 	if panel == null:
 		return
 	if ink != null:
