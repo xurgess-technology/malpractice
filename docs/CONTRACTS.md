@@ -332,6 +332,10 @@ are easy to miss:
 - `on_jolt(offset, strength, duration)` is called on the operator's machine when an underdosed
   patient stirs; for `duration` seconds the cursor passed to `handle_cursor` carries a decaying
   shake of up to `offset`. React there rather than inferring jolts from cursor jumps.
+- **Spending an item mid-step** (2026-09-21): `ctx.hand_count` (Callable(kind) -> int) is what the
+  operator holds right now, and `use_item(kind, n)` emits `item_used(kind, n)`. The surgery system
+  sends it to the host as an operator report `{"use": [kind, n]}` and the host takes it out of the
+  operator's slots (`Player.consume_hand`). The anaesthetic's tourniquet button uses it.
 - `ctx.helper_lights` (optional Callable -> Array of SpotLight3D): the surgery system passes the
   flashlights of living players other than the operator. `helper_light()` turns them into
   `{amount, spot}` for this site (on, in range, aimed, clear line of sight). The forceps step lifts
@@ -358,7 +362,9 @@ stitches, should too):
   grab the eye | MOUSE drag it to the socket"). Override `Minigame.keys()` per stage;
   `E / Esc: step away` is drawn by the HUD itself. Inputs a step can read: the cursor,
   `BUTTON_PRIMARY` (left click), `BUTTON_SECONDARY` (right) and `BUTTON_UP` (**W**, the eye snip's
-  "pull the eyeball up"). Bots set the same bits in `bot_input`'s `buttons`.
+  "pull the eyeball up"). Bots set the same bits in `bot_input`'s `buttons`. The arcade bits
+  (`BUTTON_LEFT` / `RIGHT` / `DOWN` / `ACTION`) are A, D, S and Space, and (2026-09-21)
+  `BUTTON_SCROLL_UP` / `BUTTON_SCROLL_DOWN` are one frame each per mouse-wheel notch.
 - Colour language in the world: **green** = right / holds / grab it now (tourniquet strap and
   pulse probe, gauze path ring and trail, saw guide, forceps reach ring and exit glow);
   **amber** = works but weak (loose wrap, short saw pass, strap too high); **red** = a mistake is

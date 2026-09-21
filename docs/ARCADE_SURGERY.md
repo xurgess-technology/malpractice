@@ -5,7 +5,9 @@ what exists, what it is really called, and what was decided along the way.
 
 ## Status
 
-**Phases 0 to 7 are done (2026-09-20/21). Eleven games, all switched on.** Read
+**Phases 0 to 7 are done (2026-09-20/21). Eleven games, all switched on.** On 2026-09-21 DOSE! and
+the legacy anaesthetic were replaced by the Anesthetic Injection (5.1), the only sedation game, which
+has no switch. Read
 [MORNING_REPORT.md](MORNING_REPORT.md) first: it has the status table, the lab and quick-start
 commands for every game, what to look at first, every judgment call and the known issues.
 
@@ -24,6 +26,8 @@ unedited, and still passes its own self-test.
 | freeze / resume | `ArcadeGame.frozen`, the `READY` card, `play_t` in the state blob |
 | the lab | `godot --path . tools/minigame_lab.tscn -- --game=saw --arcade` |
 | its self-test | `--selftest=saw:arcade` (`--selftest=saw` still runs the legacy one) |
+| the sedation game | `scripts/surgery/arcade/inject_arcade.gd`, in `MINIGAME_SCRIPTS` (no legacy twin, no switch); `--selftest=anesthetic` |
+| the ink look | `scripts/surgery/panel/ink.gd`, see PANEL_STYLE.md |
 
 `--quick` does **not** exist on `main` (it is on the unmerged `quick-start` branch), so nothing was
 built for it, per section 3.4.
@@ -35,6 +39,8 @@ built for it, per section 3.4.
   needed: `move_left`, `move_right`, `move_back` and `jump` are already in `project.godot`, and the
   player is locked in place while operating so they are free. `Minigame.pressed_edges(buttons)`
   gives the bits that went down this frame; call it once, at the top of `handle_cursor`.
+  **2026-09-21:** `BUTTON_SCROLL_UP` / `BUTTON_SCROLL_DOWN`, one frame per mouse-wheel notch (the
+  surgery system and the lab queue notches and let them out one a frame; bots set them the same way).
 - **`ArcadeGame`** owns the panel, the diagram-millimetre space, the palette, the command card, the
   freeze/resume, the panel shake, `quality`, the audio hooks, and a `run_bot()` for the self-tests.
   A game writes `build_game()`, `card_word_for_start()`, `play()`, `advance()`, `animate()`,
@@ -110,6 +116,53 @@ built for it, per section 3.4.
 | `max_chips` | 26 | splatter kept on the section |
 | `tick_volume` | -21 dB | the cadence tick |
 | audio cues | rasp / grind / squelch / thunk / click / clink | all existing cues; nothing new generated |
+
+`InjectArcade` (5.1; exports grouped in the inspector). "x k" / "/ k" is times / divided by the
+difficulty factor k = difficulty ^ `difficulty_gain` (0.5):
+
+| Export | Start | What |
+|---|---|---|
+| `ml_per_kg` / `barrel_ml` | 0.05 / 10 ml | the dose by weight and the barrel it is read on; they place the band |
+| `band_half` | 0.05 / k | half the band, share of the barrel |
+| `band_jitter` | 0 | a seeded nudge to the band centre (0: weight alone) |
+| `vial_start` | 0.90 | what is in the vial |
+| `draw_base` / `draw_accel` | 0.05 / 0.22 x k | draw speed = base + seconds held x accel |
+| `return_rate` / `scroll_return` | 0.25/s / 0.02 | RMB and each wheel notch putting drug back |
+| `air_hold` / `air_sustain` / `air_r` | 2.8 s / k, 0.3 s, 16 | when a hold pulls in air, and how big |
+| `in_band_k` | 0.35 | how much of the error an in-band dose carries |
+| `bubbles_min` / `bubbles_max` | 3-6 x k | bubbles at the flick stage |
+| `bubble_r_min` / `bubble_r_max` | 5 / 14 x k | their sizes |
+| `stuck_count` | 2 x k | how many start stuck to the wall |
+| `merge_cap` / `big_bubble_r` | 26 / 12 | the biggest merge; over this a bubble counts twice |
+| `rise_base` / `rise_per_r` / `wobble` | 9 / 0.9 / 12 | rise speed and wobble, px/s |
+| `damp_x` / `damp_y` | 2.5 / 1.4 | how fast a flick's kick dies |
+| `flick_vy_min` / `flick_vy_max` / `flick_vx` | 35 / 90 / 50 | the kick |
+| `unstick_reach` | 85 / k | how close a flick must land to free a stuck bubble |
+| `purge_reach` | 18 / k | how close to the needle end a bubble must be to pop |
+| `pop_cost` / `squirt_cost` | 0.004 / 0.02 | dose lost to a pop and to a squirt |
+| `vein_fade` | 1.5 s / k | how long a slap shows the veins |
+| `slap_max` / `pickup_quick` | 0.3 / 0.18 s | how short a click is a slap / a set-down |
+| `angle_min` / `angle_max` | 8 / 80 deg | the needle's range |
+| `scroll_deg` / `key_deg` | 3 / 2 | per wheel notch / per A or D |
+| `push_hold` | 0.15 s | hold this long before the needle goes in |
+| `insert_speed` / `insert_max` | 38 x k / 55 px | needle speed and reach |
+| `flash_min` / `tip_tol` | 14 / 9 / k px | the flash wants the tip this deep and this close to a vein |
+| `window_lo` / `window_hi` | 14 / 32 deg | the angle to the vein that flashes (half-width / k) |
+| `blow_past` / `blown_half_x` | 12 / k, 45 px | pushing past the flash blows the vein, for this far either side |
+| `push_up` / `push_down` / `push_cap` | 0.55 / 0.9 / 1.2 | the plunger's push rate |
+| `drain_k` | 0.09 | drain = rate x this per second |
+| `fast_rate` / `fast_every` | 0.55 / k, 0.9 s | a fast push, and how often one counts |
+| `deliver_beat` | 0.9 s | the pause after the last drop |
+| `tourniquet_item` / `tq_time` | tourniquet / 9 s | what the button spends and how long it holds |
+| `redness_up` / `redness_down` | 0.10 / 0.03 per s | the arm reddening under it |
+| `vitals_per_point` | 0.25 | vitals per point of the spec's score |
+| `pts_miss` / `pts_blown` / `pts_bubble` / `pts_fast` | 8 / 16 / 10 / 6 | the spec's penalties |
+| `pts_dose_max` / `pts_dose_slope` | 40 / 260 | the dose penalty |
+| `cost_air` / `cost_purge_low` / `cost_slap` / `cost_tourniquet_timeout` | 0 | vitals at the unpriced spike sites |
+| audio cues | draw / forceps click / plop / inject / pack / needle / tear / beep crit / cinch | all existing cues |
+
+`ArcadeGame` grew `use_ink()`, `ink_unit()`, `ink_glow` (warm) and `ink_brightness` (0.82) for games
+on the ink look.
 
 Layer cadences, resistances and tear factors are in `SawArcade.LAYERS` (skin 0.22 s / 0.45 / 0.5,
 muscle 0.30 / 1.0 / 0.8, bone 0.50 / 2.2 / 1.2, far side 0.25 / 0.9 / 0.8), as the brief specifies.
@@ -273,37 +326,77 @@ Watching a friend fail is a core feature, not a nicety.
 
 Numbers are starting points. Tune to hit the lab targets.
 
-### 5.1 DOSE! - Sedate the patient
+### 5.1 The Anesthetic Injection - Sedate the patient
 `anesthetic` x1, site `injection`. GW step 1, AM step 1.
-Rhyme: old golf-game power meter. Two presses.
+`scripts/surgery/arcade/inject_arcade.gd`. **The only sedation game** (2026-09-21): it replaced
+DOSE! and the legacy `anesthetic.gd`, so this step has no `ARCADE_*` entry and no dev-panel switch.
+Built from Zach's handoff, `docs/ANESTHETIC_INJECTION_SPEC.md`; that file's "Decisions" section
+won wherever it disagreed with the handoff. It pilots the ink/paper look (PANEL_STYLE.md, "The ink
+look") that every other panel is to move onto later.
 
-**Stage A - Stick.** Diagram of the forearm / flipper with a vein
-band at a seeded X. A needle marker sweeps side to side across the
-panel (start 90 mm/s x sqrt(difficulty), ping-pong). Click to stop it.
-- Vein width from the patient: Bob 14 mm, seal 9 mm, divided by
-  sqrt(difficulty).
-- On the vein: needle is in, hub flashes red, tick sound.
-- Off it: botch 2.0 "Missed the vein", bead of blood, flinch, 0.5 s
-  cooldown. STATE: each miss bruises the vein and narrows it 15%
-  (floor 50%).
-- Shift 3+: the vein hops once mid-sweep to a new X, telegraphed by a
-  0.3 s flicker.
+Space: the spec's 960 x 600 reference px on the 120 x 80 mm diagram at 8 px/mm, the spare 5 mm
+split top and bottom. Everything below is in reference px.
 
-**Stage B - Dose.** Hold LMB to fill a syringe-shaped meter, release
-to stop. Reuse the existing dose maths: target_ml = weight x 0.05
-(clamp 1-9), barrel = 1.9x target, 0.8 ml/s.
-- KEEP THE BEST IDEA FROM THE LEGACY GAME: the dose is never a number
-  and there is NO green zone. A small patient icon on the panel
-  twitches less as you approach the dose, is still from ~85%, and
-  turns blue-grey past ~1.15x while the alarm chirps. The real body
-  does the same through the existing calls.
-- Shift 1 only: draw a faint target zone as training wheels.
-- Release starts a 1.2 s withdraw; press again in that window to give
-  more. Under 20% of a dose gives nothing and resets.
-- Results and costs identical to today: 0.8-1.25x is good; under
-  0.75x is an underdose (free now, stirs later); over 1.25x costs
-  4.0 + excess x 30 "Overdose".
-- Jolts: none (framework already excludes this step).
+**DRAW!** The syringe hangs needle-up in an upside-down vial ("SOMNUL-9", 0.9 of a barrel in it).
+- Hold LMB to draw: speed = 0.05 + seconds held x 0.22 x difficulty (barrel shares per second).
+  It runs away the longer you hold: overshooting is the risk. Releasing starts it slow again.
+- RMB puts it back at 0.25/s; each wheel notch puts back 0.02 (either direction).
+- The green **band is centred by the patient's weight**: dose = weight x 0.05 ml on a 10 ml barrel,
+  so Bob (82 kg) at 0.41 and the seal (130 kg) at 0.65 of the barrel. Half-width 0.05 / difficulty.
+- An empty vial, or one hold longer than 2.8 s / difficulty, for 0.3 s draws in a big air bubble
+  (r 16), which joins the next stage's bubbles.
+- Space or the Done button moves on.
+
+**FLICK!** 3-6 bubbles (times difficulty), r 5-14 (the top end times difficulty); the first two
+(times difficulty) are amber and stuck to the walls.
+- Free bubbles rise at 9 + 0.9 r px/s with a sideways wobble, and merge when they touch
+  (r = sqrt(r1^2 + r2^2), capped at 26).
+- Click the barrel: every free bubble gets an upward kick; stuck ones within 85 px / difficulty come
+  off the wall.
+- Tap the thumb pad: a bubble whose top is within 18 px / difficulty of the needle end pops (costs
+  0.004 of the dose). With nothing there you squirt drug out (0.02). The panel warns in red while
+  the level is under the band.
+- Space or Continue moves on whenever you like; what is left goes into the patient.
+
+**STICK!** The forearm, or the seal's flipper (slate hide, three ridges, speckles), below a wavy
+ink edge; 2-3 seeded veins across it; the instrument tray top left.
+- Bare-handed, click (under 0.3 s) the skin to slap it: the veins show fully and fade out over
+  1.5 s / difficulty. Click the tray to take the syringe; a quick click back on it sets it down.
+- Held, the syringe follows the mouse; wheel +/-3 degrees, A/D +/-2 (8-80 degrees below
+  horizontal). Hold LMB for 0.15 s with the tip on the skin and the needle goes in at
+  38 px/s x difficulty (max 55), visibly sinking in: the buried part is a faint dashed ghost, with
+  a depth readout that goes red past 65%.
+- **The flash**: tip past 14 px, within 9 px / difficulty of a vein, at 14-32 degrees to it (the
+  window narrows about its middle with difficulty). The hub fills red. Let go: locked in.
+- Push on 12 px / difficulty past the flash and the vein blows (a bruise; that vein is dead for
+  45 px either side). Let go past 14 px with no flash: a miss (a puncture mark).
+- **The tourniquet button** pins the veins up for 9 s while the arm reddens, then lets go. It
+  spends a real tourniquet from your hands (`Minigame.use_item`; the host takes it out of your
+  slots) and is greyed out ("none to spare") without one, or when the rest of the procedure
+  still needs the one you hold (the amputation's step 2 does). Click it again to take it off early.
+
+**PUSH!** Hold LMB to build the push rate (+0.55/s, -0.9/s let go, capped at 1.2); the drug drains
+at rate x 0.09/s. The PUSH meter is green below 0.55 / difficulty and red above; every 0.9 s in the
+red is a fast push. The bubbles still in the barrel go in one by one as the plunger passes them. At
+empty: "dose delivered...", a 0.9 s beat, done.
+
+**Costs are live** (no results card, no Retry): every mistake is `cost()` the moment it happens,
+at the spec's score penalty x `vitals_per_point` (0.25), with the spec's flavour line as the
+reason. Miss 2.0, blown vein 4.0, each bubble 2.5 (5.0 when r > 12), each fast push 1.5, and at
+delivery a dose outside the band min(40, (|error| - band) x 260) x 0.25 (up to 10), "Underdosed"
+or "Overdosed". The spike sites with no price in the spec (air drawn, a purge below the band, the
+slap, the tourniquet running out) cost 0 by default (`cost_*` exports), because what they lead to is
+billed when it lands. **`spiked(kind)`** goes out at every one of the spec's spike() sites.
+
+**Result** `{"sedation": s}`: in the band, 1.0 + (ratio - 1) x 0.35 (a clean ~1.0); outside it the
+ratio itself, so an underdose still stirs every later step (< 0.75) and SQUEEZE! reads it for pulse
+noise. `quality` = the spec's score / 100.
+
+**Onlookers** get the whole state at 20 Hz (bubbles, hand, needle, marks, timers) and ease the
+bubbles and the hand between updates. **Jolts**: none (the framework excludes this step).
+**Bot**: plays all three stages; skill 1.0 draws into the band and trims with the wheel, clears the
+bubbles, slaps, sticks at the window's middle and pushes in pulses. Self-test
+`--selftest=anesthetic` (`anesthetic:arcade` still works).
 
 ### 5.2 DODGE! - Remove the bullet
 `forceps` x0, site `gunshot`. GW step 2.
@@ -575,8 +668,8 @@ procedure's test_only flag alone; I'll flip it.
 
 | From | Flag | Into | Effect |
 |---|---|---|---|
-| DOSE | sedation | every later step | stirs (existing) |
-| DOSE | sedation | SQUEEZE | jumpier pulse |
+| INJECTION | sedation | every later step | stirs (existing) |
+| INJECTION | sedation | SQUEEZE | jumpier pulse |
 | DODGE | tears | WHACK | one bleeder per tear |
 | WHACK | pack_quality | WRAP (pack) | bleeding cells |
 | SQUEEZE | tourniquet | SAW | spurt hides the pendulum |
@@ -600,7 +693,7 @@ scaffolding later games.
   the tears flag).
 - **Phase 4:** WRAP!, both variants.
 - **Phase 5:** SQUEEZE!.
-- **Phase 6:** DOSE!.
+- **Phase 6:** DOSE!. (Replaced on 2026-09-21 by the Anesthetic Injection, 5.1.)
 - **Phase 7:** STEER!, PRY!, CUT THE RIGHT ONE!, and the STITCH! ring
   variant.
 - **Phase 8:** Only on my explicit say-so: remove legacy games and the

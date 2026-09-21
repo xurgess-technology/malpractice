@@ -13,11 +13,11 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 
 ## Surgery and patients
 
-- **The anesthetic view on Bob is half behind his gown.** The step's camera sits over his chest
-  side of the left forearm, so the gown's bulk hides the inner elbow's lower half; the vein bar is
-  drawn without depth test so the step still plays (`tools/lab_shots/gown_anes_bob_bot.png`).
-  Clearing the gown there does not work (it is a shell with no torso under it); a camera from the
-  arm's outer side would.
+- **The Anesthetic Injection (2026-09-21), not yet reviewed:** the sloppy lab bot loses 37-43
+  vitals (the arcade target is 15-25), mostly from fast pushes and injected bubbles at the spec's
+  prices; a good bot takes 16 s on Bob and 26 s on the seal (8-20 s is the arcade target), most of it
+  the slow push. The tourniquet button keeps back a tourniquet a later step needs, so on an
+  amputation you need two to use one. Only the operator's own hands count, not the shelf.
 - **The Kenney fallback Bob (`bob_skin.gdshader`) still paints the old grey-green infection.** Only
   used when the Blender model is missing.
 - **The cloth shader now has a `discard`** (the gown cut-out), which every human's cloth shares; a
@@ -32,9 +32,6 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 - **Sloppy forceps varies by channel (sweep 2).** Bot 0.0 loses 10-22.5 vitals over 12 channels
   (mean 15.8) and some lab seeds only 5-8 (short, gentle channels). Wall tears are discrete
   (2.5 each, at most one per 0.9 s), so the total follows how long the sloppy hand spends on bends.
-- **The anesthetic vein floats on the seal.** It is a straight bar drawn without depth test so
-  gown folds and a fidgeting arm never hide it; on the seal's curved flank its ends hang in the
-  air a little (`tools/lab_shots/c_seal_anes_7.png`). A decal-projected vein would hug the body.
 - **Stirs cost little in most steps.** At sedation 0.4 a good surgeon loses 0 in forceps,
   tourniquet, saw and pack and 2 in the stump wrap: the jolt is forgiven by design and only
   shakes the tool. Underdosing still matters through the saw's bleeding and time lost.

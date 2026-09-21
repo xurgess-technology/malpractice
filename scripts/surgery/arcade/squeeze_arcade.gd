@@ -14,7 +14,7 @@ extends "res://scripts/surgery/arcade/arcade_game.gd"
 ##   TIGHTEN. A pressure gauge, nought to four hundred and fifty. Hold the mouse and your bar
 ##   climbs; let go and it sinks, and it carries its own momentum either way. Somewhere up the
 ##   gauge is the pulse, and the pulse does not hold still: it wanders, and now and then it darts.
-##   HOW MUCH it moves is the anaesthetic you gave it -- CARRY-FORWARD from DOSE!, and on a badly
+##   HOW MUCH it moves is the anaesthetic you gave it -- CARRY-FORWARD from the injection, and on a badly
 ##   sedated patient the marker is all over the gauge and you are chasing it.
 ##   Keep your bar over the pulse and the occlusion meter fills; drift off and it drains twice as
 ##   slowly as it filled. Fill it and the windlass drops into its clip on its own. Right-click and
@@ -75,7 +75,7 @@ const PHI := 0.6180339887498949
 @export_range(4.0, 100.0, 1.0) var bar_span_min := 24.0
 
 # -- the pulse ------------------------------------------------------------------------------------
-## CARRY-FORWARD from DOSE!: noise = pulse_noise x difficulty x (1 + sedation_gain x (1 - sedation)).
+## CARRY-FORWARD from the injection: noise = pulse_noise x difficulty x (1 + sedation_gain x (1 - sedation)).
 @export_range(0.0, 100.0, 1.0) var pulse_noise := 25.0
 @export_range(0.0, 5.0, 0.1) var sedation_gain := 1.5
 @export_range(0.05, 3.0, 0.05) var pulse_hz := 0.42
@@ -265,7 +265,7 @@ func bar_half() -> float:
 	return maxf(bar_span_min, bar_span / diff) * 0.5
 
 
-## CARRY-FORWARD from DOSE!: how far the pulse marker wanders. A badly sedated patient's heart is
+## CARRY-FORWARD from the injection: how far the pulse marker wanders. A badly sedated patient's heart is
 ## not being talked down by anything, and you can see it on the gauge.
 func noise_amp() -> float:
 	return pulse_noise * diff * (1.0 + sedation_gain * (1.0 - sedation))

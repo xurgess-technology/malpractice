@@ -87,6 +87,39 @@ Everything a panel draws with lives in `panel_style.gd`, so one file restyles ev
   that holds but is untidy, warm white for thread, pale steel for tools.
 - **Readability beats atmosphere.** No scanlines, no noise, no grime — on purpose.
 
+## The ink look (2026-09-21)
+
+The second look, and the one every panel is to move onto: a hand-inked comic page. The Anesthetic
+Injection (`scripts/surgery/arcade/inject_arcade.gd`) is its pilot and so far its only user; the teal
+look above stays for everything else until each game is moved over.
+
+Everything lives in `scripts/surgery/panel/ink.gd` (a Resource, like `panel_style.gd`), and knows
+nothing about any one game:
+
+- **The page.** `begin_page(c, size)` draws the mat (#e9e3d6), a flat printed drop shadow (9, 11 px,
+  no blur) and the paper page (#efe9dc) turned -0.65 degrees; everything the game draws after it lands
+  on the turned page (squeezed to `page_scale` 0.965 so the border and shadow stay on the texture).
+  `end_page()` draws the 3 px ink border. `unpage()` / `onpage()` convert a point between the page as
+  seen and the game's own layout, for input and for bots.
+- **Boiling lines.** `line()`, `seg()`, `rect()` (four samples an edge), `circle()` / `ellipse()` (18
+  segments), `shape()`: every vertex is nudged +/-1.3 px by integer-hash noise seeded with the shape
+  and floor(t x 7), so lines boil at 7 fps and hold still in between. Round joins and caps. Fills are
+  flat and never wobble. Widths: `detail` 2.1, `outline` 3.2, `heavy` 4.
+- **Shading and grime.** `halftone()` (an 8 px tile of two ink dots, optionally clipped to a shape by a
+  callable) and `draw_grime()` / `make_grime()` (6-8 soft olive smudges per run, 3-7% alpha).
+  No gradients anywhere.
+- **Palette.** Paper, ink, label, the sickly green drug, band green, deep red, flash, amber, bruise,
+  skin, seal hide, vein colours and the tourniquet redness, all `@export`s.
+- **Type.** `text()` in an italic serif (Lora if the machine has it, else Georgia and friends, as a
+  SystemFont); `card()` is the command card as a stamp on a paper strip.
+- **Units.** `unit` is canvas px per reference px: a game laid out on its own reference size (the
+  injection's 960 x 600) sets it, and every weight and jitter scales with it.
+
+A game opts in with `ArcadeGame.use_ink() -> true` (and `ink_unit()`). The framework then turns the
+panel's teal chrome off (`SurgeryPanel.chrome = false`), draws the page, the header in the page's top
+corners and the ink command card, warms the panel's light (`ink_glow`) and brings the paper's
+brightness down (`ink_brightness` 0.82) so it is not the brightest thing in a dark OR.
+
 ## How a new game opts in
 
 The framework change is additive and opt-in; a step that does not override these behaves exactly as

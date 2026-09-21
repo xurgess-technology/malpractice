@@ -18,7 +18,7 @@ const PLACEBO := {
 
 ## One line per minigame id: what the step asks of your hands.
 const GAME_HOW := {
-	"anesthetic": "Draw to the dose line for the patient's weight, then hold the needle steady on the vein.",
+	"anesthetic": "Draw into the band for the patient's weight, flick out the bubbles, then find the vein and push slowly.",
 	"forceps": "Steer through the wound to the bullet and back out without touching the sides.",
 	"tourniquet": "Place it above the infection line and crank it to the right pressure.",
 	"saw": "Long, steady strokes along the cut line.",

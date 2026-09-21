@@ -157,7 +157,7 @@ const ASM_TIP := 126.0
 
 @export_group("Costs")
 ## Vitals per point of the spec's score (100 points = a perfect run). 0.25 makes a missed stick 2.0,
-## the old DOSE! price.
+## what a miss always cost.
 @export_range(0.0, 1.0, 0.01) var vitals_per_point := 0.25
 @export_range(0.0, 40.0, 0.5) var pts_miss := 8.0
 @export_range(0.0, 60.0, 0.5) var pts_blown := 16.0
@@ -1071,8 +1071,8 @@ func _paint_syringe(c: CanvasItem, debubble: bool) -> void:
 		I.line(c, neck, I.ink, I.outline, 33, false)
 		# The crimp cap at the neck, and the label.
 		I.rect(c, Rect2(cv(Vector2(SYR_X - 19.0, VIAL_NECK_Y - 6.0)), Vector2(38.0, 12.0) * _u()), I.ink, I.detail, 34, Color(I.label, 0.35))
-		I.rect(c, Rect2(cv(Vector2(VIAL.position.x + 8.0, VIAL.position.y + 26.0)), Vector2(68.0, 30.0) * _u()), I.ink_soft, I.detail, 35, Color(I.paper, 0.9))
-		I.text(c, cv(Vector2(SYR_X, VIAL.position.y + 46.0)), "SOMNUL-9", 13.0, I.ink, 1)
+		I.rect(c, Rect2(cv(Vector2(VIAL.position.x + 4.0, VIAL.position.y + 10.0)), Vector2(VIAL.size.x - 8.0, 24.0) * _u()), I.ink_soft, I.detail, 35, Color(I.paper, 0.9))
+		I.text(c, cv(Vector2(SYR_X, VIAL.position.y + 27.0)), "SOMNUL-9", 10.5, I.ink, 1)
 		if vial <= 0.002:
 			I.text(c, cv(Vector2(VIAL.end.x + 14.0, VIAL.position.y + 40.0)), "vial empty", 14.0, I.deep_red)
 	# The needle, up through the neck.
@@ -1258,6 +1258,10 @@ func _paint_assembly(c: CanvasItem, g: Vector2, ang: float, adv: float, live: bo
 			var along := ASM_BARREL - flen * (float(bi - billed) + 0.5) / float(maxi(1, carried.size() - billed))
 			c.draw_arc(cv(g + d * along), clampf(float(carried[bi]) * 0.3, 2.0, 6.0) * _u(), 0.0, TAU, 10, I.ink, 1.4 * _u())
 	I.shape(c, corners, I.ink, I.outline, 602, Color(1, 1, 1, 0.3))
+	# The plunger's seal, riding on the fluid, and its rod back to the grip.
+	var sealp := hub - d * maxf(2.0, flen)
+	I.seg(c, cv(sealp + n * 8.0), cv(sealp - n * 8.0), I.ink, I.outline, 607)
+	I.seg(c, cv(g), cv(sealp), I.ink, I.detail, 608)
 	# The hub: red when blood has flashed back (a notch too, so it is shape as well as colour).
 	var hc := cv(hub + d * 4.0)
 	var flash_now := flashed or locked

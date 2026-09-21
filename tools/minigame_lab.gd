@@ -6,7 +6,7 @@ extends Node3D
 ##         [--shot=res://tools/lab_shots/forceps.png] [--shot-at=6.0] [--flags=sedation:0.6,tourniquet:0.9]
 ##         [--seed=N] [--wide] [--nohud] [--look=or] [--selftest=<game>] [--sedation=0.4]
 ##         [--cam=op|stand|wide|site] [--idle] [--marks=ggsgg] [--arcade]
-##         [--teammate-light[=nohelp|away]] [--teammate-aim=dx,dz]
+##         [--teammate-light[=nohelp|away]] [--teammate-aim=dx,dz] [--tourniquets=N]
 ##
 ## --flags with sedation under 0.75 makes the patient stir the way the surgery system does.
 ## --sedation=0.4 is shorthand for --flags=sedation:0.4, to exercise a step's on_jolt.
@@ -55,6 +55,10 @@ var idle := false
 var arcade_force := false
 var teammate_light := ""
 var teammate_aim := Vector2.ZERO
+## --tourniquets=N: how many tourniquets the operator holds (ctx.hand_count), for the anaesthetic's
+## tourniquet button. 1 by default.
+var tourniquets := 1
+var _wheel := 0
 var _teammate: SpotLight3D
 
 # Stirs, the way scripts/surgery/surgery_system.gd makes them when sedation is under 0.75.
@@ -105,6 +109,7 @@ func _ready() -> void:
 			"cam": cam_mode = v
 			"idle": idle = true
 			"arcade": arcade_force = true
+			"tourniquets": tourniquets = int(v)
 			"marks":
 				flags["stitch_marks"] = v
 				idle = true
@@ -187,6 +192,12 @@ func _ready() -> void:
 		mg_ctx["eye_kind"] = "eye_surgeon"
 		mg_ctx["eye_kind_in"] = "eye_hive"
 		mg_ctx["eye_radius"] = Grafts.EYE_RADIUS
+	mg_ctx["hand_count"] = func(kind: String) -> int: return tourniquets if kind == "tourniquet" else 0
+	if mg.has_signal("item_used"):
+		mg.item_used.connect(func(kind: String, n: int):
+			if kind == "tourniquet":
+				tourniquets = maxi(0, tourniquets - n)
+			print("[lab] t=%.1f used %d %s" % [t, n, kind]))
 	if teammate_light != "":
 		_add_teammate_light()
 		if teammate_light != "nohelp":
@@ -334,6 +345,18 @@ func _physics_process(delta: float) -> void:
 				var b := 0
 				if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): b |= MinigameBase.BUTTON_PRIMARY
 				if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT): b |= MinigameBase.BUTTON_SECONDARY
+				# The arcade keys and the wheel, as the surgery system reads them.
+				if Input.is_action_pressed("move_forward"): b |= MinigameBase.BUTTON_UP
+				if Input.is_action_pressed("move_left"): b |= MinigameBase.BUTTON_LEFT
+				if Input.is_action_pressed("move_right"): b |= MinigameBase.BUTTON_RIGHT
+				if Input.is_action_pressed("move_back"): b |= MinigameBase.BUTTON_DOWN
+				if Input.is_action_pressed("jump"): b |= MinigameBase.BUTTON_ACTION
+				if _wheel > 0:
+					b |= MinigameBase.BUTTON_SCROLL_UP
+					_wheel -= 1
+				elif _wheel < 0:
+					b |= MinigameBase.BUTTON_SCROLL_DOWN
+					_wheel += 1
 				mg.handle_cursor(_clamp(hit + shake), b, delta)
 	mg.tick(delta)
 	# Round-trip the net state every frame so a broken apply_net_state shows up in the lab.
@@ -350,6 +373,14 @@ func _physics_process(delta: float) -> void:
 		print("[lab] result=%s finished_at=%.1f botches=%d vitals_cost=%.1f progress=%.2f flags=%s" % [
 			"DONE" if finished_at >= 0.0 else "UNFINISHED", finished_at, botch_count, botch_total, mg.progress, str(result)] + ("  stirs=%d" % stir_count if stir_count > 0 else ""))
 		get_tree().quit(0 if finished_at >= 0.0 else 1)
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_wheel = mini(_wheel + 1, 8)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_wheel = maxi(_wheel - 1, -8)
 
 
 ## Mirrors the surgery system: an underdosed patient jerks now and then, which calls on_jolt,
