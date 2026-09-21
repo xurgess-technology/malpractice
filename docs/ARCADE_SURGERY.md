@@ -399,43 +399,43 @@ the infection. Click to cinch.
 
 ### 5.5 SAW! - Saw through the limb
 `bone_saw` x0, site `limb_cut`. AM step 3.
-Rhyme: alternating-key track-and-field mashing, but to a cadence.
+Rhyme: Pong. A saw goes back and forth; so does the ball.
 
-- The panel shows a CROSS-SECTION of the limb built from the real
-  `site_section` (half_up, half_side, exponent): skin ring, muscle,
-  bones as circles. Bob has two (radius and ulna). The seal flipper
-  has four or five small ones in a row. Slight seeded variation.
-- The blade is a horizontal line sinking through it, depth 0 -> 1.
-- Alternate A and D. Each alternation is one stroke; the blade slides
-  left/right.
-- A pendulum shows the cadence for the CURRENT layer: skin 0.22 s per
-  stroke, muscle 0.30, bone 0.50, far side 0.25. "Bone" applies
-  whenever more than 30% of the blade's chord is inside bone, so the
-  cadence flips as the blade meets and leaves each bone. Tolerance
-  +/-35% / sqrt(difficulty).
-- On cadence: full bite (reuse k_cut and layer resistances 0.45 / 1.0
-  / 2.2 / 0.9; tune for ~30-40 strokes total).
-- Too fast = rushed: almost no bite, the saw jumps, blood and chips
-  fly, tear accumulates (0.14 x layer tear factor per rushed stroke);
-  at 1.0: botch 3.0 "The saw jumped and tore the {layer}".
-- Too slow: reduced bite, no penalty but time.
-- Same key twice: blade binds 0.5 s, no cost.
-- AUDIO IS PART OF THE GAME: rasp in soft tissue, grind in bone, a
-  clear stroke sound, an audible cadence tick.
-- CARRY-FORWARD: a seeded artery dot sits in the muscle. When the
-  blade reaches it, spurt = 1 - flags.tourniquet (missing = 0.5).
-  Good tourniquet (>= 0.85): a dribble. Bad one: blood splatters ACROSS
-  THE PANEL and hides the pendulum (fully at spurt >= 0.5), so the
-  player must keep time by ear. Bleed botch 1.0 accumulating at 0.08
-  per unit spurt per second, as today.
-- BREAKTHROUGH: from depth 0.97 the card flashes "EASY..." If the
-  final strokes come faster than 0.25 s apart as the blade exits:
-  botch 3.0 "Sawed into the table". A final stroke interval >= 0.4 s
-  is clean.
-- Finish: apply_flags(amputated), thunk, cut_quality as today (fold
-  the table hit in as a penalty).
-- Jolt: blade binds 0.5 s and the next stroke must be the opposite
-  key.
+- The limb CROSS-SECTION (built from site_section as before: skin
+  ring, muscle, bones as circles; Bob has two, the flipper four or
+  five) sits in the centre of the court. The blade is the ball. It
+  passes THROUGH the limb, it doesn't bounce off it. Every crossing is
+  one stroke: the cut line sinks, chips fly, and a rasp or grind plays.
+- Paddles on the left and right edges are MIRRORED: mouse Y (or W/S)
+  moves both together. Top and bottom walls bounce. Return angle
+  depends on where the ball meets the paddle.
+- Paddle height 22 mm / sqrt(difficulty).
+- Tune for about 16 crossings total (roughly skin 1, muscle 4, bone 8,
+  far side 3), 12-18 s for a good player.
+- LAYERS CHANGE THE BALL. Soft tissue: quick and clean (~170 mm/s).
+  "Bone" applies whenever more than 30% of the cut line's chord is
+  inside bone: the ball gets heavy (~120 mm/s) and CHATTERS, wobbling
+  off its line (amplitude ~6 mm x difficulty) so it has to be read.
+  The feel flips as the cut meets and leaves each bone.
+- HARD / SOFT RETURNS: holding LMB at contact is a hard return (+25%
+  ball speed, so faster sawing, riskier). Not holding is a soft one.
+- MISS: the saw jumps out of the cut. botch 2.5 "The saw jumped and
+  tore the {layer}", blood and chips on the body, re-serve from the
+  centre after 0.6 s.
+- CARRY-FORWARD: a seeded artery sits in the muscle. When the cut
+  reaches it, spurt = 1 - flags.tourniquet (missing = 0.5). Blood
+  splatters a patch of the COURT (radius ~10 + 40 x spurt mm) and the
+  ball is invisible while under it. At tourniquet >= 0.85 it's a drip
+  and hides nothing. Bleed botch accumulates as in the legacy game.
+- BREAKTHROUGH: for the last three crossings the card flashes
+  "EASY..." and the ball speeds up 1.3x. If the final crossing came
+  off a HARD return: botch 3.0 "Sawed into the table".
+- Finish: apply_flags(amputated), thunk, cut_quality from misses and
+  the table hit.
+- Jolt: both paddles get knocked ~15 mm in a random direction.
+- Freeze/READY resume and 20 Hz spectator state (ball, paddles) as per
+  the shared frame.
+Original art only. It's a saw and an arm, not a tennis court.
 
 ### 5.6 (reserved)
 
