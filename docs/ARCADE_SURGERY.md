@@ -83,6 +83,62 @@ built for it, per section 3.4.
 8. **The already-cut half of the limb is greyed and hatched**, not just marked on the depth scale,
    so how far through you are reads in one look.
 
+## Tuning: every `@export` and where it starts
+
+`ArcadeGame` (shared by every arcade step):
+
+| Export | Start | What |
+|---|---|---|
+| `view_fill` | 0.78 | how much of the view's height the panel fills |
+| `view_tilt_deg` | 32 | how far back the operating camera sits from straight over the site |
+| `view_fov` | 50 | the operating camera's field of view |
+| `card_time` | 0.5 s | how long the one-word command card holds |
+| `ready_time` | 1.0 s | the countdown whoever takes over gets |
+| `card_size` / `ready_size` | 110 / 64 px | the type on the card |
+| `card_cue` / `ready_cue` / `done_cue` | click / beep / done | audio hooks (the first two are not played yet) |
+
+`SawArcade`:
+
+| Export | Start | What |
+|---|---|---|
+| `bite_per_stroke` | 0.039 | depth per full-bite stroke at resistance 1; about 30 strokes end to end |
+| `rushed_bite` / `slow_bite` | 0.15 / 0.45 | what a rushed and a lazy stroke get instead |
+| `beat_tolerance` | 0.35 | how far off the cadence a stroke may be, before `/ sqrt(difficulty)` |
+| `tear_per_rush` | **0.25** | tear per rushed stroke, times the layer's factor (brief said 0.14) |
+| `tear_botch` | 3.0 | what a torn kerf costs |
+| `bind_time` | 0.5 s | the blade jams for this long on the same key twice, or a jolt |
+| `bone_chord_frac` | 0.30 | blade chord inside bone before the cadence becomes the bone cadence |
+| `skin_mm` | 2.6 mm | skin at each face of the limb |
+| `artery_dribble` | 0.15 | spurt below this is just a dribble |
+| `artery_blinding` | 0.5 | spurt at or above this buries the pendulum completely |
+| `bleed_botch_rate` / `bleed_botch` | 0.08 / 1.0 | botch units per unit spurt per second, and the bill |
+| `easy_from` | 0.97 | depth where the card says EASY... |
+| `table_interval` / `table_botch` | 0.25 s / 3.0 | come off the last strokes faster than this and you hit the table |
+| `blade_swing_mm` / `swing_time` | 9 mm / 0.12 s | how far and how fast the blade slides on a stroke |
+| `max_chips` | 26 | splatter kept on the section |
+| `tick_volume` | -21 dB | the cadence tick |
+| audio cues | rasp / grind / squelch / thunk / click / clink | all existing cues; nothing new generated |
+
+Layer cadences, resistances and tear factors are in `SawArcade.LAYERS` (skin 0.22 s / 0.45 / 0.5,
+muscle 0.30 / 1.0 / 0.8, bone 0.50 / 2.2 / 1.2, far side 0.25 / 0.9 / 0.8), as the brief specifies.
+
+## Lab results (2026-09-20)
+
+`--selftest=saw:arcade`, **PASS**:
+
+| | skill 1.0 | skill 0.5 | skill 0.0 | target |
+|---|---|---|---|---|
+| Bob | 12.9 s, 0 vitals | 12.5 s, 3 | 19.6 s, 24 | 8-20 s / 0-2, and <40 s / 15-25 |
+| seal | 12.3 s, 0 | 10.7 s, 0 | 15.2 s, 15 | |
+
+Carry-forward: tourniquet 0.95 -> spurt 0.06 (a dribble), tourniquet 0.10 -> spurt 0.90 (the panel
+is painted over and the pendulum is gone).
+
+Also run and passing: the net round-trip and hand-over (a spectator tracks the operator exactly, a
+second player resumes on the blob and gets the READY countdown, and mashing through the countdown
+cuts nothing), the arcade saw end to end through the real surgery system, and every legacy
+self-test with its flag off, unchanged.
+
 ---
 
 # TASK: Convert every surgery step to an arcade-style panel minigame

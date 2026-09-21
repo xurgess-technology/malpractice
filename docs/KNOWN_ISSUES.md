@@ -2010,8 +2010,9 @@ Phase 0 and 1 of [docs/ARCADE_SURGERY.md](ARCADE_SURGERY.md). Every arcade game 
 - **The blood that hides the pendulum is flat hard-edged circles.** Readable and unmistakable, but
   crude next to the rest of the panel style.
 - **No arcade sounds of its own.** SAW! reuses `surgery_saw_rasp`, `surgery_saw_grind`,
-  `surgery_saw_squelch`, `surgery_saw_thunk`, `surgery_forceps_clink` and `surgery_click`. The
-  brief asks for an audible cadence tick; the pendulum is currently silent, because there is no cue
-  short and quiet enough and `tools/gen_audio.mjs` was left alone.
+  `surgery_saw_squelch`, `surgery_saw_thunk`, `surgery_forceps_clink` and `surgery_click`; nothing
+  was added to `tools/gen_audio.mjs`. The cadence tick is `surgery_click` at -21 dB, which is a
+  stand-in: it wants a short dry wood-block, because once the artery has painted over the pendulum
+  the tick is the only thing left to keep time by.
 - **The command card's `ready_cue` and `card_cue` exports are wired but never played.** They are
   there for when the cues exist.

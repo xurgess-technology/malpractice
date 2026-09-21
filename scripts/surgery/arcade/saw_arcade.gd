@@ -73,7 +73,7 @@ const SAMPLES := 72
 @export_range(0.0, 10.0, 0.5) var table_botch := 3.0
 
 # -- feel -----------------------------------------------------------------------------------------
-@export_range(0.0, 1.0, 0.01) var blade_swing_mm := 9.0    ## how far the blade slides on a stroke
+@export_range(0.0, 30.0, 0.5) var blade_swing_mm := 9.0    ## how far the blade slides on a stroke
 @export_range(0.02, 1.0, 0.01) var swing_time := 0.12
 @export_range(0, 40) var max_chips := 26
 
@@ -83,6 +83,7 @@ const SAMPLES := 72
 @export var squelch_cue := "surgery_saw_squelch"
 @export var thunk_cue := "surgery_saw_thunk"
 @export var tick_cue := "surgery_click"
+@export_range(-40.0, 0.0, 1.0) var tick_volume := -21.0
 @export var bind_cue := "surgery_forceps_clink"
 
 # ---- replicated state ----
@@ -348,6 +349,8 @@ func _stroke(key: int) -> void:
 		if tear >= 1.0:
 			tear -= 1.0
 			tear_events += 1
+			shake(1.0)
+			_chip(5)
 			cost(tear_botch, "The saw jumped and tore the %s" % String(info.name))
 	elif interval > target * (1.0 + tol):
 		last_verdict = 2
@@ -401,7 +404,19 @@ func animate(delta: float) -> void:
 	# The pendulum eases into the new layer's cadence instead of snapping.
 	_beat_shown = move_toward(_beat_shown, beat(), delta * 0.9)
 	if armed():
+		var was := beat_phase
 		beat_phase = fposmod(beat_phase + delta / maxf(0.05, _beat_shown * 2.0), 1.0)
+		# The cadence out loud at each end of the swing. This is not decoration: once the artery has
+		# painted over the pendulum, the tick is the only thing left to keep time by.
+		if _crossed(was, beat_phase, 0.0) or _crossed(was, beat_phase, 0.5):
+			audio(tick_cue, tick_volume, 0.02)
+
+
+## Did the phase pass `mark` this frame (wrapping at 1)?
+func _crossed(was: float, now: float, mark: float) -> bool:
+	if now >= was:
+		return was < mark and now >= mark
+	return was < mark or now >= mark
 
 
 func _through() -> void:
@@ -453,8 +468,11 @@ func on_jolt(_offset: Vector2, strength: float, _duration: float) -> void:
 # ---------------------------------------------------------------------------- the body
 
 func react() -> void:
+	if tear_events > _seen_tears:
+		_flash = 0.5
 	var b = body()
 	if b == null:
+		_seen_tears = tear_events
 		return
 	if strokes > _seen_strokes:
 		_seen_strokes = strokes
@@ -466,6 +484,7 @@ func react() -> void:
 			b.stir(0.4)
 	if tear_events > _seen_tears:
 		_seen_tears = tear_events
+		_flash = 0.5
 		if b.has_method("stir"):
 			b.stir(0.6)
 	if bleed_events > _seen_bleeds:

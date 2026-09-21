@@ -30,6 +30,8 @@ const SETUPS := {
 	"eyes": {"seed": 4242, "stage": "_eyes"},
 	# PANEL TESTBED (docs/PANEL_STYLE.md): a deep laceration on the table, a suture kit in hand.
 	"panel": {"seed": 4242, "stage": "_panel"},
+	# ARCADE (docs/ARCADE_SURGERY.md) phase 1: an amputation at the saw step, arcade saw switched on.
+	"arcade_saw": {"seed": 4242, "stage": "_arcade_saw"},
 }
 
 
@@ -190,6 +192,27 @@ static func _items(game: Game) -> void:
 		floor_item(game, row[i], base + out * 2.0 + side * (float(i) - 2.0) * 0.55, 1, 100)
 	print("[review] items: standing among %d loot stacks; trinkets on the floor ahead, an EpiPen in hand" % best_n)
 
+
+
+## ARCADE SAW (docs/ARCADE_SURGERY.md 5.5): Bob is on the table sedated with a tourniquet already
+## on, at the saw step, and the arcade saw is switched on for this session. The bone saw is in your
+## hand: aim at the table, press E, and alternate A and D to the pendulum. The tourniquet is a
+## mediocre 0.55, so the artery WILL spray when the blade finds it and you will lose the pendulum.
+## Turn it off again from the dev panel's "Arcade surgery" checkboxes (F1).
+static func _arcade_saw(game: Game) -> void:
+	Procedures.ARCADE_ENABLED["saw"] = true
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	game.add_case({"patient_id": "bob", "ailment_id": "amputation", "table": table,
+		"state": "on_table", "step_index": 2, "flags": {"sedation": 1.0, "tourniquet": 0.55}})
+	var t: Vector3 = game.table_position(table)
+	place(game, t + Vector3(0.0, 0, 1.15), t + Vector3(0, 1.05, 0))
+	clear_hands(game)
+	give(game, "bone_saw", 1)
+	give(game, "gauze", 2)
+	game.local_player().selected = 0
+	print("[review] arcade_saw: amputation at the saw step on table %d, arcade saw ON" % table)
 
 
 ## PANEL (docs/PANEL_STYLE.md): Bob is on the first table with a deep laceration, already sedated,
