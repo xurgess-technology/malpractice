@@ -196,17 +196,17 @@ static var ARCADE_ENABLED := {
 	"anesthetic": true,
 	"forceps": true,
 	"forceps:brain": false,   # the monster table's brain harvest: legacy, no arcade rebuild
-	"gauze:pack": false,
-	"gauze:stump": false,
+	"gauze:pack": true,
+	"gauze:stump": true,
 	"tourniquet": true,
 	"saw": false,
 	"saw:skull": false,       # the monster table's skull cut: legacy until it gets its own
-	"eye:cut": false,
+	"eye:cut": true,
 	"eye:scoop": true,
 	"eye:snip": true,
 	"eye:place": true,
 	"eye:grab": true,
-	"eye:stitch": false,
+	"eye:stitch": true,
 }
 
 
