@@ -341,34 +341,42 @@ Space: the spec's 960 x 600 reference px on the 120 x 80 mm diagram at 8 px/mm, 
 split top and bottom. Everything below is in reference px. On screen that diagram is the paper on
 the ink look's clipboard (PANEL_STYLE.md), fitted at one uniform scale.
 
-**DRAW!** The syringe hangs needle-up in an upside-down vial ("SOMNUL-9", 0.9 of a barrel in it).
-- Hold LMB to draw: speed = 0.05 + seconds held x 0.22 x difficulty (barrel shares per second).
-  It runs away the longer you hold: overshooting is the risk. Releasing starts it slow again.
-- RMB puts it back at 0.25/s; each wheel notch puts back 0.02 (either direction).
+**The shell** (docs/SURGERY_SHELL_AND_DODGE_SPEC.md Part One, and PANEL_STYLE.md): the step is a
+page on the clipboard. Every stage opens on a stamp card (DRAW! / FLICK! / STICK!, and PUSH! once
+the needle is in) that waits for a press, and that press is the first action. The controls live in
+the corner HUD top left; the dose (mL) top right, deep red while it is off the band; an ENTER cap
+bottom right lights when you may move on. **Controls:** Space is the verb (hold to draw, tap to
+purge, hold to push the needle in and then the plunger); Enter moves on between stages; the mouse
+aims, slaps, flicks, uses the tray and the tourniquet button, and the wheel (or A/D) sets the angle.
+
+**DRAW!** The syringe hangs needle-up in an upside-down vial ("SOMNUL-9", 0.9 of a barrel in it), the
+needle up through the neck with its bevel in the pool.
+- Hold Space to draw: speed = 0.05 + seconds held x 0.22 x difficulty (barrel shares per second).
+  It runs away the longer you hold: overshooting is the risk. Letting go starts it slow again.
+- Right mouse puts it back at 0.25/s; each wheel notch puts back 0.02 (either direction).
 - The green **band is centred by the patient's weight**: dose = weight x 0.05 ml on a 10 ml barrel,
   so Bob (82 kg) at 0.41 and the seal (130 kg) at 0.65 of the barrel. Half-width 0.05 / difficulty.
 - An empty vial, or one hold longer than 2.8 s / difficulty, for 0.3 s draws in a big air bubble
-  (r 16), which joins the next stage's bubbles.
-- Space or the Done button moves on.
+  (r 16, burst AIR!), which joins the next stage's bubbles.
+- Enter moves on (the ENTER cap lights while the level is in the band).
 
 **FLICK!** 3-6 bubbles (times difficulty), r 5-14 (the top end times difficulty); the first two
-(times difficulty) are amber and stuck to the walls.
+(times difficulty) are amber and drawn flattened against the wall; a two-line legend top left.
 - Free bubbles rise at 9 + 0.9 r px/s with a sideways wobble, and merge when they touch
   (r = sqrt(r1^2 + r2^2), capped at 26).
 - Click the barrel: every free bubble gets an upward kick; stuck ones within 85 px / difficulty come
   off the wall.
-- Tap the thumb pad: a bubble whose top is within 18 px / difficulty of the needle end pops (costs
-  0.004 of the dose). With nothing there you squirt drug out (0.02). The panel warns in red while
-  the level is under the band.
-- Space or Continue moves on whenever you like; what is left goes into the patient.
+- Tap Space (the plunger): a bubble whose top is within 18 px / difficulty of the needle end pops
+  (costs 0.004 of the dose). With nothing there you squirt drug out (0.02, burst WASTED!).
+- Enter moves on whenever you like (lit once the barrel is clear); what is left goes in.
 
-**STICK!** The forearm, or the seal's flipper (slate hide, three ridges, speckles), below a wavy
-ink edge; 2-3 seeded veins across it; the instrument tray top left.
+**STICK!** The forearm, or the seal's flipper (slate hide, pale folds, speckles), below a wavy ink
+edge; 2-3 seeded veins across it; the instrument tray top left; the tourniquet button top right.
 - Bare-handed, click (under 0.3 s) the skin to slap it: the veins show fully and fade out over
-  1.5 s / difficulty. Click the tray to take the syringe; a quick click back on it sets it down.
+  1.5 s / difficulty. Click the tray to take the syringe; a click back on it sets it down.
 - Held, the syringe hangs from the mouse **by its needle tip** (`cursor_at_tip`; the spec held it
   by the grip, 126 px back, and a miss's hole then landed far from the pointer); wheel +/-3
-  degrees, A/D +/-2 (8-80 degrees below horizontal), turning about the tip. Hold LMB for 0.15 s with
+  degrees, A/D +/-2 (8-80 degrees below horizontal), turning about the tip. Hold Space for 0.15 s with
   the tip on the skin and the needle goes in there at 38 px/s x difficulty (max 55): solid down to
   the entry dimple, then dashed (`buried_alpha` 0.5; the spec's 0.15 hid it) to a ringed tip, which
   is the exact point the vein test uses and where a miss leaves its hole. A depth readout goes red
@@ -377,23 +385,24 @@ ink edge; 2-3 seeded veins across it; the instrument tray top left.
 - The spec's section 7 debug overlay: `debug_overlay`, or `--inject-debug` on the command line (it
   works after `--setup=sedate` too). Veins in green, blown stretches in red, the angle window as
   dashed rays, a cross at the hit-test tip, and a readout.
-- **The flash**: tip past 14 px, within 9 px / difficulty of a vein, at 14-32 degrees to it (the
+- **The flash**: tip past 15.5 px (about a quarter of the needle, so a graze does not flash), within 9 px / difficulty of a vein, at 14-32 degrees to it (the
   window narrows about its middle with difficulty). The hub fills red. Let go: locked in.
-- Push on 12 px / difficulty past the flash and the vein blows (a bruise; that vein is dead for
-  45 px either side). Let go past 14 px with no flash: a miss (a puncture mark).
+- Push on 12 px / difficulty past the flash and the vein blows (BLOWN!, a shake, a bruise; that vein is dead for
+  45 px either side). Let go past 15.5 px with no flash: MISS! and a puncture mark.
 - **The tourniquet button** pins the veins up for 9 s while the arm reddens, then lets go. It
   spends a real tourniquet from your hands (`Minigame.use_item`; the host takes it out of your
   slots) and is greyed out ("none to spare") without one, or when the rest of the procedure
   still needs the one you hold (the amputation's step 2 does). Click it again to take it off early.
 
-**PUSH!** Hold LMB to build the push rate (+0.55/s, -0.9/s let go, capped at 1.2); the drug drains
+**PUSH!** Hold Space to build the push rate (+0.55/s, -0.9/s let go, capped at 1.2); the drug drains
 at rate x 0.09/s. The PUSH meter lies horizontally just above the skin line beside the needle, where
 the eye already is (right of the entry, or left of the whole syringe when there is no room): green
 for the first 55% from the left, red past it, with the fast-push threshold (0.55 / difficulty)
-marked; every 0.9 s past it is a fast push. The bubbles still in the barrel go in one by one as the plunger passes them. At
+marked; every 0.9 s past it is a fast push (TOO FAST!). A bubble going in is AIR!. The bubbles still in the barrel go in one by one as the plunger passes them. At
 empty: "dose delivered...", a 0.9 s beat, done.
 
-**Costs are live** (no results card, no Retry): every mistake is `cost()` the moment it happens,
+**Costs are live** (no results card, no Retry): every mistake is `mistake()` the moment it happens (the
+burst, blood on the page, the bill),
 at the spec's score penalty x `vitals_per_point` (0.25), with the spec's flavour line as the
 reason. Miss 2.0, blown vein 4.0, each bubble 2.5 (5.0 when r > 12), each fast push 1.5, and at
 delivery a dose outside the band min(40, (|error| - band) x 260) x 0.25 (up to 10), "Underdosed"

@@ -70,7 +70,7 @@ extends Resource
 ## Where the board sits on the canvas, canvas px: clear of the sides, and down from the top by enough
 ## that the clip's thumb loop (and the screen's caption bar above the panel) stay clear.
 @export var board_side := 22.0
-@export var board_top := 58.0
+@export var board_top := 72.0
 @export var board_bottom := 14.0
 @export_range(0.0, 40.0, 0.5) var board_radius := 10.0
 @export_range(1.0, 8.0, 0.1) var board_line := 3.0

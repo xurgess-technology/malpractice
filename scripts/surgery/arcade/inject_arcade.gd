@@ -56,8 +56,8 @@ const NEEDLE_TIP_Y := 104.0
 const HUB_Y := 214.0
 const TRAY := Vector2(127.0, 106.0)
 const TRAY_R := Vector2(96.0, 40.0)
-const TQ_BTN := Rect2(772.0, 26.0, 168.0, 50.0)
-const TQ_BAR := Rect2(34.0, 20.0, 190.0, 10.0)
+const TQ_BTN := Rect2(772.0, 64.0, 168.0, 50.0)
+const TQ_BAR := Rect2(772.0, 124.0, 168.0, 10.0)
 ## The PUSH bar's size, rpx. It sits beside the locked-in needle (meter_rect()).
 const METER_SIZE := Vector2(270.0, 30.0)
 const ASM_BARREL := 64.0
@@ -468,15 +468,15 @@ func hint() -> String:
 func hud_line() -> String:
 	match phase:
 		Phase.DRAW:
-			return "SPACE hold: draw   ·   right click / wheel: put back   ·   ENTER: done"
+			return "SPACE hold: draw   ·   ENTER: done\nright click / wheel: put back"
 		Phase.DEBUBBLE:
-			return "click the barrel: flick   ·   SPACE: purge   ·   ENTER: continue"
+			return "click the barrel: flick\nSPACE: purge   ·   ENTER: continue"
 		Phase.INJECT:
 			if locked:
 				return "SPACE hold: push the plunger"
 			if held:
-				return "wheel / A D: angle   ·   SPACE hold: needle in, let go at the flash   ·   click tray: put down"
-			return "click the arm: slap   ·   click the tray: take the syringe"
+				return "SPACE hold: needle in, let go at the flash\nwheel / A D: angle   ·   click tray: put down"
+			return "click the arm: slap\nclick the tray: take the syringe"
 	return ""
 
 
@@ -1323,7 +1323,7 @@ func _paint_inject(c: CanvasItem) -> void:
 		I.rect(c, Rect2(cv(Vector2(sx, skin_top(sx) - 6.0)), Vector2(26.0, 600.0 - skin_top(sx) + 6.0) * _u()), I.ink, I.outline, 570, Color(I.ink_soft, 0.8))
 		I.rect(c, Rect2(cv(TQ_BAR.position), TQ_BAR.size * _u()), I.ink, I.detail, 571)
 		c.draw_rect(Rect2(cv(TQ_BAR.position), Vector2(TQ_BAR.size.x * clampf(tq_left / tq_time, 0.0, 1.0), TQ_BAR.size.y) * _u()), Color(I.deep_red, 0.7))
-		I.text(c, cv(TQ_BAR.position + Vector2(TQ_BAR.size.x + 10.0, 10.0)), "tourniquet", 12.0)
+
 	# The tourniquet button.
 	if not locked:
 		var live := tq_avail or tq_on

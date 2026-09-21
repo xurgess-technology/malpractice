@@ -96,20 +96,19 @@ look above stays for everything else until each game is moved over.
 Everything lives in `scripts/surgery/panel/ink.gd` (a Resource, like `panel_style.gd`), and knows
 nothing about any one game:
 
-- **The clipboard** (Zach's pick, 2026-09-21). The panel texture IS a clipboard and is transparent
-  everywhere else (`SurgeryPanel.transparent`: a transparent SubViewport and the texture's alpha in
-  the quad's shader), so the room shows round it. `begin_page(c, size)` draws a hard flat shadow
-  (`shadow_offset` 14, 16 x unit) the board casts on the room, the brown hardboard (#7a5a3a,
-  rounded corners, square to the panel, a faint halftone tooth) and the paper sheet (#efe9dc) a hair
-  crooked on it (`tilt_deg` -0.65); everything the game draws after it lands on the paper.
-  `end_page(c, size, title, corner)` draws the paper's ink outline, the board's heavy boiling outline
-  (4.5 x unit), the steel clip (#a8adb0) at the top centre over the paper's edge with `title` (the
-  step's id, "SEDATE") stamped on it, and `corner` (the table) small in ink on the board's top strip.
-  The board sits `board_top` (70 px) down the texture so the clip stays clear of the screen's caption
-  bar. **The layout is honest:** the game's `content` rectangle is fitted onto the paper at ONE
-  uniform scale (`page_fit()`; 0.89 for the injection, so its 120 x 80 mm diagram is 8.9 px/mm on the
-  texture), and `unpage()` / `onpage()` convert between the paper as seen and the game's layout, for
-  input and bots. The command card is stamped across the paper only.
+- **The clipboard** (docs/SURGERY_SHELL_AND_DODGE_SPEC.md section 1). The panel texture IS a clipboard
+  and is transparent everywhere else (`SurgeryPanel.transparent`: a transparent SubViewport, the
+  texture's alpha in the quad's shader), so the room shows round it. The whole clipboard is tilted
+  -0.65 degrees. Brown hardboard (#8a6b45) in a 3 px boiling ink border, radius 10, a 1.5 px bevel line
+  5 px in at 30% ink, 14 px of board round the sheet; the cream sheet (#efe9dc, 1.5 px ink border) runs
+  up to the board's top edge; a steel spring clip over it (a 186 x 58 body in #9aa0a4 with an inset
+  bottom shadow, a 54 x 20 thumb loop in #b6bbbe, a dark hinge bar across the page) with the step's id
+  stamped on it ("SEDATE") and the table small on the board's bottom edge. **Only the clip casts a
+  shadow.** `begin_page(c, size, shake)` / `end_page(c, size, title, corner, shake)`. The board sits
+  `board_top` (72 px) down the texture so the thumb loop stays clear of the screen's caption bar.
+  **The layout is honest:** the game's `content` rectangle is fitted onto the sheet at ONE uniform
+  scale (`page_fit()`), and `unpage()` / `onpage()` convert between the sheet as seen (tilt
+  included) and the game's layout, for input and bots.
 - **Boiling lines.** `line()`, `seg()`, `rect()` (four samples an edge), `circle()` / `ellipse()` (18
   segments), `shape()`: every vertex is nudged +/-1.3 px by integer-hash noise seeded with the shape
   and floor(t x 7), so lines boil at 7 fps and hold still in between. Round joins and caps. Fills are
@@ -123,6 +122,27 @@ nothing about any one game:
   SystemFont); `card()` is the command card as a stamp on a paper strip.
 - **Units.** `unit` is canvas px per reference px: a game laid out on its own reference size (the
   injection's 960 x 600) sets it, and every weight and jitter scales with it.
+
+### The shell (`scripts/surgery/panel/shell.gd`)
+
+What every step's sheet has in common (spec Part One, sections 2-4), driven by ArcadeGame:
+
+- **Stamp cards.** `show_card(word)` raises one: a 430 x 228 translucent box (80% cream, no scrim)
+  tilted 6 degrees, a 5 px coloured border and a 2 px inner rule, the shout, a hairline, one italic
+  goal line, a line or two and the prompt. Gameplay waits under it; Space, a click or Enter takes it
+  down and **that press is the first action** (Enter only dismisses). `show_card(word, seconds)` (or a
+  card's `lock`) is an interruption: the prompt is replaced by a live countdown and no press counts
+  until it runs out. The text comes from `stamp_for(word)`, so onlookers (who only get the word) draw
+  the same card. READY (taking over) is drawn as a stamp with its countdown.
+- **The corner HUD.** `hud_line()` (one or two short lines, top left, 13 px at 70% ink), `hud_value()`
+  (["4.1 mL", in_trouble], top right, 22 px, deep red when in trouble), `enter_cap()` ({at, label,
+  ready}: an ENTER key cap, dim while you work, pulsing green once you may go on).
+- **Mistakes on the page.** `mistake(word, vitals, reason, kind, at, serious)`: a 16-point cream burst
+  with one red word that fades over 1.4 s, 2-4 blood splats thrown anywhere on the sheet (each its
+  own blob, kind, tone, squash and 60% a drip) that grow in over 0.35 s and stay for the rest of the
+  step, for a serious one a +/-14 px shake and a red wash, the `mistake_made(kind, word)` signal, and
+  `cost()` with the reason. The mistake count and the last one's word ride the state blob, and the
+  splats come from the step's seed and the mistake's index, so every onlooker gets the same mess.
 
 A game opts in with `ArcadeGame.use_ink() -> true` (and `ink_unit()`). The framework then turns the
 panel's teal chrome off (`SurgeryPanel.chrome = false`), draws the page, the header in the page's top

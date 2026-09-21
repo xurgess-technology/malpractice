@@ -186,7 +186,11 @@ func _burst(c: CanvasItem, at: Vector2, word: String, a: float, s: float) -> voi
 func draw_hud(c: CanvasItem, controls: String, value: String, bad: bool) -> void:
 	var u := ink.unit
 	if controls != "":
-		ink.text(c, area.position + Vector2(14.0, 22.0) * u, controls, 13.0, Color(ink.ink, 0.7))
+		# One or two lines ("\n"), kept short: the clip stands in the middle of the top edge.
+		var y := 22.0
+		for ln in controls.split("\n"):
+			ink.text(c, area.position + Vector2(14.0, y) * u, ln, 13.0, Color(ink.ink, 0.7))
+			y += 17.0
 	if value != "":
 		var f := InkScript.font_upright()
 		var px := int(round(22.0 * u))
