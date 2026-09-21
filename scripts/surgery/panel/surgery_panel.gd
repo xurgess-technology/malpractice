@@ -100,6 +100,9 @@ var header := ""
 var right_text := ""
 ## func(c: CanvasItem) -> void. Draws the diagram in panel pixels, over the chrome.
 var painter: Callable = Callable()
+## False when the game draws its own surface (the ink/paper look, scripts/surgery/panel/ink.gd):
+## the teal background, frame and header are then not drawn under it.
+var chrome := true
 var style: StyleScript = null
 
 var state: int = State.SHUT
@@ -275,6 +278,12 @@ func tick(delta: float) -> void:
 	redraw()
 
 
+## The colour of the light the panel throws on the patient (a paper panel glows warm, not teal).
+func set_glow(col: Color) -> void:
+	if _light != null:
+		_light.light_color = col
+
+
 ## Draw the diagram again this frame.
 func redraw() -> void:
 	if _canvas != null and is_instance_valid(_canvas):
@@ -427,7 +436,8 @@ class Canvas extends Control:
 			return
 		if _font == null:
 			_font = ThemeDB.fallback_font
-		panel.style.draw_chrome(self, size, panel.header, panel.right_text, _font)
+		if panel.chrome:
+			panel.style.draw_chrome(self, size, panel.header, panel.right_text, _font)
 		var p: Callable = panel.painter
 		if p.is_valid():
 			p.call(self)

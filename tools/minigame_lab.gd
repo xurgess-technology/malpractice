@@ -384,6 +384,9 @@ func _run_self_test() -> void:
 	var arcade := self_test.ends_with(":arcade")
 	var gid := self_test.trim_suffix(":arcade")
 	var path: String = String(Procedures.ARCADE_SCRIPTS.get(gid, "")) if arcade else String(Procedures.MINIGAME_SCRIPTS.get(gid, ""))
+	# A step with only one game (the anaesthetic) has no arcade entry: `:arcade` means that one too.
+	if path == "" and arcade:
+		path = String(Procedures.MINIGAME_SCRIPTS.get(gid, ""))
 	var script := load(path) as GDScript if path != "" and ResourceLoader.exists(path) else null
 	if script == null:
 		push_error("No minigame '%s'" % self_test)

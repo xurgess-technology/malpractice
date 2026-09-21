@@ -21,6 +21,9 @@ signal botched(amount: float, reason: String)
 ## The step is done. `result` is merged into the case flags that later steps read
 ## (e.g. {"sedation": 0.8} or {"tourniquet": 0.95}).
 signal finished(result: Dictionary)
+## The step used up `count` of `kind` from the operator's hands mid-step (the anaesthetic's optional
+## tourniquet). The surgery system has the host take it out of their slots. Emit through use_item().
+signal item_used(kind: String, count: int)
 
 ## Everything the step needs to know. Keys the surgery system always provides:
 ##   patient_id: String, patient: Dictionary (Procedures.PATIENTS entry)
@@ -31,6 +34,8 @@ signal finished(result: Dictionary)
 ##   body: Node3D, the PatientBody on the table (may be null in the lab)
 ##   operator: bool, true on the machine whose player is doing this step
 ## Optional:
+##   hand_count: Callable(kind: String) -> int, how many of `kind` the operator holds in their hands
+##     right now (0 with nobody operating). For a step that can spend an extra item (use_item).
 ##   helper_lights: Callable -> Array of SpotLight3D, the flashlights of teammates standing by (on,
 ##     not the operator's). Every machine has them (their aim and on/off are replicated), so a step
 ##     can use helper_light() to let a teammate's light help on everyone's screen.
@@ -50,6 +55,10 @@ const BUTTON_LEFT := 8
 const BUTTON_RIGHT := 16
 const BUTTON_DOWN := 32
 const BUTTON_ACTION := 64
+## One notch of the mouse wheel, up (away from you) or down. Not held: the bit is set for exactly one
+## frame per notch, and several notches in one frame come out one frame each. Bots set it the same way.
+const BUTTON_SCROLL_UP := 128
+const BUTTON_SCROLL_DOWN := 256
 
 ## Render layer 20, reserved for a minigame's own props (tools, straps, raised wound models).
 ## Every decal, the patient's and the minigames', projects only onto layer 1 (cull_mask = 1),
@@ -191,6 +200,19 @@ static func cached_shader(code: String) -> Shader:
 
 func botch(amount: float, reason: String) -> void:
 	botched.emit(amount, reason)
+
+
+## Spend `count` of `kind` from the operator's hands now (see `item_used`). Operator only.
+func use_item(kind: String, count := 1) -> void:
+	item_used.emit(kind, count)
+
+
+## How many of `kind` the operator is holding (ctx.hand_count), or -1 when nobody told us.
+func hand_count(kind: String) -> int:
+	var f = ctx.get("hand_count")
+	if f is Callable and (f as Callable).is_valid():
+		return int((f as Callable).call(kind))
+	return -1
 
 
 func finish(result: Dictionary = {}) -> void:

@@ -284,6 +284,12 @@ func receive_operator_report(peer_id: int, report: Dictionary) -> void:
 		for b in report.get("botches", []):
 			if b is Array and b.size() >= 2:
 				_game_botch(float(b[0]), String(b[1]))
+		var use = report.get("use")
+		if use is Array and (use as Array).size() >= 2:
+			var pl = game.get("players")
+			var up = (pl as Dictionary).get(peer_id) if pl is Dictionary else null
+			if up != null and is_instance_valid(up) and up.has_method("consume_hand"):
+				up.consume_hand(String(use[0]), maxi(1, int(use[1])))
 		if report.has("stir"):
 			_stir_count += 1
 			_stir_strength = float(report.stir)
@@ -470,6 +476,8 @@ func _spawn_mg() -> void:
 	_place_mg()
 	mg.botched.connect(_on_botched)
 	mg.finished.connect(_on_finished)
+	if mg.has_signal("item_used"):
+		mg.item_used.connect(_on_item_used)
 	var c := _case()
 	if not (c.get("flags") is Dictionary):
 		c["flags"] = {}
@@ -491,6 +499,9 @@ func _spawn_mg() -> void:
 		# PANEL TESTBED: which table this is, for the panel's header.
 		"table": table_index,
 		"helper_lights": _helper_lights,
+		# 2026-09-21: what the operator holds, for a step that can spend an extra item (the
+		# anaesthetic's tourniquet). Asked live, so it follows the host taking one away.
+		"hand_count": _operator_hand_count,
 		# GRAFTING: the specimen vat standing on this table, for the forceps steps that take an eye
 		# out of it or put one in. Every machine looks it up for itself; null when there is none.
 		"vat": _table_vat(),
@@ -616,6 +627,20 @@ func local_operator_exit() -> void:
 	game.send_operator_report(report)
 
 
+## Mouse wheel notches while operating, waiting to go out as BUTTON_SCROLL_* bits, one per frame.
+var _wheel := 0
+
+
+func _input(event: InputEvent) -> void:
+	if not _local_op or not (event is InputEventMouseButton) or not event.pressed:
+		return
+	var mb := event as InputEventMouseButton
+	if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+		_wheel = mini(_wheel + 1, 8)
+	elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		_wheel = maxi(_wheel - 1, -8)
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if _local_op and _op_time > 0.35 and event.is_action_pressed("interact"):
 		local_operator_exit()
@@ -672,6 +697,15 @@ func _drive(delta: float) -> void:
 			buttons |= MinigameBase.BUTTON_DOWN
 		if Input.is_action_pressed("jump"):
 			buttons |= MinigameBase.BUTTON_ACTION
+		# One wheel notch per frame (Minigame.BUTTON_SCROLL_UP / _DOWN).
+		if _wheel > 0:
+			buttons |= MinigameBase.BUTTON_SCROLL_UP
+			_wheel -= 1
+		elif _wheel < 0:
+			buttons |= MinigameBase.BUTTON_SCROLL_DOWN
+			_wheel += 1
+	else:
+		_wheel = 0
 	var c := _cursor + _stir_tick(delta)
 	var ext: Vector2 = mg.plane_extent()
 	c = Vector2(clampf(c.x, -ext.x, ext.x), clampf(c.y, -ext.y, ext.y))
@@ -731,6 +765,29 @@ func _on_botched(amount: float, reason: String) -> void:
 		return
 	_audio("surgery_botch", null, -6.0)
 	game.send_operator_report({"k": mg_key, "botches": [[amount, reason]], "tb": table_index})
+
+
+## The step spent an item from the operator's hands mid-step (Minigame.item_used). The host takes it
+## out of their slots; a client operator asks the host to.
+func _on_item_used(kind: String, count: int) -> void:
+	var bot := _bot_operator() if game.is_host() and not _local_op else null  # DEV HOOK
+	if bot != null and mg != null:
+		receive_operator_report(bot.peer_id, {"k": mg_key, "use": [kind, count]})
+		return
+	if not _local_op or mg == null:
+		return
+	game.send_operator_report({"k": mg_key, "use": [kind, count], "reliable": true, "tb": table_index})
+
+
+## ctx.hand_count: how many of `kind` whoever is operating holds right now.
+func _operator_hand_count(kind: String) -> int:
+	var players = game.get("players") if game != null else null
+	if not (players is Dictionary) or operator_id == 0:
+		return 0
+	var p = (players as Dictionary).get(operator_id)
+	if p == null or not is_instance_valid(p) or not p.has_method("hand_count"):
+		return 0
+	return int(p.hand_count(kind))
 
 
 func _on_finished(result: Dictionary) -> void:

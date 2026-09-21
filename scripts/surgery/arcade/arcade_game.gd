@@ -25,6 +25,7 @@ extends "res://scripts/surgery/minigame.gd"
 
 const PanelScript := preload("res://scripts/surgery/panel/surgery_panel.gd")
 const StyleScript := preload("res://scripts/surgery/panel/panel_style.gd")
+const InkScript := preload("res://scripts/surgery/panel/ink.gd")
 
 # -- the panel --------------------------------------------------------------------------------
 ## How much of the view's height the panel fills. The rest is the real patient, table and room.
@@ -64,6 +65,10 @@ var frozen := false
 
 var diff := 1.0
 var panel: PanelScript = null
+## The ink/paper look (scripts/surgery/panel/ink.gd), for a game whose use_ink() is true; null on the
+## teal look. The page, its border and the command card come from it.
+var ink: InkScript = null
+var _ink_t := 0.0
 
 var _was_operating := false
 
@@ -76,9 +81,32 @@ func setup(context: Dictionary) -> void:
 	panel = PanelScript.new()
 	panel.painter = _paint
 	panel.header = panel_header()
+	if use_ink():
+		ink = InkScript.new()
+		ink.unit = ink_unit()
+		panel.chrome = false
+		panel.style.glow_light = ink_glow
+		panel.brightness = ink_brightness
 	add_child(panel)
 	build_game()
 	show_card(card_word_for_start())
+
+
+## True for a game drawn in the ink/paper comic look (docs/PANEL_STYLE.md) instead of the teal
+## diagram. Override.
+func use_ink() -> bool:
+	return false
+
+
+## Canvas pixels per reference pixel, for a game on the ink look laid out on its own reference size.
+func ink_unit() -> float:
+	return 1.0
+
+
+## The ink look's warm lamp on the patient, and how bright the paper is on the quad: paper at full
+## brightness is the brightest thing in a dark OR.
+@export var ink_glow := Color(1.0, 0.9, 0.74)
+@export_range(0.2, 2.0, 0.01) var ink_brightness := 0.82
 
 
 ## The step's own setup, after the panel exists. Override.
@@ -193,6 +221,7 @@ func tick(delta: float) -> void:
 	# twice. Everyone else animates from the replicated state and is corrected 20 times a second.
 	if armed() and bool(ctx.get("operator", false)):
 		advance(delta)
+	_ink_t += delta
 	animate(delta)
 	react()
 	_panel_frame(delta, operating)
@@ -269,6 +298,23 @@ func ghost(seconds: float) -> void:
 ## The panel's painter: the game's diagram, then anything it queued on top, then the card.
 func _paint(c: CanvasItem) -> void:
 	if panel == null:
+		return
+	if ink != null:
+		var size: Vector2 = panel.tex_size()
+		ink.t = _ink_t
+		ink.begin_page(c, size)
+		paint_game(c)
+		ink.end_page(c, size)
+		# The framework's own labels, small, in the mat above the page.
+		ink.text(c, Vector2(22.0, 17.0), panel.header, 12.0)
+		if panel.right_text != "":
+			ink.text(c, Vector2(size.x - 22.0, 17.0), panel.right_text, 12.0, Color(-1, 0, 0), 2)
+		if card_word != "":
+			var ready_now := play_state == Play.READY
+			var total: float = ready_time if ready_now else card_time
+			ink.card(c, size, card_word, clampf(card_left / maxf(0.01, total), 0.0, 1.0),
+				ready_size if ready_now else card_size, ink.good if ready_now else Color(-1, 0, 0),
+				("%.1f" % card_left) if ready_now else "")
 		return
 	paint_game(c)
 	if card_word != "":
