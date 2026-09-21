@@ -194,7 +194,7 @@ const ARCADE_SCRIPTS := {
 ## monster table keeps the legacy saw and brain forceps while the patient tables move over.
 static var ARCADE_ENABLED := {
 	"anesthetic": true,
-	"forceps": false,
+	"forceps": true,
 	"forceps:brain": false,   # the monster table's brain harvest: legacy, no arcade rebuild
 	"gauze:pack": false,
 	"gauze:stump": false,
