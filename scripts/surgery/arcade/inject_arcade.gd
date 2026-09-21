@@ -1900,9 +1900,10 @@ static func self_test() -> Array:
 	# The shell: a stamp card waits for its press and that press is the first action (Enter only takes
 	# it down), and an onlooker gets the same bursts and splats as the operator.
 	var sc := _shell_check(script)
-	print("[inject self-test] shell: card waits %s, Space dismisses and draws %s, Enter dismisses without advancing %s, spectator splats %d/%d same %s" % [
-		sc.waits, sc.space_draws, sc.enter_only, sc.spec_splats, sc.op_splats, sc.same])
-	if not sc.waits or not sc.space_draws or not sc.enter_only or not sc.same or sc.op_splats < 2:
+	print("[inject self-test] shell: card waits %s, Space dismisses and draws %s, Enter dismisses without advancing %s, spectator splats %d/%d same %s, burst without blood %s, splat polygons %d (%d fail to triangulate)" % [
+		sc.waits, sc.space_draws, sc.enter_only, sc.spec_splats, sc.op_splats, sc.same, sc.burst_only, sc.polys, sc.bad_polys])
+	if not sc.waits or not sc.space_draws or not sc.enter_only or not sc.same or sc.op_splats < 2 \
+			or not sc.burst_only or sc.bad_polys != 0 or sc.polys < 2000:
 		print("[inject self-test] MISS: the shell's cards and mistakes")
 		ok = false
 	# An onlooker sees what the operator sees.
@@ -2063,7 +2064,8 @@ static func _alignment_check(script: GDScript) -> Dictionary:
 
 static func _shell_check(script: GDScript) -> Dictionary:
 	var dt := 1.0 / 60.0
-	var r := {"waits": false, "space_draws": false, "enter_only": false, "op_splats": 0, "spec_splats": 0, "same": false}
+	var r := {"waits": false, "space_draws": false, "enter_only": false, "op_splats": 0, "spec_splats": 0, "same": false,
+		"burst_only": false, "polys": 0, "bad_polys": -1}
 	var g = script.new()
 	g.setup(_ctx("bob", 1, 0))
 	for i in 90:
@@ -2099,6 +2101,32 @@ static func _shell_check(script: GDScript) -> Dictionary:
 	r.spec_splats = spec.shell._splats.size()
 	r.same = r.op_splats == r.spec_splats and r.op_splats > 0 \
 		and (op.shell._splats[-1][0] as Vector2).is_equal_approx(spec.shell._splats[-1][0])
+	# A burst without blood: onlookers see the word, nobody gets a splat or a bill.
+	var before: int = op.shell._splats.size()
+	op.burst("SQUIRM!", Vector2(500, 300))
+	op.tick(dt)
+	spec.apply_net_state(op.net_state())
+	spec.tick(dt)
+	r.burst_only = op.shell._splats.size() == before and spec.shell._splats.size() == before \
+		and spec.shell._bursts.size() > 0 and String(spec.shell._bursts[-1][0]) == "SQUIRM!"
+	# Every splat the shell can throw triangulates, at full size and as it starts growing.
+	var polys: Array = op.shell.splat_polys_for(0, 1500)
+	var bad := 0
+	for pts: PackedVector2Array in polys:
+		if Geometry2D.triangulate_polygon(pts).is_empty():
+			bad += 1
+			continue
+		var ctr := Vector2.ZERO
+		for q in pts:
+			ctr += q
+		ctr /= float(pts.size())
+		var small := PackedVector2Array()
+		for q in pts:
+			small.append(ctr + (q - ctr) * op.shell.GROW_FROM)
+		if Geometry2D.triangulate_polygon(small).is_empty():
+			bad += 1
+	r.polys = polys.size()
+	r.bad_polys = bad
 	op.free()
 	spec.free()
 	return r
