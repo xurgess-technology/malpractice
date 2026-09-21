@@ -556,25 +556,51 @@ func onpage(p: Vector2, size: Vector2) -> Vector2:
 static func font() -> Font:
 	if _font == null:
 		var sf := SystemFont.new()
-		# Lora (the spec's body face) when it is there; Georgia is the nearest face Windows ships.
+		# Georgia is the nearest face Windows ships to Lora.
 		sf.font_names = PackedStringArray(["Lora", "Georgia", "Cambria", "Times New Roman", "DejaVu Serif", "serif"])
 		sf.font_italic = true
 		sf.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
-		_font = sf
+		_font = _bundled(LORA_ITALIC, 400, sf)
 	return _font
 
 
-## Upright, heavy, for stamps and command cards.
+## Upright, semibold, for stamps, bursts, the clip and the grade number.
 static func font_upright() -> Font:
 	if _font_up == null:
 		var sf := SystemFont.new()
-		# Cormorant Garamond (the spec's display face) when it is there; Palatino / Book Antiqua are the
-		# nearest faces Windows ships.
+		# Palatino / Book Antiqua are the nearest faces Windows ships to Cormorant Garamond.
 		sf.font_names = PackedStringArray(["Cormorant Garamond", "Cormorant", "Palatino Linotype", "Book Antiqua", "Georgia", "serif"])
 		sf.font_weight = 600
 		sf.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
-		_font_up = sf
+		_font_up = _bundled(CORMORANT, 600, sf)
 	return _font_up
+
+
+## The spec's faces (docs/SURGERY_SHELL_AND_DODGE_SPEC.md 2-3), from fonts/ when they are there: the
+## Google Fonts variable files, OFL (fonts/<family>/OFL.txt). Missing, the system fallback is used.
+const CORMORANT := ["res://fonts/cormorantgaramond/CormorantGaramond[wght].ttf",
+	"res://fonts/cormorantgaramond/CormorantGaramond-SemiBold.ttf"]
+const LORA_ITALIC := ["res://fonts/lora/Lora-Italic[wght].ttf", "res://fonts/lora/Lora-Italic.ttf"]
+
+
+## The first of `paths` that exists, at weight `wght` (a variable font's axis), falling back to
+## `fallback` for anything it lacks; or `fallback` itself when none is there. Loaded straight from the
+## file, so it works before the editor has imported it.
+static func _bundled(paths: Array, wght: int, fallback: Font) -> Font:
+	for path: String in paths:
+		var abs_path := ProjectSettings.globalize_path(path)
+		if not FileAccess.file_exists(path) and not FileAccess.file_exists(abs_path):
+			continue
+		var ff := FontFile.new()
+		if ff.load_dynamic_font(abs_path) != OK:
+			continue
+		ff.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
+		ff.fallbacks = [fallback]
+		var fv := FontVariation.new()
+		fv.base_font = ff
+		fv.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): wght}
+		return fv
+	return fallback
 
 
 ## A label. `size` is reference px; `align` 0 left, 1 centre, 2 right of `at`.
