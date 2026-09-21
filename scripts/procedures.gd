@@ -204,8 +204,8 @@ static var ARCADE_ENABLED := {
 	"eye:cut": false,
 	"eye:scoop": true,
 	"eye:snip": false,
-	"eye:place": false,
-	"eye:grab": false,
+	"eye:place": true,
+	"eye:grab": true,
 	"eye:stitch": false,
 }
 
