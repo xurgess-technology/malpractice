@@ -364,7 +364,12 @@ stitches, should too):
   `BUTTON_PRIMARY` (left click), `BUTTON_SECONDARY` (right) and `BUTTON_UP` (**W**, the eye snip's
   "pull the eyeball up"). Bots set the same bits in `bot_input`'s `buttons`. The arcade bits
   (`BUTTON_LEFT` / `RIGHT` / `DOWN` / `ACTION`) are A, D, S and Space, and (2026-09-21)
-  `BUTTON_SCROLL_UP` / `BUTTON_SCROLL_DOWN` are one frame each per mouse-wheel notch.
+  `BUTTON_SCROLL_UP` / `BUTTON_SCROLL_DOWN` are one frame each per mouse-wheel notch, and
+  `BUTTON_ENTER` (512) is either Enter key, held (the shell's "move on").
+- **The shell** (2026-09-21, PANEL_STYLE.md): an `ArcadeGame` with `use_ink()` gets the clipboard, stamp
+  cards that wait for a press (the press is the first action), the corner HUD (`hud_line`,
+  `hud_value`, `enter_cap`) and `mistake(word, vitals, reason, kind, at, serious)` -- burst, blood,
+  shake, the `mistake_made(kind, word)` signal and `cost()` in one call, replicated in the state blob.
 - Colour language in the world: **green** = right / holds / grab it now (tourniquet strap and
   pulse probe, gauze path ring and trail, saw guide, forceps reach ring and exit glow);
   **amber** = works but weak (loose wrap, short saw pass, strap too high); **red** = a mistake is

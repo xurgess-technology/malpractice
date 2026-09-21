@@ -697,6 +697,8 @@ func _drive(delta: float) -> void:
 			buttons |= MinigameBase.BUTTON_DOWN
 		if Input.is_action_pressed("jump"):
 			buttons |= MinigameBase.BUTTON_ACTION
+		if Input.is_physical_key_pressed(KEY_ENTER) or Input.is_physical_key_pressed(KEY_KP_ENTER):
+			buttons |= MinigameBase.BUTTON_ENTER
 		# One wheel notch per frame (Minigame.BUTTON_SCROLL_UP / _DOWN).
 		if _wheel > 0:
 			buttons |= MinigameBase.BUTTON_SCROLL_UP
