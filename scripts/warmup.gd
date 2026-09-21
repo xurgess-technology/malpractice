@@ -326,7 +326,9 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 			# ARCADE: build the legacy game AND the arcade rebuild where one exists, so the first
 			# open never hitches whichever way ARCADE_ENABLED happens to be set.
 			var paths: Array = [path]
-			var arcade_path := String(Procedures.ARCADE_SCRIPTS.get(String(step.game), ""))
+			var arcade_path := String(Procedures.ARCADE_SCRIPTS.get(
+				"%s:%s" % [String(step.game), String(step.get("variant", ""))],
+				Procedures.ARCADE_SCRIPTS.get(String(step.game), "")))
 			if arcade_path != "" and arcade_path != path and ResourceLoader.exists(arcade_path):
 				paths.append(arcade_path)
 			for pid in pids:

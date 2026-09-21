@@ -257,6 +257,12 @@ func _add_teammate_light() -> void:
 
 
 func _find_step() -> Dictionary:
+	# A game with variants (eye: cut / scoop / snip / place / grab / stitch) has several steps in the
+	# same ailment, so --variant has to pick between them or the lab always plays the first one.
+	if variant != "":
+		for s in Procedures.steps(ailment_id):
+			if s.game == game_id and String(s.get("variant", "")) == variant:
+				return s
 	for s in Procedures.steps(ailment_id):
 		if s.game == game_id:
 			return s
