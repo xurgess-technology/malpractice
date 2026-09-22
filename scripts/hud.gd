@@ -11,6 +11,7 @@ extends Control
 ##   message   short messages / subtitles, the dead / spectating banner
 ##   money     the money readout (hides itself away from the economy spots)
 ##   hint      the controls line for the first seconds of a session
+##   minimap   the small fogged floor plan, top right (its own Control, scripts/minimap_panel.gd)
 ##   overlay   pause, flatline and shift-won overlays; the host's join address in the lobby
 ## The surgery step's title and one-line hint are drawn by scripts/surgery/surgery_hud.gd; the FPS
 ## counter (F3) by main.gd; settings and the dev panel are their own layers.
@@ -19,6 +20,8 @@ extends Control
 
 var game: Game = null
 var host_info: String = ""
+## MINIMAP: the top-right floor plan (scripts/minimap_panel.gd), its own Control child.
+var minimap_panel: MinimapPanel = null
 ## Element ids drawn in the last _draw(), for tests.
 var drawn: PackedStringArray = []
 
@@ -55,6 +58,12 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS   # the icons are imported with mipmaps
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# MINIMAP: the corner floor plan is its own Control, not part of this immediate-mode _draw, so
+	# it can redraw on its own (rare) schedule instead of at this HUD's every frame.
+	minimap_panel = MinimapPanel.new()
+	minimap_panel.name = "Minimap"
+	minimap_panel.game = game
+	add_child(minimap_panel)
 
 
 func _process(delta: float) -> void:
@@ -104,6 +113,8 @@ func _draw() -> void:
 		_draw_money(w, h, me)
 	if me != null and not me.alive:
 		_draw_dead_banner(w)
+	if minimap_panel != null and minimap_panel.visible:
+		drawn.append("minimap")   # MINIMAP: drawn by its own node, listed here for the tests
 	_draw_holds(w, h)
 	_draw_host_info(w)
 	_draw_message(w, h, in_surgery)

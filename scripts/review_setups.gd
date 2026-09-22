@@ -91,6 +91,9 @@ const SETUPS := {
 	# TAB SHEET (2026-09-22): hit Tab. Both abilities at level 2, rocket boots on and a mixed
 	# handful, so all three rows have something in them and the boots have an Unequip to press.
 	"sheet": {"seed": 4242, "stage": "_sheet"},
+	# MINIMAP (2026-09-22): an unhurried walk of the hospital with the fogged floor plan in the top
+	# right. Nothing chasing you and nothing to lose, so the map is the only thing to look at.
+	"minimap": {"seed": 4242, "stage": "_minimap"},
 }
 
 
@@ -988,3 +991,25 @@ static func _downed(game: Game) -> void:
 	floor_item(game, "suture_kit", t + side * 1.2 + b * Vector3(-0.5, 0.0, 0.0))
 	game.say("Hands empty: hold E on Dr. Bled, carry them to a table, E anywhere at it lays them down (G drops them on the floor), then stitch.", 12.0)
 	print("[review] downed: bot %d down at %s, free table %d at %s" % [bid, mate_at, table, t])
+
+
+## MINIMAP: a free run of the hospital with the fogged floor plan in the top right corner. Nothing
+## chasing you and nothing to lose, because the map is the whole point: walk out of the hub into a
+## wing and watch the plan ink itself in behind you. The hub is drawn from the start; a ward room
+## only appears once someone has actually gone into it, so walking a hallway past shut doors leaves
+## those rooms blank.
+static func _minimap(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	# No phone call, no patient waiting, no losing, and nothing hunting you: an unhurried walk.
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("god", {"on": true})
+	game._clear_monsters()
+	await tree.physics_frame
+	game.say("Walk out into a wing. The hub is already on the map; the wards fill in as you go into them.", 10.0)
+	print("[review] minimap: %d rooms, %d lit at the start" % [
+			int(game.minimap.room_count), int(game.minimap.seen_rooms.count(0xFF))])
