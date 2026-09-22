@@ -25,6 +25,11 @@ var ink: InkScript = null
 var area := Rect2(0, 0, 1200, 800)
 ## Seed for the splats (the step's seed).
 var seed_v := 1
+## SPLATS NEVER LAND HERE (canvas px, the game's layout space). docs/SUTURE_SPEC.md 5: the board is
+## the readable surface and staining it hides the puzzle, so SUTURE! hands over its grid rectangle
+## plus a margin and every splat is rejection-sampled outside it. Empty (the default) means anywhere
+## in `area` is fair game, which is what every other step wants.
+var keep_out := Rect2()
 var t := 0.0
 
 # -- tuning (reference px, times ink.unit) ----------------------------------------------------------
@@ -107,6 +112,17 @@ func _throw_splats(index: int, at := Vector2(INF, INF)) -> void:
 	var n := 1 if here else rng.randi_range(2, 4)
 	for i in n:
 		var centre := area.position + Vector2(rng.randf(), rng.randf()) * area.size
+		# Off the board: rejection-sampled, with a fall-back to the margin either side so a silly
+		# keep-out (one that swallows the page) can never spin here forever.
+		if not here and keep_out.size.x > 0.0:
+			var tries := 0
+			while keep_out.has_point(centre) and tries < 24:
+				centre = area.position + Vector2(rng.randf(), rng.randf()) * area.size
+				tries += 1
+			if keep_out.has_point(centre):
+				var left: bool = rng.randf() < 0.5
+				centre.x = lerpf(area.position.x, keep_out.position.x, rng.randf()) if left \
+					else lerpf(keep_out.end.x, area.end.x, rng.randf())
 		if here:
 			centre = at + Vector2(rng.randf_range(-7.0, 7.0), rng.randf_range(-3.0, 3.0)) * ink.unit
 		var base := rng.randf_range(5.0, 12.0) * ink.unit if here else rng.randf_range(10.0, 26.0) * ink.unit
@@ -248,6 +264,49 @@ func draw_hud(c: CanvasItem, controls: String, value: String, bad: bool) -> void
 		c.draw_string(f, Vector2(area.end.x - 14.0 * u - w, area.position.y + 26.0 * u), value,
 			HORIZONTAL_ALIGNMENT_LEFT, -1.0, px, ink.deep_red if bad else ink.ink)
 		ink.ops += 1
+
+
+## THE STANDARD CORNER HUD, top left, block one (docs/SUTURE_SPEC.md 6): WHAT YOU ARE TRYING TO DO,
+## three short lines at most, each behind a small red bullet -- never how to press it. Returns the y
+## (reference px, from the top of `area`) the next block starts at.
+##
+## New in SUTURE! and meant for all four steps eventually; the older steps still draw the one-line
+## draw_hud() above and are unchanged until they are retrofitted.
+func draw_rules(c: CanvasItem, lines: Array, y := 20.0) -> float:
+	var u := ink.unit
+	for ln in lines:
+		var s := String(ln)
+		if s == "":
+			continue
+		var at := area.position + Vector2(14.0, y) * u
+		c.draw_circle(at + Vector2(3.0, -3.6) * u, 2.6 * u, Color(ink.deep_red, 0.9))
+		ink.text(c, at + Vector2(12.0, 0.0) * u, s, 13.0, Color(ink.ink, 0.8))
+		y += 17.0
+	return y
+
+
+## Block two: THE KEYBINDINGS AS KEY CAPS. Each `caps` entry is [cap, result]: the cap is a boxed
+## pale key in the upright face, the result an italic plain-language line beside it. The boxes are the
+## point -- a player scanning the corner tells a rule from a button without reading either.
+func draw_keycaps(c: CanvasItem, caps: Array, y: float) -> float:
+	var u := ink.unit
+	y += 8.0
+	var f := InkScript.font_upright()
+	var px := int(round(11.0 * u))
+	for e in caps:
+		if not (e is Array) or (e as Array).size() < 2:
+			continue
+		var cap := String(e[0])
+		var what := String(e[1])
+		var w: float = f.get_string_size(cap, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+		var box := Rect2(area.position + Vector2(14.0, y) * u, Vector2(w + 14.0 * u, 19.0 * u))
+		ink.rect(c, box, Color(ink.ink, 0.75), 1.4, 8721 + int(y), Color(ink.paper.darkened(0.05), 0.95))
+		c.draw_string(f, box.position + Vector2(7.0 * u, box.size.y * 0.5 + px * 0.36), cap,
+			HORIZONTAL_ALIGNMENT_LEFT, -1.0, px, Color(ink.ink, 0.9))
+		ink.text(c, Vector2(box.end.x + 7.0 * u, box.position.y + box.size.y * 0.5 + 4.0 * u), what,
+			12.0, Color(ink.label, 0.85))
+		y += 24.0
+	return y
 
 
 ## The ENTER key cap at `at` (layout px, its centre) with a short italic label under it: dim while you

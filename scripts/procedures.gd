@@ -63,6 +63,10 @@ const AILMENTS := {
 			{"id": "sedate", "label": "Sedate the patient", "item": "anesthetic", "uses": 1, "game": "anesthetic", "site": "injection"},
 			{"id": "extract", "label": "Remove the bullet", "item": "forceps", "uses": 0, "game": "forceps", "site": "gunshot"},
 			{"id": "dress", "label": "Pack and dress the wound", "item": "gauze", "uses": 1, "game": "gauze", "variant": "pack", "site": "gunshot"},
+			# 2026-09-22 (docs/SUTURE_SPEC.md): step four, SUTURE! -- one continuous thread through
+			# the wound. The `laceration` variant is the open grid; the eye socket variant is the
+			# same game on a 6x6 with the eye blocked out.
+			{"id": "close", "label": "Close the wound", "item": "suture_kit", "uses": 1, "game": "suture", "variant": "laceration", "site": "gunshot"},
 		],
 	},
 	"amputation": {
@@ -161,6 +165,11 @@ const ARCADE_SCRIPTS := {
 	"eye:place": "res://scripts/surgery/arcade/grab_arcade.gd",         # GRAB! (eye into the vat)
 	"eye:grab": "res://scripts/surgery/arcade/grab_arcade.gd",          # GRAB! (vat into the socket)
 	"eye:stitch": "res://scripts/surgery/arcade/ring_arcade.gd",        # STITCH! the ring variant
+	# SUTURE! (docs/SUTURE_SPEC.md): one script, two puzzle variants. The plain "suture" key catches
+	# the `laceration` testbed procedure, whose step carries no variant of its own.
+	"suture": "res://scripts/surgery/arcade/suture_arcade.gd",          # SUTURE! (deep laceration)
+	"suture:laceration": "res://scripts/surgery/arcade/suture_arcade.gd",
+	"suture:eye": "res://scripts/surgery/arcade/suture_arcade.gd",      # SUTURE! (eye socket)
 }
 
 ## Which arcade rebuilds are live. FALSE means the legacy game still plays that step, unchanged.
@@ -180,6 +189,9 @@ static var ARCADE_ENABLED := {
 	"eye:place": true,
 	"eye:grab": true,
 	"eye:stitch": true,
+	"suture": true,
+	"suture:laceration": true,
+	"suture:eye": true,
 }
 
 
