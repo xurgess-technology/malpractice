@@ -51,8 +51,11 @@ const SKIN_BAKED := 0
 ## pinned here: these three are the baseline, not the limit.
 const PATTERNS := [
 	{"name": "None", "id": 0, "knobs": {}},
+	# Pinstripes band along body space, not the UV, so `stripe_span` (metres of body the count
+	# counts across) is what sets the pitch: count 46 over 2.0 m is a stripe every ~4 cm.
 	{"name": "Pinstripes", "id": 1,
-		"knobs": {"stripe_count": 46.0, "stripe_width": 0.22, "stripe_angle": 0.0}},
+		"knobs": {"stripe_count": 46.0, "stripe_width": 0.22, "stripe_angle": 0.0,
+			"stripe_span": 2.0}},
 	{"name": "Polka Dots", "id": 2,
 		"knobs": {"dot_count": 20.0, "dot_radius": 0.19, "dot_stagger": 0.5}},
 	{"name": "Splatter", "id": 3,
