@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.17**: Everything on the floor is wearing a little lamp
+    - Changed: A dropped item now floats inside a soft ball of light that breathes slowly, so you can tell what's lying in a dark corridor at a glance. The colour tells you what it is: teal for supplies, gold for loot, red for organs, violet for pharmacy stock, green for the big two-handed things.
+    - Changed: It's cheaper than the glow it replaces, which was redrawing the item's own model up to four times over.
 - **0.10.16**: Polish on yesterday's two
     - Changed: Sawing a monster no longer freezes it for a beat. It gets shoved back, it turns on you, and it keeps coming -- which is the whole point. Note this also means you can't saw something to open a window to sedate it any more; that's a shove's job.
     - Fixed: Pinstripe scrubs run the same way down the whole body instead of going sideways across the chest.
