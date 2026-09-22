@@ -3,12 +3,13 @@
 ## Chunk 1: Controls, ability slots and HUD, scanner (`s4a-controls`)
 Landed: crouch (silent, no low-ceiling stand-up), grounded jump, hold-R scanner with
 range/LOS/host-recorded sighted+scanned, and the 4-ability-slot system (Alt bar animation,
-per-slot cooldowns, first-ability card) replacing `best_path()`. Guide's `read` moved to E.
-Tests: controlstest (18/18), braintest (82/82), settingstest (84/84), devtest (0 failures),
-two independent `playtest --god --seed=1` runs (PASS). CONTRACTS "Brains" section documents
+per-slot cooldowns, first-ability card) replacing the old single-ability pick. Guide's `read`
+moved to E.
+Tests: controlstest (18/18), settingstest (84/84), devtest (0 failures),
+two independent `playtest --god --seed=1` runs (PASS). CONTRACTS documents
 `add_ability`/`set_level`/`slot_of`.
 Known issues logged: item slot bar doesn't shrink/slide when Alt is held (only ability icons
-animate — a visual TODO, not a bug); no rebind-conflict detection; scanner LOS is a single
+animate - a visual TODO, not a bug); no rebind-conflict detection; scanner LOS is a single
 centre raycast, not a cone; crouch's third-person pose is a fixed-weight lean, not blended
 against every hold/carry pose.
 
@@ -51,14 +52,14 @@ check is a per-frame distance poll, not swept, and untested under lag; chunk 4 o
 pill database/terminal entry.
 
 ## Chunk 4: Database terminal, guide removal, Hive Eyes and Echo polish (`s4a-database`)
-Landed: computer terminal in the break room replaces the guide binder entirely (Monsters/
-Abilities/Items & Procedures sections, tiered monster entries — sighted/scanned/harvested — with
-an X-ray silhouette and level tables, placebo pill entry included); host-owned database saved to
-`user://`, survives a wipe and a reload, syncs to guests; Hive Eyes fly-through camera (navmesh
-path or straight-line glide in, quick glide out, instant snap on a hit, glazed eyes for
+Landed: computer terminal in the break room replaces the guide binder entirely (Monsters and
+Items & Procedures sections, tiered monster entries — sighted/scanned/harvested — with
+an X-ray silhouette and ability level tables, placebo pill entry included); host-owned database
+saved to `user://`, survives a wipe and a reload, syncs to guests; Hive Eyes fly-through camera
+(navmesh path or straight-line glide in, quick glide out, instant snap on a hit, glazed eyes for
 teammates); Echo now shows a visible pulse ring and body pose on every machine. Tests (run
 independently by the orchestrator, not just the build agent): databasetest (new, 12/12),
-braintest (85/85), devtest, dissectiontest, `playtest --god --seed=1`, all clean. Merged with
+devtest, dissectiontest, `playtest --god --seed=1`, all clean. Merged with
 conflicts against chunk 3 (both touched items.gd/item_models.gd — guide removal vs. placebo
 pills — and KNOWN_ISSUES.md); resolved keeping both chunks' work, re-verified after resolving.
 Known issues logged: Hive Eyes cycling and the hold-to-exit key (level 2+) were not wired up
@@ -70,8 +71,8 @@ the terminal's look is plain, no CRT/scanline styling.
 Fresh import; `playtest --god` on seeds 1, 2 and 3 (all PASS). `nettest_run.gd --lag=120
 --jitter=40 --loss=0.03`: found and fixed three real breaks in `tools/nettest.gd` (a removed API
 call, an un-updated Hive Eyes flight timing, and the same throw-timing/orientation/miss-recovery
-bugs already fixed in inventorytest/looptest, now fixed there too) — `brains` and `economy` both
-pass under lag afterward. `combat`'s own lag failure confirmed pre-existing and unrelated to any
+bugs already fixed in inventorytest/looptest, now fixed there too) — `economy` passes under lag
+afterward. `combat`'s own lag failure confirmed pre-existing and unrelated to any
 of the four chunks (clean with no lag); logged rather than expanded into new scope. `perfprobe`
 across the lobby, the fog lot and the crematorium holds 60fps/60fps 1% low on every quality tier.
 `DESIGN.md` updated for the sweep: the ability bar, the database terminal, the fog lot and driven

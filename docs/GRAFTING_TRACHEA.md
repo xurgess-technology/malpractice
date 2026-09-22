@@ -8,14 +8,15 @@ otherwise.
 
 ## The goal
 
-**Echo comes from a graft now, the same way Hive Eyes does.** The team catches a Sonographer, takes
+**Echo comes from a graft, the same way Hive Eyes does.** The team catches a Sonographer, takes
 its glowing trachea out on an OR table, keeps it in a vat, then swaps it with a surgeon's trachea
 on the player table. The grafted surgeon's throat glows violet through the skin, and they get
 **Echo**.
 
-**Brains and the blender are gone.** Neither monster has a brain to harvest any more (the Hive
-lost its brain in 0.6.5), so the brain items, the brain harvest and the break-room blender are
-removed. Grafting is the only way to get an ability.
+**Brains and the blender are already gone** (`docs/backlog/ABILITIES_REMOVED.md`), removed ahead of
+this brief, so grafting is the only way to earn an ability. That also means **Echo has no source in
+the game until this part lands**: the ability exists and works, and nothing in a normal shift hands
+it out. Building this is what fixes that.
 
 ## The loop
 
@@ -34,8 +35,7 @@ removed. Grafting is the only way to get an ability.
 
 - **Body parts are named "X's Y":** the Sonographer's trachea, the Hive's eyeball, and a surgeon's
   own parts by name: "Zach's trachea", "Zach's eyeball".
-- **The brains, the brain harvest and the blender are removed.** The spoil system they used stays,
-  renamed for body parts, since eyeballs and tracheas use it.
+- **The spoil system is named for body parts**, since eyeballs and tracheas use it.
 - **Echo comes only from the trachea graft.**
 - **The Echo ability itself doesn't change here.** It's still today's loud shriek and outlines.
   Turning it into the Sonographer's ping is later (docs/backlog/SWEEP4B.md).
@@ -67,7 +67,7 @@ removed. Grafting is the only way to get an ability.
 | # | Branch | What | Who | When |
 |---|---|---|---|---|
 | A | `trachea-art` | The surgeon's grafted throat (a `surgeon_graft` style variant with the see-through throat and stitches, `art/stylized/`), and the two trachea item models: the Sonographer's (violet, glowing) and a surgeon's (pale pink cartilage). | Orchestrator's call; Blender-from-Python work | Any time |
-| B | `graft-trachea` | Remove the brains, the brain harvest and the blender; rename the spoil system for body parts. Trachea Extraction, the trachea items, vats holding either part, Trachea Grafting, the refusals, the throat glow (replicated), the first-person tell, Echo from the graft. Update DESIGN.md and docs/CONTRACTS.md. | Opus, high | After grafting part one's chunk C, the Sonographer's two chunks, and A are all merged |
+| B | `graft-trachea` | Trachea Extraction, the trachea items, vats holding either part, Trachea Grafting, the refusals, the throat glow (replicated), the first-person tell, Echo from the graft. Update DESIGN.md and docs/CONTRACTS.md. | Opus, high | After grafting part one's chunk C, the Sonographer's two chunks, and A are all merged |
 
 **Zach sees:**
 - A: `TRACHEA: the grafted throat and the two tracheas` (renders, or a lab scene).
@@ -77,8 +77,6 @@ removed. Grafting is the only way to get an ability.
 
 - A whole run of the loop works from a normal shift: catch a Sonographer, extract, vat, strap,
   graft, Echo, swap back, sell a trachea.
-- No brain items, brain harvest or blender are left anywhere (items, dev panel, database, tips,
-  tests).
 - Headless checks: a trachea spoils outside a vat and not inside; the last extraction cut emits a
   noise; the graft gives Echo 1 and swapping back takes it away; a surgeon can hold both grafts; an
   eyeball vat is refused for a trachea graft.

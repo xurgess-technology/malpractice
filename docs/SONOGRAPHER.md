@@ -6,8 +6,9 @@ wedge with its sweep, walls and closed doors blocking it, imaging and the deafen
 `soft_squeal` setting), the rush at the nearest imaged player, the wail with its listening pauses
 and losing you when you go quiet, the low-ceiling check, its own sounds and the netcode.
 Written up in [docs/CONTRACTS.md](CONTRACTS.md) under "The Sonographer"; every number below is a
-first guess for the review to argue with. Echo, the ability, still comes from the Sonographer's
-brain until the trachea graft replaces it (docs/GRAFTING_TRACHEA.md).
+first guess for the review to argue with. Echo, the ability, exists and works but has no source in
+the game: brains are gone, and the trachea graft that would grant it is not built yet
+(docs/GRAFTING_TRACHEA.md).
 
 Brief for the orchestrator. Agreed with Zach on 2026-09-18 (theory session); rewritten the same
 day when the ultrasound cart was dropped. The Discharged gets a new name, a new look and a new way
@@ -164,11 +165,11 @@ database entry, tips, sound cue names, the roster, tests and nettest scenarios, 
 docs/CONTRACTS.md. The host's database is saved to disk and keyed by monster kind: map the old
 `discharged` key to the new one when loading, so nobody loses what they've learned.
 
-**The Sonographer has no brain to harvest any more.** The player's Echo ability comes from
-grafting the **Sonographer's trachea** instead (docs/GRAFTING_TRACHEA.md), which also removes the
-brains and the blender. This brief doesn't build that; it only needs the monster renamed and the
-throat modelled so the trachea brief can use it. Echo turning into the ping is still later
-(docs/backlog/SWEEP4B.md).
+**The Sonographer has nothing to harvest yet.** The **Sonographer's trachea** is what comes out of
+it, and grafting it is what will give the player Echo (docs/GRAFTING_TRACHEA.md) -- grafting is the
+only way to earn an ability now that brains are gone. This brief doesn't build that; it only needs
+the monster renamed and the throat modelled so the trachea brief can use it. Echo turning into the
+ping is still later (docs/backlog/SWEEP4B.md).
 
 ## Chunks
 
@@ -187,7 +188,7 @@ interface on the new model; whichever merges second hooks them up. The interface
 - `aim`: the direction the probe points during the charge and echo.
 - `crane_limit` 0–1: how far the neck may stretch up before it bends forward (the ceiling check).
 
-**Timing with grafting:** B touches brains, abilities and the database, as grafting does. Start B
+**Timing with grafting:** B touches abilities and the database, as grafting does. Start B
 after grafting's chunk C is merged. A can start any time.
 
 **Zach sees:**

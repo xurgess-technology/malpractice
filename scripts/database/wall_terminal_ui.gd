@@ -260,7 +260,7 @@ func refresh() -> void:
 func _view() -> Dictionary:
 	var g := _game()
 	if g == null or g.get("wall") == null:
-		return {"db": {}, "peer": 0, "brains": null}
+		return {"db": {}, "peer": 0, "abilities": null}
 	return g.wall.view()
 
 

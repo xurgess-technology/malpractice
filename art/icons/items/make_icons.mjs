@@ -341,7 +341,6 @@ body{margin:0;background:#070d0e;color:#9fb3b3;font:13px system-ui,sans-serif;pa
 h3{font-weight:500;color:#c9d6d6;margin:14px 0 6px}.row{display:flex;flex-wrap:wrap;gap:18px}
 .c{width:112px;text-align:center}.c img{display:block;margin:0 auto 4px}.c img.s{margin-bottom:6px}
 </style></head><body>
-<h3>Abilities</h3><div class="row"><div class="c"><img src="../hive_eyes.svg" width="96"><img class="s" src="../hive_eyes.svg" width="48"><div>Hive Eyes</div></div><div class="c"><img src="../echolocation.svg" width="96"><img class="s" src="../echolocation.svg" width="48"><div>Echolocation</div></div></div>
 ${groups.map(([k, t]) => `<h3>${t}</h3><div class="row">${ICONS.filter(i => i.cat === k).map(cell).join("")}</div>`).join("\n")}
 </body></html>`;
 writeFileSync(new URL("./sheet.html", import.meta.url), html);

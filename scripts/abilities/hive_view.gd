@@ -1,11 +1,11 @@
 extends Node
-## Hive Eyes, on the watching player's machine only (brains, sweep 3; the fly-through is sweep 4a
+## Hive Eyes, on the watching player's machine only (sweep 3; the fly-through is sweep 4a
 ## chunk 4): a camera riding in a Hive's eyes and a grainy, sickly, night-sight screen over it.
-## main.gd renders through `camera` while `active` (game.brains.camera()). Hives see in the
+## main.gd renders through `camera` while `active` (game.abilities.camera()). Hives see in the
 ## dark, so the screen lifts the shadows a lot; everything is a washed-out yellow-green with
 ## grain, scan lines and a slow wobble.
 ##
-## The brains system (host) says which monster and until when; everything about the flight -- the
+## The ability system (host) says which monster and until when; everything about the flight -- the
 ## camera leaving the player's own head, gliding along the navmesh to the Hive (or a straight
 ## line when there is no path) and settling into its eyes over FLIGHT_IN seconds, then a quick
 ## FLIGHT_OUT glide back on a normal end -- is local and purely cosmetic (docs/SWEEP4A.md "Hive
@@ -109,7 +109,7 @@ func setup(g: Node) -> void:
 
 
 ## Look through monster `id` until world_time `end_at` (or stop with id -1). Called every frame
-## from brains.gd's physics_tick with the current authoritative state, on every machine; only
+## from abilities.gd's physics_tick with the current authoritative state, on every machine; only
 ## transitions (inactive -> active, ending, or the target id changing) do anything.
 func set_target(id: int, end_at: float) -> void:
 	if id < 0:
@@ -150,7 +150,7 @@ func _begin_start(id: int) -> void:
 	var to_pos: Vector3 = (m as Node3D).global_position if m != null else from_xf.origin
 	_path = _path_from(from_xf.origin, to_pos)
 	camera.global_transform = from_xf
-	Audio.play("brains_hive_in", null, -3.0)
+	Audio.play("ability_hive_in", null, -3.0)
 
 
 func _begin_cycle(id: int) -> void:
@@ -159,7 +159,7 @@ func _begin_cycle(id: int) -> void:
 	var m = game.monsters.get(id)
 	var to_pos: Vector3 = (m as Node3D).global_position if m != null else camera.global_position
 	_path = _path_from(camera.global_position, to_pos)
-	Audio.play("brains_hive_in", null, -3.0, 0.1)
+	Audio.play("ability_hive_in", null, -3.0, 0.1)
 
 
 func _begin_end() -> void:
@@ -177,7 +177,7 @@ func _begin_end() -> void:
 	_phase_t = 0.0
 	var me_xf := _local_eye()
 	_path = _path_from(camera.global_position, me_xf.origin)
-	Audio.play("brains_hive_out", null, -4.0)
+	Audio.play("ability_hive_out", null, -4.0)
 
 
 func _deactivate() -> void:
@@ -186,7 +186,7 @@ func _deactivate() -> void:
 	_phase = "in"
 	camera.current = false
 	_layer.visible = false
-	Audio.play("brains_hive_out", null, -4.0)
+	Audio.play("ability_hive_out", null, -4.0)
 
 
 ## A navmesh path from `from` to `to` on the default map, else empty (the caller glides straight).

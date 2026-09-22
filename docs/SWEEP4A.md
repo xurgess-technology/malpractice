@@ -75,17 +75,17 @@ to ask him between chunks.** Report once at the end. Only stop early if a chunk 
 - **Docs:** each chunk updates only its own section of `docs/CONTRACTS.md` (short, append or edit
   in place) and adds open problems under a new heading in `docs/KNOWN_ISSUES.md`.
 - Other Claude sessions sometimes edit this project. Check the mtimes on `player.gd`, `game.gd`
-  and `brains.gd` before a big rewrite, and rebase if `main` moved.
+  and the abilities node before a big rewrite, and rebase if `main` moved.
 
 ---
 
 ## Chunk 1: Controls, ability slots and HUD, scanner
 
 **Files:** `project.godot` (input map), `scripts/player.gd`, `scripts/game.gd`, `scripts/main.gd`,
-`scripts/hud.gd`, `scripts/brains/brains.gd`, `scripts/settings.gd`,
+`scripts/hud.gd`, `scripts/abilities/abilities.gd`, `scripts/settings.gd`,
 `scripts/settings_screen.gd`, `scripts/hands/body_poser.gd`, `scripts/perception.gd` (noise),
 `scripts/net.gd` (only if a new replicated field is needed).
-**CONTRACTS headings to grep:** "Brains (brains worker, sweep 3)", "Settings (settings worker",
+**CONTRACTS headings to grep:** "Abilities", "Settings (settings worker",
 "Player: hands, poses and the carry camera", "Networking (net worker".
 
 ### 1a. Controls
@@ -102,28 +102,26 @@ to ask him between chunks.** Report once at the end. Only stop early if a chunk 
 - Crouch, jump, the ability modifier (Alt) and scan must all be rebindable in Settings.
 
 ### 1b. Ability slots and HUD
-**Where abilities come from (decided for this sweep):** keep the current brain + blender
-system and its points and levels exactly as they are. The only change is that abilities go into
-slots instead of `best_path()` picking one. When a player's path first reaches level 1, that
-ability goes into the first empty slot. Its level keeps coming from the existing points.
-Grafting will replace the source later (backlog), so keep the slot contract independent of how
-levels are earned: something like `add_ability(peer, id)`, `set_level(peer, id, lvl)`,
-`slot_of(peer, id)`.
+**Where abilities come from (as of this sweep):** the source of a level is not this chunk's
+business. Keep the slot contract independent of how levels are earned: `add_ability(peer, id)`,
+`set_level(peer, id, lvl)`, `slot_of(peer, id)`. (Historical note, 2026-09-22: brains were the
+source when this brief was written; they are gone, and **grafting is the only source now** --
+`scripts/grafting/grafts.gd` `PART_ABILITY`. The slot API below was written to survive exactly
+that swap, and did.)
 
 - Each player has **4 ability slots** and can **never have more than 4 abilities**. Anything that
   would add a 5th is refused. Only two abilities exist today; the cap is for later.
 - A new ability goes into the first empty slot. Moving and swapping slots is out of scope.
-- Each slot has its **own cooldown**. Replace `best_path()` (`brains.gd`, and its caller in
-  `ability()`) with per-slot dispatch.
+- Each slot has its **own cooldown**. Replace the old single-ability `best_path()` pick with
+  per-slot dispatch.
 - **Ability bar (Alt):**
   - While Alt is held, the item icons in the inventory bar **slide up and shrink** into a small
     row at the top-left of the bar, and the **4 ability slots fill the bar**. Releasing Alt
     reverses it. The animation is short, about 0.12 s.
   - When Alt isn't held, the 4 ability icons sit small at the top-left of the bar, so they're
     always visible.
-  - **Alt+1..4** fires that slot. Pressing it again while the ability is active ends it, as R
-    does today.
-  - Holding Alt doesn't block movement. 1–4 without Alt still select item slots.
+  - **Alt+1..4** fires that slot. Pressing it again while the ability is active ends it.
+  - Holding Alt doesn't block movement. 1-4 without Alt still select item slots.
 - **Each slot icon shows:** the key (Alt+N), the ability name on hover while the bar is open, a
   cooldown sweep, and level pips.
 - **When it can't be used,** the icon greys out and pressing it shows a short reason, like
@@ -131,7 +129,7 @@ levels are earned: something like `add_ability(peer, id)`, `set_level(peer, id, 
 - **Costs** appear on the icon, for example a small "LOUD" tag on Echo.
 - **First ability card:** the first time an ability lands in a slot, show a short card with its
   name, what it does, its key and its cost. It closes itself after a few seconds or on any key.
-- Abilities and levels are still per player and still reset on a wipe with money.
+- Abilities and levels are per player and reset on a wipe with money.
 
 ### 1c. Scanner
 - **Every player has a scanner built in.** It isn't an item and doesn't take a slot.
@@ -146,7 +144,7 @@ levels are earned: something like `add_ability(peer, id)`, `set_level(peer, id, 
   player. Keep it in memory only for now.
 
 ### Tests
-- Update `tools/braintest` for slots; add cases to it or a new `tools/controlstest`:
+- Add cases to a new `tools/controlstest`:
   - Crouch silences footstep noise, and jump works.
   - Alt+1..4 fires the right slot, each slot keeps its own cooldown, and a 5th ability is
     refused.
@@ -158,8 +156,8 @@ levels are earned: something like `add_ability(peer, id)`, `set_level(peer, id, 
 The ability bar closed, the bar with Alt held showing a greyed slot, and crouch in third person.
 
 ### Done when
-All the tests above pass, the old `best_path()` single-ability path is gone, and the CONTRACTS
-"Brains" section documents the slot API and the scan record.
+All the tests above pass, the old single-ability `best_path()` path is gone, and CONTRACTS
+documents the slot API and the scan record.
 
 ---
 
@@ -373,10 +371,10 @@ the target in the crematorium.
 **Files:** `scripts/guide/*` (the content moves; the binder, lectern and `read` flow go),
 `scripts/main.gd`, `scripts/player.gd` (the `read` paths, the binder grip in
 `scripts/hands/grips.gd`), `scripts/hospital_builder.gd` or `room_furnish.gd` (break room),
-the chunk 1 scan record, `scripts/brains/hive_view.gd`, `scripts/brains/echo_view.gd`,
-`scripts/brains/brains.gd`, `scripts/dissection/dissection.gd` (the harvest hook),
+the chunk 1 scan record, `scripts/abilities/hive_view.gd`, `scripts/abilities/echo_view.gd`,
+`scripts/abilities/abilities.gd`, `scripts/dissection/dissection.gd` (the harvest hook),
 `scripts/settings.gd` or a new save file, `tools/guide_lab.gd`, `tools/devtest.gd`.
-**CONTRACTS headings to grep:** "Medical guide (guide worker", "Brains (brains worker, sweep 3)",
+**CONTRACTS headings to grep:** "Medical guide (guide worker", "Abilities",
 "Dissection (dissection worker", "Networking (net worker".
 
 ### 4a. The terminal
@@ -385,18 +383,19 @@ the chunk 1 scan record, `scripts/brains/hive_view.gd`, `scripts/brains/echo_vie
   two-handed grip and the `read` flow, and move the guide page content into the terminal.
 - It opens with E. It's full-screen UI on the local machine, and the player can't move while
   using it.
-- **Sections:** Monsters, Abilities, Items & Procedures.
+- **Sections:** Monsters, Items & Procedures.
 - **Monster entries unlock in tiers:**
   1. **Sighted** (seen within range): name and silhouette.
   2. **Scanned:** behaviour, senses, threat level, how many sedative doses it takes, and an
      **X-ray showing where its brain sits**.
-  3. **Harvested** (for now: a brain of that species was successfully harvested, or one was
-     absorbed): the brain's look, spoil time, the ability it grants, and a table of what each
-     level does (range, duration, cooldown, costs). This tier is renamed when grafting arrives.
+  3. **Harvested** (a part of that species was successfully harvested): what came out and what it
+     is worth. This tier is renamed when grafting arrives.
+- A monster entry also names the ability its parts give a surgeon, with a table of what each
+  level does (range, duration, cooldown, costs); rows fill in as your own level rises.
 - Items and procedures are unlocked from the start, as the guide is today. Add the placebo entry:
   *Placebo (sugar pill). Efficacy: disputed. Side effects: optimism.*
-- The Night Nurse's entry lists her growth site as "unknown." She has no brain, so tier 3 stays
-  locked for her.
+- The Night Nurse's entry lists her growth site as "unknown." Nothing can be harvested from her,
+  so tier 3 stays locked for her.
 - **Saving:** the database **belongs to the host**. It's saved on the host's machine (a file
   under `user://`), survives wipes, and is shared with connected guests during the session.
   Anything a guest sights, scans or harvests is recorded in the host's database. Guests don't
@@ -407,7 +406,7 @@ the chunk 1 scan record, `scripts/brains/hive_view.gd`, `scripts/brains/echo_vie
 ### 4b. Hive Eyes
 - **Fly-through camera on activation:** the local camera leaves the player's head and flies
   **along the navmesh path** to the Hive, then settles into its eyes.
-  - The flight takes about 1–1.5 s no matter the distance, speeding up on long paths. If there's
+  - The flight takes about 1-1.5 s no matter the distance, speeding up on long paths. If there's
     no path, it glides in a straight line.
   - It's local only. The host's duration timer starts **after** the flight lands.
 - **Normal exit:** a quick fly back to the body. **Taking a hit:** an instant snap back with no
@@ -425,8 +424,8 @@ The shriek visibly comes from the player who used it, with a short pulse ring an
 every machine.
 
 ### Tests
-- `braintest`, `dissectiontest`, `devtest`, `looptest`.
-- New cases (in `braintest` or a new `tools/databasetest`): a completed scan unlocks tier 2 in the
+- `dissectiontest`, `devtest`, `looptest`.
+- New cases (in a new `tools/databasetest`): a completed scan unlocks tier 2 in the
   host database; a harvest unlocks tier 3; the database persists across a wipe and a reload; a
   guest's scan lands in the host's database; the Hive Eyes timer starts after the fly-in; a hit
   snaps back instantly; no `read` action or guide binder code remains.
@@ -445,12 +444,12 @@ survives a wipe.
 ## Final integration step
 Run once after chunk 4 is merged:
 1. Fresh import, then `playtest -- --god` on seeds 1, 2 and 3.
-2. `nettest_run.gd --lag=120 --jitter=40 --loss=0.03` with the existing scenarios `brains`,
+2. `nettest_run.gd --lag=120 --jitter=40 --loss=0.03` with the existing scenarios
    `dissection` and `combat`, plus new scenarios for scanning, the ambulance, throwing and pills.
    Fix only what breaks.
 3. One `perfprobe` pass (lobby, fog lot, crematorium). Record the numbers in the log.
 4. Update `DESIGN.md` for this sweep only: the ability bar, the database terminal, the fog lot,
-   the pharmacy and crematorium, placebo pills, and no gold bars. Brains stay brains.
+   the pharmacy and crematorium, placebo pills, and no gold bars.
 5. Commit on local `main`. **Don't push.**
 6. Report to Zach once: what landed per chunk, the test and perf results, and the new known
    issues. Keep it short.

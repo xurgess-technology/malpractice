@@ -1,5 +1,5 @@
 extends Node
-## Echo, on the shrieking player's machine only (brains, sweep 3). For a few seconds the view goes
+## Echo, on the shrieking player's machine only (sweep 3). For a few seconds the view goes
 ## dark and everything that matters within the radius shows as a glowing outline through walls:
 ## monsters red, players white, surgical supplies teal, loot gold, containers dim.
 ##

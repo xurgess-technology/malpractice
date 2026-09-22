@@ -94,8 +94,9 @@ All items are physical 3D objects: on shelves, in containers, in hands, on the O
 
 A computer terminal in the break room, opened with E; full-screen, and you can't move while using it. It replaced the old guide binder entirely — no carryable version.
 
-- Three sections: Monsters, Abilities, Items & Procedures.
-- Monster entries unlock in tiers as you learn more about that species: **sighted** (name, silhouette), **scanned** (behaviour, senses, threat, sedative doses, an X-ray of where its brain sits), **harvested** (the brain's look, spoil time, the ability it grants, a level table). The Night Nurse has no brain, so her entry never reaches tier 3.
+- Two sections: Monsters, Items & Procedures.
+- Monster entries unlock in tiers as you learn more about that species: **sighted** (name, silhouette), **scanned** (behaviour, senses, threat, sedative doses, an X-ray of its insides), **harvested** (what comes out of it: the part's look, spoil time and value). Nothing can be harvested from the Night Nurse, so her entry never reaches tier 3.
+- A monster's entry also names the ability its parts give a surgeon, with a three-row level table that fills in a row at a time as your own level in that ability rises.
 - Items and procedures are unlocked from the start, same as the old guide.
 - The database belongs to the host, saved to disk, and survives a wipe; guests share the host's copy for the session but don't keep their own.
 
@@ -134,11 +135,10 @@ The core choice in every fight: **kill it to be safe, or catch it to get paid.**
 - **Kill:** the bone saw is a weapon (left mouse while holding it). Hits stagger, a few hits kill. Every hit has a chance to snap the saw, which is also the saw the surgery needs. Swinging is loud. A killed monster pays nothing: organs are only worth anything harvested alive.
 - **Catch:** shove it (stunned), then jab it with anesthetic (left mouse while holding a vial) inside the stun window. It drops, sedated, for a while. Hold E to drag it, E on a free patient table to strap it down. Strapped monsters cannot hurt anyone.
 - **On the table:** only a Hive can be strapped down (see Grafting: it is the only monster a surgeon operates on). Sedation wears off, faster with noise. Low sedation makes it stir (the operator's hand shakes); lower still it is awake and thrashing, which botches the work and damages the eye being taken. Anyone can re-dose it with anesthetic from their hands (E at the table), but every dose works for less time than the last.
-- **Brains spoil.** A harvested brain loses value quickly: run it to the crematorium (thrown into the furnace, the only sell point now) or to the break-room blender.
-- **The blender:** blend a brain and drink it to absorb that monster's knowledge. Per player, and lost on a game over along with the money. The ability it grants lands in the next empty slot of your 4-slot ability bar; its level still comes from these same points.
-  - (Hive brains teach nothing any more: **Hive Eyes** comes from the graft, below.)
-  - **Hive Eyes** (from a grafted Hive eyeball): fire from its slot to see through a nearby Hive's eyes for a few seconds. Your camera flies there along the navmesh first (about 1-1.5s), then settles into its eyes; your own body stands with glazed eyes teammates can see. A hit snaps you back instantly instead of flying back. More brains: longer range and time, and at level 2+ you can cycle between Hives in range instead of only the nearest. (Later: Puppet, steering it.)
-  - Sonographer brains, **Echo**: fire from its slot for a loud shriek, visibly coming from you (a pulse ring, a body lean) on every machine; for a few seconds everything nearby shows as outlines through walls. It is loud enough to bring every Sonographer in the wing. More brains: bigger radius and longer.
+- **Harvested parts spoil.** A part loses value quickly out in the open: keep it in a specimen vat (see Grafting) or run it to the crematorium, where throwing it into the furnace is the only way to sell anything now.
+- **Abilities come from grafts.** A grafted monster part is what teaches a surgeon an ability; it lands in the next empty slot of your 4-slot ability bar, and swapping the part back out takes it away again. There are two:
+  - **Hive Eyes** (from a grafted Hive eyeball): fire from its slot to see through a nearby Hive's eyes for a few seconds. Your camera flies there along the navmesh first (about 1-1.5s), then settles into its eyes; your own body stands with glazed eyes teammates can see. A hit snaps you back instantly instead of flying back. Higher levels: longer range and time, and at level 2+ you can cycle between Hives in range instead of only the nearest. (Later: Puppet, steering it.)
+  - **Echo**: fire from its slot for a loud shriek, visibly coming from you (a pulse ring, a body lean) on every machine; for a few seconds everything nearby shows as outlines through walls. It is loud enough to bring every Sonographer in the wing. Higher levels: bigger radius and longer. **No graft grants Echo yet** -- the trachea graft that would (docs/GRAFTING_TRACHEA.md) is not built, so today only the dev panel can hand it out.
 - Later sweeps: Puppet, Rise (get back up as a shambler when downed), visible side effects (pale skin, groans, bigger ears, loud noises hurt), rare strap breaks.
 
 Shift 1 has Hives and one Sonographer; the Night Nurse joins from shift 2; more of each on later shifts and with more players.
@@ -165,8 +165,8 @@ of: **Hive's eyeball**, **Zach's eyeball**.
   right up while you are using **Hive Eyes 1**, which the graft gives you in your next free ability
   slot. Your own view carries a faint orange tint down its left edge, stronger while the ability is
   running. Swap your own eye back in and the ability goes with it.
-- A graft lasts the whole run, through death, and is lost on a game over, like the abilities from
-  brains. Eyes sell at the crematorium furnace like any other loot.
+- A graft lasts the whole run, through death, and is lost on a game over, like the ability it gave
+  you. Eyes sell at the crematorium furnace like any other loot.
 
 ## Look and sound
 

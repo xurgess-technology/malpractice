@@ -46,8 +46,6 @@ const SCENARIOS := [
 	{"name": "two_patients", "scenario": "two_patients", "clients": 2, "timeout": 300},
 	# sweep 3: a client fights and captures monsters.
 	{"name": "combat", "scenario": "combat", "clients": 2, "timeout": 300},
-	# brains (sweep 3): a client picks up and blends brains, uses Hive Eyes and Echo.
-	{"name": "brains", "scenario": "brains", "clients": 1, "timeout": 240},
 	# SWEEP 3 HOOK (monsters): sedation, hits, dragged_by and waking reach a client.
 	{"name": "monsters", "scenario": "monsters", "clients": 1, "timeout": 240},
 	# docs/SONOGRAPHER.md chunk B: a client sees the neck, the charge, the fan and the deafen, and is

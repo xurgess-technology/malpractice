@@ -92,7 +92,7 @@ func _ready() -> void:
 func _pose_scan_ring() -> void:
 	var here: Vector3 = game.table_pos() + Vector3(0, 0, -2.0)
 	bot.teleport(here)
-	var wi: Node3D = game.brains.spawn_hive(game._floor_at(here + Vector3(0, 0, 4))) as Node3D
+	var wi: Node3D = game.spawn_hive(game._floor_at(here + Vector3(0, 0, 4))) as Node3D
 	await get_tree().process_frame
 	var pin: Vector3 = wi.global_position
 	var eye: Vector3 = pin + Vector3.UP * 1.0
@@ -143,7 +143,7 @@ func _pose_wall2(to: Dictionary, quirk := "") -> void:
 	game.mark_db("hive", "sighted")
 	game.mark_db("hive", "scanned")
 	game.mark_db("xray_film", "sighted")
-	game.brains.set_level(bot.peer_id, "hive_in", 1)
+	game.abilities.set_level(bot.peer_id, "hive_in", 1)
 	bot.set_flashlight(false)
 	var glass: Node3D = wt.glass
 	var n: Vector3 = glass.global_basis.z.normalized()
@@ -335,11 +335,11 @@ func _pose_scan_nothing() -> void:
 ## Mid fly-through: the camera should be somewhere between the player's head and the Hive.
 func _pose_hive_flight() -> void:
 	bot.bot_scan = false
-	var b: Node = game.brains
+	var b: Node = game.abilities
 	b.on_reset()
 	b.set_level(bot.peer_id, "hive_in", 1)
 	var here: Vector3 = bot.global_position
-	var wi: Node3D = game.brains.spawn_hive(game._floor_at(here + Vector3(0, 0, 8))) as Node3D
+	var wi: Node3D = game.spawn_hive(game._floor_at(here + Vector3(0, 0, 8))) as Node3D
 	await get_tree().process_frame
 	bot.bot_ability_slot = 0
 	bot.bot_ability += 1

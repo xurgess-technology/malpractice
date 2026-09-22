@@ -68,6 +68,32 @@ monster strapped down, this is probably worth more than its line count suggests.
   work slots, then **passed three times in a row** on re-run (43 s each).
 - Treat a lone `rocket_boots` failure as a flake first: re-run it alone before chasing it. If it ever
   fails on an otherwise idle machine, that is new information worth recording here.
+- **Update 2026-09-22 (the `brains-out` task):** under load it is not intermittent at all — it failed
+  three runs in a row while other slots were running tests, always with the same message:
+  `timed out after 60 s waiting for client 1's burn on client 2`, while client 1 itself passes
+  (`flew into the wall; hp now 2`). Reproduced on plain `main` at `eef06c7` from a detached checkout
+  under the same load, so it is not any branch's doing.
+- So **check what else is running before judging it**: "flaky" here means load-dependent, not
+  random. The failing half is always the *second client* seeing the first client's burn, which is
+  the hint if anyone does chase it — it looks like a replication step missing its window when frames
+  are scarce, rather than a broken rule.
+
+## 1e. looptest: carried loot does not survive the shift, and the furnace pays $0
+
+- **Command:** `godot --headless --path . --fixed-fps 60 tools/looptest.tscn`
+- **Result:** `result=FAIL failures=4`, all four:
+  - `the loot is still in hand`
+  - `carried loot survives into the next lobby`
+  - `the bot threw the loot into the furnace and sold it for $0`
+  - `last shift's untouched loot was cleared`
+- **Found 2026-09-22** by the `brains-out` task, and confirmed on plain `main` at `eef06c7` from a
+  detached checkout in a work slot, so it is not that branch's doing. It was never written down.
+- **They look like one fault, not four:** the bot does pick the loot up (`the bot picked up loot`
+  passes), and is then not holding it a moment later, so everything downstream — surviving the
+  lobby, the furnace sale, the clear-up — fails behind that. Nobody has looked at the cause yet.
+- **Where to look:** whatever empties a hand between the pickup and the next check
+  (`tools/looptest.gd` around lines 184-221), and the shift/lobby transition that is supposed to
+  carry hand slots across. Note the loot kind is whatever is nearest, so this is not about one item.
 
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
 
@@ -106,14 +132,6 @@ monster strapped down, this is probably worth more than its line count suggests.
 
 ---
 
-## 5. nettest `brains`: the client never gets a hive view
-
-- **Command:** `godot --headless --path . --fixed-fps 60 --script tools/nettest_run.gd -- --only=brains`
-- **Result:** `FAIL`, "timed out after 200 s waiting for the client's hive view and echo (hive false echo false)"; the client logs `Invalid access to property or key 'hive_view' on a base object of type 'Nil'` repeatedly (`tools/nettest.gd` around line 876).
-- **Noticed 2026-09-19** while merging `sono-brain`; it fails the same on `main` at `56d6b6f`, before that merge. Likely from the 0.7.1 eyeball changes, not confirmed. The other 21 scenarios pass.
-
----
-
 ## Running the tests
 
 The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe`
@@ -122,8 +140,8 @@ The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\
 - Import first after pulling or adding assets: `godot --headless --path . --import`
 - **Always add `--fixed-fps 60`** to headless test scenes (about 12x faster).
 - **Run headless tests one at a time per checkout.** Parallel runs in the same directory segfault.
-- Test scenes, each prints `result=PASS` or `FAIL` at the end: `tools/*test.tscn` (braintest,
-  carrycamtest, combattest, controlstest, databasetest, devtest, doortest,
+- Test scenes, each prints `result=PASS` or `FAIL` at the end: `tools/*test.tscn` (carrycamtest,
+  combattest, controlstest, databasetest, devtest, doortest,
   downedtest, fogtest, inventorytest, looptest, orscreentest, pockettest, settingstest,
   straptest) and
   `tools/monster_lab.tscn`
