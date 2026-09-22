@@ -40,18 +40,30 @@ enum State { SHUT, OPENING, OPEN, CLOSING }
 
 # -- size and framing ------------------------------------------------------------------------------
 ## Metres. 3:2, matching the SubViewport, so nothing is stretched.
-@export var panel_size := Vector2(0.52, 0.3467)
-## Metres along the site normal from the site marker to the panel's centre.
-@export var panel_lift := 0.24
+##
+## SIZED FOR THE ROOM, NOT THE OPERATOR. The step's camera_pose() derives the operator's distance
+## from this (it frames the panel to `view_fill` of the screen whatever its size), so growing the
+## board costs the operator nothing on screen -- it only makes the object in the room bigger, which
+## is the whole point: a teammate should be able to wander over and read what is being played.
+@export var panel_size := Vector2(0.78, 0.52)
+## Metres along the site normal from the site marker to the panel's centre. High enough that the
+## board hangs at a standing onlooker's eye level instead of lying down among the drapes.
+@export var panel_lift := 0.36
 ## The diagram area the panel shows, in millimetres.
 @export var view_mm := Vector2(120.0, 80.0)
-## SubViewport width; the height follows panel_size's aspect.
+## SubViewport width; the height follows panel_size's aspect. Deliberately NOT raised along with
+## panel_size: the operator's camera backs off to match the bigger board, so the diagram covers the
+## same share of his screen as before and 1200 x 800 is still about one texel per screen pixel at
+## 1080p. Only somebody who walks right up to the board sees it soften, and more pixels here is a
+## per-frame cost on a surface that is already the expensive part of an arcade step.
 @export var texture_width := 1200
 ## Degrees the panel stands up PAST facing the operator square on, tipping its top back toward them.
 ## Square on is easiest to play but lies almost flat over the patient, which is nearly edge-on to
-## anyone else in the room; a few degrees of this costs the operator nothing (cos 12 deg) and gives
-## onlookers a face to read.
-@export_range(0.0, 45.0, 1.0) var tilt_bias_deg := 12.0
+## anyone else in the room. This and the step's own `view_tilt_deg` add up to how far the board
+## stands off the body (40 + 20 = 60 degrees at the defaults, most of the way to a standing screen):
+## the step's tilt is free to the operator because the panel turns to face him, and this bias is the
+## last stretch, bought at cos 20 deg of his square-on view, to give onlookers a face to read.
+@export_range(0.0, 45.0, 1.0) var tilt_bias_deg := 20.0
 
 # -- opening and closing ---------------------------------------------------------------------------
 @export_range(0.05, 1.0, 0.01) var open_time := 0.20
@@ -66,7 +78,7 @@ enum State { SHUT, OPENING, OPEN, CLOSING }
 # -- light -----------------------------------------------------------------------------------------
 ## A weak light tinted to the panel, so it glows onto the patient and the operator's hands.
 @export_range(0.0, 2.0, 0.01) var light_energy := 0.30
-@export_range(0.1, 3.0, 0.05) var light_range := 1.15
+@export_range(0.1, 3.0, 0.05) var light_range := 1.50
 ## How much of the operating camera's work lamp a panel step wants (Minigame.lamp_scale). The
 ## diagram is its own light source, so the lamp comes down or it washes the frame out.
 @export_range(0.0, 2.0, 0.05) var lamp_scale := 0.55
@@ -423,7 +435,7 @@ static func warm(parent: Node3D) -> Node3D:
 	p.header = "LAC / CLOSE"
 	p.right_text = "TABLE 1"
 	parent.add_child(p)
-	p.open(Vector3(0.0, 0.64, 0.25))
+	p.open(Vector3(0.0, 0.91, 0.46))
 	p.tick(0.016)
 	return p
 
