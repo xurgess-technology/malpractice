@@ -137,15 +137,6 @@ How to run things is at the bottom of this file.
 - **Where to look:** morgue furnishing in `scripts/level/room_furnish.gd` (where tray anchors are
   placed against walls or equipment) versus the navmesh bake around them.
 
-## 3. The laser surge plays no sound (`dev_zap_01`)
-
-- **Not a test failure**, but it logs a warning during windowed runs:
-  `Audio: no cue named 'dev_zap_01' (run node tools/gen_audio.mjs).`
-- **Cause:** `scripts/scan_fx.gd` line 262 calls `_sfx("dev_zap_01", -10.0)`. The Audio autoload
-  registers numbered files as one cue without the number (`dev_zap_01.wav` and `dev_zap_02.wav` are
-  the cue `dev_zap`, picked at random), the way `scripts/dev/dev_room.gd` line 522 already uses it.
-- **Likely fix:** call `_sfx("dev_zap", -10.0)`. The WAV files exist; nothing needs regenerating.
-
 ## 4. devtest: the free camera leaves your body showing when you untick it
 
 - **Command:** `godot --headless --path . --fixed-fps 60 tools/devtest.tscn`
