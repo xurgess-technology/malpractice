@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.6**: Pull up a chair, the board's for everyone now
+    - Changed: The surgery board is half again as big, sits higher off the patient and stands up steeper, so a teammate walking over can actually read what you're playing instead of squinting at a postcard on someone's chest. The operator's own view is unchanged.
+
 - **0.10.5**: The corner HUD catches up
     - Changed: The Anesthetic Injection, DODGE! and WHACK!/WRAP! (wound and stump) all switch to the standardized corner HUD SUTURE! introduced -- rules as bullets, keybindings as boxed key caps, instead of the old one or two lines of mixed instructions. Each step's own top-right number (dose, vitals, blood lost, coverage) is unchanged.
 - **0.10.4**: SUTURE!, closing the wound
