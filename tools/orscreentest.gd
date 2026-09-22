@@ -27,6 +27,7 @@ var _last_vis := 0.0
 var _op_hud_seen := false
 var _hud_draw_seen := false
 var _stable_seen := false
+var _died_seen := false
 var _ailment := ""
 
 
@@ -96,13 +97,21 @@ func _sample() -> void:
 			_check_shift_model()
 		Game.Phase.WON:
 			var m: Dictionary = ModelScript.build(game)
-			# loop: a clocked-out shift may have had several patients; all of them read stable.
-			if not m.panels.is_empty() and m.panels.all(func(pn): return pn.state == "stable"):
-				_stable_seen = true
+			# loop: a clocked-out shift may have had several patients, and a shift can be won with
+			# one of them dead -- clock-out only wants every case *finished*, and a death just
+			# docks the pay (shift_loop.can_clock_out / pay_for). So every panel reads stable or
+			# dead, and at least one of them reads stable.
+			var done_all: bool = not m.panels.is_empty() and m.panels.all(
+				func(pn): return pn.state == "stable" or pn.state == "dead")
+			if done_all:
+				if m.panels.any(func(pn): return pn.state == "stable"):
+					_stable_seen = true
 				for pn in m.panels:
+					if pn.state != "stable":
+						continue   # a dead case keeps its unreached steps as todo, by design
 					for s in pn.steps:
 						if s.state != "done":
-							_problem("WON but step '%s' is %s" % [s.label, s.state])
+							_problem("WON but step '%s' is %s on a stable case" % [s.label, s.state])
 
 
 func _check_shift_model() -> void:
@@ -119,20 +128,33 @@ func _check_shift_model() -> void:
 		return
 	var p: Dictionary = m.panels[0]
 	var steps := Procedures.steps(game.case.ailment_id)
+	# A case can die on the table and the shift carries on (game.finish_case(id, false)): the body
+	# waits for the crematorium and the shift can still be clocked out, docked. A dead case has no
+	# current step and needs nothing more -- that is the panel's contract, not a fault.
+	var state := String(game.case.get("state", "on_table"))
 	var cur := int(game.case.step_index)
-	if String(game.case.get("state", "on_table")) == "stable":
+	if state == "stable":
 		cur = steps.size()
 	if p.steps.size() != steps.size():
 		_problem("steps: %d on screen, %d in the procedure" % [p.steps.size(), steps.size()])
 	if int(p.current) != cur:
 		_problem("current step %d on screen, %d in the case" % [p.current, cur])
 	for i in p.steps.size():
-		var want := "done" if i < cur else ("current" if i == cur else "todo")
+		var want := "done" if i < cur else ("current" if i == cur and state != "dead" else "todo")
 		if p.steps[i].state != want:
-			_problem("step %d is %s, expected %s" % [i, p.steps[i].state, want])
+			_problem("step %d is %s, expected %s on a %s case" % [i, p.steps[i].state, want, state])
 			break
-	_steps_seen[cur] = true
 	_ailment = String(game.case.ailment_id)
+	if state == "dead":
+		if not _died_seen:
+			_died_seen = true
+			_say("[orscreen] t=%.0f the patient died at step %d; the panel goes quiet" % [elapsed, cur])
+		if not p.supplies.is_empty():
+			_problem("a dead case still lists %d supply rows" % p.supplies.size())
+		if float(p.vitals) != 0.0:
+			_problem("a dead case reads %.2f, expected 0" % p.vitals)
+		return
+	_steps_seen[cur] = true
 	if absf(float(p.vitals) - clampf(game.vitals, 0.0, 100.0)) > 0.01:
 		_problem("vitals %.2f on screen, %.2f in the game" % [p.vitals, game.vitals])
 	var want_level := "ok" if game.vitals > 50.0 else ("low" if game.vitals > 25.0 else "critical")
@@ -153,7 +175,8 @@ func _check_shift_model() -> void:
 				_say("[orscreen] t=%.0f %s ticked green (%d/%d)" % [elapsed, s.kind, s.have, s.need])
 			_ticks_seen[s.kind] = true
 		_was_ok[s.kind] = bool(s.ok)
-	_low_check(cur)
+	if state == "on_table":
+		_low_check(cur)
 
 
 ## Once, after the first step: a low and a critical reading, then put the vitals back.
@@ -254,9 +277,24 @@ func _synthetic_checks() -> void:
 	m = ModelScript.build(g)
 	_expect(m.panels.size() == 3, "three cases give three panels")
 	if m.panels.size() == 3:
-		_expect(m.panels[0].state == "incoming" and m.panels[0].supplies.size() == 3, "an incoming case shows its supplies")
+		# The kind count comes from the procedure, not a number typed here: gunshot went from three
+		# steps to four when SUTURE! landed (0.10.x), and a hard-coded 3 just went stale.
+		var want_kinds := Procedures.remaining_requirements("gunshot", 0).size()
+		_expect(m.panels[0].state == "incoming" and m.panels[0].supplies.size() == want_kinds,
+			"an incoming case shows its supplies (%d rows for %d kinds)" % [m.panels[0].supplies.size(), want_kinds])
 		_expect(m.panels[1].state == "dead" and float(m.panels[1].vitals) == 0.0 and m.panels[1].supplies.is_empty(), "a dead case reads 0 and needs nothing")
 		_expect(m.panels[2].patient_name == "Staff member" and m.panels[2].state == "stable", "a player case without a Player node")
+	# A patient can die on the table and the shift carry on (game.finish_case(id, false)): the body
+	# waits for the crematorium, and clocking out is still allowed, just docked. The panel then has
+	# no current step and no supply rows. Checked here because a bot shift only reaches this state
+	# when it loses a patient, which most runs do not.
+	g.cases = [{"id": 6, "table": 0, "patient_id": "bob", "ailment_id": "gunshot", "step_index": 1, "vitals": 0.0, "state": "dead"}]
+	m = ModelScript.build(g)
+	if m.panels.size() == 1:
+		var d: Dictionary = m.panels[0]
+		_expect(d.supplies.is_empty() and float(d.vitals) == 0.0, "a case that died mid-shift needs nothing and reads 0")
+		_expect(not d.steps.any(func(s): return s.state == "current"), "a dead case has no current step")
+		_expect(d.steps[0].state == "done" and d.steps[1].state == "todo", "a dead case keeps the steps it finished")
 	g.cases = []
 	m = ModelScript.build(g)
 	_expect(m.mode == "idle" and m.panels.is_empty(), "no cases is idle")
@@ -305,10 +343,18 @@ func _finish(ok: bool) -> void:
 	if _finished:
 		return
 	_expect(_checked_frames > 100, "sampled %d shift frames" % _checked_frames)
-	_expect(_steps_seen.size() >= Procedures.steps(_ailment).size() and _ailment != "", "saw every step of %s become current (%s)" % [_ailment, str(_steps_seen.keys())])
-	_expect(not _ticks_seen.is_empty(), "supplies ticked green as they arrived (%s)" % str(_ticks_seen.keys()))
-	_expect(_low_checked, "checked low and critical vitals")
-	_expect(_stable_seen, "the screen read stable when the shift was won")
+	# These five need the bot to get a patient all the way through a shift. When it does not --
+	# it loses one, or the shift runs out -- the run already fails on the shift itself, and
+	# reporting them as well reads like the panel is at fault when it is not. So they are checked
+	# only on a won shift; a lost one says why instead.
+	if ok:
+		_expect(_steps_seen.size() >= Procedures.steps(_ailment).size() and _ailment != "", "saw every step of %s become current (%s)" % [_ailment, str(_steps_seen.keys())])
+		_expect(not _ticks_seen.is_empty(), "supplies ticked green as they arrived (%s)" % str(_ticks_seen.keys()))
+		_expect(_low_checked, "checked low and critical vitals")
+		_expect(_stable_seen, "the screen read stable when the shift was won")
+	else:
+		_say("[orscreen] note: the shift was not won%s, so the whole-procedure checks (steps seen %s, ticks %s, low %s, stable %s) are not meaningful this run" % [
+			" (a patient died)" if _died_seen else "", str(_steps_seen.keys()), str(_ticks_seen.keys()), str(_low_checked), str(_stable_seen)])
 	if take_extra:
 		_expect(_multi_seen, "the screen showed both patients at once (--extra)")
 	_expect(_far_frames > 60 and _far_refreshes <= 2, "no picture refreshes while the screen was out of view (%d frames, %d refreshes)" % [_far_frames, _far_refreshes])
