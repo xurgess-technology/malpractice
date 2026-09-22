@@ -39,7 +39,8 @@ const SETUPS := {
 	"arcade_am": {"seed": 4242, "stage": "_arcade_am"},
 	"arcade_eyes": {"seed": 4242, "stage": "_arcade_eyes"},
 	# 2026-09-21 (docs/ARCADE_SURGERY.md 5.1): the Anesthetic Injection, already under way on a
-	# gunshot wound. `--patient=seal` puts the seal on the table instead of Bob.
+	# gunshot wound. `--patient=seal` puts the seal on the table instead of Bob; `--stick` opens on
+	# STICK! with the dose already drawn, so the aim is all there is to try.
 	"sedate": {"seed": 4242, "stage": "_sedate"},
 	# 2026-09-21 (docs/ARCADE_SURGERY.md 5.2): DODGE!, a gunshot wound at the bullet step, sedated, and
 	# you already operating. `--undersedated` makes the patient squirm; `--patient=seal` swaps in the seal.
@@ -295,7 +296,9 @@ static func _arcade_eyes(game: Game) -> void:
 ## already operating it -- the panel is up on the DRAW stage. You hold the anaesthetic, and there is
 ## a tourniquet in your other hand so the tourniquet button on the vein stage works (once: it spends
 ## it). `--patient=seal` after `--setup=sedate` puts the seal on the table; its band sits lower down
-## the barrel because it weighs more. E steps back from the table, E again starts over where you were.
+## the barrel because it weighs more. `--stick` skips DRAW! and FLICK! and opens straight on STICK!,
+## dose drawn and no bubbles, for when only the aim is being looked at. E steps back from the table,
+## E again starts over where you were.
 static func _sedate(game: Game) -> void:
 	var pid := "bob"
 	for a in OS.get_cmdline_user_args():
