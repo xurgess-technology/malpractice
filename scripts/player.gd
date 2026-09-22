@@ -163,10 +163,27 @@ const DIVE_STAMINA_COST := 0.2
 ## the host takes a heart (faceplant_count, game.player_faceplanted). `boots` is host authoritative
 ## (report_full "bt"); the burn is client-owned movement like the dive, replicated as report bit
 ## 256 / report_full "rk" for the flame. Fuel is local, like stamina.
+##
+## A burn is short -- a dive's length, often under half a second -- and everything that carries it
+## to another machine is a *sample*: the wearer's 20 Hz report, the host's 20 Hz snapshot, and the
+## snapshot datagram itself, which is unreliable. A host frame that stalls, or one lost snapshot,
+## used to drop the whole flame on everyone else's screen: they saw a teammate fly with cold boots.
+## So whoever hears the bit second hand holds it BURN_HOLD past the last word of it (`_burn_hold`).
+## The burn then spans several ticks instead of one, with a short tail on other machines as the
+## flame fades. The wearer's own boots are never held: `rocketing` is the truth on their machine.
 var boots: bool = false
 var fuel: float = 1.0
 var rocketing: bool = false
-var _remote_rocket: bool = false
+## Seconds left of a burn heard about from another machine (see above). Counts down in _process.
+var _burn_hold: float = 0.0
+const BURN_HOLD := 0.3
+## The boots lighting, counted (report_state index 19, report_full "rc"). The live bit above can
+## still be lost outright -- it is true for a moment and then gone, so one dropped datagram takes
+## the whole flame with it. A count never goes back, so it keeps being resent until it lands:
+## every machine learns the boots lit, and gives them at least BURN_MIN of flame.
+var rocket_count: int = 0
+var _rocket_seen: int = -1   # -1 until the first word of this body: a joiner must not flare
+const BURN_MIN := 0.35
 ## This dive already burned (one burn per dive: letting go can't be undone mid-air).
 var _rocket_used: bool = false
 ## The boots lit on this dive: the capsule stays flat (prone height) until the dive is over.
@@ -435,9 +452,10 @@ func dive_in_air() -> bool:
 	return (diving and _dive_airborne) or _remote_dive_air
 
 
-## ROCKET BOOTS: the boots are burning: this machine's own burn, or the replicated bit for others.
+## ROCKET BOOTS: the boots are burning: this machine's own burn, or the replicated bit for others,
+## held a moment past the last word of it so a missed tick doesn't swallow the whole flame.
 func rocket_burning() -> bool:
-	return rocketing or _remote_rocket
+	return rocketing or _burn_hold > 0.0
 
 
 ## ROCKET BOOTS: host. Taking a pair from the pickup drawer (game._put_on). Starts on a full tank.
@@ -1011,6 +1029,7 @@ func _local_step(delta: float) -> void:
 				rocketing = true
 				_rocket_used = true
 				_rocket_lit = true
+				rocket_count += 1   # the boots lighting, as an event no machine can miss
 		else:
 			_rocket_used = true
 	if rocketing:
@@ -1901,6 +1920,12 @@ func _process(_delta: float) -> void:
 	if is_local:
 		_tick_warm(_delta)
 	# ROCKET BOOTS: the boots on the feet and the flame while they burn.
+	_burn_hold = maxf(0.0, _burn_hold - _delta)
+	if rocket_count != _rocket_seen:
+		var first := _rocket_seen < 0
+		_rocket_seen = rocket_count
+		if not is_local and not first:
+			_burn_hold = maxf(_burn_hold, BURN_MIN)
 	if _rocket_fx == null and boots:
 		_rocket_fx = RocketBootsScript.new(self, body_visual)
 	if _rocket_fx != null:
@@ -2144,6 +2169,7 @@ func revive_full() -> void:
 	diving = false   # SPRINT-DIVE HOOK
 	_dive_airborne = false
 	rocketing = false   # ROCKET BOOTS (the boots themselves stay on)
+	_burn_hold = 0.0
 	_rocket_used = false
 	_rocket_lit = false
 	fuel = 1.0
@@ -2469,7 +2495,8 @@ func report_state() -> Array:
 		snappedf(throw_wind, 0.02),   # THROW HOOK
 		faceplant_count,   # ROCKET BOOTS
 		vat_count,   # GRAFTING part one
-		unequip_count]   # TAB SHEET
+		unequip_count,   # TAB SHEET
+		rocket_count]   # ROCKET BOOTS
 
 
 func apply_remote_state(s: Array) -> void:
@@ -2491,7 +2518,8 @@ func apply_remote_state(s: Array) -> void:
 	scan_holding = bits & 32 != 0
 	prone = bits & 64 != 0
 	_remote_dive_air = bits & 128 != 0   # SPRINT-DIVE HOOK
-	_remote_rocket = bits & 256 != 0   # ROCKET BOOTS
+	if bits & 256 != 0:   # ROCKET BOOTS: held, so the host's own 20 Hz sampling can't miss the burn
+		_burn_hold = BURN_HOLD
 	shove_count = int(s[4])
 	drop_count = int(s[5])
 	aim_id = String(s[6])
@@ -2515,6 +2543,8 @@ func apply_remote_state(s: Array) -> void:
 		vat_count = int(s[17])
 	if s.size() >= 19:   # TAB SHEET: Unequip on the character sheet
 		unequip_count = int(s[18])
+	if s.size() >= 20:   # ROCKET BOOTS: the boots lighting, counted
+		rocket_count = int(s[19])
 	_consume_actions()
 
 
@@ -2536,7 +2566,7 @@ func report_full() -> Dictionary:
 		"cr": crouching,   # SWEEP 4A HOOK (controls)
 		"pr": prone,
 		"da": dive_in_air(),   # SPRINT-DIVE HOOK
-		"bt": boots, "rk": rocket_burning(),   # ROCKET BOOTS
+		"bt": boots, "rk": rocket_burning(), "rc": rocket_count,   # ROCKET BOOTS
 		"sh": scan_holding,   # terminal redesign, chunk 4: everyone sees everyone's laser
 		"tw": snappedf(throw_wind, 0.02),   # THROW HOOK: everyone sees the wind-up
 	}
@@ -2599,7 +2629,9 @@ func apply_remote_full(s: Dictionary) -> void:
 	scan_holding = bool(s.get("sh", false))   # terminal redesign, chunk 4
 	prone = bool(s.get("pr", false))
 	_remote_dive_air = bool(s.get("da", false))   # SPRINT-DIVE HOOK
-	_remote_rocket = bool(s.get("rk", false))   # ROCKET BOOTS
+	if bool(s.get("rk", false)):   # ROCKET BOOTS: held, so one lost snapshot still lights the flame
+		_burn_hold = BURN_HOLD
+	rocket_count = int(s.get("rc", rocket_count))
 	if not swinging():   # THROW HOOK (TRINKETS chunk B: a local swing timer owns it while it plays)
 		throw_wind = float(s.get("tw", 0.0))
 	moving = s.mv
