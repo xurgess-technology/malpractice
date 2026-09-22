@@ -177,8 +177,8 @@ const MINIGAME_SCRIPTS := {
 ## by "<game>" or "<game>:<variant>"; the variant key wins when it exists, so flipping "saw" moves
 ## the limb to the arcade version and leaves the monster table's "saw:skull" on the legacy one.
 const ARCADE_SCRIPTS := {
-	"gauze:pack": "res://scripts/surgery/arcade/pack_arcade.gd",        # WHACK! then WRAP!
-	"gauze:stump": "res://scripts/surgery/arcade/wrap_stump_arcade.gd", # WRAP!
+	"gauze:pack": "res://scripts/surgery/arcade/pack_wrap_arcade.gd",   # WHACK! then WRAP!
+	"gauze:stump": "res://scripts/surgery/arcade/wrap_stump_arcade.gd", # WRAP! (the same one)
 	"tourniquet": "res://scripts/surgery/arcade/squeeze_arcade.gd",     # SQUEEZE!
 	"saw": "res://scripts/surgery/arcade/saw_arcade.gd",                # SAW!
 	"eye:cut": "res://scripts/surgery/arcade/steer_arcade.gd",          # STEER!

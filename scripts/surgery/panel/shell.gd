@@ -85,14 +85,31 @@ func burst(word: String, at: Vector2, serious := false, shake_seed := 0) -> void
 		_shake_seed = shake_seed
 
 
-## The splats of mistake `index`: 2-4, each its own shape, kind, tone and drip, at random places.
-func _throw_splats(index: int) -> void:
+## BLOOD WITH NO BURST AND NO BILL: the page getting messier on its own, as a consequence rather than
+## a mistake (WHACK!'s escalating splatter while a bleeder is left open). Seeded by `index` like every
+## other splat, so every machine throws the same one.
+func splat(index: int) -> void:
+	_throw_splats(index)
+
+
+## One mark where something landed (a drip running off the wound and hitting the foot of the page),
+## instead of anywhere on the sheet. Smaller than a mistake's, and seeded by `index`.
+func splat_at(at: Vector2, index: int) -> void:
+	_throw_splats(index, at)
+
+
+## The splats of mistake `index`: 2-4, each its own shape, kind, tone and drip, at random places -- or,
+## with `at` given, ONE smaller mark landing about there.
+func _throw_splats(index: int, at := Vector2(INF, INF)) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(seed_v * 7919 + index * 104729)
-	var n := rng.randi_range(2, 4)
+	var here := is_finite(at.x) and is_finite(at.y)
+	var n := 1 if here else rng.randi_range(2, 4)
 	for i in n:
 		var centre := area.position + Vector2(rng.randf(), rng.randf()) * area.size
-		var base := rng.randf_range(10.0, 26.0) * ink.unit
+		if here:
+			centre = at + Vector2(rng.randf_range(-7.0, 7.0), rng.randf_range(-3.0, 3.0)) * ink.unit
+		var base := rng.randf_range(5.0, 12.0) * ink.unit if here else rng.randf_range(10.0, 26.0) * ink.unit
 		var col: Color = BLOOD[rng.randi_range(0, BLOOD.size() - 1)]
 		col.a = rng.randf_range(0.32, 0.62)
 		var squash := rng.randf_range(0.6, 1.1)

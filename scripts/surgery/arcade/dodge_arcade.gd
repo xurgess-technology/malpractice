@@ -29,7 +29,7 @@ extends "res://scripts/surgery/arcade/arcade_game.gd"
 ##
 ## Result {"bullet_removed": true, "tears": [arc positions]}. CARRY-FORWARD: `tears` is an Array of
 ## floats, one per wall contact in the order they happened, each the position along the tract 0..1 --
-## 0 at the wound's mouth, 1 at the bullet bed. WHACK! (5.3, pack_arcade.gd) puts one bleeder on the
+## 0 at the wound's mouth, 1 at the bullet bed. WHACK! (pack_wrap_arcade.gd) puts one bleeder on the
 ## wound per tear. `quality` = 1.0 - 0.15 per tear, floor 0.05.
 ##
 ## Space: the spec's 960 x 600 reference px ("rpx") laid on the paper; the tract is drawn at 6 px/mm.

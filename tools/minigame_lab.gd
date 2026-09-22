@@ -9,6 +9,8 @@ extends Node3D
 ##         [--teammate-light[=nohelp|away]] [--teammate-aim=dx,dz] [--tourniquets=N]
 ##
 ## --flags with sedation under 0.75 makes the patient stir the way the surgery system does.
+## --flags=tears:3 is the exception that is not a number: it means three tears carried over from
+##   DODGE!, so WHACK! (--game=gauze --variant=pack) opens with a bleeder on each of them.
 ## --sedation=0.4 is shorthand for --flags=sedation:0.4, to exercise a step's on_jolt.
 ## --look=or lights it like the game: the hospital environment and post effects, a dim ceiling
 ##   light and the surgery system's work lamp on the camera (the default lab light is much brighter).
@@ -126,7 +128,18 @@ func _ready() -> void:
 			"flags":
 				for pair in v.split(",", false):
 					var pv := pair.split(":")
-					if pv.size() == 2:
+					if pv.size() != 2:
+						continue
+					# `tears` is the one carry-forward that is a LIST, not a number: DODGE! hands WHACK!
+					# one float 0..1 per wall it tore. `tears:3` here means three of them, spread along
+					# the tract, so the pack step can be played in the lab with bleeders on it.
+					if pv[0] == "tears":
+						var n: int = maxi(0, int(float(pv[1])))
+						var arr: Array = []
+						for i in n:
+							arr.append(snappedf((float(i) + 1.0) / (float(n) + 1.0), 0.001))
+						flags["tears"] = arr
+					else:
 						flags[pv[0]] = float(pv[1])
 
 	if self_test != "":
