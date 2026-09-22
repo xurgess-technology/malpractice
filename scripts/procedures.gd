@@ -157,7 +157,9 @@ const AILMENTS := {
 
 ## Where each minigame script lives. The surgery system loads these by id.
 const MINIGAME_SCRIPTS := {
-	"anesthetic": "res://scripts/surgery/games/anesthetic.gd",
+	# 2026-09-21: the Anesthetic Injection, the only sedation game (docs/ARCADE_SURGERY.md 5.1). It is
+	# an arcade panel game with no legacy twin, so it has no ARCADE_* entry and no switch.
+	"anesthetic": "res://scripts/surgery/arcade/inject_arcade.gd",
 	"forceps": "res://scripts/surgery/games/forceps.gd",
 	"tourniquet": "res://scripts/surgery/games/tourniquet.gd",
 	"saw": "res://scripts/surgery/games/saw.gd",
@@ -171,7 +173,6 @@ const MINIGAME_SCRIPTS := {
 ## by "<game>" or "<game>:<variant>"; the variant key wins when it exists, so flipping "saw" moves
 ## the limb to the arcade version and leaves the monster table's "saw:skull" on the legacy one.
 const ARCADE_SCRIPTS := {
-	"anesthetic": "res://scripts/surgery/arcade/dose_arcade.gd",        # DOSE!
 	"forceps": "res://scripts/surgery/arcade/dodge_arcade.gd",          # DODGE!
 	"gauze:pack": "res://scripts/surgery/arcade/pack_arcade.gd",        # WHACK! then WRAP!
 	"gauze:stump": "res://scripts/surgery/arcade/wrap_stump_arcade.gd", # WRAP!
@@ -193,7 +194,6 @@ const ARCADE_SCRIPTS := {
 ## A key is "<game>" or "<game>:<variant>"; the variant key wins where it exists, which is how the
 ## monster table keeps the legacy saw and brain forceps while the patient tables move over.
 static var ARCADE_ENABLED := {
-	"anesthetic": true,
 	"forceps": true,
 	"forceps:brain": false,   # the monster table's brain harvest: legacy, no arcade rebuild
 	"gauze:pack": true,

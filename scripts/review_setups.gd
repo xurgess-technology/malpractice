@@ -38,6 +38,9 @@ const SETUPS := {
 	"arcade_gw": {"seed": 4242, "stage": "_arcade_gw"},
 	"arcade_am": {"seed": 4242, "stage": "_arcade_am"},
 	"arcade_eyes": {"seed": 4242, "stage": "_arcade_eyes"},
+	# 2026-09-21 (docs/ARCADE_SURGERY.md 5.1): the Anesthetic Injection, already under way on a
+	# gunshot wound. `--patient=seal` puts the seal on the table instead of Bob.
+	"sedate": {"seed": 4242, "stage": "_sedate"},
 }
 
 
@@ -213,7 +216,7 @@ static func arcade_all_on() -> void:
 
 
 ## ARCADE GW: a gunshot wound on the table from the first step, every arcade step on, and all three
-## tools in hand. DOSE! then DODGE! then WHACK! and WRAP!, and the mistakes in each one follow you
+## tools in hand. The injection, then DODGE! then WHACK! and WRAP!, and the mistakes in each one follow you
 ## into the next: the tract you tore shows up as bleeders, and how you packed shows up as the cells
 ## that soak through.
 static func _arcade_gw(game: Game) -> void:
@@ -234,8 +237,8 @@ static func _arcade_gw(game: Game) -> void:
 	print("[review] arcade_gw: gunshot on table %d, every arcade step ON" % table)
 
 
-## ARCADE AM: an amputation from the first step, every arcade step on, all four tools in hand. DOSE!
-## then SQUEEZE! then SAW! then WRAP!. Put a bad tourniquet on and the saw's artery will blind you,
+## ARCADE AM: an amputation from the first step, every arcade step on, all four tools in hand. The
+## injection, then SQUEEZE! then SAW! then WRAP!. Put a bad tourniquet on and the saw's artery will blind you,
 ## and the stump will bleed through the dressing.
 static func _arcade_am(game: Game) -> void:
 	arcade_all_on()
@@ -262,6 +265,42 @@ static func _arcade_eyes(game: Game) -> void:
 	arcade_all_on()
 	await _eyes(game)
 	print("[review] arcade_eyes: both eye tables, every arcade eye step ON")
+
+
+## SEDATE (docs/ARCADE_SURGERY.md 5.1): a gunshot wound on the table at the sedation step, and you
+## already operating it -- the panel is up on the DRAW stage. You hold the anaesthetic, and there is
+## a tourniquet in your other hand so the tourniquet button on the vein stage works (once: it spends
+## it). `--patient=seal` after `--setup=sedate` puts the seal on the table; its band sits lower down
+## the barrel because it weighs more. E steps back from the table, E again starts over where you were.
+static func _sedate(game: Game) -> void:
+	var pid := "bob"
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--patient="):
+			pid = a.trim_prefix("--patient=").strip_edges()
+	if not Procedures.PATIENTS.has(pid) or Procedures.is_monster(pid):
+		pid = "bob"
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	game.add_case({"patient_id": pid, "ailment_id": "gunshot", "table": table, "state": "on_table"})
+	var t: Vector3 = game.table_position(table)
+	place(game, t + Vector3(0.0, 0, 1.15), t + Vector3(0, 1.05, 0))
+	clear_hands(game)
+	give(game, "anesthetic", 3)
+	give(game, "tourniquet", 1)
+	game.local_player().selected = 0
+	game.stock_storage("anesthetic", 3)
+	var tree := game.get_tree()
+	for i in 6:
+		await tree.physics_frame
+	var sys = game.surgery_for_table(table)
+	if sys != null:
+		var why: String = sys.can_begin(game.local_player())
+		if why == "":
+			sys.begin(game.local_player())
+		else:
+			print("[review] sedate: could not start operating: %s" % why)
+	print("[review] sedate: %s on table %d at the sedation step, a tourniquet in hand" % [pid, table])
 
 
 ## ARCADE SAW (docs/ARCADE_SURGERY.md 5.5): Bob is on the table sedated with a tourniquet already

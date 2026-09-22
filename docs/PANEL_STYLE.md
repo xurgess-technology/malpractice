@@ -87,6 +87,75 @@ Everything a panel draws with lives in `panel_style.gd`, so one file restyles ev
   that holds but is untidy, warm white for thread, pale steel for tools.
 - **Readability beats atmosphere.** No scanlines, no noise, no grime — on purpose.
 
+## The ink look (2026-09-21)
+
+The second look, and the one every panel is to move onto: a hand-inked comic page. The Anesthetic
+Injection (`scripts/surgery/arcade/inject_arcade.gd`) is its pilot and so far its only user; the teal
+look above stays for everything else until each game is moved over.
+
+Everything lives in `scripts/surgery/panel/ink.gd` (a Resource, like `panel_style.gd`), and knows
+nothing about any one game:
+
+- **The clipboard** (docs/SURGERY_SHELL_AND_DODGE_SPEC.md section 1). The panel texture IS a clipboard
+  and is transparent everywhere else (`SurgeryPanel.transparent`: a transparent SubViewport, the
+  texture's alpha in the quad's shader), so the room shows round it. The whole clipboard is tilted
+  -0.65 degrees. Brown hardboard (#8a6b45) in a 3 px boiling ink border, radius 10, a 1.5 px bevel line
+  5 px in at 30% ink, 14 px of board round the sheet; the cream sheet (#efe9dc, 1.5 px ink border) runs
+  up to the board's top edge; a steel spring clip over it (a 186 x 58 body in #9aa0a4 with an inset
+  bottom shadow, a 54 x 20 thumb loop in #b6bbbe, a dark hinge bar across the page) with the step's id
+  stamped on it ("SEDATE") and the table small on the board's bottom edge. **Only the clip casts a
+  shadow.** `begin_page(c, size, shake)` / `end_page(c, size, title, corner, shake)`. The board sits
+  `board_top` (72 px) down the texture so the thumb loop stays clear of the screen's caption bar.
+  **The layout is honest:** the game's `content` rectangle is fitted onto the sheet at ONE uniform
+  scale (`page_fit()`), and `unpage()` / `onpage()` convert between the sheet as seen (tilt
+  included) and the game's layout, for input and bots.
+- **Boiling lines.** `line()`, `seg()`, `rect()` (four samples an edge), `circle()` / `ellipse()` (18
+  segments), `shape()`: every vertex is nudged +/-1.3 px by integer-hash noise seeded with the shape
+  and floor(t x 7), so lines boil at 7 fps and hold still in between. Round joins and caps. Fills are
+  flat and never wobble. Widths: `detail` 2.1, `outline` 3.2, `heavy` 4.
+- **Shading and grime.** `halftone()` (an 8 px tile of two ink dots, optionally clipped to a shape by a
+  callable) and `draw_grime()` / `make_grime()` (6-8 soft olive smudges per run, 3-7% alpha).
+  No gradients anywhere.
+- **Palette.** Paper, ink, label, the sickly green drug, band green, deep red, flash, amber, bruise,
+  skin, seal hide, vein colours and the tourniquet redness, all `@export`s.
+- **Type.** `text()` in an italic serif (Lora if the machine has it, else Georgia and friends, as a
+  SystemFont); `card()` is the command card as a stamp on a paper strip.
+- **Units.** `unit` is canvas px per reference px: a game laid out on its own reference size (the
+  injection's 960 x 600) sets it, and every weight and jitter scales with it.
+
+### The shell (`scripts/surgery/panel/shell.gd`)
+
+What every step's sheet has in common (spec Part One, sections 2-4), driven by ArcadeGame:
+
+- **Stamp cards.** `show_card(word)` raises one: a 430 x 228 translucent box (80% cream, no scrim)
+  tilted 6 degrees, a 5 px coloured border and a 2 px inner rule, the shout, a hairline, one italic
+  goal line, a line or two and the prompt. Gameplay waits under it; Space, a click or Enter takes it
+  down and **that press is the first action** (Enter only dismisses). `show_card(word, seconds)` (or a
+  card's `lock`) is an interruption: the prompt is replaced by a live countdown and no press counts
+  until it runs out. The text comes from `stamp_for(word)`, so onlookers (who only get the word) draw
+  the same card. READY (taking over) is drawn as a stamp with its countdown.
+- **The corner HUD.** `hud_line()` (one or two short lines, top left, 13 px at 70% ink), `hud_value()`
+  (["4.1 mL", in_trouble], top right, 22 px, deep red when in trouble), `enter_cap()` ({at, label,
+  ready}: an ENTER key cap, dim while you work, pulsing green once you may go on).
+- **Mistakes on the page.** `mistake(word, vitals, reason, kind, at, serious)`: a 16-point cream burst
+  with one red word that fades over 1.4 s, 2-4 blood splats thrown anywhere on the sheet (each its
+  own blob, kind, tone, squash and 60% a drip) that grow in over 0.35 s and stay for the rest of the
+  step, for a serious one a +/-14 px shake and a red wash, the `mistake_made(kind, word)` signal, and
+  `cost()` with the reason. The mistake count and the last one's word ride the state blob, and the
+  splats come from the step's seed and the mistake's index, so every onlooker gets the same mess.
+- **Warnings that are not mistakes.** `burst(word, at, serious)`: the burst (and, if serious, the
+  shake and wash) with no blood, no bill and no `mistake_made`, replicated the same way (DODGE!'s
+  SQUIRM!). The shell's state-blob keys start with `~`, so they cannot collide with a game's own.
+- **Splats always triangulate:** each blob's vertices go round the centre at rising angles (it
+  cannot cross itself), no blob is smaller than 1.2 px, growth starts at 20% size, and a blob the
+  triangulator still refuses falls back to a plain round one. The self-test throws 1,500 mistakes'
+  worth and checks every polygon.
+
+A game opts in with `ArcadeGame.use_ink() -> true` (and `ink_unit()`). The framework then turns the
+panel's teal chrome off (`SurgeryPanel.chrome = false`), draws the page, the header in the page's top
+corners and the ink command card, warms the panel's light (`ink_glow`) and brings the paper's
+brightness down (`ink_brightness` 0.82) so it is not the brightest thing in a dark OR.
+
 ## How a new game opts in
 
 The framework change is additive and opt-in; a step that does not override these behaves exactly as

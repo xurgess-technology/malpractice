@@ -5,6 +5,15 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-21 (0.9.x)**
 
+- **0.9.1**: The Anesthetic Injection, and every step is a page on a clipboard now 📋💉
+    - Changed: Sedation is the Anesthetic Injection, and DOSE! is gone. Draw the plunger into a green band set by the patient's weight, flick the bubbles out, then slap up a vein, stick it at the right angle, stop at the red flash and push. Slowly.
+    - Changed: The needle goes in exactly where you point, and you can see the part that's under the skin.
+    - Added: The clipboard. The panel is a sheet clipped to a board, drawn in boiling hand-inked lines, with the step's name on the clip.
+    - Added: Stamp cards. Each stage opens on a big word (DRAW! FLICK! STICK! PUSH!) that waits for you, and the press that clears it does the first thing.
+    - Added: Mistakes shout (MISS! BLOWN! AIR! TOO FAST!) and splatter blood across the page, and the blood stays. Teammates watching see the same mess.
+    - Added: A tourniquet in your hands can pin the vein up for you, and it uses the tourniquet up.
+    - Removed: The old sedation games, both of them. One version per game.
+
 - **0.9.0**: EVERY SURGERY STEP IS AN ARCADE GAME NOW 🕹️🫀
     - Added: DOSE! -- an old golf power meter, twice. Stop the needle on the vein, then fill the syringe by eye. The dose is still by weight and still never a number.
     - Added: DODGE! -- the forceps grip the bullet on their own and you fly it back out of the wound tract, in the dark, while the walls pinch on every heartbeat. A teammate's flashlight doubles how far you can see.

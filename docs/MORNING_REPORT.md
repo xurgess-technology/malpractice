@@ -42,7 +42,7 @@ still passes its own self-test.
 
 | Game | Step | Key | Flag | Self-test |
 |---|---|---|---|---|
-| DOSE! | GW 1, AM 1 | `anesthetic` | **ON** | PASS |
+| ~~DOSE!~~ | GW 1, AM 1 | `anesthetic` | replaced 2026-09-21 by the Anesthetic Injection (ARCADE_SURGERY.md 5.1) | |
 | DODGE! | GW 2 | `forceps` | **ON** | PASS |
 | WHACK! + WRAP! | GW 3 | `gauze:pack` | **ON** ⚠ | PASS |
 | SQUEEZE! | AM 2 | `tourniquet` | **ON** | PASS |
@@ -109,7 +109,11 @@ free. The pulse is jumpier the worse you sedated them.
 - Quick start: `tools\review.bat main "ARCADE AM" --setup=arcade_am`
 - Screens: `docs/screens/squeeze/`
 
-### DOSE! — gunshot step 1 and amputation step 1, `anesthetic` — **ON**
+### DOSE! — gunshot step 1 and amputation step 1, `anesthetic` — REPLACED
+
+Replaced on 2026-09-21 by the Anesthetic Injection (`inject_arcade.gd`, ARCADE_SURGERY.md 5.1), the
+only sedation game; DOSE! and the legacy `anesthetic.gd` are deleted. What follows is the record of
+what DOSE! was.
 
 An old golf power meter, twice. Stop a sweeping needle on the vein, then hold to fill the syringe
 and let go. Miss and the vein bruises and narrows, so the second go is harder than the first. From

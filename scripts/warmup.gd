@@ -355,6 +355,10 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 					# first SubViewport frame behind the launch printout.
 					if mg.has_method("uses_panel") and bool(mg.uses_panel()):
 						mg.tick(1.0 / 60.0)
+					# A step with stages that draw different things (the anaesthetic's syringe, bubbles,
+					# arm and meter, and the ink look's fonts) draws all of them at once here.
+					if mg.has_method("warm_all"):
+						mg.warm_all()
 					games.append(mg)
 					await _slice(slice)
 
