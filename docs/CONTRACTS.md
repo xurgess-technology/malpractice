@@ -1358,6 +1358,14 @@ game.player_faceplanted(p)           # host; a rocket dive hit a wall head on: d
   `scripts/rocket_boots.gd` (heel pods on `foot.L`/`foot.R`, top-level flames and a glow trailing
   the travel direction, cue `rocket_burn`); HUD element `"fuel"` under stamina while wearing a pair
   and it isn't full. Test: `tools/controlstest.tscn` ("rocket boots").
+- **The burn survives the trip to other machines.** A burn lasts under a second, and both hops that
+  carry it (the wearer's 20 Hz report, the host's 20 Hz snapshot) are samples of a boolean, over an
+  unreliable datagram: a stalled host frame or one lost snapshot used to drop the flame entirely for
+  everyone but the wearer. So a machine that hears the bit second hand holds it `BURN_HOLD` past the
+  last word of it (`_burn_hold`; the wearer's own `rocketing` is never held), and the boots lighting
+  is also counted -- `rocket_count`, report_state index 19 / report_full `"rc"` -- so the event
+  itself cannot be lost: a count that rises gives a remote copy at least `BURN_MIN` of flame.
+  Tested by nettest `rocket_boots` (client 2 sees client 1's burn).
 
 - **The pharmacy** (`scripts/economy/economy_props.gd`, hub rebuild chunk 3): a wall of steel bars
   across the pharmacy (width 13.5 m in the hub, 3 m in the dev room) with a pickup drawer through a

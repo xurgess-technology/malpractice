@@ -316,6 +316,27 @@ func _dev_room() -> void:
 	dev.request("revive_all")
 	await _frames(2)
 
+	# ---- going down standing still still lies the body down (KNOWN_ISSUES, sweep 2 wave 3)
+	# The clip name is no use here: `play("Crawl", 0.2)` sets it the instant they go down, bug or no
+	# bug. What used to be wrong was the pose -- the crossfade into Crawl was frozen at nothing by
+	# speed_scale 0, so a teammate who went down without crawling a step stayed bolt upright on every
+	# screen but their own. So this measures the skeleton: how high the highest bone sits over the
+	# body's own feet, standing and then downed on the spot.
+	await _frames(2)
+	_check(bot.body_hands != null and bot.body_hands.skeleton != null, "the bot's body has a skeleton to measure")
+	bot.bot_move = Vector2.ZERO
+	await _seconds(0.5)
+	var stand_top := _body_top(bot)
+	_check(stand_top > 1.2, "standing, the bot's rig reaches full height (%.2f m)" % stand_top)
+	game.knock_down_player(bot, "test")
+	await _seconds(0.5)   # down on the spot: never a step of crawling
+	var down_top := _body_top(bot)
+	_check(not bot.moving, "the bot went down standing still and never crawled")
+	_check(down_top < stand_top * 0.6, "downed on the spot, the body lies down instead of standing (%.2f m, standing %.2f m)" % [down_top, stand_top])
+	dev.request("revive_all")
+	await _seconds(0.5)
+	_check(_body_top(bot) > stand_top * 0.9, "back up, the rig stands to full height again (%.2f m)" % _body_top(bot))
+
 	# ---- the carry pose lets go once they are stitched up (playtest 2026-09-22)
 	# A dev dummy is a target dummy with no rig, so this leg uses the bot: it wears the rigged human
 	# body, whose crawl, carry and lying poses are animation clips. Stopping those clips freezes the
@@ -396,6 +417,20 @@ func _clip_of(p: Player) -> String:
 	if p.body_hands == null or p.body_hands.anim == null:
 		return ""
 	return String(p.body_hands.anim.current_animation)
+
+
+## How high the highest bone of that body's rig sits over the body's own feet, in metres (-1.0 for a
+## body with no rig). A standing surgeon is about 1.7; anything lying down is well under a metre.
+## This is the pose as every other machine draws it, which is the only place the down pose shows.
+func _body_top(p: Player) -> float:
+	if p.body_hands == null or p.body_hands.skeleton == null:
+		return -1.0
+	var sk: Skeleton3D = p.body_hands.skeleton
+	var to_body := p.body_visual.global_transform.affine_inverse() * sk.global_transform
+	var top := -1e9
+	for i in sk.get_bone_count():
+		top = maxf(top, (to_body * sk.get_bone_global_pose(i).origin).y)
+	return top
 
 
 ## True while that body's rig is still animating (a stopped one keeps the pose it froze in).

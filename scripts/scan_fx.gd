@@ -259,7 +259,7 @@ func _update_laser(me, monster: Node3D, delta: float) -> void:
 			_sfx("click", -4.0)
 		else:
 			_surge = 1.0
-			_sfx("dev_zap_01", -10.0)
+			_sfx("dev_zap", -10.0)
 	_draw_beam(from, to, landed)
 
 

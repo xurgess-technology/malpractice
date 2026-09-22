@@ -92,10 +92,22 @@ func setup(spots: Dictionary, to_world: Callable, grid := {}) -> void:
 		_add(true, BIG_GLASS, _glass_xform(m, BIG_CENTRE, to_world), BIG_PPM)
 		_add_menu_aim()
 		# CUSTOMIZATION: the menu the mirror opens. It lives here because it is the big mirror's,
-		# and a level without one never builds it.
-		add_child(preload("res://scripts/personnel/mirror_menu.gd").new())
+		# and a level without one never builds it. `load`, not `preload`: mirror_menu.gd names the
+		# Net and Settings autoloads, which do not exist under `godot -s` (tools/mapcheck.gd), and a
+		# preload would drag it into this script's compile and fail there. See _autoloads_present.
+		if _autoloads_present():
+			add_child(load("res://scripts/personnel/mirror_menu.gd").new())
 	for s in spots.get("sinks", []):
 		_add(false, SINK_GLASS, _glass_xform(s, SINK_CENTRE, to_world), SINK_PPM)
+
+
+## True in a real run and in every headless *scene* test; false under `godot -s`
+## (tools/mapcheck.gd), which never instantiates the autoloads, so a script naming one cannot even
+## compile. Map validation has no player and no menu to open, so the mirror menu is skipped there
+## on purpose rather than throwing on every seed it builds.
+static func _autoloads_present() -> bool:
+	var tree := Engine.get_main_loop() as SceneTree
+	return tree != null and tree.root != null and tree.root.has_node("Net")
 
 
 ## CUSTOMIZATION: what you aim at to open the mirror menu. A box just in front of the glass, so the

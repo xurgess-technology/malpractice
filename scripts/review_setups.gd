@@ -1038,14 +1038,12 @@ static func _downed(game: Game) -> void:
 		dev.brains.erase(bid)   # no orders, no wandering: it is a body to carry
 		mate.teleport(mate_at)
 		await tree.physics_frame
+		# Down on the spot, without a step of crawling: that is how a teammate usually goes down, and
+		# the body lies down for it (fixed 2026-09-22 -- it used to be staged crawling half a second, because a
+		# body that went down standing still stayed drawn bolt upright).
 		game.knock_down_player(mate, "review")
-		# Then half a second of crawling. The rigged body only blends into its Crawl clip while it
-		# moves (docs/KNOWN_ISSUES.md, "a downed player who never crawls is drawn standing"), so a
-		# teammate downed on the spot would be staged bolt upright -- nothing to do with this fix.
-		mate.bot_move = Vector2(0.0, -1.0)
 		for i in 30:
 			await tree.physics_frame
-		mate.bot_move = Vector2.ZERO
 		mate_at = mate.global_position
 	place(game, game._floor_at(t + side * 4.2), mate_at + Vector3(0.0, 0.4, 0.0))
 	clear_hands(game)   # a carry needs both hands free

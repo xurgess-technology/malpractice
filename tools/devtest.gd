@@ -481,6 +481,15 @@ func _doors_hooks() -> void:
 func _free_cam() -> void:
 	var fc = main.dev_panel.free_cam
 	var box: CheckBox = main.dev_panel._c["free_cam"]
+	# "Behind your eyes" below only means anything in first person: in "shoulder" or "front" the
+	# carry camera is active and your own body is *meant* to show, so the check read the machine's
+	# saved camera mode rather than the free camera. Each slot seeds its settings from Zach's, so
+	# whichever mode he last played in decided whether this passed. Pin it, and put it back after.
+	# The carry camera stands down over a few frames, not instantly, so give the switch time to
+	# settle before anything here reads the body.
+	var was_camera = Settings.get_value("camera")
+	Settings.set_value("camera", "first_person")
+	await _seconds(0.5)
 	var eye: Vector3 = me.camera.global_position
 	box.button_pressed = true
 	await _frames(3)
@@ -493,7 +502,11 @@ func _free_cam() -> void:
 	_check(fc.flying and me.dev_input_held, "and P again flies the camera")
 	box.button_pressed = false
 	await _frames(2)
-	_check(not fc.is_on() and me.camera.current and not me.dev_input_held and not me.body_visual.visible, "unticking it puts you back behind your eyes")
+	_check(not fc.is_on() and me.camera.current and not me.dev_input_held and not me.body_visual.visible,
+		"unticking it puts you back behind your eyes (on=%s eye_cam=%s held=%s body=%s)"
+		% [str(fc.is_on()), str(me.camera.current), str(me.dev_input_held), str(me.body_visual.visible)])
+	Settings.set_value("camera", was_camera)
+	await _frames(2)
 
 
 func _loot_and_money() -> void:

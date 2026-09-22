@@ -10,11 +10,34 @@ Last checked: 2026-09-22, `main` at `c933607` (0.10.17), by the `strap-fix` task
 
 The list got longer that day, and **not because anything broke**: several of these had been failing
 for some unknown time with nobody writing them down (`pockettest`, nettest `pockets`, and
-`looptest`, whose entry has since been fixed and removed), and one is fallout from 0.10.16 earlier
-the same day (nettest `hit_feedback`). Of the 22 nettest
-scenarios, 16 pass, `full_shift_lag` passes on a quiet re-run, and `brains`, `pockets`,
-`rocket_boots` and `hit_feedback` fail. The earlier note that everything but this file's entries
-passed dated from 2026-09-17, `main` at `ded2d46`.
+`looptest`, whose entry has since been fixed and removed). Of the 22 nettest scenarios, 17 pass,
+`full_shift_lag` passes on a quiet re-run, and `brains` and `pockets` fail. (`rocket_boots` failed
+that day too; it was a real replication bug, fixed 2026-09-22, and its section is gone.) The
+earlier note that everything but this file's entries passed dated from 2026-09-17, `main` at
+`ded2d46`.
+
+Two of that day's entries turned out to be **wrong diagnoses, corrected by measuring**. `looptest`
+was blamed on loot not surviving a shift change; in fact the test's own bot was shelving its loot
+mid-surgery. `hit_feedback` was on this list as 1h, blamed on 0.10.16's stagger change; in fact the
+push had never been lost -- the test was shoving a Hive into a wall. Both fixed and removed
+2026-09-22. Worth remembering while reading the rest of this file: **an entry here is a lead, not a
+verdict.**
+
+`orscreentest` (section 6) went the same way later that day and has been removed: the OR monitor's
+case panel was right about every one of its five reported problems. The test hard-coded a supply
+count from before SUTURE! gave `gunshot` a fourth step, and it had never been taught that a patient
+can die on the table while the shift carries on -- a dead case has no current step and needs no
+more supplies, which is the panel's contract, not a fault. Fixed in `tools/orscreentest.gd`.
+
+So did **section 1b**, `doortest`'s four hinged-door E failures, removed the same day: the doors were
+right and so was the aiming. The test aims by turning the bot's head and then reads `aim_prompt`, but
+the crosshair's ray starts at the *camera*, and with the `camera` setting on "shoulder" the carry
+camera puts that camera 1.4 m behind and 0.5 m right of the head, looking along its own line. The
+first aim target (a whole door) survived that; a thin open leaf at arm's length did not, and the
+three checks after it only failed because that first press never happened. Slots seed their settings
+from Zach's, which say "shoulder", so the test read his view preference. `tools/doortest.gd` now pins
+first person for its run, exactly as `devtest` did for the same reason. That leaves `doortest` failing
+the one gurney check in section 1 and nothing else.
 
 How to run things is at the bottom of this file.
 
@@ -23,7 +46,9 @@ How to run things is at the bottom of this file.
 ## 1. doortest: the paramedics don't push the OR doors open for the gurney
 
 - **Command:** `godot --headless --path . --fixed-fps 60 tools/doortest.tscn`
-- **Result:** `FAIL (1 of 82 checks)`, the check `the crew pushed the OR's doors open to bring the gurney through`
+- **Result:** `FAIL (1 of 91 checks)`, the check `the crew pushed the OR's doors open to bring the gurney through`
+  — the only check `doortest` still fails, as of 2026-09-22 (the four in the old section 1b were the
+  test's own camera setting and are fixed).
 - **The check:** `tools/doortest.gd`, around line 361. While the paramedic crew is right in the OR
   doorway (`|lp.z| < 0.9`, `|lp.x| < 0.8` in the door's frame), the OR door's `amount` must go past
   0.7 at some point before the patient is on the table. It never does.
@@ -35,33 +60,6 @@ How to run things is at the bottom of this file.
   table"), which changed how the crew and the operating player push each other. That commit is the
   most recent change near this behaviour, but it hasn't been confirmed as the cause.
 
-## 1b. doortest: four more failures in the hinged-door E section
-
-- **Command:** `godot --headless --path . --fixed-fps 60 tools/doortest.tscn`
-- **Result:** these four, alongside the gurney one above:
-  - `the open door can be aimed at:` (the prompt comes back empty)
-  - `E again closes it (-1.00)`
-  - `E from the tunnel side swings it away from the player (-1.00, max_out 90)`
-  - `closed again`
-- **Found 2026-09-22** while fixing the open-leaf collision bug (0.10.10), on plain `main` before
-  that change, so they are not its doing. They were simply never written down: this file recorded
-  only the gurney failure, so `doortest` has been failing 5 checks, not 1, for some unknown time.
-  The totals move because that fix added checks: 5 of 82 before it, 5 of 91 after, the same five.
-- **They look like one fault, not four:** all four are about opening or closing a hinged door with
-  E and reading its prompt, and the `-1.00` values suggest the door's `amount` is not being read at
-  all rather than being wrong. Nobody has looked yet.
-
-## 1d. nettest `rocket_boots` now fails for real, not just under load
-
-- **Command:** `godot --headless --path . --script tools/nettest_run.gd -- --only=rocket_boots`
-- **Result:** `FAIL`, `timed out after 60 s waiting for client 1's burn on client 2` (client 2), and
-  the host reporting that client's failure.
-- **This section used to say "flaky under load, not broken"**: it failed once during a loaded suite
-  run earlier on 2026-09-22 and then passed three times in a row. That is no longer what it does.
-  Later the same day it failed **three times out of three** — in a full suite run, on its own, and
-  on plain `main` at `c933607` with no branch changes present — with the same message each time.
-  So there is a real failure here as well as a load sensitivity; treat it as broken until someone
-  looks. Nobody has yet.
 
 ## 1f. pockettest: the Night Nurse follows you through a seam
 
@@ -96,23 +94,6 @@ How to run things is at the bottom of this file.
 - Not to be confused with the headless `pockettest` scene (section 1f), which fails on something
   else entirely (the Night Nurse).
 
-## 1h. nettest `hit_feedback`: a saw hit barely pushes the Hive — from 0.10.16
-
-- **Command:** `-- --only=hit_feedback`
-- **Result:** `FAIL` after ~22 s, `the hit pushed the Hive only 0.27 m` (0.30 m on `main`; it varies
-  a little run to run because the processes are not in lockstep).
-- **The check:** `tools/nettest.gd` around line 1841 wants `hit_feedback_monster` to move the Hive
-  at least **0.3 m**, "far enough to read as a knock rather than a twitch". It lands just under.
-- **Cause, as far as it goes:** 0.10.16 (2026-09-22) set `STAGGER_SECONDS := 0.0` in
-  `scripts/monster.gd`, and `_hit` passes it straight to `brain.stun(dir, STAGGER_SECONDS, 0.45,
-  from)` — the push now lasts zero seconds, so it only travels about the distance one frame of it
-  covers. `scripts/combat/combat.gd` line 58 records that change as "the push survived it, the stun
-  did not"; this test says the push only *just* survived it, and lands the wrong side of the line.
-- **So this one has a known author**: it is fallout from today's stagger change, not an old failure.
-  Whoever picks it up should decide which is right — the 0.3 m the test asks for, or the zero-second
-  stagger — rather than just moving the threshold.
-- Confirmed on plain `main` at `c933607`, so it is not any branch's doing.
-
 ## 1i. nettest `full_shift_lag` is a load flake
 
 - Failed once on 2026-09-22 during a full suite run (`timed out after 90 s waiting for start` on
@@ -120,6 +101,19 @@ How to run things is at the bottom of this file.
   running Godot. **Passed on its own re-run in 66 s**, against the 895 s it burned failing.
 - It runs with 120 ms lag and 3% loss, so its connection window is the tightest in the suite.
   Re-run it alone before believing a failure.
+
+## 1j. The host stalls 130-540 ms mid-shift, headless, even when idle
+
+- **Not a failing test** — found 2026-09-22 while fixing the rocket-boot burn, with temporary
+  instrumentation on the host's net tick. It is recorded here because it is the kind of thing that
+  makes other tests look flaky.
+- **What was measured:** gap probes showed the host's physics frame routinely stalling **130-330 ms**
+  on an otherwise quiet machine, and once **541 ms** — a gap that straddled an entire rocket burn, so
+  `_build_state` never ran while the bit was true and there was nothing to send. That was the second
+  half of the boots bug (fixed in 0.10.30 by holding and counting the burn rather than sampling it).
+- **The stalls themselves were never explained**, and they are no longer anyone's known bug. Anything
+  that depends on a short-lived state being sampled at 20 Hz is vulnerable to them, so this is worth
+  its own look before the next netcode feature leans on snapshot timing.
 
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
 
@@ -141,50 +135,6 @@ How to run things is at the bottom of this file.
 - So a change that alters how often pockets appear moves this list. POCKET_SPACES_2 phase 1
   (`pockets-phase1`) did exactly that, and the full run there reports **seeds 1, 38 and 112** —
   seed 1 being the pre-existing bug landing on one more seed, not a new fault.
-
-## 3. The laser surge plays no sound (`dev_zap_01`)
-
-- **Not a test failure**, but it logs a warning during windowed runs:
-  `Audio: no cue named 'dev_zap_01' (run node tools/gen_audio.mjs).`
-- **Cause:** `scripts/scan_fx.gd` line 262 calls `_sfx("dev_zap_01", -10.0)`. The Audio autoload
-  registers numbered files as one cue without the number (`dev_zap_01.wav` and `dev_zap_02.wav` are
-  the cue `dev_zap`, picked at random), the way `scripts/dev/dev_room.gd` line 522 already uses it.
-- **Likely fix:** call `_sfx("dev_zap", -10.0)`. The WAV files exist; nothing needs regenerating.
-
-## 4. devtest: the free camera leaves your body showing when you untick it
-
-- **Command:** `godot --headless --path . --fixed-fps 60 tools/devtest.tscn`
-- **Result:** `result=FAIL failures=1`, the check `unticking it puts you back behind your eyes`
-- **The check:** `tools/devtest.gd`, in `_free_cam()` (around line 496). After the panel's "Free
-  camera" box is unticked it wants `not fc.is_on() and me.camera.current and not me.dev_input_held
-  and not me.body_visual.visible`; one of those is still wrong, most likely the body.
-- **Noticed 2026-09-18** on the `graft-strap` branch and confirmed on `main` at `a50899a` with the
-  branch's changes stashed, so it is not that branch's doing. It was not in this file before, so it
-  broke some time after the 2026-09-17 sweep.
-- **Where to look:** `scripts/dev/free_cam.gd` `stop()` / `_show_body_on`, and whatever else turns
-  the local body on and off (the carry camera's `set_carry_body`, `Player._refresh_self_body`).
-
----
-
-## 6. orscreentest: the OR monitor's case panel is wrong in several places
-
-- **Command:** `godot --headless --path . --fixed-fps 60 tools/orscreentest.tscn`
-- **Result:** `[orscreen] FAIL`, with these problems:
-  - `an incoming case shows its supplies`
-  - `step 1 is todo, expected current`
-  - `supplies: 0 rows for 3 needed kinds`
-  - `saw every step of amputation become current ([0, 1])`
-  - `the screen read stable when the shift was won`
-- **Found 2026-09-22** while building the minimap, and confirmed on plain `main` at `c933607` by
-  checking the baseline out directly in the same slot. It was not in this file before.
-- **How many you see varies.** It is a playtest: a bot plays a real shift, so how far it gets
-  changes between runs and so does how many of the five a run reaches. The branch run saw 1 of them
-  (`shifts_won=1`, 438 s); the `c933607` baseline saw all 5 (`shifts_won=0`, 1500 s). Treat **any**
-  of those five names as this entry, and the count as meaningless.
-- **They look like one fault:** every one is the OR wall monitor's case panel disagreeing about a
-  case's steps or its supplies.
-- **Where to look:** `scripts/orscreen/or_screen_model.gd` (what the panel says a case needs and
-  which step is current) against `tools/orscreentest.gd`'s expectations. Nobody has looked yet.
 
 ---
 
@@ -216,7 +166,7 @@ The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\
   test without waiting for another slot to finish; the machine still gets loaded, so the flake
   warning below still applies.
 - **Expect flakes when the machine is loaded.** With four slots running Godot at once, wall-clock
-  timeouts get tight: `rocket_boots` and `downedtest` have each failed once under load and then
+  timeouts get tight: `downedtest` has failed once under load and then
   passed on a quiet re-run. Re-run alone before chasing.
 - Windowed screenshot tools write to `tools/game_shots/` and friends: `menushot`, `faxshot`,
   `tipshot`, `database_shot` (`-- --wall`, `-- --wall2`), `gameshot`, `bootsshot` (rocket boots)

@@ -5,6 +5,14 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.30**: Everyone can see your boots light up
+    - Fixed: When somebody else fired their rocket boots, the third person in the room often saw nothing at all -- no flame, just a teammate abruptly airborne. A burn lasts under a second and the game was only sampling it twenty times a second, so one hiccup swallowed the whole thing. It's held and counted now, so it always lands.
+- **0.10.29**: People who go down actually fall over
+    - Fixed: A teammate who went down without crawling anywhere stayed standing bolt upright on everyone else's screen -- a corpse at attention, while they lay there insisting they were bleeding out. They fall over properly now. You never saw it yourself, which is why it lasted this long.
+- **0.10.28**: Polish
+    - Fixed: The laser surge is audible again -- it had been asking for a sound by the wrong name since the day it was written.
+- **0.10.27**: Sawing something against a wall actually moves it
+    - Fixed: The knockback on a saw hit stopped dead the instant it touched anything, so hitting a monster backed against a wall barely shifted it. It slides along the wall now and you get the whole shove wherever you catch them.
 - **0.10.26**: Everyone can strap a monster down again
     - Fixed: If you weren't hosting, a monster you dragged to a table would refuse to be strapped. Underneath, the game was reusing the same id numbers for new monsters and new loot, so your machine kept the *old* thing and drove it with the new one's details -- a Hive that your game still thought was a Sonographer. Ids count up forever now, and anything that changes what it is gets rebuilt.
 - **0.10.25**: Somebody finally plugged the mirror lights in

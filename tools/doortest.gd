@@ -90,6 +90,18 @@ func _run() -> void:
 	# The test player is a bot, and bots push hinged doors open by walking into them: this test
 	# drives it by hand with E, so it does not.
 	doors.agents_open_doors = false
+	# Every aim check below reads the crosshair, and the crosshair's ray starts at the camera. In
+	# "shoulder" or "front" the carry camera is active in ordinary play: the camera sits about
+	# 1.4 m behind and 0.5 m to the right of the head, looking along its own orbited direction, so
+	# the ray leaves from somewhere other than the eye and points somewhere other than where the
+	# head is aimed. Each slot seeds its settings from Zach's, so whichever mode he last played in
+	# decided whether the door prompts here were found -- and the slot's settings.cfg says
+	# camera="shoulder". Doors are what this test is about, not the view, so pin first person for
+	# the run and put the old mode back at the end. (Same cause as devtest's free-camera check,
+	# 778fae2.) The carry camera stands down over several frames, so let the switch settle.
+	var was_camera = Settings.get_value("camera")
+	Settings.set_value("camera", "first_person")
+	await _seconds(0.5)
 	await _hinged_by_player()
 	await _bot_pushes()
 	await _gates_and_lobby()
@@ -100,6 +112,7 @@ func _run() -> void:
 	await _drag_through()
 	await _jam()
 	await _regeneration()
+	Settings.set_value("camera", was_camera)
 
 
 ## A player presses E on a hinged door: it swings away from them, stays open, closes on E again.
