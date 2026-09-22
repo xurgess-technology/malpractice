@@ -969,5 +969,5 @@ static func _downed(game: Game) -> void:
 	clear_hands(game)   # a carry needs both hands free
 	floor_item(game, "suture_kit", t + side * 1.2 + b * Vector3(0.5, 0.0, 0.0))
 	floor_item(game, "suture_kit", t + side * 1.2 + b * Vector3(-0.5, 0.0, 0.0))
-	game.say("Hands empty: hold E on Dr. Bled, carry them to the table, E to lay them down, then stitch.", 10.0)
+	game.say("Hands empty: hold E on Dr. Bled, carry them to a table, E anywhere at it lays them down (G drops them on the floor), then stitch.", 12.0)
 	print("[review] downed: bot %d down at %s, free table %d at %s" % [bid, mate_at, table, t])

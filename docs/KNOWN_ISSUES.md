@@ -331,19 +331,16 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
   the speed drops (a snap, `blend = 0.0` for the still case, is the cheap version); both want their
   own look, since it changes how every body goes down and goes prone. `--setup=downed` crawls its
   staged teammate half a second on purpose to work around it.
-- **PLAYTEST 2026-09-22: putting a carried player on the OR table is fiddly, and missing it dumps
-  them on the floor.** Zach: "players were sometimes struggling to set picked up players down on the
-  OR table and were getting frustrated when not clicking on the table but still pressing E set down
-  their friend". Two halves: the table's interact target is hard to hit while carrying someone, and
-  a near-miss falls through to the plain floor drop, so it doesn't merely fail -- it undoes the
-  carry and you start again. The table path itself is fine and has proper prompts and refusals
-  (`game.gd:1060` `_table_prompt` -> `:1064` -> `_downed_place_prompt`, "Place <name> on the
-  table" / "!The table is taken."); it is `drop_carried` (`game.gd:2986`) that has no table
-  awareness, trying a spot ahead of the carrier and snapping it to floor height. Targeting is the
-  camera raycast in `player.gd` ~1433 at `C.INTERACT_RANGE` 2.2 m. A deliberate floor-drop has to
-  stay possible -- the goal is only that a near-miss at a table stops silently becoming one. Note
-  0.10.3 fixed a similar "hard to aim at it" problem for dropped items with a much more generous
-  sphere-shaped pickup volume; same trick may apply.
+- **Setting a carried teammate down is snap-to-table, by a radius.** Fixed 2026-09-22 after the
+  playtest ("not clicking on the table but still pressing E set down their friend"): while you
+  carry someone, standing within `Game.CARRY_TABLE_SNAP` (2.0 m, flat) of a table that would take
+  them makes that table the prompt and what E does, whatever the camera points at
+  (`game.carry_table_target`, read by the prompt on every machine and by the host in
+  `carrier_pressed_interact`, so a client cannot lose it to latency). The floor drop at a table is
+  the drop key (G), and aiming straight at a table that refuses keeps the carry. Rough edges: the
+  radius is a flat distance to the table centre, so a table on the far side of a thin wall or a
+  gurney rail within 2 m still wins over the floor; and the "(G: down here)" tail rides on the
+  prompt line, which the carried body can partly cover at some angles.
 - **The stitches operation is self-contained.** `game.add_case` / `game.cases` do not exist on this
   branch, so the player table runs its own copy of the surgery system through
   `scripts/downed/player_surgery.gd` (an adapter standing in for the game). The integration wave

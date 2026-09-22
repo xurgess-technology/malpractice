@@ -1246,9 +1246,20 @@ func _sc_downed():
 	var ti := int(_msgs("downed")[0].data.get("table", -1))
 	var table_at: Vector3 = game.table_position(ti) if ti >= 0 else game.player_table.position
 	var table_id: String = game.table_interact_id(ti) if ti >= 0 else "player_table"
-	var place := func(): _press_at(table_at + Vector3.UP * 0.9, table_id)
-	if not await _do_until(place, func(): return target.on_table, 40.0, "laying them on the table"):
+	# PLAYTEST 2026-09-22: the client presses E at the table with the camera pointed up, well off it.
+	# The near-miss must still lay them on the table, not dump them on the floor at the host.
+	var place := func():
+		_press_at(table_at + Vector3.UP * 0.9, "")
+		var m = _me()
+		m.bot_pitch = 0.9   # camera well off the table: the press must still reach the table
+		if m.aim_prompt.begins_with("Place") and Time.get_ticks_msec() >= _press_at_ms:
+			m.bot_press += 1
+			_press_at_ms = Time.get_ticks_msec() + 1000
+	if not await _do_until(place, func(): return target.on_table or target.carried_by == 0, 40.0, "laying them on the table"):
 		return
+	if not target.on_table:
+		return _end(false, "a near-miss at the table dropped the teammate on the floor")
+	_me().bot_pitch = 0.0
 	game.player_surgery.surgery.bot_skill = 1.0
 	var operate := func():
 		if not game.player_surgery.surgery.is_local_operating():
