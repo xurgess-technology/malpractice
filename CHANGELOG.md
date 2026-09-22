@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.21**: The seal's flipper is a hand, and it's nearly all bone
+    - Changed: A seal's fore-flipper is a webbed paw, so SAW! now gives it five thick tapering digits with webbing between them instead of a few thin splines. It's 66% bone against the arm's 40%: narrower, so you cross it quicker, but there's almost nowhere to put the blade that isn't bone.
+    - Fixed: The report card could call your stump ragged while stamping it CLEAN.
 - **0.10.20**: Aim at the grate, not the hole
     - Fixed: The crematorium's hatch is opened and shut by aiming at the grate itself, which now moves when the grate does. You used to be aiming at the hole in the wall the whole time, whether the grate was over it or not.
 - **0.10.19**: Brains are off the menu
