@@ -134,6 +134,30 @@ var _shake := 0.0                 # seconds of rattle left
 var _shake_k := 0.0               # 0..1 strength of the current rattle
 var _rest := Vector3.ZERO         # where the panel hangs when it is not rattling
 
+# -- how often it repaints ------------------------------------------------------------------------
+## WHO IS THIS PANEL FOR. True on the machine whose player is operating this table: their panel is
+## the thing they are playing and repaints every single frame, always.
+##
+## Everyone else's does not. A panel is a real object in the room, so every machine builds one for
+## every table being operated -- up to three at once -- and each one is a 1200 x 800 SubViewport plus
+## a full hand-inked repaint. Painting all of them at full rate for onlookers who are across the room,
+## or facing the other way, was most of what made these steps lag for everybody. An onlooker's panel
+## now repaints at `spectate_hz` nearby, `far_hz` past `far_metres`, and `hidden_hz` when it is behind
+## the camera -- which is only ever how OFTEN the same picture is drawn, never WHAT is drawn, so the
+## operator and the onlookers still see the same board. The ink look boils at 7 fps by design, so a
+## bystander's page does not read as choppy.
+var operator_view := false
+## Lab hook (tools/minigame_lab.gd --spectate): hold operator_view where it is, so a run that is
+## operating can still be measured and looked at as an onlooker sees it.
+var spectate_test := false
+@export_range(5.0, 60.0, 1.0) var spectate_hz := 30.0
+@export_range(2.0, 60.0, 1.0) var far_hz := 15.0
+## Off the side of the screen. Kept just above the 7 fps ink boil, so turning toward a table never
+## catches the page more than one boil frame stale -- and it is still a seven-fold saving.
+@export_range(0.5, 20.0, 0.5) var hidden_hz := 8.0
+@export_range(1.0, 20.0, 0.5) var far_metres := 4.0
+var _paint_due := 0.0
+
 static var _shader: Shader = null
 
 
@@ -290,7 +314,36 @@ func tick(delta: float) -> void:
 		visible = false
 		_set_updating(false)
 		return
-	redraw()
+	# Opening and closing always repaint: the panel is popping in and wants every frame of it.
+	if state != State.OPEN or _due(delta):
+		redraw()
+
+
+## Is this panel's repaint due this frame? Always for the operator (and while it is animating in or
+## out); otherwise on the rate its place on the onlooker's screen earns.
+func _due(delta: float) -> bool:
+	if operator_view:
+		return true
+	_paint_due -= delta
+	if _paint_due > 0.0:
+		return false
+	_paint_due += 1.0 / maxf(0.5, _rate())
+	# A long stall (a load, a pause) must not bank up a burst of repaints.
+	_paint_due = maxf(_paint_due, 0.0)
+	return true
+
+
+func _rate() -> float:
+	if not is_inside_tree():
+		return spectate_hz
+	var vp := get_viewport()
+	var cam: Camera3D = vp.get_camera_3d() if vp != null else null
+	# No camera at all (headless, the lab's own passes, a test): paint every frame, as it always did.
+	if cam == null:
+		return 1000.0
+	if not cam.is_position_in_frustum(global_position):
+		return hidden_hz
+	return far_hz if cam.global_position.distance_to(global_position) > far_metres else spectate_hz
 
 
 ## The colour of the light the panel throws on the patient (a paper panel glows warm, not teal).

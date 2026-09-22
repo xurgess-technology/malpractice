@@ -112,6 +112,9 @@ var content := Rect2()
 var t := 0.0
 ## Profiling: draw commands issued since reset (every draw_* call counts one).
 var ops := 0
+## Profiling: textured quads issued since reset -- the round joins and caps stroke() puts at every
+## vertex of every line. They batch into few draw calls, but each one is still a command to build.
+var quads := 0
 ## Jittered outlines, kept for the rest of their boil frame: seed -> [frame, input, output]. A shape
 ## that has not moved is not re-jittered until the next 7 fps tick.
 var _jit := {}
@@ -204,6 +207,7 @@ func stroke(c: CanvasItem, pts: PackedVector2Array, col: Color, width: float) ->
 		for p in pts:
 			c.draw_texture_rect(tex, Rect2(p.x - r, p.y - r, w, w), false, col)
 		ops += 1
+		quads += pts.size()
 
 
 func seg(c: CanvasItem, a: Vector2, b: Vector2, col: Color, width: float, shape_seed: int) -> void:
