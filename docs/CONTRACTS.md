@@ -2173,6 +2173,35 @@ game.spawn_hive(pos) -> Node               # host (dev, tests): a Hive. It lives
 - Tests: `tools/controlstest.tscn` (Alt+1..4 slot dispatch), `tools/grafttest.tscn` (Hive Eyes 1 in
   and out off the graft), nettest scenario `graft`.
 
+## The character sheet (Tab)
+
+`main.char_sheet` (`scripts/character_sheet.gd`, a CanvasLayer on layer 3, local UI on every
+machine). Tab opens three rows of four: **HANDS** (`Player.slots`), **ABILITIES**
+(`abilities.slots_for`) and **WORN**. Esc closes it too (`main._unhandled_input` owns both keys, so
+one press never flips it twice); it shuts itself when you die, pause, go under for an operation or
+ride a Hive's eyes.
+
+- **It does not pause and it does not blind you.** The world is dimmed, not hidden, and the shift
+  keeps running behind it. The mouse is freed so you can hover (`main._update_mouse`), which roots
+  you where you stand (`Player` gates movement and look on a captured mouse): open is a *worse*
+  place to be than walking, on purpose. While it is up the HUD's item and ability bars stand down
+  (`Hud.sheet_open`), since the sheet is those same two rows, bigger.
+- **Hover** opens a card in a fixed column to the right, with a leader line to the slot.
+  `CharacterSheet.hover_lines(row, i, player, game)` is static and pure, so a test can read a card
+  without a screen. The ability cards take their numbers from `abilities.echo_radius` /
+  `echo_seconds` / `hive_range` / `hive_seconds` at the current level, plus what the next level
+  would give: nothing about an ability's reach is typed into the sheet.
+- **WORN is boots plus three empty places** (helm, belt, gloves). Those three items do not exist.
+- **Unequipping** (`Game.player_unequip`, host): the boots come off and land at your feet as a loose
+  `rocket_boots` world item, which anyone can pick up and put on again (`Game._put_on`). Never into
+  a hand -- `Items.is_worn` / `Player.can_take` already say worn things never occupy a hand, and the
+  floor has no hands-full case. **Refused in mid-air** (`boots` gates the rocket dive), while
+  carrying, and while operating; the sheet greys the button with the reason and the host checks the
+  same rules again, because the client's copy is a courtesy. The client only bumps
+  `Player.unequip_count`, index 18 of the input report, alongside the other intent counters.
+- Review setup `--setup=sheet`; the smoke look is `tools\sheetshot.ps1` (minimized, shots in
+  `tools/game_shots/sheet_*.png`).
+
 ## Grafting and the scanner
 
 ### Grafting part one: eyes, vats and Eyeball Extraction (docs/GRAFTING.md, chunk A, 2026-09-18)
