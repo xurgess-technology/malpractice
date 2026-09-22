@@ -663,6 +663,26 @@ left below is what still applies to the shared strapped-monster infrastructure.
   renders every frame and the rest take turns" (line 11), so proximity changes which mirror is on
   the every-frame path. Check both the full-length entrance mirror and the sink mirrors, since they
   are different sizes and may not fail alike.
+- **LEADING HYPOTHESIS: it is the cloth material, not the lighting.** In the mirror, the **cloth goes
+  black while the skin on the same body, in the same frame, still renders** (face and hands stay lit
+  and correct; see `tools/mirror_shots/v_no_torch_050.png`). Two materials on one skinned body
+  behaving differently inside one SubViewport is a material / per-instance render-flag problem, and
+  it is a much better lead than lights, layers or cull masks, all of which were measured and ruled
+  out (below). **Chronology matters here: this split was seen in the unmodified build, before
+  `skin_tint` or the per-player skin material existed** -- `human_model.gd` has always given the
+  humans two materials (`Human_Cloth`, `Human_Skin`), with cloth made per spawn and skin shared. So
+  the 0.10.12 customization work did not cause it and is not the place to look. The sharpest
+  untested step is **`gi_mode` on the imported meshes** (Godot imports at `GI_MODE_STATIC`), then the
+  cloth shader itself (`human_cloth.gdshader`: `ALBEDO` collapses to black if its `albedo_tex`
+  sample comes back black, e.g. a mip or sampler problem that the skin shader's own textures dodge).
+- **Pinstripes follow the model's UV layout, not the body.** The pattern shader steps the UV's x
+  coordinate, as specified, but `surgeon_st`'s islands are not laid out consistently: the stripes
+  run across the torso and down the legs. It reads as deliberate more than as a bug, and
+  `stripe_angle` (a uniform) rotates them, but a truly vertical pinstripe everywhere would want the
+  cloth UVs re-laid or a body-space coordinate instead of UV.
+- **The mirror menu does not fix this and must not be read as evidence that it is fixed.** Opening
+  the customization menu stands you 1.7 m back, where the reflection is lit, so that screen looks
+  correct while **walking up to a mirror in normal play is still broken**.
 - **REPRODUCED 2026-09-22 (mirror-customize), not yet root-caused.** `tools/mirrorshot.ps1` boots the
   entrance, stands you at a list of distances from the big mirror and from a sink mirror, dumps what
   the mirror camera and every nearby light are doing, and saves a shot at each
@@ -671,9 +691,9 @@ left below is what still applies to the shared strapped-monster infrastructure.
       **Sink mirrors**: dark at every distance tested, 0.5 m to 3.5 m, so they are worse, not
       different.
     - The **room around the body stays correctly lit in the same frame**; only the body goes dark,
-      and within the body it is the **cloth** that goes black while the **skin** (face, hands) still
-      renders. That is the giveaway that it reads as "completely black": the scrubs are dark green,
-      so with only the 0.13 ambient on them they are black, while bright skin still shows.
+      and within the body only the cloth (the split above). That is why it reads as "completely
+      black": the scrubs are dark green, so with only the 0.13 ambient on them they are black, while
+      bright skin still shows.
   **Ruled out, each by a one-frame A/B in that tool** (`--variants`):
     - *The light cull masks / the `SELF` layer.* The mirror camera's mask has `SELF` in it at every
       distance, the body's meshes are all on `SELF`, and 13 of the 13 lights within 14 m already

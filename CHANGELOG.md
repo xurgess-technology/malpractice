@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.14**: Scrubs with a bit of personality
+    - Added: Pick a pattern for your scrubs at the mirror -- pinstripes, polka dots or a splatter that you can absolutely pass off as camo -- and a colour to print it in. Or None, if you're a coward.
 - **0.10.13**: You can tell when you've hit something now
     - Added: Land a saw hit and whatever you hit washes red for a moment and gets knocked back a step -- monsters and teammates alike. It doesn't stun them: they keep doing whatever they were doing, which is its own kind of bad news.
 - **0.10.12**: Check yourself out in the mirror 🪞
