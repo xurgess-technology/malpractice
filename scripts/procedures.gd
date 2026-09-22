@@ -160,7 +160,11 @@ const MINIGAME_SCRIPTS := {
 	# 2026-09-21: the Anesthetic Injection, the only sedation game (docs/ARCADE_SURGERY.md 5.1). It is
 	# an arcade panel game with no legacy twin, so it has no ARCADE_* entry and no switch.
 	"anesthetic": "res://scripts/surgery/arcade/inject_arcade.gd",
-	"forceps": "res://scripts/surgery/games/forceps.gd",
+	# 2026-09-21: DODGE!, the only bullet extraction (docs/ARCADE_SURGERY.md 5.2). No legacy twin and no
+	# switch. The monster table's brain harvest is a different game and keeps the legacy forceps script
+	# through its own "forceps:brain" key below (a "<game>:<variant>" key here wins over "<game>").
+	"forceps": "res://scripts/surgery/arcade/dodge_arcade.gd",
+	"forceps:brain": "res://scripts/surgery/games/forceps.gd",
 	"tourniquet": "res://scripts/surgery/games/tourniquet.gd",
 	"saw": "res://scripts/surgery/games/saw.gd",
 	"gauze": "res://scripts/surgery/games/gauze.gd",
@@ -173,7 +177,6 @@ const MINIGAME_SCRIPTS := {
 ## by "<game>" or "<game>:<variant>"; the variant key wins when it exists, so flipping "saw" moves
 ## the limb to the arcade version and leaves the monster table's "saw:skull" on the legacy one.
 const ARCADE_SCRIPTS := {
-	"forceps": "res://scripts/surgery/arcade/dodge_arcade.gd",          # DODGE!
 	"gauze:pack": "res://scripts/surgery/arcade/pack_arcade.gd",        # WHACK! then WRAP!
 	"gauze:stump": "res://scripts/surgery/arcade/wrap_stump_arcade.gd", # WRAP!
 	"tourniquet": "res://scripts/surgery/arcade/squeeze_arcade.gd",     # SQUEEZE!
@@ -194,8 +197,6 @@ const ARCADE_SCRIPTS := {
 ## A key is "<game>" or "<game>:<variant>"; the variant key wins where it exists, which is how the
 ## monster table keeps the legacy saw and brain forceps while the patient tables move over.
 static var ARCADE_ENABLED := {
-	"forceps": true,
-	"forceps:brain": false,   # the monster table's brain harvest: legacy, no arcade rebuild
 	"gauze:pack": true,
 	"gauze:stump": true,
 	"tourniquet": true,
@@ -225,6 +226,8 @@ static func minigame_script(game: String, variant := "") -> String:
 		var path := String(ARCADE_SCRIPTS.get("%s:%s" % [game, variant], ARCADE_SCRIPTS.get(game, "")))
 		if path != "" and ResourceLoader.exists(path):
 			return path
+	if variant != "" and MINIGAME_SCRIPTS.has("%s:%s" % [game, variant]):
+		return String(MINIGAME_SCRIPTS["%s:%s" % [game, variant]])
 	return String(MINIGAME_SCRIPTS.get(game, ""))
 
 

@@ -34,6 +34,7 @@ signal item_used(kind: String, count: int)
 ##   body: Node3D, the PatientBody on the table (may be null in the lab)
 ##   operator: bool, true on the machine whose player is doing this step
 ## Optional:
+##   vitals: Callable -> float, this patient's vitals right now (the shell's corner number).
 ##   hand_count: Callable(kind: String) -> int, how many of `kind` the operator holds in their hands
 ##     right now (0 with nobody operating). For a step that can spend an extra item (use_item).
 ##   helper_lights: Callable -> Array of SpotLight3D, the flashlights of teammates standing by (on,
@@ -138,6 +139,12 @@ func held_last() -> int:
 ## handle_cursor. `strength` is 0..1. React here instead of guessing jolts from cursor jumps.
 func on_jolt(_offset: Vector2, _strength: float, _duration: float) -> void:
 	pass
+
+
+## True for a step that makes an under-sedated patient's stirs itself (DODGE!'s squirm), so the
+## framework's own stir jolts, their body jerk and their sound stay out of it.
+func stirs_itself() -> bool:
+	return false
 
 
 ## How much of the operating camera's work lamp this step wants (1.0 = the usual amount). A step

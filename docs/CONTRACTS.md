@@ -332,14 +332,19 @@ are easy to miss:
 - `on_jolt(offset, strength, duration)` is called on the operator's machine when an underdosed
   patient stirs; for `duration` seconds the cursor passed to `handle_cursor` carries a decaying
   shake of up to `offset`. React there rather than inferring jolts from cursor jumps.
+  A step whose `stirs_itself()` returns true (DODGE!, whose squirm is its stir) gets none of this:
+  no jolts, no body jerk, no stir sound from the framework (2026-09-21).
+- `ctx.vitals` (Callable -> float, 2026-09-21): this patient's vitals right now, on every machine,
+  for a panel's corner number.
 - **Spending an item mid-step** (2026-09-21): `ctx.hand_count` (Callable(kind) -> int) is what the
   operator holds right now, and `use_item(kind, n)` emits `item_used(kind, n)`. The surgery system
   sends it to the host as an operator report `{"use": [kind, n]}` and the host takes it out of the
   operator's slots (`Player.consume_hand`). The anaesthetic's tourniquet button uses it.
 - `ctx.helper_lights` (optional Callable -> Array of SpotLight3D): the surgery system passes the
   flashlights of living players other than the operator. `helper_light()` turns them into
-  `{amount, spot}` for this site (on, in range, aimed, clear line of sight). The forceps step lifts
-  its channel's darkness with it on every machine.
+  `{amount, spot}` for this site (on, in range, aimed, clear line of sight). The legacy forceps game
+  lifted its channel's darkness with it; since DODGE! replaced it for the bullet (2026-09-21) nothing
+  in a shift reads it.
 - `Minigame.OWN_LAYER` (render layer 20) is reserved for a minigame's own props. Decals project
   only onto layer 1, so nothing on layer 20 gets painted. Cameras keep the default cull mask.
 - `hud_state()` may add `cross_section: {layers: [{name, from, to, color}], depth, layer}`; the

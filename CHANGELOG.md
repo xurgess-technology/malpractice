@@ -5,6 +5,12 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-21 (0.9.x)**
 
+- **0.9.2**: DODGE!, rebuilt: fly the bullet out with the lights on
+    - Changed: DODGE! is Flappy Bird down the bullet's own channel. Space flaps and that's it; the whole tract is visible, and the dark, the flashlight and the brake are gone.
+    - Changed: The walls only pinch when the patient squirms, and they only squirm if you under-dosed them. SQUIRM!
+    - Changed: Clip a wall and it tears: the game stops on a TORN! card for two seconds, you get dragged back, and the press that restarts it flaps.
+    - Changed: Every tear still comes back as its own bleeder when you pack the wound.
+
 - **0.9.1**: The Anesthetic Injection, and every step is a page on a clipboard now 📋💉
     - Changed: Sedation is the Anesthetic Injection, and DOSE! is gone. Draw the plunger into a green band set by the patient's weight, flick the bubbles out, then slap up a vein, stick it at the right angle, stop at the red flash and push. Slowly.
     - Changed: The needle goes in exactly where you point, and you can see the part that's under the skin.

@@ -403,7 +403,7 @@ func _input(event: InputEvent) -> void:
 ## shakes the cursor for a moment and jolts the body.
 func _stir_tick(delta: float) -> Vector2:
 	var sed := float(flags.get("sedation", 1.0))
-	if game_id == "anesthetic" or sed >= 0.75:
+	if game_id == "anesthetic" or sed >= 0.75 or (mg != null and mg.has_method("stirs_itself") and bool(mg.stirs_itself())):
 		return Vector2.ZERO
 	_stir_timer -= delta
 	if _stir_timer <= 0.0:
@@ -446,7 +446,9 @@ func _run_self_test() -> void:
 		get_tree().quit(3)
 		return
 	var started := Time.get_ticks_msec()
-	if gid == "forceps" and not arcade:
+	# The legacy forceps game (now only the monster table's brain harvest: --selftest=forceps:brain)
+	# wants a parent to put its 3D pieces under.
+	if path.ends_with("games/forceps.gd"):
 		script.call("self_test", self, 12)
 	else:
 		script.call("self_test")

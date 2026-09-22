@@ -502,6 +502,8 @@ func _spawn_mg() -> void:
 		# 2026-09-21: what the operator holds, for a step that can spend an extra item (the
 		# anaesthetic's tourniquet). Asked live, so it follows the host taking one away.
 		"hand_count": _operator_hand_count,
+		# 2026-09-21: this patient's vitals right now, for the shell's corner number (DODGE!'s VITALS).
+		"vitals": _case_vitals,
 		# GRAFTING: the specimen vat standing on this table, for the forceps steps that take an eye
 		# out of it or put one in. Every machine looks it up for itself; null when there is none.
 		"vat": _table_vat(),
@@ -816,6 +818,8 @@ func _sedation() -> float:
 
 
 func _stirs_now() -> bool:
+	if mg != null and mg.has_method("stirs_itself") and bool(mg.stirs_itself()):
+		return false
 	return String(_mg_step.get("game", "")) != "anesthetic" and _sedation() < 0.75
 
 

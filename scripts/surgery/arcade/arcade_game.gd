@@ -634,7 +634,7 @@ static func run_bot(g, skill: float, sed: float, seed_v: int, limit := 90.0) -> 
 		t += dt
 		var inp: Dictionary = g.bot_input(t, skill)
 		var c: Vector2 = inp.get("cursor", Vector2.ZERO)
-		if sed < 0.75:
+		if sed < 0.75 and not g.stirs_itself():
 			next_stir -= dt
 			if next_stir <= 0.0:
 				next_stir = lerpf(2.5, 11.0, sed / 0.75) * rng.randf_range(0.7, 1.3)

@@ -41,6 +41,9 @@ const SETUPS := {
 	# 2026-09-21 (docs/ARCADE_SURGERY.md 5.1): the Anesthetic Injection, already under way on a
 	# gunshot wound. `--patient=seal` puts the seal on the table instead of Bob.
 	"sedate": {"seed": 4242, "stage": "_sedate"},
+	# 2026-09-21 (docs/ARCADE_SURGERY.md 5.2): DODGE!, a gunshot wound at the bullet step, sedated, and
+	# you already operating. `--undersedated` makes the patient squirm; `--patient=seal` swaps in the seal.
+	"dodge": {"seed": 4242, "stage": "_dodge"},
 }
 
 
@@ -208,8 +211,8 @@ static func _items(game: Game) -> void:
 static func arcade_all_on() -> void:
 	for key in Procedures.ARCADE_ENABLED.keys():
 		var k := String(key)
-		# The two monster-table steps have no arcade rebuild of their own and stay legacy.
-		if k == "saw:skull" or k == "forceps:brain":
+		# The monster table's skull cut has no arcade rebuild of its own and stays legacy.
+		if k == "saw:skull":
 			continue
 		if ResourceLoader.exists(String(Procedures.ARCADE_SCRIPTS.get(k, Procedures.ARCADE_SCRIPTS.get(k.get_slice(":", 0), "")))):
 			Procedures.ARCADE_ENABLED[k] = true
@@ -301,6 +304,46 @@ static func _sedate(game: Game) -> void:
 		else:
 			print("[review] sedate: could not start operating: %s" % why)
 	print("[review] sedate: %s on table %d at the sedation step, a tourniquet in hand" % [pid, table])
+
+
+## DODGE (docs/ARCADE_SURGERY.md 5.2): a gunshot wound on the table at step 2, the bullet, already
+## sedated, and you operating it with the forceps in hand: the DODGE! card is up. Space starts it and
+## flaps. `--undersedated` puts the patient in at sedation 0.3 instead, so the walls squirm every so
+## often (the first within 4-10 s of flying). `--patient=seal` puts the seal on the table. Gauze is in
+## the other hand for the next step (WHACK! puts a bleeder on every wall you tore). E steps back.
+static func _dodge(game: Game) -> void:
+	var pid := "bob"
+	var sed := 1.0
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--patient="):
+			pid = a.trim_prefix("--patient=").strip_edges()
+		if a == "--undersedated":
+			sed = 0.3
+	if not Procedures.PATIENTS.has(pid) or Procedures.is_monster(pid):
+		pid = "bob"
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	game.add_case({"patient_id": pid, "ailment_id": "gunshot", "table": table, "state": "on_table",
+		"step_index": 1, "flags": {"sedation": sed}})
+	var t: Vector3 = game.table_position(table)
+	place(game, t + Vector3(0.0, 0, 1.15), t + Vector3(0, 1.05, 0))
+	clear_hands(game)
+	give(game, "forceps", 1)
+	give(game, "gauze", 3)
+	game.local_player().selected = 0
+	game.stock_storage("gauze", 3)
+	var tree := game.get_tree()
+	for i in 6:
+		await tree.physics_frame
+	var sys = game.surgery_for_table(table)
+	if sys != null:
+		var why: String = sys.can_begin(game.local_player())
+		if why == "":
+			sys.begin(game.local_player())
+		else:
+			print("[review] dodge: could not start operating: %s" % why)
+	print("[review] dodge: %s on table %d at the bullet step, sedation %.1f" % [pid, table, sed])
 
 
 ## ARCADE SAW (docs/ARCADE_SURGERY.md 5.5): Bob is on the table sedated with a tourniquet already
