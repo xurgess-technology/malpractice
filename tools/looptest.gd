@@ -394,10 +394,23 @@ func _work() -> void:
 				bot.selected = i
 				bot.drop_count += 1
 				return
+		# 2026-09-22: stash a supply, never the loot. The bot's own housekeeping used to pick the
+		# first non-empty slot, which is the loot stack it grabbed for the furnace sale -- so it
+		# quietly put its payday on the OR shelves and every later loot check failed. A player
+		# shelves gauze to free a hand; nobody shelves the thing they came to sell.
+		var stash := -1
 		for i in bot.slots.size():
-			if String(bot.slots[i].kind) != "":
-				bot.selected = i
+			var k2 := String(bot.slots[i].kind)
+			if k2 != "" and not Items.is_loot(k2):
+				stash = i
 				break
+		if stash < 0:
+			# Every slot is loot (never happens with the one stack this test grabs, but don't wedge
+			# the whole shift loop if it ever does): put one down on the floor instead of hanging.
+			bot.selected = 0
+			bot.drop_count += 1
+			return
+		bot.selected = stash
 		var shelf: Node3D = game.storage_nodes[0]
 		_go_use(String(shelf.get_meta("interact_id")), shelf.global_position, false)
 		return

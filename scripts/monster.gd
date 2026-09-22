@@ -34,11 +34,19 @@ const MAX_HIVES := 8
 ## flash and the push are the feedback now.
 ##
 ## Zero rather than deleted, because this is a feel call: put 0.7 back and the old stagger returns.
-## brain.stun() is still CALLED, and still earns its keep at zero seconds -- it does the 0.45 m
-## knockback, it points the monster at whoever hit it (`then_hunt`, so it turns and rushes you
-## rather than wandering off), and its `maxf(timer, seconds)` guard means a saw hit can't cut short
-## a stun a SHOVE opened. Only the freeze goes.
+## brain.stun() is still CALLED, and still earns its keep at zero seconds -- it points the monster
+## at whoever hit it (`then_hunt`, so it turns and rushes you rather than wandering off), it
+## interrupts a Sonographer's charge and wail, and its `maxf(timer, seconds)` guard means a saw hit
+## can't cut short a stun a SHOVE opened. Only the freeze goes.
+##
+## The knockback is NOT one of those things any more: it is STAGGER_KNOCK through knock_back()
+## below, its own call, so that this number can go to zero without the push going with it.
 const STAGGER_SECONDS := 0.0
+## Metres a saw blow knocks it straight back. This used to ride inside brain.stun()'s `push`
+## argument, which made the knockback and the freeze one call and one decision; they are two
+## different things (the freeze is gone, the knockback is the point), so the push is its own
+## call now -- knock_back() below -- and brain.stun() is asked for 0 push.
+const STAGGER_KNOCK := 0.45
 ## Getting up after sedation wears off, before it hunts.
 const WAKE_STAGGER := 1.2
 
@@ -329,10 +337,43 @@ func take_hit(dir: Vector3, amount: int, _source: String) -> String:
 	var attacker: Node = nearest_player(3.5)
 	if attacker != null:
 		from = attacker.global_position
+	knock_back(dir, STAGGER_KNOCK)
+	# Push 0: the shove back already happened above. This call is here for everything else it does
+	# and NOT for a freeze -- STAGGER_SECONDS is 0. It points the monster at whoever hit it
+	# (`then_hunt`), it interrupts a Sonographer's charge and wail, and its maxf(timer, seconds)
+	# means a saw hit can never cut short a stun a SHOVE opened.
 	if brain.has_method("stun"):
-		brain.stun(dir, STAGGER_SECONDS, 0.45, from)
+		brain.stun(dir, STAGGER_SECONDS, 0.0, from)
 	lunge_t = 0.0
 	return "stagger"
+
+
+## Host: shove this body `metres` straight back along `dir`, flat and at once. No stun, no freeze:
+## a knockback and a stun are separate things here (see STAGGER_SECONDS), and this is the knockback.
+##
+## A wall still stops it, but a wall it meets at an ANGLE deflects it instead of swallowing it: a
+## plain move_and_collide halts dead on first contact, so a hit landed anywhere near hospital
+## geometry lost most of its push and read as a twitch. The leftover travel slides along the
+## surface, which is what made the knockback unreliable (nettest `hit_feedback` measured 0.27 m of
+## a 0.8 m push with a wall in the way). Returns the metres it actually travelled.
+func knock_back(dir: Vector3, metres: float) -> float:
+	if metres <= 0.0 or not is_inside_tree():
+		return 0.0
+	var d := dir
+	d.y = 0.0
+	if d.length() < 0.01:
+		return 0.0
+	var from: Vector3 = global_position
+	var motion := d.normalized() * metres
+	for _i in 3:
+		var col := move_and_collide(motion)
+		if col == null:
+			break
+		motion = col.get_remainder().slide(col.get_normal())
+		motion.y = 0.0
+		if motion.length() < 0.01:
+			break
+	return from.distance_to(global_position)
 
 
 ## Stunned right now (the shove window) and it has a brain worth taking.

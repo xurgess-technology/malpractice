@@ -9,11 +9,14 @@ Last checked: 2026-09-22, `main` at `c933607` (0.10.17), by the `strap-fix` task
 `c933607` itself to be sure it was not the branch's doing.
 
 The list got longer that day, and **not because anything broke**: several of these had been failing
-for some unknown time with nobody writing them down (`looptest`, `pockettest`, nettest `pockets`),
-and one is fallout from 0.10.16 earlier the same day (nettest `hit_feedback`). Of the 22 nettest
-scenarios, 16 pass, `full_shift_lag` passes on a quiet re-run, and `brains`, `pockets`,
-`rocket_boots` and `hit_feedback` fail. The earlier note that everything but this file's entries
-passed dated from 2026-09-17, `main` at `ded2d46`.
+for some unknown time with nobody writing them down (`looptest`, `pockettest`, nettest `pockets`).
+Of the 22 nettest scenarios, 17 pass, `full_shift_lag` passes on a quiet re-run, and `brains`,
+`pockets` and `rocket_boots` fail. The earlier note that everything but this file's entries passed
+dated from 2026-09-17, `main` at `ded2d46`.
+
+`hit_feedback` was on this list as 1h, blamed on 0.10.16's stagger change. It was measured on the
+`saw-push` branch and **that diagnosis was wrong**: the test was shoving a Hive into a wall. Fixed
+and removed 2026-09-22.
 
 How to run things is at the bottom of this file.
 
@@ -98,23 +101,6 @@ How to run things is at the bottom of this file.
   identical message, and it reproduces every run (not a load flake). Never written down before.
 - Not to be confused with the headless `pockettest` scene (section 1f), which fails on something
   else entirely (the Night Nurse).
-
-## 1h. nettest `hit_feedback`: a saw hit barely pushes the Hive — from 0.10.16
-
-- **Command:** `-- --only=hit_feedback`
-- **Result:** `FAIL` after ~22 s, `the hit pushed the Hive only 0.27 m` (0.30 m on `main`; it varies
-  a little run to run because the processes are not in lockstep).
-- **The check:** `tools/nettest.gd` around line 1841 wants `hit_feedback_monster` to move the Hive
-  at least **0.3 m**, "far enough to read as a knock rather than a twitch". It lands just under.
-- **Cause, as far as it goes:** 0.10.16 (2026-09-22) set `STAGGER_SECONDS := 0.0` in
-  `scripts/monster.gd`, and `_hit` passes it straight to `brain.stun(dir, STAGGER_SECONDS, 0.45,
-  from)` — the push now lasts zero seconds, so it only travels about the distance one frame of it
-  covers. `scripts/combat/combat.gd` line 58 records that change as "the push survived it, the stun
-  did not"; this test says the push only *just* survived it, and lands the wrong side of the line.
-- **So this one has a known author**: it is fallout from today's stagger change, not an old failure.
-  Whoever picks it up should decide which is right — the 0.3 m the test asks for, or the zero-second
-  stagger — rather than just moving the threshold.
-- Confirmed on plain `main` at `c933607`, so it is not any branch's doing.
 
 ## 1i. nettest `full_shift_lag` is a load flake
 
