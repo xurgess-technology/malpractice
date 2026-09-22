@@ -63,5 +63,21 @@ func _initialize() -> void:
 		print("  shift %d: %d/%d = %.1f%%" % [gn, e[0], e[1], 100.0 * float(e[0]) / maxf(1.0, float(e[1]))])
 	print("  rolls that wanted a pocket and found no room: %d" % wanted_but_failed)
 	print("  in band 20-30%%: %s" % ("YES" if pct >= 20.0 and pct <= 30.0 else "NO"))
+	# No repeats: with a kind excluded, no roll may land on it. A quarter of the seeds is plenty.
+	var breaches := 0
+	var rolled := 0
+	var sample := maxi(1, seed_count / 4)
+	for kind in Plan.KINDS:
+		Plan.exclude_kind = kind
+		for seed in range(first_seed, first_seed + sample):
+			for gn in range(1, shift_count + 1):
+				var plan := Plan.of(MG.generate(seed, MG.wing_seed_for(seed, gn)))
+				if plan.is_empty():
+					continue
+				rolled += 1
+				if String(plan.kind) == kind:
+					breaches += 1
+	Plan.exclude_kind = ""
+	print("  no repeats: %d pockets rolled with a kind excluded, %d were the excluded kind" % [rolled, breaches])
 	print("took %d ms" % (Time.get_ticks_msec() - t0))
-	quit(0 if pct >= 20.0 and pct <= 30.0 else 1)
+	quit(0 if pct >= 20.0 and pct <= 30.0 and breaches == 0 else 1)

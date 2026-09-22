@@ -73,6 +73,17 @@ How to run things is at the bottom of this file.
   `c933607` — the same two checks with the same numbers to the decimal (60.0 s, 1444.3 m), so
   nothing about it is timing-dependent. Never written down before; nobody has looked at the cause.
 - The other 178 checks pass, the seams themselves included.
+- **It became intermittent on 2026-09-22** with the POCKET_SPACES_2 phase 1 fence (`pockets-phase1`),
+  which stops idle wander crossing a seam. Five runs on that branch: **pass, fail, pass, pass, fail**.
+  A passing run has her following in **9.2 s, 3.9 m** — a healthy follow, not a near-miss — and a
+  failing one still reports exactly 60.0 s and 1444.3 m, which is just "she stayed in the hospital
+  while the bot walked into the pocket", so the identical number says nothing about the cause.
+- **So it is not fixed, and the branch did not break it either**: a deterministic failure became a
+  coin flip. That is a strong hint about the cause. The Night Nurse's `_vanish()` asks
+  `random_nav_point` for a point up to **400 m** away, which used to reach the pocket at tile 800;
+  the fence now refuses those, so she is far likelier to still be nearby when the bot crosses.
+  Whoever picks this up should look at `_vanish()` in `scripts/monsters/night_nurse_brain.gd` and at
+  how `_nurse_follows` in `tools/pockettest.gd` stages her, rather than at the seam.
 
 ## 1g. nettest `pockets`: client 1 never carries client 2 into the pocket
 
@@ -122,6 +133,14 @@ How to run things is at the bottom of this file.
   before, and seed 149 has too; seed 38 is new as of 2026-09-17.
 - **Where to look:** morgue furnishing in `scripts/level/room_furnish.gd` (where tray anchors are
   placed against walls or equipment) versus the navmesh bake around them.
+- **The seed numbers are not the bug — don't chase a new one.** Which seeds trip this depends on
+  whether that seed's map got a pocket, because the entrance stubs reserve room slots and the whole
+  wing lays out differently. Shown on 2026-09-22 with mapcheck's own flag, nothing else changed:
+  `--seeds=8 --builds=8 --build_pocket=none` fails seeds **3 and 4**, and the same command with a
+  pocket fails seeds **1 and 3**. Same bug, same ~2.6-3.3 m, different seeds.
+- So a change that alters how often pockets appear moves this list. POCKET_SPACES_2 phase 1
+  (`pockets-phase1`) did exactly that, and the full run there reports **seeds 1, 38 and 112** —
+  seed 1 being the pre-existing bug landing on one more seed, not a new fault.
 
 ## 3. The laser surge plays no sound (`dev_zap_01`)
 
