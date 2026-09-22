@@ -5,6 +5,11 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.18**: SAW!, rebuilt: the limb is meat, not a progress bar
+    - Changed: SAW! is Pong where the ball is a bone saw and the arm doesn't bounce it back. Every pass strips a layer off whatever the blade actually crosses, and it's off when a gap opens all the way through -- so a careless run leaves a visibly chewed stump instead of a worse number.
+    - Changed: Bone doesn't take more passes, it fights your hands: the blade slows and chatters off its line while it's riding a shaft.
+    - Changed: Human arm or seal flipper, on a toggle. Miss the paddle and the saw gets past you -- that's the only way to botch it.
+    - Note: Still behind the dev panel's Arcade surgery toggle until you've played it.
 - **0.10.17**: Everything on the floor is wearing a little lamp
     - Changed: A dropped item now floats inside a soft ball of light that breathes slowly, so you can tell what's lying in a dark corridor at a glance. The colour tells you what it is: teal for supplies, gold for loot, red for organs, violet for pharmacy stock, green for the big two-handed things.
     - Changed: It's cheaper than the glow it replaces, which was redrawing the item's own model up to four times over.
