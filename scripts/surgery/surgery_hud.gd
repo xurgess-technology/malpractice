@@ -94,26 +94,9 @@ class _Canvas extends Control:
 			drawn.append("cross_section")
 			draw_rect(Rect2(x, y - 30, pw, 26), Color(0, 0, 0, 0.42))
 			_cross_section(font, x + 14, y - 30, pw - 28, xs)
-		_draw_stamp(w, h)
-
-	## The current step's stamp card ("DRAW!", "READY", ...), pinned in the same screen spot every
-	## time -- the middle of the view, clear of the bottom strip -- instead of wherever this step's
-	## panel happens to be anchored on the patient (ArcadeGame.stamp_card(), shell.gd
-	## draw_stamp_fixed; 2026-09-22).
-	func _draw_stamp(w: float, h: float) -> void:
-		var sys = hud.system
-		var mg = sys.mg
-		if mg == null or not is_instance_valid(mg) or not mg.has_method("stamp_card"):
-			return
-		var sc: Dictionary = mg.stamp_card()
-		if sc.is_empty():
-			return
-		var shell = mg.shell
-		if shell == null:
-			return
-		shell.draw_stamp_fixed(self, String(sc.get("shout", "")), sc.get("card", {}),
-			float(sc.get("lock_left", 0.0)), float(sc.get("k", 0.0)), Vector2(w * 0.5, h * 0.44))
-
+		# THE STAMP CARD IS NOT DRAWN HERE (2026-09-22). It belongs to the paper on the clipboard --
+		# ArcadeGame's painter stamps it into the page through shell.draw_stamp -- so it reads as one
+		# surface with the game under it, and an onlooker across the OR sees it on the board too.
 
 	## One row of "KEY what it does" pairs: the key in the panel's teal, what it does in grey, with a
 	## thin separator between pairs. Pairs that do not fit are dropped rather than wrapped.
