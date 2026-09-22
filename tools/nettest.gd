@@ -1799,6 +1799,32 @@ func _sc_monsters():
 	await _finish_together("saw the Hives, one sedated (lying), hit, dragged by me and waking")
 
 
+## The flattest horizontal direction out of `m` with clear floor space behind it, so a knockback
+## test measures the knockback and not the nearest wall. Tries 16 directions at chest height and
+## takes the one with the most room; Vector3.FORWARD if the world is not there to ask.
+func _clear_push_dir(m: Node) -> Vector3:
+	var world: World3D = game.get_viewport().world_3d if game.is_inside_tree() else null
+	if world == null:
+		return Vector3.FORWARD
+	var eye: Vector3 = m.global_position + Vector3.UP * 1.0
+	var want := 2.0
+	var best := Vector3.FORWARD
+	var best_room := -1.0
+	for i in 16:
+		var a := TAU * float(i) / 16.0
+		var d := Vector3(sin(a), 0.0, cos(a))
+		var q := PhysicsRayQueryParameters3D.create(eye, eye + d * want)
+		q.collision_mask = C.L_WORLD
+		var hit := world.direct_space_state.intersect_ray(q)
+		var room: float = want if hit.is_empty() else eye.distance_to(hit.position)
+		if room > best_room:
+			best_room = room
+			best = d
+		if room >= want:
+			break
+	return best
+
+
 ## HIT FEEDBACK: a landed weapon hit reads on every machine, not just the swinger's. The host lands
 ## hits on a Hive and on client 1 (scripts/combat/combat.gd hit_feedback_monster / _player) and the
 ## client has to see BOTH of them flash red on its own copies. The knock back is checked on the host,
@@ -1820,8 +1846,14 @@ func _sc_hit_feedback():
 		_send("hf_start", {"m": int(w.monster_id), "p": int(victim.peer_id)})
 		await _wall_wait(0.5)
 		# The push: straight back, far enough to read as a knock rather than a twitch.
+		# Pick a direction with ROOM behind it first. This used to push along Vector3.FORWARD no
+		# matter what, and a Hive out of the shift's roster stands wherever it stands -- when that
+		# was flush against a wall (seen 2026-09-22: 0.29 m of clearance, the wall's normal dead
+		# ahead) the push measured a twitch and this check failed, testing the hospital's geometry
+		# rather than the knockback. The 0.3 m below is unchanged; it just gets a fair swing at it.
+		var push_dir := _clear_push_dir(w)
 		var before: Vector3 = w.global_position
-		game.combat.hit_feedback_monster(w, Vector3.FORWARD)
+		game.combat.hit_feedback_monster(w, push_dir)
 		var moved: float = before.distance_to(w.global_position)
 		if moved < 0.3:
 			return _end(false, "the hit pushed the Hive only %.2f m" % moved)

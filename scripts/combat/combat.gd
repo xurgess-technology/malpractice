@@ -53,9 +53,10 @@ const STRAP_SEDATION_MIN := 0.35
 # down and shows a stun window (stun_window.gd); a sawn one keeps coming at you, just a step further
 # away. Feel numbers, meant to be moved by eye.
 #
-## Metres a sawn monster is shoved straight back, on top of the 0.45 m brain.stun's own knockback
-## gives it (monster.take_hit). ~1.25 m in all: a tapped shove's push is 1.05 m. That call's freeze
-## is 0 s as of 2026-09-22 (monster.gd STAGGER_SECONDS) -- the push survived it, the stun did not.
+## Metres a sawn monster is shoved straight back, on top of the 0.45 m monster.take_hit already
+## gave it (monster.gd STAGGER_KNOCK). ~1.25 m in all: a tapped shove's push is 1.05 m. The freeze
+## is 0 s as of 2026-09-22 (STAGGER_SECONDS) and the knockback no longer rides inside brain.stun()
+## at all -- monster.knock_back() is its own call, so losing the stun cannot cost us the push.
 const HIT_PUSH := 0.8
 ## The knockback a sawn player takes: a touch under a tapped shove's 11.0 / UP * 2.0 (game.gd
 ## player_shoved), so it moves you without the shove's "get off me" heave.
@@ -272,15 +273,19 @@ func hit_feedback_player(q: Node) -> void:
 	game._broadcast("cb_flash", {"p": int(q.peer_id)})
 
 
-## Host: shove `m` straight back along `dir`, flat, the way a brain's stun push does it
-## (move_and_collide, so walls stop it). Host-only: monster positions are replicated in the
-## snapshot, so clients see the step back without an event of their own.
+## Host: shove `m` straight back along `dir`, flat, through the monster's own knock_back (which
+## deflects off walls rather than stopping dead on them -- see monster.gd). Host-only: monster
+## positions are replicated in the snapshot, so clients see the step back without an event of
+## their own. Nothing here stuns: the knockback is its own thing now, not a side effect of a stun.
 func _push_back(m: Node, dir: Vector3) -> void:
 	if not (m is CharacterBody3D) or is_sedated(m) or dragger_of(m) != null:
 		return
 	var d := dir
 	d.y = 0.0
 	if d.length() < 0.01:
+		return
+	if m.has_method("knock_back"):
+		m.knock_back(d, HIT_PUSH)
 		return
 	(m as CharacterBody3D).move_and_collide(d.normalized() * HIT_PUSH)
 
