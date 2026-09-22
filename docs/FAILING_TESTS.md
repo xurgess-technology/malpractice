@@ -91,6 +91,19 @@ How to run things is at the bottom of this file.
 - It runs with 120 ms lag and 3% loss, so its connection window is the tightest in the suite.
   Re-run it alone before believing a failure.
 
+## 1j. The host stalls 130-540 ms mid-shift, headless, even when idle
+
+- **Not a failing test** — found 2026-09-22 while fixing the rocket-boot burn, with temporary
+  instrumentation on the host's net tick. It is recorded here because it is the kind of thing that
+  makes other tests look flaky.
+- **What was measured:** gap probes showed the host's physics frame routinely stalling **130-330 ms**
+  on an otherwise quiet machine, and once **541 ms** — a gap that straddled an entire rocket burn, so
+  `_build_state` never ran while the bit was true and there was nothing to send. That was the second
+  half of the boots bug (fixed in 0.10.30 by holding and counting the burn rather than sampling it).
+- **The stalls themselves were never explained**, and they are no longer anyone's known bug. Anything
+  that depends on a short-lived state being sampled at 20 Hz is vulnerable to them, so this is worth
+  its own look before the next netcode feature leans on snapshot timing.
+
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
 
 - **Command:** `godot --headless --path . -s tools/mapcheck.gd`
