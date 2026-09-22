@@ -236,8 +236,11 @@ func _boot_setup(setup: String) -> void:
 		await get_tree().process_frame
 	await ReviewSetups.stage(setup, game)
 	if role == "host":
-		print("[review] staged '%s'; host player at %v, %d player(s) in the world" % [
-			setup, game.local_player().global_position, game.players.size()])
+		var c: Dictionary = game.case
+		print("[review] staged '%s'; host player at %v, %d player(s) in the world; case here: %s" % [
+			setup, game.local_player().global_position, game.players.size(),
+			"none" if c.is_empty() else "%s / %s, step %s, %s" % [
+				c.get("patient_id", "?"), c.get("ailment_id", "?"), c.get("step_index", "?"), c.get("state", "?")]])
 
 
 ## Co-op review window 1: like _start_host, but on the setup's seed and the review set's port, and
@@ -305,9 +308,15 @@ func _boot_setup_join(port: int) -> void:
 		await get_tree().process_frame
 	ReviewSetups.place_beside(game, host_player)
 	# Proof, in the log, that this is the host's world and not a lookalike of it: the host's player
-	# is a node here, at the spot the host's own log says the setup put it.
-	print("[review] joined: host player %s at %v; standing beside it at %v" % [
-		Net.name_for(Net.HOST_ID), host_player.global_position, game.local_player().global_position])
+	# is a node here at the spot the host's own log says the setup put it, and the case the host
+	# staged is on this machine's table too. Two windows that look right but are in separate worlds
+	# is the failure this whole path exists to stop, so it says so in the log rather than leaving it
+	# to be eyeballed.
+	var c: Dictionary = game.case
+	print("[review] joined: host player %s at %v; standing beside it at %v; case here: %s" % [
+		Net.name_for(Net.HOST_ID), host_player.global_position, game.local_player().global_position,
+		"none" if c.is_empty() else "%s / %s, step %s, %s" % [
+			c.get("patient_id", "?"), c.get("ailment_id", "?"), c.get("step_index", "?"), c.get("state", "?")]])
 
 
 func _after_launch() -> void:
