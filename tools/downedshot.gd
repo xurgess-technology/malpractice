@@ -15,6 +15,9 @@ extends Node
 ##   07_stitches_mistake   right after a bad bite
 ##   08_stitches_done      the gash closed
 ##   08b_after_done        a moment later
+##   09_carrying_teammate  a bot teammate over your shoulder at the table (2026-09-22 playtest)
+##   09_revived_standing   the same teammate standing again after the stitches: no carry pose left
+##   09b_revived_side      and from the other side, feet on the floor
 ##
 ## A normal hospital (seed 4242) with dev mode on (No monsters, No game over), clocked in with the
 ## phone hung up. 01 is on the hidden dev room's floor; everything with a table is in the hospital's
@@ -222,6 +225,57 @@ func _run() -> void:
 	_look_at(pt + Vector3.UP * 0.9)
 	await _frames(2)
 	await _shot("05_on_table_wide")
+
+	# ---- 09: PLAYTEST 2026-09-22 -- carry a teammate in, stitch them up, watch them stand.
+	# A bot, not a dummy: a dev dummy is a target dummy with no rig, and it is the rig that used to
+	# keep the fireman's-carry pose after the revive (most of the body ended up under the floor).
+	await _until(func(): return not d2.on_table, 60.0)
+	await _seconds(0.5)
+	dev.order_bot(bid, "stay")
+	bot.teleport(game._floor_at(pt + side * 5.5 + along * 2.5))   # the carrier bot, out of the shots
+	d2.teleport(game._floor_at(pt + side * 5.5 - along * 2.5))
+	var pid: int = dev.spawn_bot("bot", me, "Dr. Bled")
+	var pal: Player = game.players[pid]
+	dev.order_bot(pid, "stay")
+	await _frames(4)
+	pal.teleport(game._floor_at(pt + side * 2.6))
+	await _frames(2)
+	game.knock_down_player(pal, "test")
+	await _seconds(0.6)
+	me.slots = Player.empty_slots()   # a carry needs both hands
+	_stand(pal.global_position + side * 1.4, 0.0)
+	_look_at(pal.global_position)
+	await _frames(2)
+	game.start_carry(me, pal)
+	await _frames(3)
+	_stand(pt + side * 1.3, 0.0)
+	_look_at(pt + Vector3.UP * 0.9)
+	await _frames(3)
+	await _shot("09_carrying_teammate")
+	game.place_on_player_table(me, ti)
+	await _until(func(): return pal.on_table, 3.0)
+	game.give_hand(me, "suture_kit", 2)
+	me.bot_aim_id = tid
+	await _frames(3)
+	game.player_surgery.surgery.bot_skill = 1.0
+	me.bot_press += 1
+	await _until(func(): return me.operating, 5.0)
+	await _until(func(): return not pal.downed, 40.0)
+	game.player_surgery.surgery.bot_skill = -1.0
+	me.bot_aim_id = ""
+	await _seconds(1.5)
+	_stand(game._floor_at(pal.global_position + side * 2.4 + along * 1.4), 0.0)
+	_look_at(pal.global_position + Vector3.UP * 0.9)
+	await _seconds(0.4)
+	_look_at(pal.global_position + Vector3.UP * 0.9)
+	await _frames(3)
+	await _shot("09_revived_standing")
+	_stand(game._floor_at(pal.global_position - along * 2.6 + side * 0.5), 0.0)
+	_look_at(pal.global_position + Vector3.UP * 0.9)
+	await _seconds(0.4)
+	_look_at(pal.global_position + Vector3.UP * 0.9)
+	await _frames(3)
+	await _shot("09b_revived_side")
 
 
 ## The bot (on a carry order to "table", already carrying `who`) lays them on patient table `ti`.

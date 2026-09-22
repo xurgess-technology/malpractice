@@ -20,6 +20,9 @@ extends Node3D
 
 const LightRooms := preload("res://scripts/level/light_rooms.gd")
 
+## CUSTOMIZATION: the interact id of the big mirror itself (scripts/personnel/mirror_menu.gd).
+const MENU_AIM_ID := "mirror_customize"
+
 ## The big mirror's glass: size, and its centre in the piece's frame (wall-mounted: origin at the
 ## wall face, -Z out into the room).
 const BIG_GLASS := Vector2(1.58, 2.66)
@@ -51,6 +54,10 @@ class Mirror extends RefCounted:
 var _mirrors: Array[Mirror] = []
 var _turn := 0
 var _self_on := false
+## CUSTOMIZATION (scripts/personnel/mirror_menu.gd): while the mirror menu is up it drives the big
+## mirror itself -- it wants the picture every frame and the local body shown, whatever the camera
+## happens to be pointing at -- so the usual per-frame budgeting stands aside.
+var menu_hold := false
 
 
 ## `spots` is level_info.personnel's builder form (tile-space spots; see entrance.gd), converted by
@@ -61,8 +68,33 @@ func setup(spots: Dictionary, to_world: Callable) -> void:
 	var m: Dictionary = spots.get("mirror", {})
 	if not m.is_empty():
 		_add(true, BIG_GLASS, _glass_xform(m, BIG_CENTRE, to_world), BIG_PPM)
+		_add_menu_aim()
+		# CUSTOMIZATION: the menu the mirror opens. It lives here because it is the big mirror's,
+		# and a level without one never builds it.
+		add_child(preload("res://scripts/personnel/mirror_menu.gd").new())
 	for s in spots.get("sinks", []):
 		_add(false, SINK_GLASS, _glass_xform(s, SINK_CENTRE, to_world), SINK_PPM)
+
+
+## CUSTOMIZATION: what you aim at to open the mirror menu. A box just in front of the glass, so the
+## whole mirror is clickable rather than one spot on it.
+func _add_menu_aim() -> void:
+	var mr := _mirrors[_mirrors.size() - 1]
+	var a := Area3D.new()
+	a.name = "MirrorAim"
+	a.collision_layer = C.L_INTERACT
+	a.collision_mask = 0
+	a.monitoring = false
+	a.add_to_group("interactable")
+	a.set_meta("interact_id", MENU_AIM_ID)
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(mr.size.x, mr.size.y, 0.12)
+	cs.shape = box
+	a.add_child(cs)
+	mr.root.add_child(a)
+	a.position = Vector3(0, 0, 0.06)
+	a.set_script(preload("res://scripts/personnel/mirror_aim.gd"))
 
 
 func _glass_xform(spot: Dictionary, centre: Vector3, to_world: Callable) -> Transform3D:
@@ -114,6 +146,8 @@ func _exit_tree() -> void:
 
 
 func _process(_delta: float) -> void:
+	if menu_hold:
+		return
 	var main := get_viewport().get_camera_3d()
 	if main == null or _mirrors.is_empty():
 		_set_self(false)
@@ -157,6 +191,30 @@ func _process(_delta: float) -> void:
 		if mr != pick:
 			mr.viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	_render(pick, eye, mask, SubViewport.UPDATE_ONCE)
+
+
+## CUSTOMIZATION: the big mirror's glass node, its SubViewport and its glass size, or an empty
+## dictionary when this level has no big mirror.
+func big_mirror() -> Dictionary:
+	for mr in _mirrors:
+		if mr.big:
+			return {"root": mr.root, "viewport": mr.viewport, "size": mr.size}
+	return {}
+
+
+## CUSTOMIZATION: draw the big mirror this frame from `eye`, with the local body shown, ignoring the
+## render budget. Used by the mirror menu, which shows that picture full screen.
+func render_for_menu(eye: Vector3) -> void:
+	var mr: Mirror = null
+	for m in _mirrors:
+		if m.big:
+			mr = m
+	if mr == null:
+		return
+	var main := get_viewport().get_camera_3d()
+	var base: int = main.cull_mask if main != null else 0xFFFFF
+	_set_self(true)
+	_render(mr, eye, (base & ~HIDE_FROM_MIRRORS) | LightRooms.SELF, SubViewport.UPDATE_ALWAYS)
 
 
 ## In front of the glass, near enough, and some part of the glass on screen.

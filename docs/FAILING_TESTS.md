@@ -27,6 +27,48 @@ How to run things is at the bottom of this file.
   table"), which changed how the crew and the operating player push each other. That commit is the
   most recent change near this behaviour, but it hasn't been confirmed as the cause.
 
+## 1b. doortest: four more failures in the hinged-door E section
+
+- **Command:** `godot --headless --path . --fixed-fps 60 tools/doortest.tscn`
+- **Result:** these four, alongside the gurney one above:
+  - `the open door can be aimed at:` (the prompt comes back empty)
+  - `E again closes it (-1.00)`
+  - `E from the tunnel side swings it away from the player (-1.00, max_out 90)`
+  - `closed again`
+- **Found 2026-09-22** while fixing the open-leaf collision bug (0.10.10), on plain `main` before
+  that change, so they are not its doing. They were simply never written down: this file recorded
+  only the gurney failure, so `doortest` has been failing 5 checks, not 1, for some unknown time.
+  The totals move because that fix added checks: 5 of 82 before it, 5 of 91 after, the same five.
+- **They look like one fault, not four:** all four are about opening or closing a hinged door with
+  E and reading its prompt, and the `-1.00` values suggest the door's `amount` is not being read at
+  all rather than being wrong. Nobody has looked yet.
+
+## 1c. Strapping a monster to a table is broken, in three places at once
+
+Found 2026-09-22 by two tasks independently, and confirmed on plain `main` each time (once by
+stashing, once from a clean checkout, once by the orchestrator running the baseline directly). None
+of it was written down before. The three look like **one fault**, not three: every one of them is a
+monster failing to get strapped to a table.
+
+- **`combattest`: 1 of N, `a taken table does not offer to strap`** (the prompt reads
+  'Put the Sonographer down').
+  `godot --headless --path . --fixed-fps 60 tools/combattest.tscn` → `result=FAIL failures=1`.
+- **nettest `combat`: times out on strapping a monster.**
+  `godot --headless --path . --script tools/nettest_run.gd -- --only=combat`. It sedates the monster
+  at t=60 and then never drags/straps it — a gameplay step, not a connection step.
+- **nettest `graft`: `timed out after 30 s waiting for the cut step`.**
+  `-- --only=graft`. Same shape: it cannot get the monster onto the table to start cutting.
+
+Nobody has looked into the cause yet. Since GRAFTING and the monster cases both depend on getting a
+monster strapped down, this is probably worth more than its line count suggests.
+
+## 1d. nettest `rocket_boots` is flaky under load, not broken
+
+- Failed once during a full suite run on 2026-09-22 while four Godot instances were running in other
+  work slots, then **passed three times in a row** on re-run (43 s each).
+- Treat a lone `rocket_boots` failure as a flake first: re-run it alone before chasing it. If it ever
+  fails on an otherwise idle machine, that is new information worth recording here.
+
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
 
 - **Command:** `godot --headless --path . -s tools/mapcheck.gd`

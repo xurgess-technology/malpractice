@@ -29,6 +29,7 @@ extends RefCounted
 ## Then open it:  tools\review.bat 2 "HIVE: does the lunge read?" --setup=hive_lunge
 
 const DEFAULT_SEED := 4242
+const MirrorsScript := preload("res://scripts/personnel/mirrors.gd")
 
 const SETUPS := {
 	"icons": {"seed": 4242, "stage": "_icons"},
@@ -74,6 +75,19 @@ const SETUPS := {
 	# under the board swaps between them in play either way. `--solution` adds the debug overlay.
 	"suture": {"seed": 4242, "stage": "_suture"},
 	"suture_eye": {"seed": 4242, "stage": "_suture_eye"},
+	# MIRRORS (2026-09-22): in front of the entrance's big full-length mirror, hands empty, looking
+	# at your own reflection. `--dist=N` stands N metres off the glass (default 1.4).
+	"mirror": {"seed": 4242, "stage": "_mirror"},
+	# 2026-09-22 (playtest): a downed teammate on the floor by the OR. Carry them over your shoulder
+	# to a table, stitch them up, and watch them get up: the carry pose must not come with them.
+	"downed": {"seed": 4242, "stage": "_downed"},
+	# DOORS (2026-09-22, the playtest's "monsters walk through doors"): a hinged door standing wide
+	# open with a Hive parked behind the open leaf, hunting you. The leaf used to have no collider
+	# once the door was open: everything, you included, walked straight through the door model.
+	"doors": {"seed": 4242, "stage": "_doors"},
+	# HIT FEEDBACK (2026-09-22): bone saws in hand, two Hives coming for you, and Dr. Botsworth
+	# standing there to saw as well. A landed hit flashes its target red and knocks it back.
+	"hit": {"seed": 4242, "stage": "_hit"},
 }
 
 
@@ -670,6 +684,114 @@ static func _sono(game: Game) -> void:
 	game.say("Throw something (right click) and watch its neck. When it fills, it pings you.", 9.0)
 
 
+## DOORS: a room door standing wide open, a Hive on the far face of the open leaf, coming for you.
+## The leaf is the thing to test: walk into it, and watch the Hive go round it instead of through it.
+static func _doors(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	# Nothing else going on: no phone call, no patient, no other monsters, and you cannot lose.
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("god", {"on": true})
+	game._clear_monsters()
+	await tree.physics_frame
+	# A hinged door with room on both sides, nearest the clock.
+	var best: Node = null
+	var best_d := INF
+	for d in game.doors.doors.values():
+		if d.kind != "hinged" or bool(d.data.get("base", false)) or d.max_out < 80.0:
+			continue
+		if not game._point_is_clear(d.global_position + d.normal * 2.4) \
+				or not game._point_is_clear(d.global_position - d.normal * 2.4):
+			continue
+		var dist: float = d.global_position.distance_to(game.clock_pos())
+		if dist < best_d:
+			best_d = dist
+			best = d
+	if best == null:
+		push_warning("[review] doors setup: no hinged door with room on both sides")
+		return
+	# Wide open, the way it is left after someone walks through it.
+	var open_amount := 1.0 if best.max_out >= 80.0 else -1.0
+	best.snap_to(open_amount)
+	game.doors._moving.erase(best.door_id)
+	await tree.physics_frame
+	var leaf: Node3D = best.leaf_bodies[0]
+	var leaf_mid: Vector3 = leaf.global_transform * Vector3(float(best.leaf_len[0]) * 0.6, 0.0, 0.0)
+	leaf_mid.y = best.global_position.y
+	# The leaf stands out of the wall into the room, so the room's near-wall strip has a side each:
+	# you back in the room looking at it, the Hive on the far side of it, the leaf between you.
+	var out: Vector3 = (leaf_mid - best.global_position)
+	out.y = 0.0
+	out = out.normalized()                          # into the room, along the open leaf
+	var hinge_side: Vector3 = (leaf.global_position - best.global_position)
+	hinge_side.y = 0.0
+	hinge_side = hinge_side.normalized()            # along the doorway, toward the leaf's hinge
+	var you: Vector3 = game._floor_at(best.global_position + out * 4.0 - hinge_side * 1.5)
+	if not game._point_is_clear(you + Vector3.UP * 1.0):
+		you = game._floor_at(best.global_position + out * 2.6)
+	place(game, you, leaf_mid + Vector3.UP * 1.1)
+	var hive_at: Vector3 = game._floor_at(best.global_position + hinge_side * 2.2 + out * 0.9)
+	if not game._point_is_clear(hive_at + Vector3.UP * 1.0):
+		hive_at = game._floor_at(best.global_position + hinge_side * 2.2 + out * 2.0)
+	var hive = game._add_monster("hive", hive_at)
+	hive.brain._hunt(you)
+	p.set_flashlight(true)
+	await tree.physics_frame
+	print("[review] doors: door %s wide open (%.2f), a Hive behind its leaf at %s" % [best.door_id, best.amount, str(hive.global_position.snappedf(0.1))])
+	game.say("The open door is between you and the Hive. Walk into the leaf; watch it come round, not through.", 10.0)
+
+
+## HIT FEEDBACK: a clear stretch of floor with three bone saws in your hands, two Hives walking in
+## at you, and Dr. Botsworth standing beside you as something to swing at that is a PLAYER, not a
+## monster. Hit either and it should wash red for a moment and get knocked a step back -- and the
+## Hive should keep coming at you rather than going down dazed, which is what a shove (Q) does.
+## Swing a Hive and then Q it back to back to see the difference. You cannot be hurt.
+static func _hit(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	# Nothing else going on, and nothing that can end the review early.
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("god", {"on": true})
+	game._clear_monsters()
+	await tree.physics_frame
+	# Somewhere with room to be knocked about in.
+	var base: Vector3 = game._floor_at(game.clock_pos())
+	var out := open_direction(game, base + Vector3.UP * 1.2, 8.0)
+	var side := out.cross(Vector3.UP).normalized()
+	place(game, base, base + out * 4.0 + Vector3.UP * 1.6)
+	clear_hands(game)
+	# Three saws: one snaps on about one swing in eight, and the review should outlive that.
+	give(game, "bone_saw", 1)
+	give(game, "bone_saw", 1)
+	give(game, "bone_saw", 1)
+	give(game, "anesthetic", 3)
+	p.selected = 0
+	p.set_flashlight(true)
+	# Dr. Botsworth, standing still, close enough to saw: the PvP half.
+	var bot: int = game.dev.spawn_bot("bot", p, "Dr. Botsworth", game._floor_at(base + side * 1.4))
+	game.dev.order_bot(bot, "stay")
+	# Two Hives walking in from ahead.
+	var hives: Array = []
+	for i in 2:
+		var at: Vector3 = game._floor_at(base + out * 5.0 + side * (float(i) * 2.0 - 1.0))
+		if not game._point_is_clear(at + Vector3.UP * 1.0):
+			at = game._floor_at(base + out * 3.2)
+		var h = game._add_monster("hive", at)
+		h.brain._hunt(p.global_position)
+		hives.append(h)
+	await tree.physics_frame
+	print("[review] hit: %d Hives and Dr. Botsworth within reach, %d bone saws in hand" % [hives.size(), 3])
+	game.say("Saw the Hives, and saw Botsworth. Red flash, knocked back, still coming. Q shoves (that one stuns).", 10.0)
+
+
 static func _graft_stage(game: Game, vat_kind: String, owner: String, already: bool) -> void:
 	var tree := game.get_tree()
 	var p = game.local_player()
@@ -773,3 +895,71 @@ static func _hover_drop(game: Game) -> void:
 	drop_at(game, "suture_kit", spot)
 	drop_at(game, "tourniquet", spot + out * 0.1)
 	game.say("Drop everything on the same spot: they float, they glow, they make room.", 9.0)
+
+
+## MIRRORS (2026-09-22): standing in front of the entrance's big full-length mirror, hands empty,
+## looking at your own reflection. `--dist=N` stands N metres off the glass (default 1.4).
+static func _mirror(game: Game) -> void:
+	var pr: Dictionary = game.level_info.get("personnel", {})
+	var m: Dictionary = pr.get("mirror", {})
+	if m.is_empty():
+		print("[review] mirror: this level has no personnel mirror")
+		return
+	var mp: Vector3 = m.position
+	var out := (Basis(Vector3.UP, float(m.get("yaw", 0.0))) * Vector3(0, 0, -1)).normalized()
+	var dist := 1.4
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--dist="):
+			dist = float(a.split("=")[1])
+	var glass: Vector3 = mp + Vector3(0.0, MirrorsScript.BIG_CENTRE.y, 0.0)
+	place(game, game._floor_at(mp + out * dist), glass - Vector3(0.0, 0.3, 0.0))
+	clear_hands(game)
+	game.local_player().selected = 0
+	game.say("Aim at the mirror and press E: cycle your scrubs and your skin, E again to come back.", 10.0)
+## DOWNED (2026-09-22 playtest): a teammate bleeding on the floor of the OR, a free table beside you
+## and two suture kits on the floor by it. Hands empty, hold E on them to hoist them over your
+## shoulder, carry them to the table and press E to lay them down, pick a kit up and stitch them.
+## What this is for: when they get up, the body must stand like anyone else's. It used to keep the
+## fireman's-carry pose -- folded over a shoulder that is not there, most of it through the floor.
+## The bug was never visible to the player being carried (they are behind their own eyes), so this
+## setup makes you the carrier and the teammate a bot, which is exactly the body everyone else sees.
+## Dev mode is on (F1) with monsters off and no game over, so nothing interrupts the look.
+static func _downed(game: Game) -> void:
+	var tree := game.get_tree()
+	var me = game.local_player()
+	game.set_dev_tools(true, me)
+	var dev = game.dev
+	dev.request("monsters_off", {"on": true})
+	dev.request("no_game_over", {"on": true})
+	# A free table to lay them on, and a clear patch of floor in front of it for the pick-up.
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	var t: Vector3 = game.table_position(table)
+	var b := Basis(Vector3.UP, float(game.table_yaw_of(table)))
+	var side: Vector3 = b * Vector3(0.0, 0.0, 1.0)   # the side a revived player gets up on
+	var mate_at: Vector3 = game._floor_at(t + side * 2.6)
+	# A bot teammate, downed where you can see them from where you stand.
+	var bid: int = dev.spawn_bot("bot", me, "Dr. Bled")
+	for i in 4:
+		await tree.physics_frame
+	var mate = game.players.get(bid)
+	if mate != null and is_instance_valid(mate):
+		dev.brains.erase(bid)   # no orders, no wandering: it is a body to carry
+		mate.teleport(mate_at)
+		await tree.physics_frame
+		game.knock_down_player(mate, "review")
+		# Then half a second of crawling. The rigged body only blends into its Crawl clip while it
+		# moves (docs/KNOWN_ISSUES.md, "a downed player who never crawls is drawn standing"), so a
+		# teammate downed on the spot would be staged bolt upright -- nothing to do with this fix.
+		mate.bot_move = Vector2(0.0, -1.0)
+		for i in 30:
+			await tree.physics_frame
+		mate.bot_move = Vector2.ZERO
+		mate_at = mate.global_position
+	place(game, game._floor_at(t + side * 4.2), mate_at + Vector3(0.0, 0.4, 0.0))
+	clear_hands(game)   # a carry needs both hands free
+	floor_item(game, "suture_kit", t + side * 1.2 + b * Vector3(0.5, 0.0, 0.0))
+	floor_item(game, "suture_kit", t + side * 1.2 + b * Vector3(-0.5, 0.0, 0.0))
+	game.say("Hands empty: hold E on Dr. Bled, carry them to the table, E to lay them down, then stitch.", 10.0)
+	print("[review] downed: bot %d down at %s, free table %d at %s" % [bid, mate_at, table, t])

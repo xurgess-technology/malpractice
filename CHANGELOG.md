@@ -5,6 +5,15 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.13**: You can tell when you've hit something now
+    - Added: Land a saw hit and whatever you hit washes red for a moment and gets knocked back a step -- monsters and teammates alike. It doesn't stun them: they keep doing whatever they were doing, which is its own kind of bad news.
+- **0.10.12**: Check yourself out in the mirror 🪞
+    - Added: Walk up to the big mirror in the personnel room and press E: your surgeon fills the glass head to toe, and arrows by the head and the torso cycle your skin tone and your scrubs. Eight scrub colours, six skin tones, and everyone else sees what you picked.
+    - Added: Your look sticks -- it's saved, so you clock in tomorrow wearing what you chose.
+- **0.10.11**: Stitched up, and standing like a person again
+    - Fixed: A teammate you carried to a table and stitched up got back up still folded over an invisible shoulder, with half of them through the floor. Only everyone *else* saw it, which is why it lasted this long.
+- **0.10.10**: A door you can see is a door you can't walk through
+    - Fixed: A hinged door standing wide open was completely walk-through -- the metre of solid door sticking out into the room had no collision at all, so monsters (and you) strolled straight through it. It's solid again, while still not catching you on its end when you cut the doorway corner.
 - **0.10.9**: The surgery board stops chugging
     - Fixed: Blood on the page was being re-cut into triangles every single frame, so the messier you got the slower it ran. It's baked once now: the worst case went from about 4 ms a frame to effectively nothing, and it no longer gets worse the more you bleed on it.
     - Fixed: Everyone in the room was redrawing every surgery board at full speed, on every machine, for every table at once. Now only the person actually operating pays full price; onlookers redraw less the further off they are, and not at all when it's off screen. Whole painter is down from 5.6-6.8 ms to 1.9-2.4 ms.

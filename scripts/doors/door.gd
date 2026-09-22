@@ -14,8 +14,14 @@ extends Node3D
 const Plan := preload("res://scripts/level/door_plan.gd")
 const Models := preload("res://scripts/doors/door_models.gd")
 
-## Past this amount a door is open enough to walk through and its leaves stop colliding.
+## Past this amount a door is open enough to walk through: its leaves keep colliding (a swung-open
+## leaf stands more than a metre into the room, and anyone walking into it must be stopped by it),
+## but the collider is pulled back from the hinge by OPEN_INSET so the doorway itself stays clear.
 const OPEN_PASS := 0.9
+## How far the open leaf's collider starts out from the hinge, metres. The leaf's end would
+## otherwise sit in the doorway's mouth with its cap facing anyone coming through, and stop a body
+## cutting the corner dead; past this it is out in the room, where a body slides along its face.
+const OPEN_INSET := 0.25
 const HALT_MASK_OPEN := C.L_PLAYER
 const HALT_MASK_CLOSE := C.L_PLAYER | C.L_PICKUP
 
@@ -40,6 +46,13 @@ var leaf_bodies: Array = []
 var leaf_hinge: Array = []
 var leaf_dir: Array = []
 var leaf_len: Array = []
+## Each leaf's shut collider (the whole leaf) and its open one (pulled back from the hinge), as
+## [shape, local position] pairs. The halt check always sweeps with the shut one.
+var leaf_shut_shape: Array = []
+var leaf_shut_pos: Array = []
+var leaf_open_shape: Array = []
+var leaf_open_pos: Array = []
+var _leaf_inset := false
 var occluder: OccluderInstance3D = null
 var lamp: MeshInstance3D = null
 var lamp_state := ""
@@ -141,8 +154,16 @@ func _add_leaf(mesh: Mesh, hinge_x: float, dir: float, length: float) -> void:
 	cs.shape = bs
 	cs.position = Vector3(reach * 0.5, Models.LEAF_H * 0.5 + 0.01, 0.0)
 	body.add_child(cs)
-	# The aim target stays when the leaf stops colliding (folded open against its jamb), so an open
-	# door can still be aimed at and closed.
+	# The same leaf minus its first OPEN_INSET metres, used while it stands open (see OPEN_INSET).
+	var open_len := maxf(reach - OPEN_INSET, 0.1)
+	var obs := BoxShape3D.new()
+	obs.size = Vector3(open_len, Models.LEAF_H, Models.LEAF_T + 0.02)
+	leaf_shut_shape.append(bs)
+	leaf_shut_pos.append(cs.position)
+	leaf_open_shape.append(obs)
+	leaf_open_pos.append(Vector3(reach - open_len * 0.5, Models.LEAF_H * 0.5 + 0.01, 0.0))
+	# The aim target is always the whole leaf, whatever the pose's collider leaves out, so an open
+	# door can still be aimed at and closed along its full length.
 	var aim := Area3D.new()
 	aim.name = "Aim"
 	aim.collision_layer = C.L_INTERACT
@@ -177,6 +198,11 @@ func _add_panel(mesh: Mesh, x: float, z: float) -> void:
 	cs.shape = bs
 	cs.position = Vector3(0.0, Models.LEAF_H * 0.5 + 0.01, 0.0)
 	body.add_child(cs)
+	# A sliding panel slides into the wall beside the doorway: it never needs the open-leaf inset.
+	leaf_shut_shape.append(bs)
+	leaf_shut_pos.append(cs.position)
+	leaf_open_shape.append(bs)
+	leaf_open_pos.append(cs.position)
 	body.position = Vector3(x, 0.0, z)
 	add_child(body)
 	leaf_bodies.append(body)
@@ -271,16 +297,20 @@ func leaf_xform(i: int, a: float) -> Transform3D:
 
 
 func _apply_pose() -> void:
-	# A leaf folded flat against its jamb stops colliding: its end would otherwise stand 7 cm
-	# into the doorway and catch anyone cutting the corner through it. Sliding panels are inside
-	# the wall by then anyway.
-	var solid := absf(amount) < OPEN_PASS
+	# A leaf swung open stands over a metre into the room, so it keeps blocking movement; only the
+	# first OPEN_INSET metres of it give way, so its end does not sit in the doorway's mouth and
+	# catch anyone cutting the corner through it. Sliding panels are inside the wall by then anyway.
+	var inset := absf(amount) >= OPEN_PASS
 	for i in leaf_bodies.size():
 		var b: AnimatableBody3D = leaf_bodies[i]
 		b.transform = leaf_xform(i, amount)
-		var layer := C.L_WORLD if solid else 0
-		if b.collision_layer != layer:
-			b.collision_layer = layer
+		if b.collision_layer != C.L_WORLD:
+			b.collision_layer = C.L_WORLD
+		if inset != _leaf_inset:
+			var cs: CollisionShape3D = b.get_child(1)
+			cs.shape = leaf_open_shape[i] if inset else leaf_shut_shape[i]
+			cs.position = leaf_open_pos[i] if inset else leaf_shut_pos[i]
+	_leaf_inset = inset
 	if occluder != null:
 		var shut := is_closed()
 		if occluder.visible != shut:
@@ -331,9 +361,10 @@ func _blocked_at(a: float) -> bool:
 	var inv := global_transform.affine_inverse()
 	for i in leaf_bodies.size():
 		var body: AnimatableBody3D = leaf_bodies[i]
-		var cs: CollisionShape3D = body.get_child(1)
-		_shape_query.shape = cs.shape
-		_shape_query.transform = global_transform * leaf_xform(i, a) * cs.transform
+		# Always the whole leaf, whatever the pose is wearing: a door closing from wide open must
+		# still see someone standing in the part its open collider leaves out.
+		_shape_query.shape = leaf_shut_shape[i]
+		_shape_query.transform = global_transform * leaf_xform(i, a) * Transform3D(Basis(), leaf_shut_pos[i])
 		_shape_query.collision_mask = HALT_MASK_CLOSE if closing else HALT_MASK_OPEN
 		_shape_query.exclude = [body.get_rid()]
 		for hit in space.intersect_shape(_shape_query, 4):

@@ -96,6 +96,7 @@ func _run() -> void:
 	await _or_doors_and_crew()
 	await _sight_and_noise()
 	await _monsters_and_doors()
+	await _doors_stop_monsters()
 	await _drag_through()
 	await _jam()
 	await _regeneration()
@@ -546,6 +547,105 @@ func _monsters_and_doors() -> void:
 	_check(opened and int(game.doors.stats.get("night_nurse", 0)) > sounds_before, "she opens it once nobody is looking")
 	game.kill_monster(nurse)
 	await _frames(2)
+
+
+## A door is solid to a monster, shut or standing open (PLAYTEST 2026-09-22: monsters walked
+## through doors; the swung-open leaf had no collider at all). Held at its pose the whole time, so
+## nothing here depends on who opens what. The doorway itself must stay clear: a bot still walks
+## straight through the open one without catching on the leaf's end.
+func _doors_stop_monsters() -> void:
+	_say("---- a door is solid to a monster, shut and open")
+	var d := _pick_hinged()
+	var open_amount := 1.0 if d.max_out >= 80.0 else -1.0
+	# The leaf of a wide-open door is solid along its length, except the bit beside the hinge that
+	# is deliberately left out of the doorway's mouth (Door.OPEN_INSET).
+	d.snap_to(open_amount)
+	await _frames(2)
+	var open_leaf: Node3D = d.leaf_bodies[0]
+	var leaf_len: float = float(d.leaf_len[0])
+	var space := get_viewport().world_3d.direct_space_state
+	var solid_at: Array = []
+	var holes := 0
+	for f in [0.35, 0.55, 0.75, 0.95]:
+		for h in [0.5, 1.2, 1.9]:
+			var p: Vector3 = open_leaf.global_transform * Vector3(leaf_len * f, h, 0.0)
+			var n: Vector3 = open_leaf.global_transform.basis.z.normalized()
+			var q := PhysicsRayQueryParameters3D.create(p - n * 0.5, p + n * 0.5)
+			q.collision_mask = C.L_WORLD
+			if space.intersect_ray(q).is_empty():
+				holes += 1
+			else:
+				solid_at.append(f)
+	_check(holes == 0, "the open leaf is solid all the way across (%d of 12 sample lines went through it)" % holes)
+	_check(solid_at.size() > 0, "the open leaf has a collider at all")
+	for kind in ["hive", "sonographer", "night_nurse"]:
+		# Shut: hunting a point on the other side must not get it there.
+		var inside: Vector3 = d.global_position + d.normal * 3.0
+		var outside: Vector3 = d.global_position - d.normal * 3.0
+		_stand(inside + d.normal * 10.0)
+		var crossed := await _monster_pushes_at(d, kind, 0.0, outside, inside, d.normal, d.global_position)
+		_check(not crossed, "a shut door stops the %s" % kind)
+		# Open: the leaf itself, not the doorway, between the monster and where it wants to be.
+		var leaf: Node3D = d.leaf_bodies[0]
+		d.snap_to(open_amount)
+		await _frames(2)
+		var mid: Vector3 = leaf.global_transform * Vector3(float(d.leaf_len[0]) * 0.55, 0.0, 0.0)
+		mid.y = d.global_position.y
+		var face: Vector3 = leaf.global_transform.basis.z.normalized()
+		crossed = await _monster_pushes_at(d, kind, open_amount, mid + face * 1.1, mid - face * 1.1, face, mid)
+		_check(not crossed, "the leaf of an open door stops the %s walking through it" % kind)
+	# And the open doorway is still clear to walk through.
+	game.doors.set_all(false)
+	await _seconds(1.0)
+	game.doors._drive(d, open_amount, 2.5)
+	await _seconds(1.5)
+	var from: Vector3 = d.global_position + d.normal * 2.5
+	var to: Vector3 = d.global_position - d.normal * 2.5
+	_stand(from)
+	var start := t
+	var through := false
+	while t < start + 8.0:
+		var dir := to - me.global_position
+		me.bot_yaw = atan2(-dir.x, -dir.z)
+		me.bot_move = Vector2(0, -1)
+		await get_tree().physics_frame
+		if (me.global_position - to).length() < 0.8:
+			through = true
+			break
+	me.bot_move = Vector2.ZERO
+	_check(through, "an open doorway is still clear to walk through (%.1f s, door %.2f)" % [t - start, d.amount])
+	game.doors.set_all(false)
+	await _seconds(1.2)
+
+
+## Spawn a `kind` at `from`, hold `d` at `pin`, hunt `to` for a few seconds, and say whether the
+## monster ended up on the far side of the plane through `origin` with normal `axis`.
+func _monster_pushes_at(d: Node, kind: String, pin: float, from: Vector3, to: Vector3, axis: Vector3, origin: Vector3) -> bool:
+	d.snap_to(pin)
+	game.doors._moving.clear()
+	await _frames(2)
+	var m: Node = game._add_monster(kind, from)
+	await _frames(2)
+	var side0: float = signf((m.global_position - origin).dot(axis))
+	var crossed := false
+	var start := t
+	while t < start + 8.0:
+		await get_tree().physics_frame
+		d.snap_to(pin)          # nobody gets to move this door: only the collision is on trial
+		game.doors._moving.clear()
+		if m.brain.has_method("_hunt"):
+			m.brain._hunt(to)
+		if "last_seen" in m.brain:
+			m.brain.last_seen = to
+		if "target" in m.brain:
+			m.brain.target = to
+		var s: float = (m.global_position - origin).dot(axis)
+		if signf(s) != side0 and absf(s) > 0.45:
+			crossed = true
+			break
+	game.kill_monster(m)
+	await _frames(2)
+	return crossed
 
 
 ## A deep gate jams part way open, shudders, and frees itself.
