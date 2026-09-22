@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.8**: STICK! goes where you point it
+    - Changed: The needle now lands exactly where your cursor is and sinks straight down from there, instead of sliding off along its own angle as it went in. Hold Space and it stops itself the moment it's in the vein -- no more letting go at the flash.
+    - Removed: Blowing the vein, and the angle control. Aim is the whole skill now; you can still miss.
+    - Fixed: The syringe tray no longer sits on top of the instructions in the corner.
 - **0.10.7**: The order is stamped on the sheet
     - Changed: The big word a step opens on is drawn on the clipboard page again instead of floating on your screen, so it reads as part of the sheet you're about to play on -- and onlookers can see it on the board too. Still lands in the same spot at the same size whatever the step.
 - **0.10.6**: Pull up a chair, the board's for everyone now
