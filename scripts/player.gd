@@ -70,9 +70,9 @@ const THROW_FOLLOW_TIME := 0.25
 var interact_count: int = 0
 var wants_interact: bool = false
 ## SWEEP 3 HOOK: left mouse with a usable item in hand (bone saw swing, anesthetic jab; see
-## scripts/combat/combat.gd), and R for the absorbed-brain ability (scripts/brains/brains.gd).
+## scripts/combat/combat.gd), and Alt+1..4 for the abilities (scripts/abilities/abilities.gd).
 var use_count: int = 0
-## SWEEP 4A HOOK (controls): four ability slots (scripts/brains/brains.gd), each with its own
+## SWEEP 4A HOOK (controls): four ability slots (scripts/abilities/abilities.gd), each with its own
 ## bump counter (Alt+1..4), analogous to ability_count before it. Report keys "a1".."a4".
 var ability_slot_press: Array = [0, 0, 0, 0]
 ## SWEEP 4A HOOK (controls): crouch (client-owned, replicated: report bit 16 / report_full "cr")
@@ -167,7 +167,7 @@ const ROCKET_EYE_H := 0.55
 ## Not replicated: every machine computes its own from its own aim, same as aim_id/aim_prompt.
 var scan_progress: float = 0.0
 var scan_target_id: int = -1
-## SWEEP 3 HOOK (brains): looking through a Hive's eyes (Hive Eyes). Host authoritative, report
+## looking through a Hive's eyes (Hive Eyes). Host authoritative, report
 ## key `hv`. The body stands still and helpless: no moving, looking, using or picking up; E or R
 ## (or Esc, main.gd) ends it; others see the head droop.
 var hive_view: bool = false
@@ -719,7 +719,7 @@ func _input(event: InputEvent) -> void:
 	if not view_local() or not alive:
 		return
 	if hive_view or dev_input_held:
-		return   # SWEEP 3 HOOK (brains): the mouse is not yours while you look through a Hive
+		return   # the mouse is not yours while you look through a Hive
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		# Settings hook: "sensitivity" multiplies the base look speed.
 		var sens: float = MOUSE_SENS * float(Settings.get_value("sensitivity"))
@@ -842,7 +842,7 @@ func _local_step(delta: float) -> void:
 	else:
 		wants_interact = false
 		scan_holding = false
-	# SWEEP 3 HOOK (brains): Hive Eyes freezes the body; E or R asks to come back.
+	# Hive Eyes freezes the body; E or R asks to come back.
 	if hive_view != _was_hive:
 		_was_hive = hive_view
 		if hive_view:
@@ -854,8 +854,8 @@ func _local_step(delta: float) -> void:
 		want_sprint = false
 		wants_interact = false
 		_pitch = move_toward(_pitch, -0.95, delta * 2.5)
-		if can_move and not bot_active and Input.is_action_just_pressed("interact") and game != null and game.brains != null:
-			var hi: int = game.brains.slot_of(peer_id, "hive_in")
+		if can_move and not bot_active and Input.is_action_just_pressed("interact") and game != null and game.abilities != null:
+			var hi: int = game.abilities.slot_of(peer_id, "hive_in")
 			if hi >= 0:
 				ability_slot_press[hi] = int(ability_slot_press[hi]) + 1
 
@@ -1058,7 +1058,7 @@ func _local_step(delta: float) -> void:
 	elif was_air and is_on_floor() and fall_speed < -4.0 and fx.has_method("land"):
 		fx.land(clampf(-fall_speed / 14.0, 0.0, 1.0))
 
-	if can_move and not bot_active and not hive_view:   # SWEEP 3 HOOK (brains): helpless in Hive Eyes
+	if can_move and not bot_active and not hive_view:   # helpless in Hive Eyes
 		if Input.is_action_just_pressed("flashlight"):
 			set_flashlight(not flashlight_on)
 			Audio.play("click")
@@ -1210,12 +1210,12 @@ func _headroom(from_h: float, to_h: float) -> bool:
 
 
 ## SWEEP 4A HOOK (Echo polish, chunk 4): 0..1 while this player's shriek pose should show, driven
-## by game.brains._echo_pose_until (peer -> world_time), a local one-shot timer every machine sets
-## the same way from the reliable br_echo event (not a replicated Player field).
+## by game.abilities._echo_pose_until (peer -> world_time), a local one-shot timer every machine sets
+## the same way from the reliable ab_echo event (not a replicated Player field).
 func _echo_pose_weight() -> float:
-	if game == null or game.brains == null:
+	if game == null or game.abilities == null:
 		return 0.0
-	var until := float(game.brains._echo_pose_until.get(peer_id, -1.0))
+	var until := float(game.abilities._echo_pose_until.get(peer_id, -1.0))
 	return clampf((until - float(game.world_time)) / 0.5, 0.0, 1.0) if until > 0.0 else 0.0
 
 
@@ -1227,7 +1227,7 @@ func _remote_step(delta: float) -> void:
 		k = 1.0
 	global_position = global_position.lerp(_target_pos, k)
 	rotation.y = lerp_angle(rotation.y, _target_yaw, k)
-	head.rotation.x = lerpf(head.rotation.x, -0.95 if hive_view else _pitch, k)   # SWEEP 3 HOOK (brains): head droops
+	head.rotation.x = lerpf(head.rotation.x, -0.95 if hive_view else _pitch, k)   # head droops
 	if _hive_glaze != null:
 		_hive_glaze.visible = hive_view   # SWEEP 4A HOOK (Hive Eyes, chunk 4): glazed eyes for teammates
 	if moving and not downed and not crouching:
@@ -1339,7 +1339,7 @@ func _consume_actions() -> void:
 	if game == null:
 		return
 	# Downed hook: a downed player only calls for help; a carrier only puts down or places.
-	var busy := downed or carrying != 0 or dragging_monster >= 0 or hive_view or held_by >= 0   # SWEEP 3 HOOK (combat: dragging; brains: helpless in Hive Eyes); the Nurse's grab
+	var busy := downed or carrying != 0 or dragging_monster >= 0 or hive_view or held_by >= 0   # SWEEP 3 HOOK (combat: dragging; helpless in Hive Eyes); the Nurse's grab
 	# SWEEP 3 HOOK: item use and the brain ability (the systems decide what a busy player may do).
 	if use_count != _use_seen:
 		_use_seen = use_count
@@ -1372,7 +1372,7 @@ func _consume_actions() -> void:
 	if interact_count != _interact_seen:
 		_interact_seen = interact_count
 		if hive_view or held_by >= 0:
-			pass   # SWEEP 3 HOOK (brains); held by the Nurse, nobody is coming in time
+			pass   # held by the Nurse, nobody is coming in time
 		elif alive and downed:
 			game.downed_call_out(self)
 		elif alive and carrying != 0:
@@ -1449,7 +1449,7 @@ func _update_aim_core() -> void:
 	aim_id = ""
 	aim_prompt = ""
 	aim_hold = 0.0
-	if not alive or hive_view:   # SWEEP 3 HOOK (brains): nothing in reach while you are elsewhere
+	if not alive or hive_view:   # nothing in reach while you are elsewhere
 		return
 	# Downed hook: on the floor or the table there is nothing to use, only a call for help.
 	if downed:
@@ -2071,7 +2071,7 @@ func revive_full() -> void:
 	selected = 0
 	operating = false
 	dragging_monster = -1   # SWEEP 3 HOOK (combat)
-	hive_view = false   # SWEEP 3 HOOK (brains)
+	hive_view = false
 	crouching = false   # SWEEP 4A HOOK (controls)
 	prone = false
 	_stance_want = STAND
@@ -2300,7 +2300,7 @@ func _update_down_pose(delta: float) -> void:
 	# SWEEP 4A HOOK (Echo polish, chunk 4): a brief lean-back as the shriek goes out, so it visibly
 	# comes from whoever used it (docs/SWEEP4A.md "Echo"), on every machine's copy of that player.
 	var echo_tilt := -0.4 * _echo_pose_weight()
-	var tilt := -PI * 0.47 if down else (-0.2 if hive_view else echo_tilt)   # SWEEP 3 HOOK (brains): slumped in Hive Eyes
+	var tilt := -PI * 0.47 if down else (-0.2 if hive_view else echo_tilt)   # slumped in Hive Eyes
 	if not is_equal_approx(body_visual.rotation.x, tilt):
 		body_visual.rotation.x = move_toward(body_visual.rotation.x, tilt, delta * 6.0)
 		body_visual.position.y = 0.3 * (body_visual.rotation.x / (-PI * 0.47))
@@ -2383,7 +2383,7 @@ func report_full() -> Dictionary:
 		"nh": held_by,   # the Night Nurse's grab
 		"ch": snappedf(carry_hold, 0.1),
 		"dm": dragging_monster,   # SWEEP 3 HOOK (combat)
-		"hv": hive_view,   # SWEEP 3 HOOK (brains)
+		"hv": hive_view,
 		"cr": crouching,   # SWEEP 4A HOOK (controls)
 		"pr": prone,
 		"da": dive_in_air(),   # SPRINT-DIVE HOOK
@@ -2428,7 +2428,7 @@ func apply_remote_full(s: Dictionary) -> void:
 		teleport(held_from)   # she let go: I own my position, so I drop back onto that spot myself
 	held_by = nh
 	dragging_monster = int(s.get("dm", -1))   # SWEEP 3 HOOK (combat)
-	hive_view = bool(s.get("hv", false))   # SWEEP 3 HOOK (brains)
+	hive_view = bool(s.get("hv", false))
 	var host_bleed := float(s.get("bl", 0.0))
 	if not downed or absf(host_bleed - bleed) > 1.5:
 		bleed = host_bleed

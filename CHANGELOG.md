@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.19**: Brains are off the menu
+    - Removed: Brains, all of it. No harvesting them, no watching them rot in your hands, no selling them at the dumpster, and no break-room blender to tip them into. The Hive and the Sonographer keep their heads.
+    - Changed: You still get abilities -- you earn them by grafting now instead. Graft a Hive's eye and Hive Eyes comes with it; lose the eye and you lose the sight.
+    - Note: Echo has nothing to come from until the Sonographer's trachea graft is built. It works fine, there's just no way to get it yet.
 - **0.10.18**: SAW!, rebuilt: the limb is meat, not a progress bar
     - Changed: SAW! is Pong where the ball is a bone saw and the arm doesn't bounce it back. Every pass strips a layer off whatever the blade actually crosses, and it's off when a gap opens all the way through -- so a careless run leaves a visibly chewed stump instead of a worse number.
     - Changed: Bone doesn't take more passes, it fights your hands: the blade slows and chatters off its line while it's riding a shaft.

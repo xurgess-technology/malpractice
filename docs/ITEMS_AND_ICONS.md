@@ -49,8 +49,7 @@ trinkets sell for a small scrap value once used up.
 
 **Cut (13 kinds):** stethoscope, ear thermometer (`thermometer`), BP cuff, otoscope, patient
 records, wheelchair wheel, sample rack, wedding ring, coffee maker, IV pump, microscope, the old
-pulse oximeter loot, and the brains (the brains go in `docs/GRAFTING_TRACHEA.md`; don't remove them
-here, only the loot). Remove them from `scripts/economy/loot_table.gd`, their models from
+pulse oximeter loot. Remove them from `scripts/economy/loot_table.gd`, their models from
 `loot_models.gd`, and every other mention (dev panel, database, tips, tests, `warmup.gd`).
 
 **Rebalance after the cut:**
@@ -58,7 +57,7 @@ here, only the loot). Remove them from `scripts/economy/loot_table.gd`, their mo
   cafeteria, maintenance and janitor's closet lose theirs in the cut; spread the kept items over
   them with the room weights (the laptop fits the lab, the desk phone the break room, and so on).
 - **Pay:** (superseded) a shift once had to pay within about 10% of before. Loot is now scarce on
-  purpose: 15 to 20 stacks and about $1,000 a shift, so a harvested brain is a real share of the pay.
+  purpose: 15 to 20 stacks and about $1,000 a shift, so a harvested part is a real share of the pay.
   Room coverage is checked over several seeds, not every shift.
 - **Trinkets are rarer than plain loot,** so finding one feels like a find.
 

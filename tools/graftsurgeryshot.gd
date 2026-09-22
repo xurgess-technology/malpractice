@@ -263,7 +263,7 @@ func _run() -> void:
 		await _seconds(0.6)
 	await _until(func(): return game.grafts.graft_of(me.peer_id) == "eye_hive", 20.0)
 	print("[graftshot] graft=", game.grafts.graft_of(me.peer_id), " vat=", String(vat.x),
-		" slot=", game.brains.slot_of(me.peer_id, "hive_in"))
+		" slot=", game.abilities.slot_of(me.peer_id, "hive_in"))
 
 	# ---- back on your feet, and what everyone sees
 	game.get_up_from_table(me)

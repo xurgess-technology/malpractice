@@ -559,7 +559,7 @@ func _panel_extras() -> void:
 	_check(dev.in_room(me.global_position), "the panel's Dev room button takes you there")
 	_press_panel("All abilities")
 	await _frames(2)
-	_check(game.brains.slot_of(me.peer_id, "echo") >= 0 and game.brains.slot_of(me.peer_id, "hive_in") >= 0, "the panel's All abilities grants Echo and Hive Eyes")
+	_check(game.abilities.slot_of(me.peer_id, "echo") >= 0 and game.abilities.slot_of(me.peer_id, "hive_in") >= 0, "the panel's All abilities grants Echo and Hive Eyes")
 	_press_panel("Unlock every entry")
 	_check(game.db_record("hive").harvested and game.db_record("night_nurse").scanned, "Unlock every entry fills this machine's database")
 	_press_panel("Reset database")

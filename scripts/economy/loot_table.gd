@@ -78,19 +78,8 @@ const LOOT := {
 		"rooms": {"patient_room": 0.072, "nurse_station": 0.096, "supply_closet": 0.036, "lab": 0.048, "morgue": 0.036, "*": 0.006},
 		"surfaces": ["counter", "tray"], "containers": {"station_drawers": 0.5, "trauma_bag": 0.3},
 	},
-	# BRAINS (sweep 3, scripts/brains): harvested from a dissected monster, never found. No rooms,
-	# surfaces or containers, so the loot spawner never picks them; `value` is the full price of a
-	# perfect brain (scaled by its condition when harvested, then by spoilage, see brains.gd).
-	"brain_hive": {
-		"name": "Hive brain", "short": "Hive brains", "value": [150, 150], "tier": 3, "fragile": true,
-		"brain": true, "rooms": {}, "surfaces": [], "containers": {},
-	},
-	"brain_sonographer": {
-		"name": "Sonographer brain", "short": "Sonographer brains", "value": [350, 350], "tier": 3, "fragile": true,
-		"brain": true, "rooms": {}, "surfaces": [], "containers": {},
-	},
 	# GRAFTING part one (scripts/grafting/eyes.gd): taken out of a strapped Hive, or a surgeon's own
-	# eye swapped out; never found. They spoil like brains outside a vat (Eyes.spoil_factor).
+	# eye swapped out; never found. They spoil outside a vat (Eyes.spoil_factor).
 	"eye_hive": {
 		"name": "Hive's eyeball", "short": "Hive's eyeballs", "value": [120, 120], "tier": 3,
 		"eye": true, "rooms": {}, "surfaces": [], "containers": {},

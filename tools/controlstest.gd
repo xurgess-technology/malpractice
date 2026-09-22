@@ -483,13 +483,13 @@ func _stand_up() -> void:
 
 func _ability_slots() -> void:
 	_say("---- Alt+1..4 fires the right slot, each with its own cooldown")
-	var b: Node = game.brains
+	var b: Node = game.abilities
 	b.on_reset()
 	me.revive_full()
 	me.bot_move = Vector2.ZERO
 	me.bot_crouch = false
-	b.add_points(me.peer_id, "hive", 1.0)     # -> slot 0, hive_in
-	b.add_points(me.peer_id, "sonographer", 1.0)  # -> slot 1, echo
+	b.set_level(me.peer_id, "hive_in", 1)   # -> slot 0
+	b.set_level(me.peer_id, "echo", 1)      # -> slot 1
 	_check(b.slot_of(me.peer_id, "hive_in") == 0 and b.slot_of(me.peer_id, "echo") == 1, "hive_in in slot 1, echo in slot 2")
 	# Fire slot 2 (Echo). Slot 1 (Hive Eyes) must still be off cooldown.
 	me.bot_ability_slot = 1
@@ -499,7 +499,7 @@ func _ability_slots() -> void:
 	_check(b.cooldown_left(me.peer_id, "sonographer") > 0.0, "Echo's own cooldown is running")
 	_check(b.cooldown_left(me.peer_id, "hive") <= 0.0, "Hive Eyes' cooldown is untouched: each slot cools down on its own")
 	# Now fire slot 1 (Hive Eyes): a Hive to borrow.
-	var wi: Node = b.spawn_hive(game._floor_at(me.global_position + Vector3(0, 0, 10)))
+	var wi: Node = game.spawn_hive(game._floor_at(me.global_position + Vector3(0, 0, 10)))
 	await _frames(2)
 	me.bot_ability_slot = 0
 	me.bot_ability += 1
@@ -518,7 +518,7 @@ func _scanner() -> void:
 	# The database persists in user://, shared with any other run or open copy of the game.
 	game.database.clear()
 	var here: Vector3 = me.global_position
-	var wi: Node3D = game.brains.spawn_hive(game._floor_at(here + Vector3(0, 0, 6))) as Node3D
+	var wi: Node3D = game.spawn_hive(game._floor_at(here + Vector3(0, 0, 6))) as Node3D
 	await _frames(2)
 	var to: Vector3 = wi.global_position - me.global_position
 	me.bot_yaw = atan2(-to.x, -to.z)

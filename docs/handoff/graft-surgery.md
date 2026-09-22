@@ -41,12 +41,12 @@ Everything in the chunk C brief, verified headless and in a smoke look:
 - **The glow** is a new `instance uniform float lock` on the eye shader (0 a low pinpoint, 1 the
   whole ball lit). `Grafts` eases it to 1 while that player's `hive_view` is on, which is already
   replicated, so every machine agrees.
-- **The ability.** Finishing the graft calls `brains.set_level(peer, "hive_in", 1)` (next free slot,
-  new-ability card); swapping back calls the new `brains.clear_ability`, which empties the slot,
-  zeroes the points and ends any Hive Eyes view. The graft lasts the run through death and
+- **The ability.** Finishing the graft calls `abilities.set_level(peer, "hive_in", 1)` (next free
+  slot, new-ability card); swapping back calls `abilities.clear_ability`, which empties the slot,
+  zeroes the level and ends any Hive Eyes view. The graft lasts the run through death and
   `grafts.on_reset()` clears it on a game over.
-- **Hive brains teach nothing now.** `Brains.blendable` is false for `brain_hive`; the blender
-  refuses it and `drink` ignores it. Echo, the Discharged brains and the blender are untouched.
+- **Grafting is the only source of an ability** now that brains and the blender are gone
+  (`docs/backlog/ABILITIES_REMOVED.md`), so Echo has no source at all until the trachea graft.
 - **The first-person tell**: `scripts/grafting/graft_view.gd` (`main.graft_view`), an orange wash
   down the LEFT edge, stronger while Hive Eyes runs. **It is its own CanvasLayer at 52, above the
   look pass's grade (layer 50)** -- under it (where the HUD lives) a faint orange on a teal picture
@@ -62,7 +62,7 @@ Everything in the chunk C brief, verified headless and in a smoke look:
   client checks the graft, the swapped eye on the body with `Human_Eye_L` hidden, and the glow while
   Hive Eyes runs). **Written but never run** -- see below.
 - **DESIGN.md**: the Hive row now says what you harvest, the lab-wall paragraph mentions the vat
-  benches and the stands, the blender bullet says Hive brains teach nothing, and there is a new
+  benches and the stands, and there is a new
   "Grafting" section. **docs/CONTRACTS.md**: the chunk C section above.
 - **Warmup**: the vat stand, a lying body wearing the grafted eyeball and the `eye_graft` steps'
   minigames all build in `scripts/warmup.gd`.
@@ -84,8 +84,9 @@ Everything in the chunk C brief, verified headless and in a smoke look:
 
 Zach has not seen the graft yet -- he closed the windows before reviewing and asked for review setups
 instead. What came through the coordinator and is **done**: the "X's Y" rename, the vat stand on every
-OR table (there is no player table), keeping the graft generic for a second part kind, removing only
-the Hive-brain route to Hive Eyes, and the `--setup=` skeleton with a `graft` and a `graft_back` setup.
+OR table (there is no player table), keeping the graft generic for a second part kind, making the
+graft the only route to Hive Eyes, and the `--setup=` skeleton with a `graft` and a `graft_back`
+setup.
 
 **Still open, to put in front of him:** the whole feel of it -- the four steps' pacing, the stand's
 model (it reads a bit like an IV pole), how strong the left-edge tint should be
