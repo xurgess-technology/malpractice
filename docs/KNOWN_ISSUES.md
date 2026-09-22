@@ -319,6 +319,17 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 
 ## Downed players (sweep 2 wave 3)
 
+- **PLAYTEST 2026-09-22: a player stitched up on the table keeps the carry pose.** Reported by Zach
+  after a session with real players: someone went down, was carried to a table and stitched up, and
+  stayed in the over-the-shoulder Carried pose afterwards, so most of the model glitched through the
+  floor. The carried/on-table visual state is not being cleared when the stitches operation finishes
+  and the player is back up. Where to look: `scripts/player.gd` around line 2126 ("Downed hook: set
+  every visual that follows from downed / carried / on_table. Idempotent.") and line 2203-2212 (the
+  Carried clip's origin being placed on the carrier's left shoulder, mirrored), plus whatever
+  `scripts/downed/player_surgery.gd` calls when the operation completes -- the note below says the
+  player table runs its own copy of the surgery system through that adapter rather than going
+  through `game.add_case`, so the revive path there may simply never tell the body to leave the
+  carried pose. Check it on every machine, not just the revived player's: the pose is replicated.
 - **The stitches operation is self-contained.** `game.add_case` / `game.cases` do not exist on this
   branch, so the player table runs its own copy of the surgery system through
   `scripts/downed/player_surgery.gd` (an adapter standing in for the game). The integration wave
@@ -630,6 +641,16 @@ left below is what still applies to the shared strapped-monster infrastructure.
   `C.L_WORLD`): nothing sees through it. Monsters never wander into the entrance building anyway.
 - **A leaf folded open past 90% stops colliding** so bodies cutting a doorway corner do not catch on
   its end; a player hugging the jamb can clip a few centimetres into the open leaf.
+- **PLAYTEST 2026-09-22: monsters walk through doors.** Reported by Zach after a session with real
+  players; he could not tell whether it was closed doors or the *model of the opened state* of the
+  door being walked through. Not yet reproduced or root-caused. The entry above is the obvious first
+  suspect for the open-leaf case -- a leaf past 90% deliberately stops colliding, and what is "a few
+  centimetres" of clip for a player hugging the jamb may be a whole monster walking through the
+  visibly-open leaf, since monsters are bigger and faster and do not path the way a player walks.
+  For the closed-door case, check whether monsters are subject to the same door-opening rules as
+  other agents ("Agents open hinged doors by facing them within about 3 m" below) or whether some
+  monster mover bypasses door collision entirely. Worth checking per monster type: they may not all
+  share a mover.
 - **About 3% of room doors have under 80 degrees of room on the hallway side** (furniture or a
   container near the doorway): they always fold into their tunnel, even toward someone coming out
   of the room, who has to step back while it swings (a bot gets shoved back a little). `DoorPlan.check` guarantees every door still opens wide enough to pass.
