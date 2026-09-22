@@ -1092,7 +1092,12 @@ func _local_step(delta: float) -> void:
 		# SPRINT-DIVE HOOK: no starting a drop charge mid-dive either.
 		if Input.is_action_just_pressed("vat_take") and not diving and not winding:
 			vat_count += 1   # GRAFTING part one: the host decides whether there is a vat to reach into
-		if Input.is_action_just_pressed("drop") and selected_stack().kind != "" and dragging_monster < 0 and not winding and not diving:
+		# PLAYTEST 2026-09-22: carrying a teammate, the drop key is the deliberate "down here", so
+		# that E at a table can always mean the table. No charge: a body is not thrown.
+		if carrying != 0 and Input.is_action_just_pressed("drop") and not winding and not diving:
+			drop_charge = 0.0
+			drop_count += 1
+		if Input.is_action_just_pressed("drop") and selected_stack().kind != "" and carrying == 0 and dragging_monster < 0 and not winding and not diving:
 			_drop_holding = true
 			_drop_hold_t = 0.0
 		if _drop_holding:
@@ -1359,7 +1364,10 @@ func _consume_actions() -> void:
 			game.vats.take_out(self, aim_id)   # GRAFTING part one
 	if drop_count != _drop_seen:
 		_drop_seen = drop_count
-		if alive and not busy:
+		# PLAYTEST 2026-09-22: the deliberate floor drop while carrying a teammate (or a body).
+		if alive and not downed and carrying != 0 and not hive_view and held_by < 0:
+			game.drop_carried(self)
+		elif alive and not busy:
 			game.drop_selected(self, drop_charge)   # SWEEP 4A HOOK (pharmacy, chunk 3): charged throw
 	if interact_count != _interact_seen:
 		_interact_seen = interact_count
@@ -1378,6 +1386,17 @@ func _consume_actions() -> void:
 # =========================================================================
 # aiming and hands
 # =========================================================================
+
+## The key bound to an action right now, for a prompt ("G"). Rebinding in the settings follows.
+func _key_label(action: String) -> String:
+	if InputMap.has_action(action):
+		for ev in InputMap.action_get_events(action):
+			if ev is InputEventKey:
+				var kc: int = (ev as InputEventKey).physical_keycode
+				if kc > 0:
+					return OS.get_keycode_string(DisplayServer.keyboard_get_keycode_from_physical(kc)).to_upper()
+	return action.to_upper()
+
 
 ## Find what the camera points at and what it would let this player do.
 func _update_aim() -> void:
@@ -1458,7 +1477,9 @@ func _update_aim_core() -> void:
 		q.collide_with_areas = true
 		q.exclude = [get_rid()]
 		var hit := get_world_3d().direct_space_state.intersect_ray(q)
-		if hit.is_empty() and dragging_monster < 0:   # SWEEP 3 HOOK (combat): a dragger always gets a prompt
+		# SWEEP 3 HOOK (combat): a dragger always gets a prompt. PLAYTEST 2026-09-22: so does a
+		# carrier, whose prompt at a table does not depend on the ray hitting it.
+		if hit.is_empty() and dragging_monster < 0 and carrying == 0:
 			return
 		node = hit.get("collider")
 		while node != null and not node.has_meta("interact_id"):
@@ -1485,13 +1506,29 @@ func _update_aim_core() -> void:
 		var drop_text := "Put %s down" % (who.player_name if who != null else "them")
 		# Hub rebuild: on the hub any free patient table ("table", "table_<i>") takes them too.
 		var tid := String(node.get_meta("interact_id")) if node != null and node.has_meta("interact_id") else ""
-		if tid != "player_table" and not tid.begins_with("table"):
-			aim_prompt = drop_text
+		var tp: String = node.interact_prompt(self) if tid == "player_table" or tid.begins_with("table") else ""
+		# PLAYTEST 2026-09-22: aimed anywhere but a table that would take them, standing at one still
+		# offers the table -- a near-miss must not dump a teammate on the floor. The floor drop moves
+		# to the drop key, so putting them down where you stand stays possible at a table.
+		if not tp.begins_with("Place"):
+			var near: Dictionary = game.carry_table_target(self) if game != null else {}
+			if not near.is_empty():
+				var nnode: Node = game.find_interactable(String(near.get("id", "")))
+				var np: String = nnode.interact_prompt(self) if nnode != null else ""
+				if np.begins_with("Place"):
+					aim_id = String(near.get("id", ""))
+					aim_prompt = "%s  (%s: down here)" % [np, _key_label("drop")]
+					return
+			# A table said no ("!The table is taken."): say why instead of silently offering the floor.
+			if tp.begins_with("!"):
+				aim_prompt = tp
+				return
+			aim_prompt = "%s  (%s)" % [drop_text, _key_label("drop")]
 			return
-		var tp: String = node.interact_prompt(self)
-		if tp == "" or tp.begins_with("!"):
-			aim_prompt = drop_text
-			return
+		aim_id = tid
+		aim_prompt = "%s  (%s: down here)" % [tp, _key_label("drop")]
+		aim_hold = node.interact_hold()
+		return
 	if node == null or not node.has_method("interact_prompt"):
 		return
 	var prompt: String = node.interact_prompt(self)
