@@ -27,10 +27,17 @@ not change in this sweep.
    are the tunables, in `pocket_plan.gd`. At 0.04 / 0.05 / 0.45 the
    usual depths 1-3 give 4% / 9% / 14%.
    **Measured, not reasoned**: `tools/pocketrate.gd` (new) generates
-   many seeds x many shifts and prints the real rate. Over 300 seeds
-   x 4 shifts: **46.6% before, 24.5% after**, every shift number
-   inside the 20-30% band, and no roll that wanted a pocket failed to
-   place one. Re-run it after any change to the curve.
+   many seeds x many shifts, prints the real rate, and exits non-zero
+   if it leaves the band. Before the change, 300 seeds x 4 shifts
+   gave **46.6%**. After, three sweeps:
+   - seeds 1-300 x 4 shifts (1200 shifts): **24.5%**
+   - seeds 1-500 x 4 shifts (2000 shifts): **23.9%**
+   - seeds 2001-2400 x 4 shifts (1600, disjoint): **27.2%**
+
+   **25.4% over 4800 shifts** all told, with every individual shift
+   number also inside 20-30%, and not one roll that wanted a pocket
+   failing to find room for it. Re-run it after any change to the
+   curve.
 2. NO REPEATS. **Done.** `game.pocket_seen_kind` holds the kind the
    run last saw; `_to_next_shift` copies it into
    `PocketPlan.exclude_kind` before the wings regenerate, and
@@ -80,6 +87,31 @@ three brains at once, the Night Nurse's vanish included.
 What deliberately still works: **spawning** inside a pocket (spawn
 points do not come through this predicate) and **chasing** a player
 through a seam (a chase steers at the quarry, not at a wander goal).
+
+### What phase 1 was tested with
+- `tools/pocketrate.gd` — the rates above, plus a direct no-repeats
+  check: **470 pockets rolled with a kind excluded, 0 of them the
+  excluded kind**.
+- `tools/pockettest.tscn` — **PASS, 208 checks**, including new ones
+  for the noise floor (declared 0.0, 0.0 inside the space, 0.0 in the
+  hospital) and the fence (refused both ways across a seam, allowed
+  within a space, refused into every stub's dead half, and unchanged
+  when called without a `from`). It fails intermittently on the
+  pre-existing Night Nurse check — see FAILING_TESTS 1f, which phase
+  1 turned from a deterministic failure into a coin flip and did not
+  fix.
+- `tools/mapcheck.gd` — the pockets section passes on 300 seeds
+  (341/341 forced placements). Its morgue-tray failures are the
+  pre-existing ones; the seed list moves when the pocket rate moves,
+  which is written up in FAILING_TESTS 2.
+- **`tools/perfprobe` was not run, deliberately.** It needs a real
+  window to give honest frame times, and a minimized one does not
+  render. Phase 1 changes no geometry, no lights and no materials —
+  the added cost is one `Rect2.has_point` plus a cached dictionary
+  lookup per sound-hunting monster per tick, and one `space_of` and
+  `phantom_at` per wander-goal candidate, which are picked rarely.
+  Nothing there can move a frame-time percentile. **Phases 2-4 do add
+  geometry and must run it.**
 
 ### Notes for the later phases
 - A new space declares `AMBIENT_NOISE_LEVEL` in its layout script and
