@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.25**: Somebody finally plugged the mirror lights in
+    - Fixed: Standing at a mirror turned you into a silhouette. Turns out the bulbs round the glass were painted on -- pretty, but not actually lights -- so nothing in the building ever lit the side of you a mirror looks at. They're real lamps now, and you can see yourself from right up close.
 - **0.10.24**: The trinkets do things now
     - Added: The six trinkets stop being loot you just sell. Each one does its own job -- the defibrillator shocks a downed teammate awake where they lie, the reflex hammer swings, and the rest have their own tricks. They still sell if you'd rather have the money.
 - **0.10.23**: Tab, and a look at yourself
