@@ -88,6 +88,15 @@ const SETUPS := {
 	# HIT FEEDBACK (2026-09-22): bone saws in hand, two Hives coming for you, and Dr. Botsworth
 	# standing there to saw as well. A landed hit flashes its target red and knocks it back.
 	"hit": {"seed": 4242, "stage": "_hit"},
+	# TAB SHEET (2026-09-22): hit Tab. Both abilities at level 2, rocket boots on and a mixed
+	# handful, so all three rows have something in them and the boots have an Unequip to press.
+	"sheet": {"seed": 4242, "stage": "_sheet"},
+	# MINIMAP (2026-09-22): an unhurried walk of the hospital with the fogged floor plan in the top
+	# right. Nothing chasing you and nothing to lose, so the map is the only thing to look at.
+	"minimap": {"seed": 4242, "stage": "_minimap"},
+	# TRINKETS chunk B (docs/ITEMS_AND_ICONS.md): all six in hand, a Hive to tag and bonk, and a
+	# teammate lying down for the defibrillator.
+	"trinkets": {"seed": 4242, "stage": "_trinkets"},
 }
 
 
@@ -282,6 +291,20 @@ static func _icons(game: Game) -> void:
 	game.local_player().selected = 0
 	floor_item(game, "heart_monitor", t + Vector3(0.1, 0, 2.3), 1, 200)
 	floor_item(game, "defibrillator", t + Vector3(1.1, 0, 2.3), 1, 300)
+
+
+## TAB SHEET (2026-09-22): open floor by the OR, hands part full, both abilities at level 2 and
+## rocket boots already on. Press Tab: three rows of four, hover an ability for its real numbers,
+## press Unequip and watch the boots land at your feet (then walk over them to put them back on).
+static func _sheet(game: Game) -> void:
+	var t: Vector3 = game.table_pos()
+	place(game, t + Vector3(0.6, 0, 4.0), t + Vector3(0, 1.0, 0))
+	clear_hands(game)
+	give(game, "anesthetic", 3)
+	give(game, "gold_watch", 1, 90)
+	give_abilities(game, 2)
+	game.local_player().put_on_boots()
+	game.local_player().selected = 0
 
 
 ## ITEMS (docs/ITEMS_AND_ICONS.md chunk A): a normal shift; you start in the room with the most loot near
@@ -624,6 +647,64 @@ static func _panel(game: Game) -> void:
 	game.local_player().selected = 0
 	game.stock_storage("suture_kit", 2)
 	print("[review] panel: a deep laceration on table %d, suture kits in hand" % table)
+## TRINKETS (docs/ITEMS_AND_ICONS.md, chunk B): the open floor beyond the OR with all six trinkets
+## to hand. Two are in your hands (the pulse oximeter and the reflex hammer, the two reusable ones)
+## and the other four lie in a row in front of you, which leaves the two free slots the bulky
+## defibrillator needs. A Hive stands a few metres away, calm for the first few seconds, to shove,
+## tag, bonk and run from; a teammate (a dev dummy, so it works solo; with `-Count 2` the other
+## window is a real surgeon) lies downed beside you for the defibrillator. Nothing else is going
+## on: no phone call, no patient, no other monsters.
+static func _trinkets(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("monsters_off", {"on": true})   # only the one staged below
+	game.dev.request("clear_patient")
+	# Standing in the open beyond the OR table, looking away from it down the longest clear line.
+	var t: Vector3 = game.table_pos()
+	var base: Vector3 = game._floor_at(t + Vector3(0.0, 0.0, 4.2))
+	var out := open_direction(game, base + Vector3.UP * 1.2, 7.0)
+	var side := out.cross(Vector3.UP).normalized()
+	# Look low enough that the four on the floor are in shot from the first frame (they used to sit
+	# under the hands), and high enough that the Hive further out is still in view.
+	place(game, base, base + out * 4.0 + Vector3(0, 0.05, 0))
+	clear_hands(game)
+	give(game, "pulse_oximeter", 1, 40)
+	give(game, "reflex_hammer", 1, 20)
+	p.selected = 0
+	p.flashlight_on = true
+	var row := ["desk_phone", "laptop", "epipen", "defibrillator"]
+	var value := [20, 80, 30, 120]
+	for i in row.size():
+		floor_item(game, row[i], base + out * 2.4 + side * (float(i) - 1.5) * 0.7, 1, value[i])
+	await tree.physics_frame
+	# A Hive, out in front. It starts idle and, once it spots you, it will come -- but `calm` means
+	# it cannot land a hit for the first half minute, so you get to look at the phone and the laptop
+	# before it can knock anything out of your hands. After that it is an ordinary Hive.
+	var m = game._add_monster("hive", game._floor_at(base + out * 7.0 - side * 0.6))
+	if m != null:
+		m.calm = 35.0
+		if m.brain != null and "home" in m.brain:
+			m.brain.home = m.global_position
+			m.brain.timer = 35.0
+			m.mode = Monster.Mode.IDLE
+	# A teammate on the floor beside you, waiting for the paddles. A dummy, not a bot: it has no
+	# brain of its own, so it stays exactly where it is put and stays down.
+	var bot_id: int = game.dev.spawn_bot("dummy", p, "Nurse Pratt", game._floor_at(base + out * 3.4 + side * 1.9))
+	var downed := false
+	for i in 10:
+		await tree.physics_frame
+	for q in game.players.values():
+		if q != null and is_instance_valid(q) and String(q.player_name) == "Nurse Pratt":
+			q.bot_move = Vector2.ZERO
+			game.knock_down_player(q, "dev:setup")
+			downed = q.downed
+	print("[review] trinkets: hive=%s downed mate=%s (bot %d)" % [str(m != null), str(downed), bot_id])
+	game.say("Pulse oximeter and reflex hammer in hand; phone, laptop, EpiPen and defibrillator on the floor. The Hive is yours to experiment on.", 10.0)
 
 
 ## GRAFT (docs/GRAFTING.md, chunk C): you are strapped to a free OR table with a vat holding a
@@ -972,3 +1053,25 @@ static func _downed(game: Game) -> void:
 	floor_item(game, "suture_kit", t + side * 1.2 + b * Vector3(-0.5, 0.0, 0.0))
 	game.say("Hands empty: hold E on Dr. Bled, carry them to a table, E anywhere at it lays them down (G drops them on the floor), then stitch.", 12.0)
 	print("[review] downed: bot %d down at %s, free table %d at %s" % [bid, mate_at, table, t])
+
+
+## MINIMAP: a free run of the hospital with the fogged floor plan in the top right corner. Nothing
+## chasing you and nothing to lose, because the map is the whole point: walk out of the hub into a
+## wing and watch the plan ink itself in behind you. The hub is drawn from the start; a ward room
+## only appears once someone has actually gone into it, so walking a hallway past shut doors leaves
+## those rooms blank.
+static func _minimap(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	# No phone call, no patient waiting, no losing, and nothing hunting you: an unhurried walk.
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("god", {"on": true})
+	game._clear_monsters()
+	await tree.physics_frame
+	game.say("Walk out into a wing. The hub is already on the map; the wards fill in as you go into them.", 10.0)
+	print("[review] minimap: %d rooms, %d lit at the start" % [
+			int(game.minimap.room_count), int(game.minimap.seen_rooms.count(0xFF))])

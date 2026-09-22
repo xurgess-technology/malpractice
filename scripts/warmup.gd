@@ -84,6 +84,12 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	_inert(shelf)
 	_report(progress, "items", Items.ITEMS.size())
 	ItemIcons.preload_all()   # ICONS: every item and ability icon loaded, and the greyscale ones (spoiled, used up) made
+	# TRINKETS chunk B: nothing extra to build. The six trinkets are loot kinds, so their models and
+	# their tinted stacks are in the loop above, their bare/framed/greyscale icons (the used-up crack
+	# is drawn over the grey one) come from preload_all, and the only new drawing is the laptop map,
+	# which the HUD makes out of rects, circles, lines and text it already draws every frame. If a
+	# trinket ever grows a visual of its own (a light on the ringing phone, a spark off the paddles)
+	# it builds here.
 	EconomyScript.warm(shelf)
 	preload("res://scripts/rocket_boots.gd").warm(shelf)   # ROCKET BOOTS: the heel pods and the flame
 	ExteriorScript.warm(shelf)   # the front: concrete, window glass, sign letters

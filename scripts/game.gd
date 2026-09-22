@@ -209,6 +209,7 @@ const DissectionScript := preload("res://scripts/dissection/dissection.gd")
 const AbilitiesScript := preload("res://scripts/abilities/abilities.gd")
 const VatsScript := preload("res://scripts/grafting/vats.gd")
 const GraftsScript := preload("res://scripts/grafting/grafts.gd")
+const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
 var sono_echo: Node = null    # the Sonographer's echo: the fan, the imaging flash, the deafen squeal
 var combat: Node = null       # bone saw swings, anesthetic jabs, dragging and strapping monsters
 var dissection: Node = null   # monster cases on the patient tables: sedation and re-dosing the Hive
@@ -216,6 +217,7 @@ var _step_operator := 0     # host: who finished the step that is finishing the 
 var vats: Node = null         # GRAFTING part one: specimen vats, eye spoilage (scripts/grafting/vats.gd)
 var grafts: Node = null       # GRAFTING chunk C: Eyeball Grafting on a strapped surgeon (scripts/grafting/grafts.gd)
 var abilities: Node = null    # Echo and Hive Eyes, their levels and slots (scripts/abilities/)
+var trinkets: Node = null     # TRINKETS chunk B: what the six trinkets do (scripts/trinkets/trinkets.gd)
 # POCKETS HOOK: pocket spaces (the Factory, the Restaurant), their seams and crossings.
 const PocketSpacesScript := preload("res://scripts/level/pockets/pocket_spaces.gd")
 var pockets: Node = null
@@ -225,6 +227,8 @@ const DoorsScript := preload("res://scripts/doors/doors.gd")
 const WingLoaderScript := preload("res://scripts/level/wing_loader.gd")
 var doors: Node = null         # scripts/doors/doors.gd, child "Doors"
 var wing_loader: Node = null   # scripts/level/wing_loader.gd, child "WingLoader"
+const MinimapScript := preload("res://scripts/minimap.gd")
+var minimap: Node = null       # MINIMAP: the shared fog of war, scripts/minimap.gd, child "Minimap"
 ## Host: someone clocked in while the wings were still being rebuilt; clock-in happens when ready.
 var clock_in_pending := false
 
@@ -308,6 +312,11 @@ func _ready() -> void:
 	grafts.name = "Grafts"
 	add_child(grafts)
 	grafts.setup(self)
+	# TRINKETS chunk B: what the six trinkets do. Same path on every machine.
+	trinkets = TrinketsScript.new()
+	trinkets.name = "Trinkets"
+	add_child(trinkets)
+	trinkets.setup(self)
 	# POCKETS HOOK: after Entities, so crossings see this frame's movement. Same path everywhere.
 	pockets = PocketSpacesScript.new()
 	pockets.name = "Pockets"
@@ -323,6 +332,12 @@ func _ready() -> void:
 	add_child(wing_loader)
 	wing_loader.setup(self)
 	wing_loader.extra_builders.append(pockets)   # POCKETS HOOK: the pocket is built and torn down with the wings
+	# MINIMAP: the party's shared fog of war, host authoritative. Same path on every machine so its
+	# `mm_fog` events line up; the HUD's corner panel draws it (scripts/minimap_panel.gd).
+	minimap = MinimapScript.new()
+	minimap.name = "Minimap"
+	add_child(minimap)
+	minimap.setup(self)
 	Net.roster_changed.connect(_on_roster_changed)
 	# CUSTOMIZATION: what everyone looks like arrives on its own channel (scripts/net.gd).
 	Net.looks_changed.connect(_apply_looks)
@@ -1465,6 +1480,8 @@ func pickup_item(p: Node, it: Node) -> void:
 		p.slots[i]["bt"] = float(it.bt)   # GRAFTING: the spoil clock travels with it
 	if String(it.x) != "":
 		p.slots[i]["x"] = String(it.x)   # GRAFTING part one: an eye's owner, a vat's contents
+		if String(it.x) == TrinketsScript.USED_MARK:
+			p.slots[i]["used"] = true   # TRINKETS chunk B: a spent trinket stays spent, and greyed
 	var pos: Vector3 = it.global_position
 	mark_db(String(it.kind), "sighted", p)   # wall terminal: an item this player has held shows in their database
 	world_items.erase(it.item_id)
@@ -1764,6 +1781,8 @@ func reset_money() -> void:
 		abilities.on_reset()   # the grafts that grant them go at the same time
 	if grafts != null:
 		grafts.on_reset()   # GRAFTING chunk C: a graft lasts the run, and goes with a game over
+	if trinkets != null:
+		trinkets.on_reset()   # TRINKETS chunk B: rings, tags and boosts go with the run
 
 
 ## SWEEP 4A HOOK (pharmacy, chunk 3): the flat price of one bottle of placebo pills. Never
@@ -1860,6 +1879,40 @@ func furnace_value(kind: String, s: Dictionary) -> int:
 func player_ability_slot(p: Node, slot_idx: int) -> void:
 	if is_host() and abilities != null:
 		abilities.ability_slot(p, slot_idx)
+
+
+## TAB SHEET, host: Unequip on the character sheet. Only the boots exist to take off so far.
+##
+## Where they go: **on the floor at your feet**, as a loose world item anyone can pick back up (and
+## put on, `_put_on`). Not into a hand: `Items.is_worn` and `Player.can_take` already say worn things
+## never occupy a hand, and dropping them sidesteps the hands-full case entirely -- a pair of boots
+## you cannot take off because you are holding two scalpels would be a worse rule than this.
+##
+## **Not in mid-air.** `Player.boots` gates the rocket dive (`player.gd` around the ROCKET BOOTS
+## burn), so taking them off with the thrusters lit would mean deciding what a half-lit dive does.
+## The answer is that you cannot: you have to have your feet on the ground, which is also the only
+## place the fuel refills. The sheet greys the button and says so, and the host refuses it again
+## here, because the client's copy of that rule is a courtesy and not the authority.
+func player_unequip(p: Node) -> void:
+	if not is_host():
+		return
+	if not p.boots:
+		return
+	if p.rocketing or not p.is_on_floor():
+		tell(p, "Not in mid-air.")
+		return
+	if p.carrying != 0 or p.operating:
+		tell(p, "Your hands are busy.")
+		return
+	p.boots = false
+	p.rocketing = false
+	p.fuel = 1.0   # they come off full; the fuel bar belongs to the boots, not the surgeon
+	var from := Transform3D(Basis(), p.global_position + Vector3.UP * 0.5 + -p.global_transform.basis.z * 0.5)
+	var it := _spawn_item("rocket_boots", 1, from, WorldItem.State.LOOSE)
+	it.toss(from, Vector3.DOWN * 0.5)
+	_sound("thud", from.origin)
+	emit_noise(from.origin, 0.4, "drop")
+	tell(p, "Rocket boots off. They're at your feet.", 3.0)
 
 
 func _floor_at(p: Vector3) -> Vector3:
@@ -2389,6 +2442,7 @@ func _physics_process(delta: float) -> void:
 	combat.physics_tick(delta)
 	dissection.physics_tick(delta)
 	abilities.physics_tick(delta)
+	trinkets.physics_tick(delta)   # TRINKETS chunk B: rings, heartbeats, the EpiPen's boost
 	doors.physics_tick(delta)   # DOORS HOOK: every machine; the host decides, clients animate
 
 	_update_danger()
@@ -3570,8 +3624,13 @@ func player_shoved(p: Node, charge: float = -1.0) -> void:
 func player_used(p: Node) -> void:
 	if not is_host():
 		return
-	if String(p.selected_stack().kind) == "placebo_pills":
+	var kind := String(p.selected_stack().kind)
+	if kind == "placebo_pills":
 		eat_pill(p)
+		return
+	# TRINKETS chunk B: the six trinkets do their own job instead of winding up a strike.
+	if trinkets != null and trinkets.is_usable(kind):
+		trinkets.use(p)
 		return
 	if combat != null:
 		combat.use(p)
@@ -4158,6 +4217,7 @@ func _global_fields() -> Dictionary:
 		# SWEEP 3 HOOK: small dictionaries of quantized values only (see docs/SWEEP3.md)
 		"cb": combat.net_state(), "dx": dissection.net_state(), "ab": abilities.net_state(),
 		"gf": grafts.net_state(),   # GRAFTING chunk C: who has a grafted part
+		"tk": trinkets.net_state(),   # TRINKETS chunk B: rings, laptop screens, tagged monsters, EpiPens
 	}
 	# loop: the cases, one field per case so a vitals tick resends a float, not every case:
 	# "cs" the ids in order, "c.<id>" the case without vitals, "v.<id>" its vitals.
@@ -4400,6 +4460,7 @@ func _apply_state(state: Dictionary, msg: Dictionary, keyframe: bool) -> void:
 	dissection.apply_net_state(g.get("dx", {}))
 	abilities.apply_net_state(g.get("ab", {}))
 	grafts.apply_net_state(g.get("gf", {}))   # GRAFTING chunk C
+	trinkets.apply_net_state(g.get("tk", {}))   # TRINKETS chunk B
 	var new_tools := bool(g.get("dt", dev_tools))   # DEV HOOK
 	if new_tools != dev_tools:
 		dev_tools = new_tools
@@ -4563,6 +4624,11 @@ func _event(kind: String, data: Dictionary) -> void:
 			mark_own_db(String(data.kind), String(data.field))
 		"wt_pulse":
 			wall.on_pulse(data)   # terminal redesign: someone clicked the break room screen
+		"mm_fog", "mm_fog+":
+			# MINIMAP: the party's shared fog. "mm_fog" is the whole state (a join, a new wing
+			# generation, or the periodic resync); "mm_fog+" is what was just revealed.
+			if minimap != null:
+				minimap.on_event(kind, data)
 		"sound":
 			Audio.play(data.cue, data.get("at"))
 		"cremate":
@@ -4634,6 +4700,8 @@ func _event(kind: String, data: Dictionary) -> void:
 			elif kind.begins_with("sn_"):
 				# The Sonographer's echo: the fan, and being imaged and deafened by it.
 				sono_echo.on_event(kind, data)
+			elif kind.begins_with("tk_"):
+				trinkets.on_event(kind, data)   # TRINKETS chunk B: the reflex hammer's view snap
 			elif kind == "dr_evict":
 				# DOORS HOOK: the host walked me out of a wing that is about to be rebuilt.
 				var me := local_player()
