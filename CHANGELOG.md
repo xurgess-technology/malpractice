@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.27**: Sawing something against a wall actually moves it
+    - Fixed: The knockback on a saw hit stopped dead the instant it touched anything, so hitting a monster backed against a wall barely shifted it. It slides along the wall now and you get the whole shove wherever you catch them.
 - **0.10.26**: Everyone can strap a monster down again
     - Fixed: If you weren't hosting, a monster you dragged to a table would refuse to be strapped. Underneath, the game was reusing the same id numbers for new monsters and new loot, so your machine kept the *old* thing and drove it with the new one's details -- a Hive that your game still thought was a Sonographer. Ids count up forever now, and anything that changes what it is gets rebuilt.
 - **0.10.25**: Somebody finally plugged the mirror lights in
