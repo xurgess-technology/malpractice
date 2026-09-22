@@ -60,6 +60,9 @@ const SETUPS := {
 	# under the board swaps between them in play either way. `--solution` adds the debug overlay.
 	"suture": {"seed": 4242, "stage": "_suture"},
 	"suture_eye": {"seed": 4242, "stage": "_suture_eye"},
+	# 2026-09-22 (playtest): a downed teammate on the floor by the OR. Carry them over your shoulder
+	# to a table, stitch them up, and watch them get up: the carry pose must not come with them.
+	"downed": {"seed": 4242, "stage": "_downed"},
 	# DOORS (2026-09-22, the playtest's "monsters walk through doors"): a hinged door standing wide
 	# open with a Hive parked behind the open leaf, hunting you. The leaf used to have no collider
 	# once the door was open: everything, you included, walked straight through the door model.
@@ -762,3 +765,52 @@ static func _hover_drop(game: Game) -> void:
 	drop_at(game, "suture_kit", spot)
 	drop_at(game, "tourniquet", spot + out * 0.1)
 	game.say("Drop everything on the same spot: they float, they glow, they make room.", 9.0)
+
+
+## DOWNED (2026-09-22 playtest): a teammate bleeding on the floor of the OR, a free table beside you
+## and two suture kits on the floor by it. Hands empty, hold E on them to hoist them over your
+## shoulder, carry them to the table and press E to lay them down, pick a kit up and stitch them.
+## What this is for: when they get up, the body must stand like anyone else's. It used to keep the
+## fireman's-carry pose -- folded over a shoulder that is not there, most of it through the floor.
+## The bug was never visible to the player being carried (they are behind their own eyes), so this
+## setup makes you the carrier and the teammate a bot, which is exactly the body everyone else sees.
+## Dev mode is on (F1) with monsters off and no game over, so nothing interrupts the look.
+static func _downed(game: Game) -> void:
+	var tree := game.get_tree()
+	var me = game.local_player()
+	game.set_dev_tools(true, me)
+	var dev = game.dev
+	dev.request("monsters_off", {"on": true})
+	dev.request("no_game_over", {"on": true})
+	# A free table to lay them on, and a clear patch of floor in front of it for the pick-up.
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	var t: Vector3 = game.table_position(table)
+	var b := Basis(Vector3.UP, float(game.table_yaw_of(table)))
+	var side: Vector3 = b * Vector3(0.0, 0.0, 1.0)   # the side a revived player gets up on
+	var mate_at: Vector3 = game._floor_at(t + side * 2.6)
+	# A bot teammate, downed where you can see them from where you stand.
+	var bid: int = dev.spawn_bot("bot", me, "Dr. Bled")
+	for i in 4:
+		await tree.physics_frame
+	var mate = game.players.get(bid)
+	if mate != null and is_instance_valid(mate):
+		dev.brains.erase(bid)   # no orders, no wandering: it is a body to carry
+		mate.teleport(mate_at)
+		await tree.physics_frame
+		game.knock_down_player(mate, "review")
+		# Then half a second of crawling. The rigged body only blends into its Crawl clip while it
+		# moves (docs/KNOWN_ISSUES.md, "a downed player who never crawls is drawn standing"), so a
+		# teammate downed on the spot would be staged bolt upright -- nothing to do with this fix.
+		mate.bot_move = Vector2(0.0, -1.0)
+		for i in 30:
+			await tree.physics_frame
+		mate.bot_move = Vector2.ZERO
+		mate_at = mate.global_position
+	place(game, game._floor_at(t + side * 4.2), mate_at + Vector3(0.0, 0.4, 0.0))
+	clear_hands(game)   # a carry needs both hands free
+	floor_item(game, "suture_kit", t + side * 1.2 + b * Vector3(0.5, 0.0, 0.0))
+	floor_item(game, "suture_kit", t + side * 1.2 + b * Vector3(-0.5, 0.0, 0.0))
+	game.say("Hands empty: hold E on Dr. Bled, carry them to the table, E to lay them down, then stitch.", 10.0)
+	print("[review] downed: bot %d down at %s, free table %d at %s" % [bid, mate_at, table, t])

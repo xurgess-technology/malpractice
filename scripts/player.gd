@@ -1859,6 +1859,11 @@ func set_carry_body(on: bool) -> void:
 ## shadowing (the torch sits inside the head), and seen by the first-person camera only for the carry
 ## camera.
 func _refresh_self_body() -> void:
+	# This decides your OWN body only. A teammate's copy is not a self body: it is shown and posed by
+	# refresh_downed_visuals, and letting this run on it would hide it and stop its rig (the carry
+	# pose used to stay frozen on a player who had been stitched up, because set_stand_in got here).
+	if not is_local:
+		return
 	# GRAFTING chunk C: while a lying stand-in body is on the table for you, your own never draws --
 	# not even for the mirrors, the carry camera or the body Dr. Botsworth is driven past.
 	var show := (_mirror_self or _carry_body or dev_body_shown) and not (on_table and stand_in)
@@ -2013,7 +2018,9 @@ func revive_full() -> void:
 	_sprint_toggle = false
 	_sprint_grace = 0.0
 	_clear_downed()
-	_set_visible_alive(true)
+	# Back on your feet is a change of downed state like any other: let the one hook derive the
+	# visuals from it, so the body is drawn and its rig animating again whoever put you back up.
+	refresh_downed_visuals()
 
 
 func revive(with_hp: int) -> void:
@@ -2022,7 +2029,7 @@ func revive(with_hp: int) -> void:
 	dead_time = 0.0
 	invuln = 3.0
 	_clear_downed()
-	_set_visible_alive(true)
+	refresh_downed_visuals()   # drawn, and animating, on every machine again (see revive_full)
 
 
 var _downed_seen := false
@@ -2132,6 +2139,12 @@ func refresh_downed_visuals() -> void:
 	if on_table and (downed or stand_in) and not view_local():
 		body_visual.visible = false
 		name_tag.visible = false
+	# Everyone else's copy of this player: the rig animates exactly while that body is drawn. A body
+	# that stops mid-clip keeps that pose, so anything that hides one (the lying stand-in on the
+	# table) has to hand the clips back when it shows again, or a stitched-up player stands up still
+	# folded over a shoulder. Idempotent, and set_active replays the clip from `want` on the way back.
+	if body_hands != null and not view_local():
+		body_hands.set_active(body_visual.visible)
 	refresh_own_lights()   # GRAFT HOOK: no torch and no head glow on a strapped face
 	if view_local():
 		# GRAFT HOOK: strapped down (or shown to a camera that moved elsewhere), no floating arms.
