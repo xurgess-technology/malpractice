@@ -140,9 +140,17 @@ func _ambient_noise_floor(kind: String, pk) -> void:
 ## is the other copy, so walking to it is walking through the seam. Chases and spawns do not come
 ## through this predicate and are checked elsewhere (_nurse_follows, _sonographer_hears).
 func _wander_fenced(kind: String, pk) -> void:
-	var here: Vector3 = bot.global_position
+	# A wing hallway, not wherever the bot happens to be standing: at the start of a shift that is
+	# the neutral area, which monster_may_wander_to excludes on its own account and always did.
+	var here := Vector3.INF
+	for sp in game.level_info.get("monster_spawns", []):
+		if not pk.in_pocket(sp):
+			here = sp
+			break
 	var there: Vector3 = pk.pocket.spawn
-	_check(not pk.in_pocket(here) and pk.in_pocket(there), "%s: a hospital point and a pocket point to test with" % kind)
+	_check(here.is_finite() and pk.in_pocket(there), "%s: a hospital wing point and a pocket point to test with" % kind)
+	if not here.is_finite():
+		return
 	_check(not game.monster_may_wander_to(there, here), "%s: a monster in the hospital may not wander into the pocket" % kind)
 	_check(not game.monster_may_wander_to(here, there), "%s: a monster in the pocket may not wander out into the hospital" % kind)
 	_check(game.monster_may_wander_to(there, there), "%s: a monster in the pocket may still wander inside it" % kind)
