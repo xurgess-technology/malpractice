@@ -5,6 +5,15 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.10**: A door you can see is a door you can't walk through
+    - Fixed: A hinged door standing wide open was completely walk-through -- the metre of solid door sticking out into the room had no collision at all, so monsters (and you) strolled straight through it. It's solid again, while still not catching you on its end when you cut the doorway corner.
+- **0.10.9**: The surgery board stops chugging
+    - Fixed: Blood on the page was being re-cut into triangles every single frame, so the messier you got the slower it ran. It's baked once now: the worst case went from about 4 ms a frame to effectively nothing, and it no longer gets worse the more you bleed on it.
+    - Fixed: Everyone in the room was redrawing every surgery board at full speed, on every machine, for every table at once. Now only the person actually operating pays full price; onlookers redraw less the further off they are, and not at all when it's off screen. Whole painter is down from 5.6-6.8 ms to 1.9-2.4 ms.
+- **0.10.8**: STICK! goes where you point it
+    - Changed: The needle now lands exactly where your cursor is and sinks straight down from there, instead of sliding off along its own angle as it went in. Hold Space and it stops itself the moment it's in the vein -- no more letting go at the flash.
+    - Removed: Blowing the vein, and the angle control. Aim is the whole skill now; you can still miss.
+    - Fixed: The syringe tray no longer sits on top of the instructions in the corner.
 - **0.10.7**: The order is stamped on the sheet
     - Changed: The big word a step opens on is drawn on the clipboard page again instead of floating on your screen, so it reads as part of the sheet you're about to play on -- and onlookers can see it on the board too. Still lands in the same spot at the same size whatever the step.
 - **0.10.6**: Pull up a chair, the board's for everyone now

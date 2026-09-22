@@ -331,6 +331,19 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
   the speed drops (a snap, `blend = 0.0` for the still case, is the cheap version); both want their
   own look, since it changes how every body goes down and goes prone. `--setup=downed` crawls its
   staged teammate half a second on purpose to work around it.
+- **PLAYTEST 2026-09-22: putting a carried player on the OR table is fiddly, and missing it dumps
+  them on the floor.** Zach: "players were sometimes struggling to set picked up players down on the
+  OR table and were getting frustrated when not clicking on the table but still pressing E set down
+  their friend". Two halves: the table's interact target is hard to hit while carrying someone, and
+  a near-miss falls through to the plain floor drop, so it doesn't merely fail -- it undoes the
+  carry and you start again. The table path itself is fine and has proper prompts and refusals
+  (`game.gd:1060` `_table_prompt` -> `:1064` -> `_downed_place_prompt`, "Place <name> on the
+  table" / "!The table is taken."); it is `drop_carried` (`game.gd:2986`) that has no table
+  awareness, trying a spot ahead of the carrier and snapping it to floor height. Targeting is the
+  camera raycast in `player.gd` ~1433 at `C.INTERACT_RANGE` 2.2 m. A deliberate floor-drop has to
+  stay possible -- the goal is only that a near-miss at a table stops silently becoming one. Note
+  0.10.3 fixed a similar "hard to aim at it" problem for dropped items with a much more generous
+  sphere-shaped pickup volume; same trick may apply.
 - **The stitches operation is self-contained.** `game.add_case` / `game.cases` do not exist on this
   branch, so the player table runs its own copy of the surgery system through
   `scripts/downed/player_surgery.gd` (an adapter standing in for the game). The integration wave
@@ -634,24 +647,53 @@ left below is what still applies to the shared strapped-monster infrastructure.
 - **`mapcheck` takes about twice as long** (every seed is generated again with a pocket forced).
 - **The Restaurant is very warm-orange** under the game's teal/amber grade; the tables' tops and the booth
   wood read dark from a distance.
+## Mirrors (2026-09-22 playtest)
+
+- **PLAYTEST 2026-09-22: standing too close to a mirror turns your character completely black.**
+  Reported by Zach after a session with real players. Not yet reproduced or root-caused; it is a
+  lighting problem, not a geometry one (the body is there, it is just unlit).
+  Where to look, in `scripts/personnel/mirrors.gd`: the local player's own body is shown to mirror
+  cameras only, on the `LightRooms.SELF` layer which the first-person camera leaves out (lines
+  15-16, and `Player.set_mirror_self` ~line 196). The mirror camera builds its cull mask as
+  `(main.cull_mask & ~HIDE_FROM_MIRRORS) | LightRooms.SELF` (~line 136, applied ~line 191) -- so the
+  first question is whether the room's **lights** actually illuminate the `SELF` layer, and whether
+  that changes with proximity. `scripts/level/light_rooms.gd` owns which lights light which layers
+  and line 35 there is specifically about this body; note `set_meta("light_dynamic", true)` at
+  mirrors.gd:60 ("light_rooms.gd: leave its layers alone").
+  Two other candidates worth ruling out: the mirror camera's **near plane is pinned to the glass**
+  (line 6, "so the wall behind never shows") -- walking close puts the reflected body right up
+  against that plane; and the render budget, where "of the sink mirrors you can see, the nearest
+  renders every frame and the rest take turns" (line 11), so proximity changes which mirror is on
+  the every-frame path. Check both the full-length entrance mirror and the sink mirrors, since they
+  are different sizes and may not fail alike.
+
 ## Doors and the per-shift wings (doors worker, 2026-09-14)
 
 - **Ceiling fixtures still light through closed doors** (they cast no shadows, as they already lit
   through walls). The flashlight (a shadow caster) and every sight ray stop at a door.
 - **The main entrance's glass blocks sight rays** like a solid door (its panels are on
   `C.L_WORLD`): nothing sees through it. Monsters never wander into the entrance building anyway.
-- **A leaf folded open past 90% stops colliding** so bodies cutting a doorway corner do not catch on
-  its end; a player hugging the jamb can clip a few centimetres into the open leaf.
-- **PLAYTEST 2026-09-22: monsters walk through doors.** Reported by Zach after a session with real
-  players; he could not tell whether it was closed doors or the *model of the opened state* of the
-  door being walked through. Not yet reproduced or root-caused. The entry above is the obvious first
-  suspect for the open-leaf case -- a leaf past 90% deliberately stops colliding, and what is "a few
-  centimetres" of clip for a player hugging the jamb may be a whole monster walking through the
-  visibly-open leaf, since monsters are bigger and faster and do not path the way a player walks.
-  For the closed-door case, check whether monsters are subject to the same door-opening rules as
-  other agents ("Agents open hinged doors by facing them within about 3 m" below) or whether some
-  monster mover bypasses door collision entirely. Worth checking per monster type: they may not all
-  share a mover.
+- **An open leaf's first 25 cm do not collide** (`Door.OPEN_INSET`), so bodies cutting a doorway
+  corner do not catch on its end, which sits in the doorway's mouth with its cap facing anyone
+  coming through. The rest of the open leaf is solid. Before 2026-09-22 the whole leaf's collider
+  was switched off past 90% open instead, which is the bug below.
+- **PLAYTEST 2026-09-22: monsters walk through doors** -- *found and fixed, the open-leaf half.*
+  A hinged leaf swung wide open stands about 1.4 m straight out into the room, and past 90% open
+  its collider was switched off entirely: the whole visible door model was walk-through, for
+  monsters and players alike (rays across it on `C.L_WORLD` hit nothing; a hunting Hive crossed it
+  in under a second). `Door._apply_pose` now keeps the leaf on `C.L_WORLD` at every pose and swaps
+  the collider for one pulled `OPEN_INSET` back from the hinge, which is what the anti-snag rule
+  above was actually after. `tools/doortest.gd` `_doors_stop_monsters` covers it: 12 sample lines
+  across the open leaf, all three monster kinds against the door shut and standing open, and a bot
+  still walking cleanly through the open doorway.
+  **The closed-door half was not reproduced** and is still open in principle. With the door pinned
+  shut, a hunting Hive, Sonographer and Night Nurse were all stopped by it, and a Sonographer forced
+  into RUSH charging from 8 m at 5.2 m/s bounced off it four times out of four (no tunnelling). A
+  client-side visual desync was also ruled out as the cause: a client animates toward the host's
+  amount at `CLIENT_SPEED` or faster (`Doors.apply_net`), so it is at most a couple of tenths of a
+  second behind, and its own leaves collide the same way. What Zach saw was most likely the open
+  leaf; if it turns up again against a door that is visibly shut on the host, start with the
+  monster's own mover rather than the door.
 - **About 3% of room doors have under 80 degrees of room on the hallway side** (furniture or a
   container near the doorway): they always fold into their tunnel, even toward someone coming out
   of the room, who has to step back while it swings (a bot gets shoved back a little). `DoorPlan.check` guarantees every door still opens wide enough to pass.

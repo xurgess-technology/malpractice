@@ -62,6 +62,9 @@ var teammate_aim := Vector2.ZERO
 var tourniquets := 1
 ## --fps: print frames drawn per second and the panel's paint cost once a second.
 var fps_report := false
+## --spectate: play the step, but let the panel repaint at an ONLOOKER'S rate (surgery_panel.gd), to
+## measure and to look at what everyone else in the room sees.
+var spectate := false
 var _fps_t := 0.0
 var _fps_frames := 0
 var _wheel := 0
@@ -116,6 +119,7 @@ func _ready() -> void:
 			"idle": idle = true
 			"arcade": arcade_force = true
 			"tourniquets": tourniquets = int(v)
+			"spectate": spectate = true
 			"fps": fps_report = true
 			"marks":
 				flags["stitch_marks"] = v
@@ -378,6 +382,11 @@ func _physics_process(delta: float) -> void:
 					b |= MinigameBase.BUTTON_SCROLL_DOWN
 					_wheel += 1
 				mg.handle_cursor(_clamp(hit + shake), b, delta)
+	if spectate:
+		var pn = mg.get("panel")
+		if pn != null and is_instance_valid(pn):
+			pn.spectate_test = true
+			pn.operator_view = false
 	mg.tick(delta)
 	if fps_report:
 		_fps_t += delta
@@ -385,8 +394,24 @@ func _physics_process(delta: float) -> void:
 			var frames := Engine.get_frames_drawn() - _fps_frames
 			_fps_frames = Engine.get_frames_drawn()
 			var ps: Array = mg.take_paint_stats() if mg.has_method("take_paint_stats") else [0, 0]
-			print("[lab] fps t=%.0f frames=%d paints=%d paint_ms_each=%.2f phase=%s %s" % [t, frames, int(ps[1]),
-				float(ps[0]) / 1000.0 / maxf(1.0, float(ps[1])), str(mg.get("phase")), str(mg.get("prof_line")) if mg.get("prof_line") != null else ""])
+			var parts := ""
+			if ps.size() > 2 and ps[2] is Dictionary:
+				var n := maxf(1.0, float(ps[1]))
+				for k: String in (ps[2] as Dictionary):
+					parts += " %s=%.2f" % [k, float((ps[2] as Dictionary)[k]) / 1000.0 / n]
+			if ps.size() > 4:
+				parts += " splat_polys=%d splats=%d" % [int(ps[3]), int(ps[4])]
+			if ps.size() > 5:
+				parts += " quads_each=%d" % int(float(ps[5]) / maxf(1.0, float(ps[1])))
+			parts += " objs=%d nodes=%d" % [int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)),
+				int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))]
+			print("[lab] fps t=%.0f frames=%d paints=%d paint_ms_each=%.2f draws=%d prims=%d gpu_ms=%.2f cpu_ms=%.2f%s phase=%s %s" % [t, frames, int(ps[1]),
+				float(ps[0]) / 1000.0 / maxf(1.0, float(ps[1])),
+				int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+				int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
+				Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+				Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, parts,
+				str(mg.get("phase")), str(mg.get("prof_line")) if mg.get("prof_line") != null else ""])
 			_fps_t = 0.0
 	# Round-trip the net state every frame so a broken apply_net_state shows up in the lab.
 	mg.apply_net_state(mg.net_state())
