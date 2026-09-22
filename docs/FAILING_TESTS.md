@@ -9,8 +9,9 @@ Last checked: 2026-09-22, `main` at `c933607` (0.10.17), by the `strap-fix` task
 `c933607` itself to be sure it was not the branch's doing.
 
 The list got longer that day, and **not because anything broke**: several of these had been failing
-for some unknown time with nobody writing them down (`looptest`, `pockettest`, nettest `pockets`),
-and one is fallout from 0.10.16 earlier the same day (nettest `hit_feedback`). Of the 22 nettest
+for some unknown time with nobody writing them down (`pockettest`, nettest `pockets`, and
+`looptest`, whose entry has since been fixed and removed), and one is fallout from 0.10.16 earlier
+the same day (nettest `hit_feedback`). Of the 22 nettest
 scenarios, 16 pass, `full_shift_lag` passes on a quiet re-run, and `brains`, `pockets`,
 `rocket_boots` and `hit_feedback` fail. The earlier note that everything but this file's entries
 passed dated from 2026-09-17, `main` at `ded2d46`.
@@ -61,21 +62,6 @@ How to run things is at the bottom of this file.
   on plain `main` at `c933607` with no branch changes present — with the same message each time.
   So there is a real failure here as well as a load sensitivity; treat it as broken until someone
   looks. Nobody has yet.
-
-## 1e. looptest: loot in hand does not survive a shift change
-
-- **Command:** `godot --headless --path . --fixed-fps 60 tools/looptest.tscn`
-- **Result:** `result=FAIL failures=4`, all four about loot across the shift boundary:
-  `the loot is still in hand`, `carried loot survives into the next lobby`,
-  `the bot threw the loot into the furnace and sold it for $0`,
-  `last shift's untouched loot was cleared`.
-- **Found 2026-09-22** during the strapping fix, and **confirmed identical on plain `main`** at
-  `c933607` (same four checks, same order). It was simply never written down, so looptest has been
-  failing for some unknown time. Nobody has looked into the cause.
-- **Where to look:** `_shift_item_ids` in `scripts/game.gd` (the set of items the spawners put in
-  the hospital this run, cleared at the next clock-in) and whatever is meant to spare what a player
-  is holding. The first failure is the interesting one: the rest may all follow from the loot
-  leaving the hand.
 
 ## 1f. pockettest: the Night Nurse follows you through a seam
 
