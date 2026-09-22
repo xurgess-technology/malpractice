@@ -633,6 +633,26 @@ left below is what still applies to the shared strapped-monster infrastructure.
 - **`mapcheck` takes about twice as long** (every seed is generated again with a pocket forced).
 - **The Restaurant is very warm-orange** under the game's teal/amber grade; the tables' tops and the booth
   wood read dark from a distance.
+## Mirrors (2026-09-22 playtest)
+
+- **PLAYTEST 2026-09-22: standing too close to a mirror turns your character completely black.**
+  Reported by Zach after a session with real players. Not yet reproduced or root-caused; it is a
+  lighting problem, not a geometry one (the body is there, it is just unlit).
+  Where to look, in `scripts/personnel/mirrors.gd`: the local player's own body is shown to mirror
+  cameras only, on the `LightRooms.SELF` layer which the first-person camera leaves out (lines
+  15-16, and `Player.set_mirror_self` ~line 196). The mirror camera builds its cull mask as
+  `(main.cull_mask & ~HIDE_FROM_MIRRORS) | LightRooms.SELF` (~line 136, applied ~line 191) -- so the
+  first question is whether the room's **lights** actually illuminate the `SELF` layer, and whether
+  that changes with proximity. `scripts/level/light_rooms.gd` owns which lights light which layers
+  and line 35 there is specifically about this body; note `set_meta("light_dynamic", true)` at
+  mirrors.gd:60 ("light_rooms.gd: leave its layers alone").
+  Two other candidates worth ruling out: the mirror camera's **near plane is pinned to the glass**
+  (line 6, "so the wall behind never shows") -- walking close puts the reflected body right up
+  against that plane; and the render budget, where "of the sink mirrors you can see, the nearest
+  renders every frame and the rest take turns" (line 11), so proximity changes which mirror is on
+  the every-frame path. Check both the full-length entrance mirror and the sink mirrors, since they
+  are different sizes and may not fail alike.
+
 ## Doors and the per-shift wings (doors worker, 2026-09-14)
 
 - **Ceiling fixtures still light through closed doors** (they cast no shadows, as they already lit
