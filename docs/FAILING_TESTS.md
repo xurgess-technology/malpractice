@@ -4,9 +4,16 @@
 written down, so seeing them does not mean your change broke something. If you fix one, delete its
 section here (and its entry in docs/KNOWN_ISSUES.md, if it has one) in the same commit.
 
-Last checked: 2026-09-17, `main` at `ded2d46`. The failures reproduce identically on `58d088a`, the
-commit before that day's merge. Everything else passes: every headless test scene, three playtest
-shifts (`--god --seed=1..3`) and all 19 multiplayer scenarios in `tools/nettest_run.gd`.
+Last checked: 2026-09-22, `main` at `c933607` (0.10.17), by the `strap-fix` task: the whole
+`nettest_run.gd` suite plus the headless scenes it touched, each failure below re-run against
+`c933607` itself to be sure it was not the branch's doing.
+
+The list got longer that day, and **not because anything broke**: several of these had been failing
+for some unknown time with nobody writing them down (`looptest`, `pockettest`, nettest `pockets`),
+and one is fallout from 0.10.16 earlier the same day (nettest `hit_feedback`). Of the 22 nettest
+scenarios, 16 pass, `full_shift_lag` passes on a quiet re-run, and `brains`, `pockets`,
+`rocket_boots` and `hit_feedback` fail. The earlier note that everything but this file's entries
+passed dated from 2026-09-17, `main` at `ded2d46`.
 
 How to run things is at the bottom of this file.
 
@@ -43,31 +50,79 @@ How to run things is at the bottom of this file.
   E and reading its prompt, and the `-1.00` values suggest the door's `amount` is not being read at
   all rather than being wrong. Nobody has looked yet.
 
-## 1c. Strapping a monster to a table is broken, in three places at once
+## 1d. nettest `rocket_boots` now fails for real, not just under load
 
-Found 2026-09-22 by two tasks independently, and confirmed on plain `main` each time (once by
-stashing, once from a clean checkout, once by the orchestrator running the baseline directly). None
-of it was written down before. The three look like **one fault**, not three: every one of them is a
-monster failing to get strapped to a table.
+- **Command:** `godot --headless --path . --script tools/nettest_run.gd -- --only=rocket_boots`
+- **Result:** `FAIL`, `timed out after 60 s waiting for client 1's burn on client 2` (client 2), and
+  the host reporting that client's failure.
+- **This section used to say "flaky under load, not broken"**: it failed once during a loaded suite
+  run earlier on 2026-09-22 and then passed three times in a row. That is no longer what it does.
+  Later the same day it failed **three times out of three** — in a full suite run, on its own, and
+  on plain `main` at `c933607` with no branch changes present — with the same message each time.
+  So there is a real failure here as well as a load sensitivity; treat it as broken until someone
+  looks. Nobody has yet.
 
-- **`combattest`: 1 of N, `a taken table does not offer to strap`** (the prompt reads
-  'Put the Sonographer down').
-  `godot --headless --path . --fixed-fps 60 tools/combattest.tscn` → `result=FAIL failures=1`.
-- **nettest `combat`: times out on strapping a monster.**
-  `godot --headless --path . --script tools/nettest_run.gd -- --only=combat`. It sedates the monster
-  at t=60 and then never drags/straps it — a gameplay step, not a connection step.
-- **nettest `graft`: `timed out after 30 s waiting for the cut step`.**
-  `-- --only=graft`. Same shape: it cannot get the monster onto the table to start cutting.
+## 1e. looptest: loot in hand does not survive a shift change
 
-Nobody has looked into the cause yet. Since GRAFTING and the monster cases both depend on getting a
-monster strapped down, this is probably worth more than its line count suggests.
+- **Command:** `godot --headless --path . --fixed-fps 60 tools/looptest.tscn`
+- **Result:** `result=FAIL failures=4`, all four about loot across the shift boundary:
+  `the loot is still in hand`, `carried loot survives into the next lobby`,
+  `the bot threw the loot into the furnace and sold it for $0`,
+  `last shift's untouched loot was cleared`.
+- **Found 2026-09-22** during the strapping fix, and **confirmed identical on plain `main`** at
+  `c933607` (same four checks, same order). It was simply never written down, so looptest has been
+  failing for some unknown time. Nobody has looked into the cause.
+- **Where to look:** `_shift_item_ids` in `scripts/game.gd` (the set of items the spawners put in
+  the hospital this run, cleared at the next clock-in) and whatever is meant to spare what a player
+  is holding. The first failure is the interesting one: the rest may all follow from the loot
+  leaving the hand.
 
-## 1d. nettest `rocket_boots` is flaky under load, not broken
+## 1f. pockettest: the Night Nurse follows you through a seam
 
-- Failed once during a full suite run on 2026-09-22 while four Godot instances were running in other
-  work slots, then **passed three times in a row** on re-run (43 s each).
-- Treat a lone `rocket_boots` failure as a flake first: re-run it alone before chasing it. If it ever
-  fails on an otherwise idle machine, that is new information worth recording here.
+- **Command:** `godot --headless --path . --fixed-fps 60 tools/pockettest.tscn`
+- **Result:** `FAILED 2 of 180 checks`:
+  `restaurant: the Night Nurse followed the player through the seam (60.0 s, 1444.3 m away)` and
+  `restaurant: she crossed exactly once`.
+- **Found 2026-09-22** during the strapping fix, and **confirmed identical on plain `main`** at
+  `c933607` — the same two checks with the same numbers to the decimal (60.0 s, 1444.3 m), so
+  nothing about it is timing-dependent. Never written down before; nobody has looked at the cause.
+- The other 178 checks pass, the seams themselves included.
+
+## 1g. nettest `pockets`: client 1 never carries client 2 into the pocket
+
+- **Command:** `-- --only=pockets`
+- **Result:** `FAIL` after 140 s: client 1 says `carried 0, client 2's body in pocket false`, and the
+  host and client 2 both time out after 120 s `waiting for client 1 to carry client 2 into the
+  pocket`. The carry never starts, so nothing about the seam itself is exercised.
+- **Found 2026-09-22** during the strapping fix, **confirmed on plain `main`** at `c933607` with the
+  identical message, and it reproduces every run (not a load flake). Never written down before.
+- Not to be confused with the headless `pockettest` scene (section 1f), which fails on something
+  else entirely (the Night Nurse).
+
+## 1h. nettest `hit_feedback`: a saw hit barely pushes the Hive — from 0.10.16
+
+- **Command:** `-- --only=hit_feedback`
+- **Result:** `FAIL` after ~22 s, `the hit pushed the Hive only 0.27 m` (0.30 m on `main`; it varies
+  a little run to run because the processes are not in lockstep).
+- **The check:** `tools/nettest.gd` around line 1841 wants `hit_feedback_monster` to move the Hive
+  at least **0.3 m**, "far enough to read as a knock rather than a twitch". It lands just under.
+- **Cause, as far as it goes:** 0.10.16 (2026-09-22) set `STAGGER_SECONDS := 0.0` in
+  `scripts/monster.gd`, and `_hit` passes it straight to `brain.stun(dir, STAGGER_SECONDS, 0.45,
+  from)` — the push now lasts zero seconds, so it only travels about the distance one frame of it
+  covers. `scripts/combat/combat.gd` line 58 records that change as "the push survived it, the stun
+  did not"; this test says the push only *just* survived it, and lands the wrong side of the line.
+- **So this one has a known author**: it is fallout from today's stagger change, not an old failure.
+  Whoever picks it up should decide which is right — the 0.3 m the test asks for, or the zero-second
+  stagger — rather than just moving the threshold.
+- Confirmed on plain `main` at `c933607`, so it is not any branch's doing.
+
+## 1i. nettest `full_shift_lag` is a load flake
+
+- Failed once on 2026-09-22 during a full suite run (`timed out after 90 s waiting for start` on
+  client 1 — it never finished connecting, before any gameplay), while three other slots were
+  running Godot. **Passed on its own re-run in 66 s**, against the 895 s it burned failing.
+- It runs with 120 ms lag and 3% loss, so its connection window is the tightest in the suite.
+  Re-run it alone before believing a failure.
 
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
 
@@ -131,10 +186,16 @@ The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\
 - Map validation: `godot --headless --path . -s tools/mapcheck.gd`
 - Multiplayer, every scenario as real processes: `godot --headless --path . --script tools/nettest_run.gd`
   (`-- --only=wall,surgery` for a few)
-- **Two work slots must not run nettest at the same time.** `nettest_run.gd`'s ports start at 7790
-  and are numbered per scenario, not per slot, so two slots running it together clash and a scenario
-  fails for no reason (seen 2026-09-22: `monsters` failed on a port clash, then passed alone). If a
-  nettest scenario fails and another slot was also testing, re-run it alone before believing it.
+- **Two work slots must not run nettest at the same time _on the same ports_.** `nettest_run.gd`'s
+  ports start at 7790 and are numbered per scenario, not per slot, so two slots running it together
+  clash and a scenario fails for no reason (seen 2026-09-22: `monsters` failed on a port clash, then
+  passed alone). If a nettest scenario fails and another slot was also testing, re-run it alone
+  before believing it.
+- **Or give your slot its own port base:** `-- --port=7900` (one port per scenario from there, so
+  leave a slot's bases about 100 apart). Used on 2026-09-22 to run `combat` and `graft` in wt-4
+  while wt-1 was running the whole suite on 7790/7800, with no clash either way. This is the way to
+  test without waiting for another slot to finish; the machine still gets loaded, so the flake
+  warning below still applies.
 - **Expect flakes when the machine is loaded.** With four slots running Godot at once, wall-clock
   timeouts get tight: `rocket_boots` and `downedtest` have each failed once under load and then
   passed on a quiet re-run. Re-run alone before chasing.
