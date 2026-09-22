@@ -11,7 +11,8 @@ Last checked: 2026-09-22, `main` at `c933607` (0.10.17), by the `strap-fix` task
 The list got longer that day, and **not because anything broke**: several of these had been failing
 for some unknown time with nobody writing them down (`pockettest`, nettest `pockets`, and
 `looptest`, whose entry has since been fixed and removed). Of the 22 nettest scenarios, 17 pass,
-`full_shift_lag` passes on a quiet re-run, and `brains`, `pockets` and `rocket_boots` fail. The
+`full_shift_lag` passes on a quiet re-run, and `brains` and `pockets` fail. (`rocket_boots` failed
+that day too; it was a real replication bug, fixed 2026-09-22, and its section is gone.) The
 earlier note that everything but this file's entries passed dated from 2026-09-17, `main` at
 `ded2d46`.
 
@@ -56,18 +57,6 @@ How to run things is at the bottom of this file.
 - **They look like one fault, not four:** all four are about opening or closing a hinged door with
   E and reading its prompt, and the `-1.00` values suggest the door's `amount` is not being read at
   all rather than being wrong. Nobody has looked yet.
-
-## 1d. nettest `rocket_boots` now fails for real, not just under load
-
-- **Command:** `godot --headless --path . --script tools/nettest_run.gd -- --only=rocket_boots`
-- **Result:** `FAIL`, `timed out after 60 s waiting for client 1's burn on client 2` (client 2), and
-  the host reporting that client's failure.
-- **This section used to say "flaky under load, not broken"**: it failed once during a loaded suite
-  run earlier on 2026-09-22 and then passed three times in a row. That is no longer what it does.
-  Later the same day it failed **three times out of three** — in a full suite run, on its own, and
-  on plain `main` at `c933607` with no branch changes present — with the same message each time.
-  So there is a real failure here as well as a load sensitivity; treat it as broken until someone
-  looks. Nobody has yet.
 
 ## 1f. pockettest: the Night Nurse follows you through a seam
 
@@ -164,7 +153,7 @@ The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\
   test without waiting for another slot to finish; the machine still gets loaded, so the flake
   warning below still applies.
 - **Expect flakes when the machine is loaded.** With four slots running Godot at once, wall-clock
-  timeouts get tight: `rocket_boots` and `downedtest` have each failed once under load and then
+  timeouts get tight: `downedtest` has failed once under load and then
   passed on a quiet re-run. Re-run alone before chasing.
 - Windowed screenshot tools write to `tools/game_shots/` and friends: `menushot`, `faxshot`,
   `tipshot`, `database_shot` (`-- --wall`, `-- --wall2`), `gameshot`, `bootsshot` (rocket boots)
