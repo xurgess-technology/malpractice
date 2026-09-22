@@ -19,17 +19,19 @@ const MM = preload("res://scripts/minimap.gd")
 
 const SIDE := 152.0        # the panel, square
 const MARGIN := 16.0       # from the top right corner of the screen
-const SCALE := 4.5         # screen pixels per 1.5 m tile: the panel shows about 50 m across
+const SCALE := 3.8         # screen pixels per 1.5 m tile: the panel shows about 60 m across
 
-const PAPER := Color(0.043, 0.051, 0.063, 0.74)     # unexplored: the fog is just blank paper
-const FRAME := Color("f0e6c8", 0.55)
-const OUTDOOR := Color(0.36, 0.40, 0.38, 0.22)      # the lot outside, faint context
-const CORRIDOR := Color(0.72, 0.69, 0.58, 0.20)
-const ROOM := Color(0.80, 0.76, 0.62, 0.30)
-const DOORWAY := Color("5ce0d0", 0.62)
-const WALL := Color("f0e6c8", 0.62)
-const ARROW := Color("f6efd4")
-const MATE := Color("5ce0d0")
+const PAPER := Color(0.047, 0.053, 0.063, 0.96)     # unexplored: the fog is just blank paper
+const FRAME := Color("f0e6c8", 0.85)
+# Explored floor is light and the walls are dark ink ON it -- an inked floor plan, not a glowing
+# radar. It is also the only way a 4.5 px tile reads at all on a dark screen.
+const OUTDOOR := Color(0.34, 0.38, 0.36, 0.80)      # the lot outside: faint, but not nothing
+const CORRIDOR := Color("b3ab93", 0.90)
+const ROOM := Color("d8d0b8", 0.95)
+const DOORWAY := Color("2f7d74")
+const WALL := Color("15120e")
+const ARROW := Color("c0241f")                      # you: red on cream, unmistakable
+const MATE := Color("1f5f8f")
 
 var game: Node = null
 ## The tile the panel is centred on, and how far past it the player is (0..1 per axis).
@@ -143,7 +145,7 @@ class MapLayer:
 					run_from = tx
 					run_col = col
 		if walls.size() >= 2:
-			draw_multiline(walls, MinimapPanel.WALL, 1.0)
+			draw_multiline(walls, MinimapPanel.WALL, 1.5)
 
 	## The fill index for a tile (-1 for nothing), collecting its wall edges on the way.
 	func _col_at(mm, base: int, tx: int, ty: int, walls: PackedVector2Array, ctr: Vector2, ct: Vector2i, s: float) -> int:
@@ -216,8 +218,8 @@ class OverLayer:
 		var yaw: float = me.rotation.y
 		var fwd := Vector2(-sin(yaw), -cos(yaw))
 		var side := Vector2(-fwd.y, fwd.x)
-		var pts := PackedVector2Array([ctr + fwd * 6.5, ctr - fwd * 4.0 + side * 4.0,
-				ctr - fwd * 1.5, ctr - fwd * 4.0 - side * 4.0])
+		var pts := PackedVector2Array([ctr + fwd * 9.0, ctr - fwd * 5.5 + side * 5.5,
+				ctr - fwd * 2.0, ctr - fwd * 5.5 - side * 5.5])
 		draw_colored_polygon(pts, Color(0, 0, 0, 0.75))
 		var inner := PackedVector2Array()
 		for v in pts:
