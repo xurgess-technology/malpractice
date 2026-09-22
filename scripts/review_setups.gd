@@ -51,6 +51,11 @@ const SETUPS := {
 	# The same WRAP! on a stump: an amputation at the dressing step with a mediocre tourniquet, so a
 	# good half of the cells are still bleeding and want two layers. `--goodtq` for a clean one.
 	"wrap_stump": {"seed": 4242, "stage": "_wrap_stump"},
+	# 2026-09-22 (docs/SUTURE_SPEC.md): SUTURE!, a gunshot wound at the closing step, already packed
+	# and dressed. `suture` opens on the deep laceration, `suture_eye` on the eye socket; the button
+	# under the board swaps between them in play either way. `--solution` adds the debug overlay.
+	"suture": {"seed": 4242, "stage": "_suture"},
+	"suture_eye": {"seed": 4242, "stage": "_suture_eye"},
 }
 
 
@@ -422,6 +427,58 @@ static func _wrap_stump(game: Game) -> void:
 		else:
 			print("[review] wrap_stump: could not start operating: %s" % why)
 	print("[review] wrap_stump: amputation on table %d at the dressing step, tourniquet %.2f" % [table, tq])
+
+
+## SUTURE (docs/SUTURE_SPEC.md): a gunshot wound on the table at step 4, the closing, with the bullet
+## out and the wound already packed and dressed -- so the SUTURE! card is up the moment you look at
+## it. Press on dot 1 and HOLD the left mouse button, then drag: the needle walks one cell at a time
+## through every open cell, taking the numbered dots in order and never crossing itself. Pulling back
+## along the thread undoes stitches and costs him. The button under the board swaps to the eye socket
+## and back. `--patient=seal` swaps the patient; `--solution` adds the debug overlay (the dashed green
+## solution, New puzzle and Clear thread). E steps back.
+static func _suture(game: Game) -> void:
+	await _suture_case(game, "laceration")
+
+
+## The same step opened on the EYE SOCKET instead: 6x6 with the centre 2x2 blocked by an eyeball and
+## a dashed DO NOT STITCH fence over it, 32 cells to thread around. The button under the board swaps
+## back to the laceration.
+static func _suture_eye(game: Game) -> void:
+	await _suture_case(game, "eye")
+
+
+static func _suture_case(game: Game, mode: String) -> void:
+	arcade_all_on()
+	load("res://scripts/surgery/arcade/suture_arcade.gd").force_mode = mode
+	var pid := "bob"
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--patient="):
+			pid = a.trim_prefix("--patient=").strip_edges()
+	if not Procedures.PATIENTS.has(pid) or Procedures.is_monster(pid):
+		pid = "bob"
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	game.add_case({"patient_id": pid, "ailment_id": "gunshot", "table": table, "state": "on_table",
+		"step_index": 3, "flags": {"sedation": 1.0, "bullet_removed": true, "dressed": true,
+		"pack_quality": 0.8}})
+	var t: Vector3 = game.table_position(table)
+	place(game, t + Vector3(0.0, 0, 1.15), t + Vector3(0, 1.05, 0))
+	clear_hands(game)
+	give(game, "suture_kit", 2)
+	game.local_player().selected = 0
+	game.stock_storage("suture_kit", 2)
+	var tree := game.get_tree()
+	for i in 6:
+		await tree.physics_frame
+	var sys = game.surgery_for_table(table)
+	if sys != null:
+		var why: String = sys.can_begin(game.local_player())
+		if why == "":
+			sys.begin(game.local_player())
+		else:
+			print("[review] suture: could not start operating: %s" % why)
+	print("[review] suture: %s on table %d at the closing step, %s variant" % [pid, table, mode])
 
 
 ## ARCADE SAW (docs/ARCADE_SURGERY.md 5.5): Bob is on the table sedated with a tourniquet already
