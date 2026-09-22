@@ -771,7 +771,6 @@ static func _hover_drop(game: Game) -> void:
 	game.say("Drop everything on the same spot: they float, they glow, they make room.", 9.0)
 
 
-<<<<<<< HEAD
 ## MIRRORS (2026-09-22): standing in front of the entrance's big full-length mirror, hands empty,
 ## looking at your own reflection. `--dist=N` stands N metres off the glass (default 1.4).
 static func _mirror(game: Game) -> void:
@@ -791,7 +790,6 @@ static func _mirror(game: Game) -> void:
 	clear_hands(game)
 	game.local_player().selected = 0
 	game.say("Aim at the mirror and press E: cycle your scrubs and your skin, E again to come back.", 10.0)
-=======
 ## DOWNED (2026-09-22 playtest): a teammate bleeding on the floor of the OR, a free table beside you
 ## and two suture kits on the floor by it. Hands empty, hold E on them to hoist them over your
 ## shoulder, carry them to the table and press E to lay them down, pick a kit up and stitch them.
@@ -839,4 +837,3 @@ static func _downed(game: Game) -> void:
 	floor_item(game, "suture_kit", t + side * 1.2 + b * Vector3(-0.5, 0.0, 0.0))
 	game.say("Hands empty: hold E on Dr. Bled, carry them to the table, E to lay them down, then stitch.", 10.0)
 	print("[review] downed: bot %d down at %s, free table %d at %s" % [bid, mate_at, table, t])
->>>>>>> main
