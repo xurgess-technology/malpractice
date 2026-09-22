@@ -53,6 +53,10 @@ var drop_count: int = 0
 ## GRAFTING part one: presses of the vat key (take the eye out of a vat), client-owned like drop_count.
 var vat_count: int = 0
 var _vat_seen: int = 0
+## TAB SHEET: presses of Unequip on the character sheet, client-owned like the rest. The host
+## decides what actually comes off and where it lands (Game.player_unequip).
+var unequip_count: int = 0
+var _unequip_seen: int = 0
 ## SWEEP 4A HOOK (pharmacy, chunk 3): 0..1 charge the drop key had when it last fired
 ## (client-owned, sent alongside drop_count so the host reads them together). A quick tap
 ## reports ~0 (the old gentle toss); holding the key ramps it up to 1 by DROP_CHARGE_FULL.
@@ -1362,6 +1366,10 @@ func _consume_actions() -> void:
 		_vat_seen = vat_count
 		if alive and not busy and game.get("vats") != null:
 			game.vats.take_out(self, aim_id)   # GRAFTING part one
+	if unequip_count != _unequip_seen:
+		_unequip_seen = unequip_count
+		if alive and not busy:
+			game.player_unequip(self)   # TAB SHEET
 	if drop_count != _drop_seen:
 		_drop_seen = drop_count
 		# PLAYTEST 2026-09-22: the deliberate floor drop while carrying a teammate (or a body).
@@ -2314,7 +2322,8 @@ func _update_down_pose(delta: float) -> void:
 ## dictionary: no key strings on the wire, about a third of the size.
 ##   [position, yaw, pitch, flag bits (1 light, 2 sprint, 4 moving, 8 holding E, 16 crouching,
 ##    32 scan-holding, 64 prone, 128 in the air in a dive, 256 rocket boots burning), shove count, drop count, aim id,
-##    interact count, selected hand, use count, ability slot 1..4 press counts, drop charge, throw wind-up, faceplant count]
+##    interact count, selected hand, use count, ability slot 1..4 press counts, drop charge, throw wind-up, faceplant count,
+##    vat count, unequip count]
 func report_state() -> Array:
 	var bits := (1 if flashlight_on else 0) | (2 if sprinting else 0) | (4 if moving else 0) | (8 if wants_interact else 0) \
 		| (16 if crouching else 0) | (32 if scan_holding else 0) | (64 if prone else 0) | (128 if dive_in_air() else 0) \
@@ -2324,7 +2333,8 @@ func report_state() -> Array:
 		snappedf(drop_charge, 0.02),   # SWEEP 4A HOOK (pharmacy, chunk 3)
 		snappedf(throw_wind, 0.02),   # THROW HOOK
 		faceplant_count,   # ROCKET BOOTS
-		vat_count]   # GRAFTING part one
+		vat_count,   # GRAFTING part one
+		unequip_count]   # TAB SHEET
 
 
 func apply_remote_state(s: Array) -> void:
@@ -2366,6 +2376,8 @@ func apply_remote_state(s: Array) -> void:
 		faceplant_count = int(s[16])
 	if s.size() >= 18:   # GRAFTING part one: the vat key
 		vat_count = int(s[17])
+	if s.size() >= 19:   # TAB SHEET: Unequip on the character sheet
+		unequip_count = int(s[18])
 	_consume_actions()
 
 

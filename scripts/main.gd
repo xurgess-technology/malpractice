@@ -25,6 +25,9 @@ var settings_ui: CanvasLayer = null
 ## The tip fax (scripts/tips/tip_fax.gd): first-time memos at the bottom of the screen.
 var tips: CanvasLayer = null
 
+## TAB SHEET: the character sheet on Tab (scripts/character_sheet.gd). Local UI; it does not pause.
+var char_sheet: CanvasLayer = null
+
 ## The shift assignment fax (scripts/shift_fax.gd): covers a session start from the title menu.
 var shift_fax: CanvasLayer = null
 
@@ -78,6 +81,10 @@ func _ready() -> void:
 	hud.name = "HUD"
 	hud.game = game
 	hud_layer.add_child(hud)
+
+	# TAB SHEET: the character sheet, just above the HUD.
+	char_sheet = load("res://scripts/character_sheet.gd").create(game)
+	add_child(char_sheet)
 
 	# GRAFTING chunk C: the grafted eye's orange down the left edge, above the look pass's grade.
 	graft_view = load("res://scripts/grafting/graft_view.gd").create(game)
@@ -605,6 +612,17 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
+	# TAB SHEET: Tab opens the character sheet, Esc closes it instead of pausing. (The sheet's own
+	# _unhandled_input takes the Tab that closes it, so it never toggles twice in one press.)
+	if char_sheet != null and event.is_action_pressed("character_sheet") and not game.paused:
+		char_sheet.toggle()
+		get_viewport().set_input_as_handled()
+		return
+	if char_sheet != null and char_sheet.open and event.is_action_pressed("pause"):
+		char_sheet.close()
+		get_viewport().set_input_as_handled()
+		return
+
 	# Esc while looking through a Hive's eyes comes back instead of pausing.
 	if event.is_action_pressed("pause") and not game.paused and game.abilities != null and game.abilities.local_hive_active():
 		game.abilities.local_exit()
@@ -657,7 +675,8 @@ func _update_mouse() -> void:
 \
 		or (game.economy != null and game.economy.fax_ui_open()) \
 		or game.surgery_wants_mouse() \
-		or (dev_panel != null and dev_panel.is_open())  # DEV HOOK
+		or (dev_panel != null and dev_panel.is_open()) \
+		or (char_sheet != null and char_sheet.open)  # TAB SHEET: the cursor is how you hover a slot
 	var want := Input.MOUSE_MODE_VISIBLE if free else Input.MOUSE_MODE_CAPTURED
 	if Input.mouse_mode != want:
 		Input.set_mouse_mode(want)

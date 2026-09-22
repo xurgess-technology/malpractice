@@ -1862,6 +1862,40 @@ func player_ability_slot(p: Node, slot_idx: int) -> void:
 		abilities.ability_slot(p, slot_idx)
 
 
+## TAB SHEET, host: Unequip on the character sheet. Only the boots exist to take off so far.
+##
+## Where they go: **on the floor at your feet**, as a loose world item anyone can pick back up (and
+## put on, `_put_on`). Not into a hand: `Items.is_worn` and `Player.can_take` already say worn things
+## never occupy a hand, and dropping them sidesteps the hands-full case entirely -- a pair of boots
+## you cannot take off because you are holding two scalpels would be a worse rule than this.
+##
+## **Not in mid-air.** `Player.boots` gates the rocket dive (`player.gd` around the ROCKET BOOTS
+## burn), so taking them off with the thrusters lit would mean deciding what a half-lit dive does.
+## The answer is that you cannot: you have to have your feet on the ground, which is also the only
+## place the fuel refills. The sheet greys the button and says so, and the host refuses it again
+## here, because the client's copy of that rule is a courtesy and not the authority.
+func player_unequip(p: Node) -> void:
+	if not is_host():
+		return
+	if not p.boots:
+		return
+	if p.rocketing or not p.is_on_floor():
+		tell(p, "Not in mid-air.")
+		return
+	if p.carrying != 0 or p.operating:
+		tell(p, "Your hands are busy.")
+		return
+	p.boots = false
+	p.rocketing = false
+	p.fuel = 1.0   # they come off full; the fuel bar belongs to the boots, not the surgeon
+	var from := Transform3D(Basis(), p.global_position + Vector3.UP * 0.5 + -p.global_transform.basis.z * 0.5)
+	var it := _spawn_item("rocket_boots", 1, from, WorldItem.State.LOOSE)
+	it.toss(from, Vector3.DOWN * 0.5)
+	_sound("thud", from.origin)
+	emit_noise(from.origin, 0.4, "drop")
+	tell(p, "Rocket boots off. They're at your feet.", 3.0)
+
+
 func _floor_at(p: Vector3) -> Vector3:
 	return _surface_below(p + Vector3.UP * 1.5, p + Vector3.DOWN)
 
