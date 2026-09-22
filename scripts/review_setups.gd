@@ -59,6 +59,10 @@ const SETUPS := {
 	# under the board swaps between them in play either way. `--solution` adds the debug overlay.
 	"suture": {"seed": 4242, "stage": "_suture"},
 	"suture_eye": {"seed": 4242, "stage": "_suture_eye"},
+	# DOORS (2026-09-22, the playtest's "monsters walk through doors"): a hinged door standing wide
+	# open with a Hive parked behind the open leaf, hunting you. The leaf used to have no collider
+	# once the door was open: everything, you included, walked straight through the door model.
+	"doors": {"seed": 4242, "stage": "_doors"},
 }
 
 
@@ -589,6 +593,67 @@ static func _sono(game: Game) -> void:
 	await tree.physics_frame
 	print("[review] sono: a Sonographer %.0f m down the corridor; throw something, watch its neck" % base.distance_to(at))
 	game.say("Throw something (right click) and watch its neck. When it fills, it pings you.", 9.0)
+
+
+## DOORS: a room door standing wide open, a Hive on the far face of the open leaf, coming for you.
+## The leaf is the thing to test: walk into it, and watch the Hive go round it instead of through it.
+static func _doors(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	# Nothing else going on: no phone call, no patient, no other monsters, and you cannot lose.
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("god", {"on": true})
+	game._clear_monsters()
+	await tree.physics_frame
+	# A hinged door with room on both sides, nearest the clock.
+	var best: Node = null
+	var best_d := INF
+	for d in game.doors.doors.values():
+		if d.kind != "hinged" or bool(d.data.get("base", false)) or d.max_out < 80.0:
+			continue
+		if not game._point_is_clear(d.global_position + d.normal * 2.4) \
+				or not game._point_is_clear(d.global_position - d.normal * 2.4):
+			continue
+		var dist: float = d.global_position.distance_to(game.clock_pos())
+		if dist < best_d:
+			best_d = dist
+			best = d
+	if best == null:
+		push_warning("[review] doors setup: no hinged door with room on both sides")
+		return
+	# Wide open, the way it is left after someone walks through it.
+	var open_amount := 1.0 if best.max_out >= 80.0 else -1.0
+	best.snap_to(open_amount)
+	game.doors._moving.erase(best.door_id)
+	await tree.physics_frame
+	var leaf: Node3D = best.leaf_bodies[0]
+	var leaf_mid: Vector3 = leaf.global_transform * Vector3(float(best.leaf_len[0]) * 0.6, 0.0, 0.0)
+	leaf_mid.y = best.global_position.y
+	# The leaf stands out of the wall into the room, so the room's near-wall strip has a side each:
+	# you back in the room looking at it, the Hive on the far side of it, the leaf between you.
+	var out: Vector3 = (leaf_mid - best.global_position)
+	out.y = 0.0
+	out = out.normalized()                          # into the room, along the open leaf
+	var hinge_side: Vector3 = (leaf.global_position - best.global_position)
+	hinge_side.y = 0.0
+	hinge_side = hinge_side.normalized()            # along the doorway, toward the leaf's hinge
+	var you: Vector3 = game._floor_at(best.global_position + out * 4.0 - hinge_side * 1.5)
+	if not game._point_is_clear(you + Vector3.UP * 1.0):
+		you = game._floor_at(best.global_position + out * 2.6)
+	place(game, you, leaf_mid + Vector3.UP * 1.1)
+	var hive_at: Vector3 = game._floor_at(best.global_position + hinge_side * 2.2 + out * 0.9)
+	if not game._point_is_clear(hive_at + Vector3.UP * 1.0):
+		hive_at = game._floor_at(best.global_position + hinge_side * 2.2 + out * 2.0)
+	var hive = game._add_monster("hive", hive_at)
+	hive.brain._hunt(you)
+	p.set_flashlight(true)
+	await tree.physics_frame
+	print("[review] doors: door %s wide open (%.2f), a Hive behind its leaf at %s" % [best.door_id, best.amount, str(hive.global_position.snappedf(0.1))])
+	game.say("The open door is between you and the Hive. Walk into the leaf; watch it come round, not through.", 10.0)
 
 
 static func _graft_stage(game: Game, vat_kind: String, owner: String, already: bool) -> void:
