@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.15**: Putting your friend on the table actually works now
+    - Fixed: Standing at a table with a teammate over your shoulder puts them on it when you press E, wherever you happen to be looking. Missing the table by a few degrees used to dump them on the floor, which meant picking them up and trying again.
+    - Changed: Want them on the floor? That's G now, while carrying. Aiming at a table that's already taken keeps hold of them instead of dropping them.
 - **0.10.14**: Scrubs with a bit of personality
     - Added: Pick a pattern for your scrubs at the mirror -- pinstripes, polka dots or a splatter that you can absolutely pass off as camo -- and a colour to print it in. Or None, if you're a coward.
 - **0.10.13**: You can tell when you've hit something now

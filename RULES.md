@@ -49,6 +49,13 @@ slot, and the branch.
 
 Nothing gets tested hard until Zach has played it.
 
+**Don't leave windows open for him.** (2026-09-22) A subagent does not open a review window and
+park it waiting to be looked at. Zach opens his own window when he is ready to play, and a row of
+abandoned windows from finished tasks is just clutter on his machine. A subagent **may** open a
+window to check its own work -- that is what the smoke look is -- but it **closes it when it is
+done**. The command below is for your own eyes unless Zach has asked to be shown something
+specific; when he has, say so in the handoff and leave that one open.
+
 - When there's something to see, the subagent opens it and stops:
   `tools\review.bat 2 "HIVE: does the lunge read?"`. The window's title and a yellow bar at the top
   of the screen say `SYSTEM: what to do`, short. Add `-Scene res://...` to start in a lab scene,
