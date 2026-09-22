@@ -28,7 +28,7 @@ var seed_v := 1
 var t := 0.0
 
 # -- tuning (reference px, times ink.unit) ----------------------------------------------------------
-var stamp_size := Vector2(430.0, 228.0)
+var stamp_size := Vector2(516.0, 274.0)   ## ~20% bigger than the original 430x228 (2026-09-22)
 var stamp_tilt_deg := -6.0
 var burst_life := 1.4
 var burst_radii := Vector2(46.0, 72.0)
@@ -258,14 +258,31 @@ func draw_enter(c: CanvasItem, at: Vector2, label: String, ready: bool) -> void:
 
 ## A stamp card over the live game (no scrim). `card` is {goal, lines, prompt, color}. `lock_left`
 ## above 0 shows the countdown instead of the prompt; `k` 0..1 is how long it has been up (the pop).
+## Turned about the card's own middle, on top of the page's own transform -- so it rides wherever
+## `area` (the clipboard's page rect) is right now. See draw_stamp_fixed for a card that does not.
 func draw_stamp(c: CanvasItem, shout: String, card: Dictionary, lock_left: float, k: float) -> void:
+	var page_xf: Transform2D = _page_xf_now
+	_draw_stamp_body(c, shout, card, lock_left, k, page_xf * Transform2D(deg_to_rad(stamp_tilt_deg), area.get_center()))
+	c.draw_set_transform_matrix(page_xf)
+
+
+## The same stamp card, pinned at `at` (this CanvasItem's own local px) instead of riding the
+## clipboard's page transform and `area` -- for a HUD overlay that wants the card to land in the
+## same screen spot every time, whatever step is up and wherever its panel happens to be anchored
+## on the patient (docs/ARCADE_SURGERY.md; ArcadeGame.stamp_card() feeds this from surgery_hud.gd).
+func draw_stamp_fixed(c: CanvasItem, shout: String, card: Dictionary, lock_left: float, k: float, at: Vector2) -> void:
+	_draw_stamp_body(c, shout, card, lock_left, k, Transform2D(deg_to_rad(stamp_tilt_deg), at))
+	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+## The card's look, drawn in a frame already turned and popped about its own middle; `base_xf` is
+## that frame before the pop-in scale (draw_stamp and draw_stamp_fixed each build their own).
+func _draw_stamp_body(c: CanvasItem, shout: String, card: Dictionary, lock_left: float, k: float, base_xf: Transform2D) -> void:
 	var u := ink.unit
 	var size := stamp_size * u
 	var col: Color = card.get("color", ink.ink)
 	var pop := 1.0 - pow(1.0 - clampf(k * 5.0, 0.0, 1.0), 3.0)
-	# Draw in a frame turned about the card's middle, on top of the page's own transform.
-	var page_xf: Transform2D = _page_xf_now
-	c.draw_set_transform_matrix(page_xf * Transform2D(deg_to_rad(stamp_tilt_deg), area.get_center()) * Transform2D().scaled(Vector2.ONE * lerpf(0.9, 1.0, pop)))
+	c.draw_set_transform_matrix(base_xf * Transform2D().scaled(Vector2.ONE * lerpf(0.9, 1.0, pop)))
 	var box := Rect2(-size * 0.5, size)
 	c.draw_rect(box, Color(ink.paper, 0.8))
 	ink.rect(c, box, col, 5.0, 8601)
@@ -295,7 +312,6 @@ func draw_stamp(c: CanvasItem, shout: String, card: Dictionary, lock_left: float
 		c.draw_string(fb, Vector2(-pw * 0.5, box.end.y - 18.0 * u), prompt, HORIZONTAL_ALIGNMENT_LEFT, -1.0, pp,
 			Color(ink.ink, 0.5) if lock_left > 0.0 else ink.ink)
 	ink.ops += 6
-	c.draw_set_transform_matrix(page_xf)
 
 
 ## The page transform in force, set by whoever draws (so a stamp can turn about its own middle and go
