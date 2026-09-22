@@ -8,13 +8,14 @@ older grafting notes.
 
 The first graft in the game, deliberately small. The team catches a Hive, takes one of its eyes
 out on an OR table, keeps it in a specimen vat, then straps a surgeon down and swaps one of their
-eyes for it. The grafted surgeon has one normal eye and one orange Hive eye. The surgeon's own eye
-goes into the vat and can be swapped back in or sold.
+eyes for it. The grafted surgeon has one normal eye and one orange Hive eye, and gets **Hive Eyes**
+from it. The surgeon's own eye goes into the vat and can be swapped back in or sold.
 
-**The ability reward is gone.** As written below, a graft granted the player ability "Hive Eyes".
-The whole ability system has since been removed (`docs/backlog/ABILITIES_REMOVED.md`), so the graft
-grants nothing: it is the look, the first-person tint, and a part you can swap back out. Everything
-else in this brief still stands; read every mention of an ability below as no longer built.
+**Grafting is the only way to earn an ability.** Brains and the break-room blender used to be the
+other source and are gone (`docs/backlog/ABILITIES_REMOVED.md`), so this graft is now the single
+source of Hive Eyes -- and the only source of any ability in the game. Echo has no source at all
+until the trachea graft lands (`docs/GRAFTING_TRACHEA.md`). Levels are set outright now (there are
+no fractional points any more): the graft grants level 1, and taking the part back out clears it.
 
 ## The loop
 
@@ -76,7 +77,10 @@ else in this brief still stands; read every mention of an ability below as no lo
   and eye spoon start in the lab storage in the OR, so the feature is never blocked by a search.
   Vats and their contents last the whole run (the entrance building never changes); a new run
   resets them.
-- **The graft lasts the run,** through death, like rocket boots, and is lost on a game over.
+- **The graft lasts the run,** through death, like rocket boots, and is lost on a game over,
+  like the ability it gave you.
+- **Hive Eyes comes only from the graft.** There is no other route to it, and no other route to
+  any ability at all.
 
 ## Chunks
 
@@ -119,7 +123,9 @@ A and B can run at the same time. C starts after both are merged.
   `surgeon_graft` variant with the left eye as a stitched Hive eye (`art/stylized/README.md`).
   It shows in third person, on other players' screens and in the Personnel mirrors.
 - The glow: the Hive eye material's `Lock` value (0 = low pinpoint, 1 = the whole ball lit).
-  Low all the time (it used to rise while the ability was in use). Replicated.
+  Low normally, high while the surgeon is in Hive Eyes. Replicated.
+- Grafting puts Hive Eyes level 1 in the next free ability slot, with the new-ability card;
+  swapping back removes it.
 - The first-person orange tint on the left edge.
 - Update DESIGN.md (the Hive row, a Grafting section, the lab wall) and docs/CONTRACTS.md.
 - **Zach sees:** `GRAFT: as Botsworth, give yourself a Hive eye, then check the mirror`
@@ -127,12 +133,13 @@ A and B can run at the same time. C starts after both are merged.
 
 ## Done when
 
-- A whole run of the loop works from a normal shift: catch, extract, vat, strap, graft,
+- A whole run of the loop works from a normal shift: catch, extract, vat, strap, graft, Hive Eyes,
   swap back, sell an eye.
 - It works in co-op: a nettest scenario for the graft, with the eye swap and glow seen by the
   other machine.
 - Headless checks: an eye spoils outside a vat and not inside; a spoiled eye can't be grafted; the
-  graft is refused without a vat on the stand; you can't get up after the scoop.
+  graft is refused without a vat on the stand; a graft gives Hive Eyes 1 and swapping back takes it
+  away; you can't get up after the scoop.
 
 ## Not in this part
 

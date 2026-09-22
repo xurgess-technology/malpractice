@@ -5,13 +5,15 @@ extends RefCounted
 ##   SECTIONS                          [{id, title}] in home-grid order
 ##   entries(section, view) -> Array   [{key, title, known}]; unknown entries show "???" and can't open
 ##   page(section, key, view) -> Dict  {title, subtitle, paragraphs: [String], hint, models: [{monster} |
-##                                      {item, count, link, label}]; a procedure's steps are a paragraph and its tools
+##                                      {item, count, link, label}], ability: {name, levels: [String]}
+##                                      (monsters); a procedure's steps are a paragraph and its tools
 ##                                      links (link: a surgery item's key, label over it when pointed at)
 ##
 ## `view` is whose database the screen shows (wall_session.gd view()): {db: {kind: bits (1 sighted,
-## 2 scanned, 4 harvested)}, peer}; nobody signed in is an empty db and peer 0.
+## 2 scanned, 4 harvested)}, peer, abilities}; nobody signed in is an empty db and peer 0.
 ## Known: surgery items and procedures always; a monster once scanned; any other item once picked
-## up (game.mark_db(kind, "sighted", player) in pickup_item).
+## up (game.mark_db(kind, "sighted", player) in pickup_item). Ability names show once harvested,
+## each level's numbers once the player's ability level reaches it.
 
 const MonsterPages := preload("res://scripts/database/monster_pages.gd")
 const Pages := preload("res://scripts/database/database_pages.gd")
@@ -25,6 +27,9 @@ const SECTIONS := [
 	{"id": "surgery", "title": "SURGERY ITEMS"},
 	{"id": "other", "title": "OTHER ITEMS"},
 ]
+
+## Which ability path a monster's ability grows on, and its name.
+const ABILITY := {"hive": "Hive Eyes", "sonographer": "Echo"}
 
 const MONSTER_TEXT := {
 	"hive": ["Wanders the wings until it hears something. It can't see: running, dropping things and shoving give you away.", "About 2 doses of anesthetic put it under."],
@@ -125,6 +130,20 @@ static func _monster(kind: String, view: Dictionary) -> Dictionary:
 		"paragraphs": MONSTER_TEXT.get(kind, []),
 		"models": [{"monster": kind}],
 	}
+	var name := "???"
+	var levels: Array = ["???", "???", "???"]
+	if ABILITY.has(kind):
+		var lvl := _level(view, kind)
+		if lvl >= 1:
+			name = String(ABILITY[kind]).to_upper()
+		for n in range(1, 4):
+			var ab = view.get("abilities")
+			if lvl >= n and ab != null:
+				if kind == "hive":
+					levels[n - 1] = "Reach %.0f m, watch for %.1f s" % [ab.hive_range(n), ab.hive_seconds(n)]
+				else:
+					levels[n - 1] = "Radius %.0f m, lasts %.1f s" % [ab.echo_radius(n), ab.echo_seconds(n)]
+	p["ability"] = {"name": name, "levels": levels}
 	return p
 
 
@@ -215,3 +234,9 @@ static func _tier(view: Dictionary, kind: String) -> int:
 static func _found(view: Dictionary, kind: String) -> bool:
 	return _tier(view, kind) >= 1
 
+
+static func _level(view: Dictionary, path: String) -> int:
+	var ab = view.get("abilities")
+	if ab == null or int(view.get("peer", 0)) == 0:
+		return 0
+	return int(ab.level(int(view.peer), path))

@@ -4,7 +4,7 @@ extends RefCounted
 ## one place that lists every huntable species. Add a new monster kind here when one is added.
 ##
 ## Each entry: {kind, name, silhouette (a rough humanoid shape descriptor for the terminal's
-## silhouette/X-ray drawing), behaviour, senses, threat, doses, brain_site, growth_site}
+## silhouette/X-ray drawing), behaviour, senses, threat, doses, brain_site, ability, growth_site}
 
 const ENTRIES := {
 	"hive": {
@@ -16,6 +16,7 @@ const ENTRIES := {
 		"threat": "Low alone. Dangerous in groups or once it has found you and closed the distance.",
 		"doses": "About 2 doses of anesthetic to bring it under and keep it there for a full harvest.",
 		"brain_site": "Skull, centre, just above eye level.",
+		"ability": "Hive Eyes",
 		"growth_site": "",
 	},
 	"sonographer": {
@@ -27,6 +28,7 @@ const ENTRIES := {
 		"threat": "High. Hits hard, keeps coming. Sedate it before it closes the distance.",
 		"doses": "About 3 doses of anesthetic; it fights the sedative longer than a Hive.",
 		"brain_site": "Skull, set slightly further back than a Hive's.",
+		"ability": "Echo",
 		"growth_site": "",
 	},
 	"night_nurse": {
@@ -38,6 +40,7 @@ const ENTRIES := {
 		"threat": "Unknown. Nobody has gotten close enough, on purpose, to say.",
 		"doses": "Unknown. She has never been strapped to a table.",
 		"brain_site": "Unknown.",
+		"ability": "",
 		"growth_site": "unknown",
 	},
 }

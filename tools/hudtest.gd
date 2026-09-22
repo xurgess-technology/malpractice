@@ -37,7 +37,7 @@ func _run() -> void:
 	var h := 720.0
 	var e := {"kind": "", "count": 0}
 	# Four empty slots: four units, all in one row across the bottom centre.
-	var u: Array = Hud.bar_units(w, h, [e.duplicate(), e.duplicate(), e.duplicate(), e.duplicate()], 0)
+	var u: Array = Hud.bar_units(w, h, [e.duplicate(), e.duplicate(), e.duplicate(), e.duplicate()], 0, 0.0)
 	_check(u.size() == C.CARRY_CAP, "an empty bar draws a slot per hand slot (%d)" % u.size())
 	var xs := 0.0
 	for x in u:
@@ -48,7 +48,7 @@ func _run() -> void:
 	_check((u[0].rect as Rect2).size.x > (u[1].rect as Rect2).size.x, "the selected slot is bigger")
 	# A bulky stack in slots 1 and 2: one wide unit, the tail slot gone.
 	var s := [{"kind": "anesthetic", "count": 2}, {"kind": "heart_monitor", "count": 1}, {"kind": "", "count": 0, "of": 1}, e.duplicate()]
-	u = Hud.bar_units(w, h, s, 0)
+	u = Hud.bar_units(w, h, s, 0, 0.0)
 	_check(u.size() == 3, "a bulky stack takes one wide slot across two (units %d)" % u.size())
 	var wide := 0
 	for x in u:
@@ -57,7 +57,7 @@ func _run() -> void:
 			_check((x.rect as Rect2).size.x > 100.0 and String(x.keys) == "2", "the wide slot spans both and is keyed 2")
 	_check(wide == 1, "exactly one wide slot")
 	# Selecting the bulky stack lifts the whole wide slot; selecting its tail does the same (head_of).
-	u = Hud.bar_units(w, h, s, 1)
+	u = Hud.bar_units(w, h, s, 1, 0.0)
 	var sel_wide := false
 	for x in u:
 		if x.wide and x.sel:
@@ -65,12 +65,19 @@ func _run() -> void:
 	_check(sel_wide, "the selected bulky stack lifts as one wide slot")
 	# The tail listed before the head (the pair wraps): still one wide slot.
 	s = [{"kind": "", "count": 0, "of": 1}, {"kind": "defibrillator", "count": 1}, e.duplicate(), e.duplicate()]
-	u = Hud.bar_units(w, h, s, 1)
+	u = Hud.bar_units(w, h, s, 1, 0.0)
 	_check(u.size() == 3 and (u[0].wide or u[1].wide), "a tail before its head still joins into one wide slot")
 	# Non-adjacent halves (slots 0 and 3): two squares, the far one a ghost.
 	s = [{"kind": "ultrasound", "count": 1}, e.duplicate(), e.duplicate(), {"kind": "", "count": 0, "of": 0}]
-	u = Hud.bar_units(w, h, s, 0)
+	u = Hud.bar_units(w, h, s, 0, 0.0)
 	_check(u.size() == 4 and not u[0].wide and u[3].ghost, "a bulky pair that does not touch stays two squares (ghost half)")
+	# Alt held: the small row, no wide slots, no lift.
+	s = [{"kind": "anesthetic", "count": 2}, {"kind": "heart_monitor", "count": 1}, {"kind": "", "count": 0, "of": 1}, e.duplicate()]
+	u = Hud.bar_units(w, h, s, 0, 1.0)
+	var small_ok := u.size() == 4
+	for x in u:
+		small_ok = small_ok and (x.rect as Rect2).size.x < 40.0 and not x.wide
+	_check(small_ok, "with Alt held every slot is a small square")
 	# Icons.
 	var data = JSON.parse_string(FileAccess.get_file_as_string(ItemIcons.CATEGORIES))
 	var missing := []
@@ -92,6 +99,7 @@ func _run() -> void:
 			if p.a > 0.5 and (absf(p.r - p.g) > 0.02 or absf(p.g - p.b) > 0.02):
 				grey_ok = false
 		_check(grey_ok, "the greyscale icon has no colour left")
+	_check(ItemIcons.ability("hive_in") != null and ItemIcons.ability("echo") != null and ItemIcons.ability("zzz") == null, "ability icons, and none for an unknown one")
 	_check(ItemIcons.kind_named("Forceps") == "forceps", "a step's item name finds its kind")
 	print("[hud] result=%s checks=%d fails=%d" % ["PASS" if fails == 0 else "FAIL", checks, fails])
 	get_tree().quit(1 if fails > 0 else 0)

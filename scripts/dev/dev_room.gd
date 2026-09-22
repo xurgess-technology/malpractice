@@ -682,6 +682,11 @@ func _apply_request(sender: int, action: String, a: Dictionary) -> void:
 				game.say("Not on a shift.", 2.0)
 		"skip_to_table":
 			game.loop.dev_skip_to_table()
+		"abilities":
+			if game.abilities != null:
+				for id in game.abilities.ABILITY_ID_TO_PATH.keys():
+					game.abilities.set_level(sender, String(id), int(game.abilities.MAX_LEVEL))
+				game.tell(who, "Every ability, max level. Alt+1..4 uses them.", 3.0)
 		"difficulty":
 			game.shift = clampi(int(a.get("shift", 1)), 1, 99)
 			game.say("Difficulty: shift %d." % game.shift, 2.5)
@@ -747,6 +752,10 @@ func _apply_request(sender: int, action: String, a: Dictionary) -> void:
 			var target = game.players.get(int(a.get("id", sender)))
 			if target != null:
 				game.knock_down_player(target, "dev:panel")
+		_:
+			# the abilities node's own dev requests: "ab_levels", "ab_reset".
+			if action.begins_with("ab_") and game.abilities != null and game.abilities.has_method("dev_request"):
+				game.abilities.dev_request(sender, action, a)
 	state_changed.emit()
 
 

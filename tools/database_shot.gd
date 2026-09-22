@@ -4,7 +4,7 @@ extends Node
 ##
 ##   godot --path . tools/database_shot.tscn -- [--seed=N]
 ##
-## Writes tools/game_shots/60_terminal_monster_tier2.png, 61_scan_ring.png.
+## Writes tools/game_shots/60_terminal_monster_tier2.png, 61_scan_ring.png, 62_hive_flight.png.
 
 const OUT_DIR := "res://tools/game_shots"
 
@@ -39,6 +39,7 @@ func _ready() -> void:
 
 	var shots := [
 		{"name": "61_scan_ring", "fn": _pose_scan_ring, "settle": 6},
+		{"name": "62_hive_flight", "fn": _pose_hive_flight, "settle": 1},
 	]
 	# --scan: the scanner's hologram mid-scan, then the completion flash, ring and banner.
 	if OS.get_cmdline_user_args().has("--scan"):
@@ -126,8 +127,8 @@ func _pose_scan_nurse() -> void:
 	bot.bot_scan = false
 
 
-## Chunk 2: stand square to the screen with the projector on and open `to` (a scanned Hive, an
-## X-ray film picked up).
+## Chunk 2: stand square to the screen with the projector on and open `to` (a scanned Hive with
+## Hive Eyes at level 1, an X-ray film picked up).
 func _pose_wall2(to: Dictionary, quirk := "") -> void:
 	var wt: Node3D = _level_wall_terminal()
 	if wt == null:
@@ -142,6 +143,7 @@ func _pose_wall2(to: Dictionary, quirk := "") -> void:
 	game.mark_db("hive", "sighted")
 	game.mark_db("hive", "scanned")
 	game.mark_db("xray_film", "sighted")
+	game.abilities.set_level(bot.peer_id, "hive_in", 1)
 	bot.set_flashlight(false)
 	var glass: Node3D = wt.glass
 	var n: Vector3 = glass.global_basis.z.normalized()
@@ -328,3 +330,20 @@ func _pose_scan_nothing() -> void:
 	bot.bot_pitch = -0.1
 	await get_tree().process_frame
 	bot.bot_scan = true
+
+
+## Mid fly-through: the camera should be somewhere between the player's head and the Hive.
+func _pose_hive_flight() -> void:
+	bot.bot_scan = false
+	var b: Node = game.abilities
+	b.on_reset()
+	b.set_level(bot.peer_id, "hive_in", 1)
+	var here: Vector3 = bot.global_position
+	var wi: Node3D = game.spawn_hive(game._floor_at(here + Vector3(0, 0, 8))) as Node3D
+	await get_tree().process_frame
+	bot.bot_ability_slot = 0
+	bot.bot_ability += 1
+	# Land the screenshot partway through FLIGHT_IN (1.2 s): a few frames in is early enough that
+	# the camera has visibly left the player's head but not yet reached the Hive's eyes.
+	for i in 20:
+		await get_tree().process_frame

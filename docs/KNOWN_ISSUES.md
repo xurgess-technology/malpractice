@@ -376,6 +376,30 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 - **`tools/mapcheck.gd` reports seed 112** (a morgue tray anchor 3.3 m off the navmesh); the same
   on `main` before the pod removal.
 
+## Abilities (sweep 3)
+
+- **Echo has no source in the game.** Brains were the only way to earn it and they are gone
+  (`docs/backlog/ABILITIES_REMOVED.md`); grafting is the only source of an ability now, and the
+  only graft that exists grants Hive Eyes (`scripts/grafting/grafts.gd` `PART_ABILITY`). Echo
+  itself is built, tested and replicated, but nothing in a normal shift hands it out -- only the
+  dev panel, `ReviewSetups.give_abilities` and the headless tests. The trachea graft
+  (`docs/GRAFTING_TRACHEA.md`) is what would fix this.
+- **Hive Eyes was built against a stand-in Hive.** When it was written `Monster.HIVE` did not
+  exist, so `game.spawn_hive` made a Sonographer body with `kind = "hive"` (it still hunts by
+  sound). The camera sits at `m.height * 0.93` and 0.34 m in front of the monster's origin along
+  its facing; the real Hive model may need a different eye point (its head can block the view, or
+  the camera can poke through a wall the Hive faces). The sedation end is only reached through
+  `has_method("is_sedated")` and was not exercised.
+- **The HUD stays up during Hive Eyes** (crosshair, slots, messages): the view is the Hive's
+  but the HUD is yours. No HUD hook was added.
+- **Echo's veil does not fully hide a lit flashlight cone** (volumetric fog and the post layer draw
+  after it), so the spot on the nearest wall stays faintly visible under the outlines. Outlines of
+  skinned meshes follow their skeleton; only the dev dummy surgeon was checked in a screenshot.
+- **Perf** (1600x900 medium, two passes, measured in sweep 3): pharmacy baseline 188-201 fps
+  (1% low 134-150), Echo at level 3 with 66 outlines 180-192 (132-150); corridor baseline 88-94
+  (75-82), Echo 93-96 (81-86); Hive Eyes depends on what the Hive looks at (131-236). Starting
+  Echo takes 1.8-2.8 ms (it walks every container once).
+
 ## Monsters (sweep 3, monsters worker)
 
 - **Spawning a Hive costs about 6-8 ms** on the machine that builds it (the rig, its animation
@@ -557,7 +581,8 @@ left below is what still applies to the shared strapped-monster infrastructure.
   regions join the map a few frames apart. `tools/mapcheck.gd` waits for both; code that paths the frame
   after a build may get a hospital-only path.
 - **Things the mirrors do not carry across a seam**: a player's head glow, held-item models' own lights,
-  monster sounds (a Sonographer's rattle is heard where it really is). A
+  monster sounds (a Sonographer's rattle is heard where it really is), the Echo outlines and Hive
+  Eyes. A
   Hive does not see a player on the other side of a seam (its sight rays go to the real position), and
   the danger heartbeat counts only monsters in the same space. Hearing does cross: a noise within 26 m of
   a seam is mirrored into the other copy, pulled into the stub (the Sonographer comes through and then
@@ -947,10 +972,10 @@ left below is what still applies to the shared strapped-monster infrastructure.
   every scene (about 14 draw calls: palm, sleeve, finger and thumb pieces, the torch); remote bodies
   add an AnimationPlayer and a SkeletonModifier3D each (no teammates in the probe).
 
-## Controls and HUD, scanner (sweep 4a chunk 1, docs/SWEEP4A.md)
+## Controls, ability slots and HUD, scanner (sweep 4a chunk 1, docs/SWEEP4A.md)
 
-- **The rebind screen has no conflict detection.** Settings > CONTROLS > KEYS (crouch, jump,
-  scan) writes straight to `Settings.set_value("key_*", ...)`, which rebinds the matching
+- **The rebind screen has no conflict detection.** Settings > CONTROLS > KEYS (crouch, jump, ability
+  modifier, scan) writes straight to `Settings.set_value("key_*", ...)`, which rebinds the matching
   InputMap action immediately, but nothing stops binding two of these (or one of these and an
   existing fixed action like `interact`) to the same physical key, and there is no "already in use"
   warning or reset-to-default-only-this-key control (only "Reset to defaults" for everything).
@@ -963,9 +988,10 @@ left below is what still applies to the shared strapped-monster infrastructure.
   item, carry or wind-up pose, rather than a rig-aware crouched stance blended with those poses.
   Reads correctly (a stooped lean) in the common cases; not verified against every hold pose.
 - **`game.database` (the scanner's sighted/scanned records) has no reset hook.** It is host-only,
-  in-memory, and intentionally not cleared on `reset_money()` / game over — species knowledge is
-  meant to persist across a wipe with money — but nothing has exercised that assumption yet (chunk 4 is expected to formalize it when the database
-  is saved to disk).
+  in-memory, and intentionally not cleared on `reset_money()` / game over the way
+  `abilities.on_reset()` clears ability levels and slots — species knowledge is meant to persist
+  across a wipe with money — but nothing has exercised that assumption yet (chunk 4 is expected to
+  formalize it when the database is saved to disk).
 - **Screenshots were not taken.** `tools/gameshot.tscn` needs a windowed run; this chunk was built
   and tested entirely headless, and grabbing 1-3 screenshots was judged not worth the added run in
   this pass (the spec allows skipping them when they prove awkward in a headless environment).
@@ -1072,8 +1098,26 @@ left below is what still applies to the shared strapped-monster infrastructure.
   gap independent of the placement bug. The lobby-furniture overlap noted above is unrelated and
   still open.
 
-## Database terminal and guide removal (sweep 4a chunk 4, docs/SWEEP4A.md)
+## Database terminal, guide removal, Hive Eyes and Echo polish (sweep 4a chunk 4, docs/SWEEP4A.md)
 
+- **Hive Eyes cycling and the hold-to-exit key (level 2+) were not built.** `docs/SWEEP4A.md`
+  asks for: at level 1 tapping the slot ends it (built, unchanged from sweep 3); at level 2+
+  tapping cycles to another Hive in range and holding the slot ~0.4 s ends it. Cycling needs
+  `abilities.ability_slot()` to pick a different Hive and retarget the same hive session instead
+  of ending it, and holding-vs-tapping needs real key-hold timing, not just the existing discrete
+  press counter (`Player.ability_slot_press`, incremented once per press with no duration). Both
+  would mean widening the replicated ability-press protocol; judged out of proportion to this
+  chunk's budget. What *is* built: `hive_view.gd`'s state machine already has a `_begin_cycle()`
+  path (a short fly-through between two Hives) ready for whoever wires the trigger up, and
+  ending Hive Eyes still works today exactly as it did in sweep 3 (the slot again, or Esc, both via
+  `ability_slot_press`). At any level, only the nearest Hive in range is ever picked.
+- **The fly-through's "no path" straight-line glide was exercised, but only informally**: the test
+  hospital's break room to a nearby Hive always has a navmesh path in practice, so the headless
+  tests never hit the `NavigationServer3D.map_get_path` returning empty case in a real level.
+  `hive_view._path_from` falls back to a straight line correctly by inspection (and the fallback
+  branch is exercised by construction whenever the map iteration id is 0, e.g. the very first
+  physics frame after a level loads), but nobody has watched it happen on a level where the Hive
+  truly has no path to the player (e.g. across a locked door).
 - **The database terminal's Monsters section is a fixed, hand-written list**
   (`scripts/database/monster_pages.gd`), not derived from any shared "monster kind" registry --
   there isn't one yet. Adding a new monster kind means adding an entry there by hand; nothing
@@ -1087,10 +1131,10 @@ left below is what still applies to the shared strapped-monster infrastructure.
   readable, but visually plainer than the old guide binder's hand-crafted paper aesthetic it
   replaces. No custom shader was added for it either way, so this did not need a
   `Minigame.cached_shader()` registration or a `warmup.gd` entry.
-- **The terminal's glow uses plain `StandardMaterial3D`s**, not registered
-  in `scripts/warmup.gd`: it is not a custom shader, and it is visually similar to dozens of
-  other emissive materials already exercised well before a player can reach the break room,
-  so a compile-time hitch was judged very unlikely. Not measured with
+- **The terminal and Hive Eyes' glazed-eyes glow use plain `StandardMaterial3D`s**, not registered
+  in `scripts/warmup.gd`: neither is a custom shader, and both are visually similar to dozens of
+  other emissive materials already exercised well before a player can reach the break room or
+  trigger Hive Eyes, so a compile-time hitch was judged very unlikely. Not measured with
   `perfprobe` specifically for this chunk (chunk 4 was not asked to run it).
 - **A guest's own scan/harvest is recorded on the host correctly (tested with a second bot `Player`
   at a different peer id in the same process, `databasetest._guest_scan_lands_in_host_db`), but the
@@ -1297,6 +1341,61 @@ any target, warp the bot to it and force a repath, same as a player would eventu
 after strafing off a wedge. Re-verified: 7 of 8 runs clean after the fix; the one remaining
 failure was the already-documented furnace-throw flake below, not this death cascade.
 
+## Circular ability hotbar (2026-09-16)
+
+Rebuilt the Alt+1..4 ability bar (`scripts/hud.gd` `_draw_ability_bar`) from flat rectangles to
+circular icon slots, matching the vector/procedural style the rest of the HUD already uses
+(`_draw_scan_ring`'s `draw_arc`, the hearts' `draw_circle`/`draw_colored_polygon`, etc.). Each
+slot is a filled circle with a per-ability glyph drawn in a new `_draw_ability_icon()`: Echo is
+three concentric partial arcs plus a centre dot (a sound pulse), Hive Eyes is an almond eye
+outline with a pupil. The old bottom cooldown bar is now a radial arc that drains clockwise from
+the top; level pips sit in a row just under the circle; the Hive Eyes "Hive in range" border pulse
+is now a ring drawn with `draw_arc` instead of `draw_rect`; empty/unusable slots dim the same way
+as before, just on a circle. `_draw_ability_card` (the unlock popup) doesn't reference the bar's
+shape and was left alone.
+
+While rebuilding this I found and fixed a real, pre-existing bug in the big/small Alt-hold blend
+(`_alt_t`): the ability bar was lerping its rect with the *same* `t` direction as the hands bar
+(`_draw_hands`), so at `t=0` (Alt not held) it rendered at full/"big" size directly on top of the
+hand-slot boxes instead of shrinking into its own small idle corner -- the two bars were meant to
+swap spots, not overlap, per the hands bar's own comment ("cross-fade into each other's spot...
+rather than overlapping"), but the ability bar's lerp was never actually inverted to do that. Fixed
+by swapping which rect is the `t=0` vs `t=1` end for the ability bar only; the hands bar itself was
+untouched. Also nudged the big-mode vertical anchor and the ability name label's offset, since the
+new circles combined with the name/reason text were bumping into the bottom control-hint line at
+1600x900 in the first pass.
+
+Verified:
+- `godot --headless --path . --import` re-imported clean after the script changes.
+- No existing HUD-specific headless test tool exists (grepped `tools/*.gd` for `hud`/`ability_bar`/
+  `_draw_ability_bar`; the closest is `tools/orscreentest.gd`, which covers the OR wall monitor, a
+  different HUD layer, not this one).
+- Added two poses to `tools/gameshot.gd` (`_pose_ability_bar_idle`, `_pose_ability_bar_alt`,
+  shots `40_ability_bar_idle` / `41_ability_bar_alt`) that give the bot Echo/Hive Eyes via
+  `game.abilities.set_level()`, force one ability onto a cooldown, and toggle the `ability_alt`
+  input action to capture both the idle-small and Alt-held-big states. Ran windowed (not
+  `--headless`, which returns a null viewport texture) with `-- --only=ability_bar --tag=t3` and
+  actually looked at the resulting screenshots
+  (`tools/game_shots/40_ability_bar_idle_t3.png`, `tools/game_shots/41_ability_bar_alt_t3.png`,
+  gitignored, not committed): circular slots, the Echo/Hive Eyes glyphs, the radial cooldown
+  sweep, level pips, the dimmed empty slots, and the Alt-held big/small swap all render correctly
+  with no overlap or off-screen elements after the `_alt_t` direction fix above.
+- `tools/devtest.tscn` and `tools/inventorytest.tscn` headless: both still `result=PASS
+  failures=0` (devtest) and `result=PASS checks=92 failures=0` (inventorytest), unchanged from
+  before this change, confirming the HUD rework didn't touch anything those exercise.
+
+Known gaps: the per-slot "why can't I use this" reason text (`_slot_reason`) is still drawn
+centred on the *full* screen width per slot (`HORIZONTAL_ALIGNMENT_CENTER, w`), unchanged from the
+original rectangle code -- if two slots ever have a reason at once (e.g. Echo cooling down and
+Hive Eyes out of range simultaneously) their texts stack on top of each other at the same spot
+instead of appearing over their own slot. Not introduced by this rework (the original rectangle
+version had the exact same call shape) and not hit in the two abilities that exist today since
+they're rarely both blocked at once, but worth widening to per-slot placement if a third ability
+ever ships. The new icon shapes (concentric arcs / almond eye) are a first pass at "read clearly
+at 26-52px" -- fine at both the idle and Alt-held sizes in the screenshots above, but not tested
+against colourblind palettes or at ultra-low resolutions. (Note, 2026-09-22: the bar itself is
+unchanged, but only Hive Eyes has an in-game source now -- see "Abilities (sweep 3)" above.)
+
 ## Default over-the-shoulder camera (2026-09-16)
 
 - **Made the default walking-around camera over-the-shoulder, generalizing the existing
@@ -1428,8 +1527,8 @@ into an ordinary crouch-walk. Client-owned local movement throughout, same as th
   third-person crouch torso-lean (`_update_down_pose`'s `body_hands.poser.crouch` blend) and the
   lowered eye height all already show up on every other machine for free, the same way an ordinary
   crouch does. A remote peer doesn't need to know *why* someone is crouched, only that they are.
-- **Blocked during the dive window:** interacting (E), the shove/use left-mouse actions and starting
-  a charged drop -- mirrors how `downed`/`winding`/`dragging_monster`
+- **Blocked during the dive window:** interacting (E), the shove/use left-mouse actions, starting a
+  charged drop, and Alt+1..4 ability slots -- mirrors how `downed`/`winding`/`dragging_monster`
   already gate those same call sites, just with an added `not diving`. Switching the selected item
   slot (plain 1..4 / scroll) was deliberately left allowed, since it's not "interacting" and there's
   no reason to block it. Jumping is already blocked for free (`want_jump` already requires
@@ -1458,9 +1557,9 @@ into an ordinary crouch-walk. Client-owned local movement throughout, same as th
     stays crouched exactly like letting go of an ordinary crouch there already does, and standing
     back up works again once the ceiling is removed. 14 of 14 new checks pass
     (`godot --headless --fixed-fps 60 --path . tools/controlstest.tscn`); found and fixed a real
-    gating bug along the way (the bot-input path's `bot_press`/`bot_use`/`bot_charge`
+    gating bug along the way (the bot-input path's `bot_press`/`bot_use`/`bot_charge`/`bot_ability`
     branches weren't checking `not diving` at all -- only the keyboard paths were -- so a bot could
-    still interact/use/shove mid-dive; the human paths were correct from the start).
+    still interact/use/shove/ability mid-dive; the human paths were correct from the start).
   - Ran the full mandated regression suite: `tools/inventorytest.tscn` (92/92), `tools/devtest.tscn`
     (0 failures), `tools/databasetest.tscn` (12/12), `tools/looptest.tscn` (0 failures),
     `tools/settingstest.tscn` (97/97), and `tools/carrycamtest.tscn` (0 failures except the same 3

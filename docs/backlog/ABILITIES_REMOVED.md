@@ -1,156 +1,154 @@
-# The ability system, as it was when it was removed
+# What brains took with them, and what came back
 
-Brains and everything attached to them were deleted on the `brains-out` branch: the harvested brain
-items and their spoilage, the break-room blender, and the two abilities the blender taught — **Echo**
-and **Hive Eyes**.
+Brains were removed on the `brains-out` branch: the harvested brain items and their spoilage, the
+break-room blender, the dumpster price, and everything that fed on them.
 
-The abilities went too because brains were the only way to earn them. They are expected back:
-**grafting** is being built on another branch and will source ability levels instead of the blender.
-`brains.gd`'s own comment said `add_ability()` / `set_level()` / `slot_of()` were kept deliberately
-independent of *how* a level is earned, precisely so grafting could plug in later. That is the API
-this file records, so it gets restored rather than reinvented.
+The two **abilities** — Echo and Hive Eyes — were deleted along with them at first, because the
+blender was the only way to earn them. That was reversed the same day: **the abilities are back,
+and only brains stayed gone.** This file is the record of what changed in between, and of the one
+real hole the removal left.
 
-**Removed in commit `REMOVAL_COMMIT`.** Everything below can be recovered verbatim with:
-
-```
-git show REMOVAL_COMMIT^:scripts/brains/brains.gd
-git show REMOVAL_COMMIT^:scripts/brains/echo_view.gd
-git show REMOVAL_COMMIT^:scripts/brains/hive_view.gd
-git show REMOVAL_COMMIT^:scripts/brains/blender.gd
-git show REMOVAL_COMMIT^:scripts/brains/brain_model.gd
-git show REMOVAL_COMMIT^:scripts/hud.gd        # the circular ability hotbar
-git show REMOVAL_COMMIT^:tools/braintest.gd    # the test that proved all of it
-```
+The system now lives in `scripts/abilities/` (`abilities.gd`, `echo_view.gd`, `hive_view.gd`) as
+the `Abilities` child of Game, reached as `game.abilities`.
 
 ---
 
-## The two abilities
+## The one thing that actually changed: where a level comes from
 
-| path | ability id | name | earned from |
-|---|---|---|---|
-| `"sonographer"` | `"echo"` | Echo | drinking a `brain_sonographer` |
-| `"hive"` | `"hive_in"` | Hive Eyes | the `eye_hive` **graft** (the blender refused Hive brains) |
+Brains were the earning mechanic. With them gone:
 
-`PATHS` was `["hive", "sonographer"]` — the **order matters**, it indexes the points array.
+- **Hive Eyes is earned by grafting.** An `eye_hive` graft grants it at level 1, and taking the part
+  out takes it away again (`scripts/grafting/grafts.gd`, `PART_ABILITY := {"eye_hive": "hive_in"}`).
+  That code already existed before any of this; it is now the *only* source of an ability in the
+  game. This was always where it was heading — the old `brains.gd` comment said `add_ability()` /
+  `set_level()` / `slot_of()` were kept deliberately independent of how a level is earned, precisely
+  so grafting could plug in.
+- **Echo has no source yet.** Drinking a Sonographer brain was the only one. Nothing grants `echo`
+  in a normal shift now. It still works end to end — the dev panel, `set_level()` and the review
+  setups all reach it — but **a player cannot currently earn Echo.** A known gap, not an oversight.
+
+  It closes when **grafting part two** lands: `docs/GRAFTING_TRACHEA.md` is the Sonographer's
+  trachea graft, whose payoff was always Echo. The brief is written and the art exists
+  (`art/icons/items/sonographer_trachea.svg`); the code does not — `Eyes.KINDS` is still just
+  `["eye_hive", "eye_surgeon"]`. It is being built on another machine, so **nothing was invented
+  here to fill the hole.**
+
+  When it lands, wiring Echo up is one line, beside the entry `eye_hive` already has:
+
+  ```gdscript
+  # scripts/grafting/grafts.gd
+  const PART_ABILITY := {"eye_hive": "hive_in", "trachea_sonographer": "echo"}
+  ```
+
+  `grafts.gd` is generic over part kinds on purpose — its own header says part two "slots in
+  through `PART_ABILITY` and `Eyes.NOUN` without a rewrite" — so nothing else has to change.
+- **Points are gone.** Levels used to be a float accumulated in multiples of 0.25, because a brain
+  was worth 1.0 / 0.75 / 0.5 depending on how fresh it was. With the blender gone nothing produced a
+  fraction, so `points()`, `add_points()`, `points_for()` and the `POINTS_FRESH` / `POINTS_SPOILING`
+  / `POINTS_ROTTEN` constants went with it. **Levels are now plain ints, set directly.** Grafting
+  only ever called `set_level()`, so nothing it depends on changed.
+
+## The API, as it stands
+
+All host-authoritative.
 
 ```gdscript
-const PATH_OF   := {"brain_hive": "hive", "brain_sonographer": "sonographer"}
-const KIND_OF   := {"hive": "brain_hive", "sonographer": "brain_sonographer"}
-const ABILITY_NAME       := {"hive": "Hive Eyes", "sonographer": "Echo"}
-const ABILITY_ID         := {"sonographer": "echo", "hive": "hive_in"}
-const ABILITY_ID_TO_PATH := {"echo": "sonographer", "hive_in": "hive"}
-const MAX_SLOTS := 4
-const MAX_LEVEL := 3
-```
-
-Note the asymmetry at the end: by the time it was deleted, Hive Eyes came **only** from grafting an
-`eye_hive` (`scripts/grafting/grafts.gd`, `PART_ABILITY := {"eye_hive": "hive_in"}`), and the blender
-refused Hive brains (`blendable()` returned false for `brain_hive`). Only Echo still came from a
-brain. Whoever restores this should decide whether Echo also becomes a graft.
-
-## The API grafting was meant to call
-
-```gdscript
-func points(peer_id: int, path: String) -> float
-func level(peer_id: int, path: String) -> int          # mini(MAX_LEVEL, floor(points + 0.001))
-func add_points(peer_id: int, path: String, amount: float) -> void
-func slots_for(peer_id: int) -> Array                  # MAX_SLOTS entries, ability id or ""
-func add_ability(peer_id: int, id: String) -> bool     # first empty slot; false if full; idempotent
-func slot_of(peer_id: int, id: String) -> int          # slot index, or -1
-func clear_ability(peer_id: int, id: String) -> void   # empties its slot AND zeroes its points
-func set_level(peer_id: int, id: String, lvl: int) -> void  # direct; lvl >= 1 also grants the slot
+func level(peer_id: int, path: String) -> int               # 0..MAX_LEVEL
+func slots_for(peer_id: int) -> Array                       # MAX_SLOTS entries, ability id or ""
+func add_ability(peer_id: int, id: String) -> bool          # first empty slot; false if full; idempotent
+func slot_of(peer_id: int, id: String) -> int               # slot index, or -1
+func clear_ability(peer_id: int, id: String) -> void        # empties its slot AND zeroes its level
+func set_level(peer_id: int, id: String, lvl: int) -> void  # lvl >= 1 also grants the slot
 func cooldown_left(peer_id: int, path: String) -> float
-func ability_slot(p: Node, slot_idx: int) -> void      # host: the player pressed Alt+(slot_idx+1)
+func ability_slot(p: Node, slot_idx: int) -> void           # host: the player pressed Alt+(slot_idx+1)
 ```
 
-All host-authoritative. `set_level` / `clear_ability` were the two grafting already used:
+The two grafting already uses:
 
 ```gdscript
-# scripts/grafting/grafts.gd, as it was
-game.brains.set_level(peer_id, String(PART_ABILITY[kind]), 1)   # graft installed
-game.brains.clear_ability(peer_id, String(PART_ABILITY[had]))   # graft removed
+game.abilities.set_level(peer_id, String(PART_ABILITY[kind]), 1)   # graft installed
+game.abilities.clear_ability(peer_id, String(PART_ABILITY[had]))   # graft removed
 ```
 
-**Slot assignment:** an ability entered the first empty slot the moment its path first reached level
-1 — either through `add_points` crossing the boundary, or `set_level(.., >= 1)` directly. Nothing
-ever re-packed the slots; `clear_ability` left a hole that the next new ability filled.
+**Slot assignment:** an ability enters the first empty slot the moment `set_level(.., >= 1)` grants
+it. Nothing re-packs the slots; `clear_ability` leaves a hole that the next new ability fills.
 
-## Levels to effect values
+## Ids, paths and levels
 
-Levels ran 0..3. Level 0 meant "not owned". The per-level curves were linear:
+| path | ability id | name | source |
+|---|---|---|---|
+| `"hive"` | `"hive_in"` | Hive Eyes | the `eye_hive` graft |
+| `"sonographer"` | `"echo"` | Echo | **nothing — see above** |
 
-```gdscript
-func echo_radius(lvl: int)  -> float: return 12.0 + 6.0  * lvl   # ECHO_RADIUS  + ECHO_RADIUS_PER_LEVEL
-func echo_seconds(lvl: int) -> float: return 2.5  + 0.75 * lvl   # ECHO_SECONDS + ECHO_SECONDS_PER_LEVEL
-func hive_range(lvl: int)   -> float: return 20.0 + 10.0 * lvl   # HIVE_RANGE   + HIVE_RANGE_PER_LEVEL
-func hive_seconds(lvl: int) -> float: return 5.0  + 2.0  * lvl   # HIVE_SECONDS + HIVE_SECONDS_PER_LEVEL
-```
-
-Other tuning constants:
+`PATHS` is `["hive", "sonographer"]`; the **order matters**, it indexes the level array.
+`MAX_SLOTS` is 4, `MAX_LEVEL` is 3. Level 0 means "not owned".
 
 ```gdscript
+func echo_radius(lvl: int)  -> float: return 12.0 + 6.0  * lvl
+func echo_seconds(lvl: int) -> float: return 2.5  + 0.75 * lvl
+func hive_range(lvl: int)   -> float: return 20.0 + 10.0 * lvl
+func hive_seconds(lvl: int) -> float: return 5.0  + 2.0  * lvl
+
 const ECHO_COOLDOWN := 20.0     # from the moment it fires
-const ECHO_NOISE    := 1.2      # emit_noise(), so Echo is LOUD — it attracts monsters
+const ECHO_NOISE    := 1.2      # emit_noise(), so Echo is LOUD -- it attracts monsters
 const HIVE_COOLDOWN := 12.0     # counted from when the view ENDS, not when it starts
 const HIVE_PRESS_GRACE := 0.5   # after a view ends, ignore that player's presses this long
 ```
 
-**Points**, when they still came from the blender: a drink was worth 1.0 / 0.75 / 0.5 for a fresh /
-spoiling / rotten brain, clamped to `MAX_LEVEL`, and stored as multiples of 0.25.
+## How it replicates
 
-## What each ability actually did
-
-- **Echo** — a shriek at the player. Emitted world noise (so monsters heard it), played
-  `brains_shriek` on every machine, drew an expanding ring, and started `echo_view.gd`: an outline of
-  everything within `echo_radius(lvl)` **through walls** for `echo_seconds(lvl)`.
-- **Hive Eyes** — found the nearest non-sedated Hive monster within `hive_range(lvl)` (through
-  walls), then rendered the game through a camera on that monster for `hive_seconds(lvl)`. The
-  player's own body froze, head drooped, eyes glazed for teammates, and the mouse was taken away.
-  Refused if the player was carrying something or operating. Ended early if the Hive died or was
-  sedated, or if the player was hit, downed, stunned, grabbed or picked up. `HiveViewScript.FLIGHT_IN`
-  was a fly-through whose duration was added to the authoritative end time.
-
-## How it replicated
-
-Host-authoritative throughout; clients only rendered.
-
-- **Global snapshot field `br`** (`game.gd` `net_state()` / `apply_net_state()`), from
-  `Brains.net_state()`, quantized:
-  - `p`  — peer id -> `[hive points, sonographer points]`, snapped to 0.25
+- **Global snapshot field `ab`** (was `br`), from `Abilities.net_state()`:
+  - `lv` — peer id -> `[hive level, sonographer level]` (ints)
   - `hv` — peer id -> `[monster id, world_time the view ends]`, snapped to 0.1
-  - `bh` — peer id -> blend progress 0..1, snapped to 0.05 (only while someone held E on the blender)
-  - `ab` — peer id -> `Array[MAX_SLOTS]` of ability id, `""` for empty
-- **Player report key `hv`** — `Player.hive_view: bool`, so every machine could pose a player who was
-  away in a Hive.
-- **Player input** — `ability_slot_press: Array = [0,0,0,0]`, a press counter per slot in the player
-  report (indices 10..13 of the input array), dispatched host-side through
-  `game.player_ability_slot(p, i)` -> `brains.ability_slot(p, i)`. Edge-detected against
-  `_ability_slot_seen`, so a dropped packet could not lose a press.
-- **Reliable events** — `br_echo` `{id, pos, r, s}`, `br_drink` `{id, kind, pos, cond}`,
-  `br_hive` `{id, on}`. `br_hive` carried no state (the view followed `hv`); it existed only to keep
-  the one-off moment ordered.
-- **Nothing was ever saved.** Ability levels and absorbed brains lived only in memory and were wiped
-  by `on_reset()` on game over, so no save file needs migrating.
+  - `sl` — peer id -> `Array[MAX_SLOTS]` of ability id, `""` for empty
+- **Player report key `hv`** — `Player.hive_view: bool`, so every machine can pose a player who is
+  away in a Hive (head droops, eyes glaze for teammates) and so the grafted eye's glow matches.
+- **Player input** — `ability_slot_press: Array = [0,0,0,0]`, a press counter per slot at indices
+  10..13 of the report array, dispatched host-side through `game.player_ability_slot(p, i)`.
+  Edge-detected against `_ability_slot_seen`, so a dropped packet cannot lose a press.
+- **Reliable events** — `ab_echo` `{id, pos, r, s}` and `ab_hive` `{id, on}` (were `br_echo` /
+  `br_hive`). `ab_hive` carries no state (the view follows `hv`); it exists to keep the one-off
+  moment ordered. `br_drink` is gone for good — it was the blender.
+- **Nothing is saved.** Levels and slots live only in memory and are wiped by `on_reset()` on game
+  over, at the same time as the grafts that grant them.
 
-## The input side
+## Input and presentation
 
-- Input action **`ability_alt`** in `project.godot`, rebindable as `key_ability_alt` in
-  `scripts/settings.gd` (the settings screen row was labelled "Ability"). Holding it grew the four
-  circular ability slots out of the item bar; **Alt+1..4** fired a slot.
-- The HUD drew them in `scripts/hud.gd` `_draw_ability_bar()` with a procedural glyph per ability
-  (`_draw_ability_icon`), a cooldown wedge, and a first-time "New ability" card. Icon art was
-  `art/icons/hive_eyes.svg` and `art/icons/echolocation.svg`, coloured `#ff8a2a` (Hive Eyes) and
-  `#9b6bff` (Echo) via `ItemIcons.ability(id)`.
-- Esc during Hive Eyes called `Brains.local_exit()`, which just bumped that slot's press counter.
+- Input action **`ability_alt`**, rebindable as `key_ability_alt` (the settings row is "Ability").
+  Holding it grows the four circular slots out of the item bar; **Alt+1..4** fires a slot.
+- `scripts/hud.gd` `_draw_ability_bar()` draws them, with a per-ability glyph, a cooldown wedge,
+  level pips and a first-time "New ability" card. Icons are `art/icons/hive_eyes.svg` and
+  `art/icons/echolocation.svg`, coloured `#ff8a2a` and `#9b6bff` via `ItemIcons.ability(id)`.
+- Esc during Hive Eyes calls `Abilities.local_exit()`, which bumps that slot's press counter.
+- Audio: `ability_shriek`, `ability_hive_in`, `ability_hive_out`, generated by
+  `tools/gen_audio_abilities.mjs`. The blender's own cues (`brains_blend`, `brains_gulp`,
+  `brains_squelch`) are gone.
 
-## Things that went with it, that a restore may want back
+---
 
-- `scripts/database/wall_pages.gd` had ability description pages in the database terminal, fed live
-  from `hive_range` / `hive_seconds` / `echo_radius` / `echo_seconds` for the reader's current level.
-- Database **tier 3** for a species was marked by `game.mark_db(path, "harvested", p)`, called **only**
-  from the blender drink. With the blender gone nothing sets `harvested`, so tier 3 is currently
-  unreachable. The field and the pages are still there; whatever replaces the blender should set it.
-- The brain items themselves spoiled: full value for `FRESH_SECONDS` (45 s), then linearly down to
-  `MIN_FACTOR` (0.15) at `ROTTEN_SECONDS` (225 s), carried on the item as `bt` (the world_time it was
-  harvested). `scripts/grafting/eyes.gd` still has its own copy of that idea for eyes, which is a
-  reasonable model to copy from.
+## What brains took with them for good
+
+Removed in commit `5397ddd`; recoverable with `git show 5397ddd^:<path>`.
+
+- `scripts/brains/brains.gd` — the spoilage model, the blender, the drink, and the points system.
+- `scripts/brains/blender.gd`, `scripts/brains/brain_model.gd`.
+- The loot kinds `brain_hive` ($150) and `brain_sonographer` ($350), both tier 3 and never found by
+  the loot spawner — they only ever existed as a harvest.
+- **Spoilage:** a brain held full value for `FRESH_SECONDS` (45 s), then fell linearly to
+  `MIN_FACTOR` (0.15) at `ROTTEN_SECONDS` (225 s), carried on the item as `bt` (the world_time it
+  was harvested). `scripts/grafting/eyes.gd` has its own copy of the same idea for eyes, which is
+  the model to crib from if anything needs to spoil again.
+- `tools/braintest.gd` — the test that covered all of it, including the ability behaviour. Worth
+  reading if ability coverage ever needs rebuilding.
+- **Database tier 3 is now unreachable.** `game.mark_db(path, "harvested", p)` was called *only*
+  from the blender drink. The `harvested` bit, the persisted field and the pages are all still
+  there; nothing sets it any more. Whatever replaces the blender should.
+
+### One thing that deliberately did NOT go
+
+`WorldItem.bt` **stays.** It reads like a brains field and is documented as one, but grafting's vats
+use the same key as the **eye** spoil clock (`vats.eye_value({"v": value, "bt": bt})`). Removing it
+would have silently broken eye spoilage. It is now commented as the grafting field it actually is.
+
+Likewise `spawn_hive(pos)` — a Hive *monster* spawner that merely lived on the brains node — moved
+to `game.gd`, because a number of unrelated tests spawn a Hive with it.

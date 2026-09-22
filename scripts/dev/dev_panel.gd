@@ -154,6 +154,7 @@ func _build() -> void:
 	_c["gun"] = _check(you, "Dev gun", func(on): _req("gun", {"on": on}))
 	var you2 := _row(col)
 	_button(you2, "Down me", func(): _req("down_me"))   # downed hook
+	_button(you2, "All abilities", func(): _req("abilities"))
 	_button(you2, "Revive all", func(): _req("revive_all"))
 	_label(col, "Gun: left click kills, right click downs. Noclip: Space up, Ctrl down.", 11, DIM)
 	var fc := _row(col)

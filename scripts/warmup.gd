@@ -106,6 +106,10 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	syringe.position = Vector3(x, 0.3, 0.3)
 	_inert(shelf)
 	_report(progress, "terminal")
+	# Echo's ghosts and veil, and the Hive Eyes screen.
+	preload("res://scripts/abilities/abilities.gd").warm(shelf)
+	_inert(shelf)
+	_report(progress, "abilities")
 	# GRAFTING part one: a vat with each eye floating in it (the glass, the fluid and the eye shader).
 	for ek in Eyes.KINDS:
 		var vm := ItemModels.make("specimen_vat")

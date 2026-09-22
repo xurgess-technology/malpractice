@@ -927,7 +927,7 @@ func _sc_two_patients():
 
 ## GRAFTING chunk C (docs/GRAFTING.md): the host grafts a Hive eyeball into a client's surgeon on an
 ## OR table, with the vat on that table's stand. The other client watches: the graft, the swapped eye
-## on the patient's body both have to reach it.
+## on the patient's body and its glow while Hive Eyes runs all have to reach it.
 func _sc_graft():
 	if role == "host":
 		if not await _start_shift_when_full():
@@ -968,10 +968,17 @@ func _sc_graft():
 				return
 		if not await _until(func(): return game.grafts.graft_of(patient.peer_id) == "eye_hive", 30.0, "the graft to take"):
 			return
+		if game.abilities.slot_of(patient.peer_id, "hive_in") < 0:
+			return _end(false, "the graft gave no Hive Eyes slot")
 		_say("grafted: %s, vat now %s" % [game.grafts.graft_of(patient.peer_id), String(vat.x)])
+		# The glow: hive_view is replicated, so the other machine must light the eye up too.
+		patient.hive_view = true
+		_send("glow", {"on": true})
+		await _wall_wait(2.0)
+		patient.hive_view = false
 		if not await _until(func(): return _count_msgs("ok") >= 2 or _count_msgs("fail") > 0, 90.0, "both clients' reports"):
 			return
-		await _finish_together("the host grafted a Hive eyeball into a client, and the other machine saw the eye")
+		await _finish_together("the host grafted a Hive eyeball into a client, and the other machine saw the eye and its glow")
 		return
 	if not await _wait_shift_as_client():
 		return
@@ -991,9 +998,13 @@ func _sc_graft():
 	var eye_l = load("res://scripts/human/human_model.gd").piece(human, "Human_Eye_L")
 	if eye_l != null and eye_l.visible:
 		return _end(false, "the patient's own left eye is still showing over the graft")
-	_say("saw the graft and the swapped eye")
+	if not await _until(func(): return _count_msgs("glow") > 0, 120.0, "the glow order"):
+		return
+	if not await _until(func(): return float(game.grafts._lock.get(pid, 0.0)) > 0.6, 20.0, "the eye to light up while Hive Eyes runs"):
+		return
+	_say("saw the graft, the swapped eye and its glow (lock %.2f)" % float(game.grafts._lock.get(pid, 0.0)))
 	_send("ok", {})
-	await _finish_together("the graft and the eye on the body both reached this machine")
+	await _finish_together("the graft, the eye on the body and its glow all reached this machine")
 
 
 ## Downed (sweep 2 wave 3): client 1 goes down, client 2 carries them to the player table and

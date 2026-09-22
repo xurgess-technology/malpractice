@@ -7,8 +7,8 @@ extends Control
 ##   HOME      a 2x2 grid: Monsters, Procedures, Surgery Items, Other Items, each with an icon
 ##   SECTION   a 3x3 grid of its entries, PREV / NEXT through more; an unscanned entry is an empty
 ##             slot in the tray (no title, can't be opened)
-##   ENTRY     a header, a subtitle and a paragraph or two on the left (a procedure's steps,
-##             each step opening its surgery item), the entry's
+##   ENTRY     a header, a subtitle and a paragraph or two on the left (a monster's ability and its
+##             three levels, a procedure's steps, each step opening its surgery item), the entry's
 ##             3D model turning on the right (model_preview.gd)
 ## BACK goes up one page (a procedure's item goes back to the procedure), HOME to the top.
 ## Chunks 3 and 4 (wall_session.gd): nobody signed in is NO TRAY LOADED, one big HOLD TO LOAD YOUR TRAY and
@@ -260,7 +260,7 @@ func refresh() -> void:
 func _view() -> Dictionary:
 	var g := _game()
 	if g == null or g.get("wall") == null:
-		return {"db": {}, "peer": 0}
+		return {"db": {}, "peer": 0, "abilities": null}
 	return g.wall.view()
 
 
@@ -531,6 +531,18 @@ func _draw_entry(section: String, key: String) -> void:
 		para.position = Vector2(0, y)
 		_body.add_child(para)
 		y += float(para.get_line_count()) * 38.0 + 18.0
+	if p.has("ability"):
+		var ab: Dictionary = p.ability
+		var at := _label("ABILITY:  %s" % String(ab.name), 28, INK)
+		at.position = Vector2(0, y + 4)
+		_body.add_child(at)
+		y += 50.0
+		for n in (ab.levels as Array).size():
+			var known := String(ab.levels[n]) != "???"
+			var lv := _label("LEVEL %d    %s" % [n + 1, String(ab.levels[n])], 26, INK if known else INK_DIM)
+			lv.position = Vector2(20, y)
+			_body.add_child(lv)
+			y += 38.0
 	if String(p.get("hint", "")) != "":
 		var hint := _para(String(p.hint), 23, INK_DIM, col_w)
 		hint.position = Vector2(0, y + 6)

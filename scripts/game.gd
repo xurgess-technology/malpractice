@@ -206,6 +206,7 @@ var _call_at: Dictionary = {}   # peer id -> world_time of their last call for h
 # SWEEP 3 HOOK (docs/SWEEP3.md): children created in _ready on every machine.
 const CombatScript := preload("res://scripts/combat/combat.gd")
 const DissectionScript := preload("res://scripts/dissection/dissection.gd")
+const AbilitiesScript := preload("res://scripts/abilities/abilities.gd")
 const VatsScript := preload("res://scripts/grafting/vats.gd")
 const GraftsScript := preload("res://scripts/grafting/grafts.gd")
 var sono_echo: Node = null    # the Sonographer's echo: the fan, the imaging flash, the deafen squeal
@@ -214,6 +215,7 @@ var dissection: Node = null   # monster cases on the patient tables: sedation an
 var _step_operator := 0     # host: who finished the step that is finishing the case (only inside surgery_step_done)
 var vats: Node = null         # GRAFTING part one: specimen vats, eye spoilage (scripts/grafting/vats.gd)
 var grafts: Node = null       # GRAFTING chunk C: Eyeball Grafting on a strapped surgeon (scripts/grafting/grafts.gd)
+var abilities: Node = null    # Echo and Hive Eyes, their levels and slots (scripts/abilities/)
 # POCKETS HOOK: pocket spaces (the Factory, the Restaurant), their seams and crossings.
 const PocketSpacesScript := preload("res://scripts/level/pockets/pocket_spaces.gd")
 var pockets: Node = null
@@ -294,6 +296,10 @@ func _ready() -> void:
 	dissection.name = "Dissection"
 	add_child(dissection)
 	dissection.setup(self)
+	abilities = AbilitiesScript.new()
+	abilities.name = "Abilities"
+	add_child(abilities)
+	abilities.setup(self)
 	vats = VatsScript.new()
 	vats.name = "Vats"
 	add_child(vats)
@@ -1754,6 +1760,8 @@ func reset_money() -> void:
 		p.boots = false   # ROCKET BOOTS: bought gear goes with the money
 	if economy != null:
 		economy.on_reset()
+	if abilities != null:
+		abilities.on_reset()   # the grafts that grant them go at the same time
 	if grafts != null:
 		grafts.on_reset()   # GRAFTING chunk C: a graft lasts the run, and goes with a game over
 
@@ -1846,6 +1854,12 @@ func furnace_value(kind: String, s: Dictionary) -> int:
 	if vats != null and Eyes.is_eye(kind):
 		return maxi(0, int(vats.eye_value(s)))   # GRAFTING part one: eyes spoil too
 	return maxi(0, int(s.get("v", 0)))
+
+
+## SWEEP 4A HOOK, host: the player pressed Alt+(slot_idx+1).
+func player_ability_slot(p: Node, slot_idx: int) -> void:
+	if is_host() and abilities != null:
+		abilities.ability_slot(p, slot_idx)
 
 
 func _floor_at(p: Vector3) -> Vector3:
@@ -2374,6 +2388,7 @@ func _physics_process(delta: float) -> void:
 	# SWEEP 3 HOOK: every machine; each system does its host-only work behind is_host().
 	combat.physics_tick(delta)
 	dissection.physics_tick(delta)
+	abilities.physics_tick(delta)
 	doors.physics_tick(delta)   # DOORS HOOK: every machine; the host decides, clients animate
 
 	_update_danger()
@@ -3235,7 +3250,7 @@ func player_table_prompt(q: Node) -> String:
 func strap_in_prompt(q: Node) -> String:
 	if q == null or not q.alive or q.downed or q.on_table or q.carried_by != 0 or int(q.held_by) >= 0:
 		return ""
-	if q.dragging_monster >= 0 or q.carrying != 0:
+	if q.dragging_monster >= 0 or q.carrying != 0 or q.hive_view:
 		return ""
 	if phase != Phase.SHIFT:
 		return ""
@@ -4077,7 +4092,7 @@ func _global_fields() -> Dictionary:
 		"wn": economy.waiting_nurse.net_state() if economy.waiting_nurse != null and is_instance_valid(economy.waiting_nurse) else {},  # hub: the waiting room's Night Nurse
 		"pn": pill_notes.duplicate(),  # SWEEP 4A HOOK (pharmacy, chunk 3): OR green blip notes
 		# SWEEP 3 HOOK: small dictionaries of quantized values only (see docs/SWEEP3.md)
-		"cb": combat.net_state(), "dx": dissection.net_state(),
+		"cb": combat.net_state(), "dx": dissection.net_state(), "ab": abilities.net_state(),
 		"gf": grafts.net_state(),   # GRAFTING chunk C: who has a grafted part
 	}
 	# loop: the cases, one field per case so a vitals tick resends a float, not every case:
@@ -4319,6 +4334,7 @@ func _apply_state(state: Dictionary, msg: Dictionary, keyframe: bool) -> void:
 	# SWEEP 3 HOOK
 	combat.apply_net_state(g.get("cb", {}))
 	dissection.apply_net_state(g.get("dx", {}))
+	abilities.apply_net_state(g.get("ab", {}))
 	grafts.apply_net_state(g.get("gf", {}))   # GRAFTING chunk C
 	var new_tools := bool(g.get("dt", dev_tools))   # DEV HOOK
 	if new_tools != dev_tools:
@@ -4549,6 +4565,8 @@ func _event(kind: String, data: Dictionary) -> void:
 				combat.on_event(kind, data)
 			elif kind.begins_with("dx_"):
 				dissection.on_event(kind, data)
+			elif kind.begins_with("ab_"):
+				abilities.on_event(kind, data)
 			elif kind.begins_with("sn_"):
 				# The Sonographer's echo: the fan, and being imaged and deafened by it.
 				sono_echo.on_event(kind, data)

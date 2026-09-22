@@ -27,9 +27,23 @@ var _font: Font
 var _stamina_show: float = 0.0
 ## ROCKET BOOTS: the fuel bar under stamina, only while wearing a pair and it isn't full.
 var _fuel_show: float = 0.0
+## SWEEP 4A HOOK (controls): the ability bar (Alt) and the scanner ring, both local-only.
+## 0 = Alt not held (abilities small top-left, items at full size); 1 = Alt held (abilities fill
+## the bar, items shrink to a small top-left row). ~0.12 s each way per docs/SWEEP4A.md.
+var _alt_t: float = 0.0
+## Ability id -> world_time its first-ability card should stop showing itself, and which ids have
+## already had their card (so it only shows once per id per session).
+var _card_until: Dictionary = {}
 # SWEEP 4A HOOK (scanner): the "SCAN COMPLETE" banner (scan_fx.gd), until _t passes this.
 var _scan_banner_until := -1.0
 var _scan_banner_name := ""
+var _card_seen: Dictionary = {}
+const ABILITY_LABEL := {"echo": "Echo", "hive_in": "Hive Eyes"}
+const ABILITY_COST := {"echo": "LOUD", "hive_in": ""}
+const ABILITY_DESC := {
+	"echo": "A shriek that outlines everything nearby through walls for a few seconds.",
+	"hive_in": "See through a nearby Hive's eyes for a few seconds.",
+}
 
 
 func _ready() -> void:
@@ -47,6 +61,16 @@ func _process(delta: float) -> void:
 	_stamina_show = clampf(_stamina_show + (delta * 4.0 if tired else -delta * 1.5), 0.0, 1.0)
 	var fuel_low: bool = me != null and me.boots and (me.fuel < 0.995 or me.rocketing)
 	_fuel_show = clampf(_fuel_show + (delta * 4.0 if fuel_low else -delta * 1.5), 0.0, 1.0)
+	var alt_held: bool = Input.is_action_pressed("ability_alt")
+	_alt_t = move_toward(_alt_t, 1.0 if alt_held else 0.0, delta / 0.12)
+	# SWEEP 4A HOOK: the first time an ability lands in a slot, a short card for it.
+	if me != null and game.abilities != null:
+		for id in (game.abilities.slots_for(me.peer_id) as Array):
+			if String(id) != "" and not _card_seen.has(id):
+				_card_seen[id] = true
+				_card_until[id] = _t + 5.0
+	if _card_until.size() > 0 and Input.is_anything_pressed():
+		_card_until.clear()
 	queue_redraw()
 
 
@@ -64,10 +88,12 @@ func _draw() -> void:
 		_draw_prompt(w, h, me)
 	if me != null and me.alive and not in_surgery:
 		_draw_hands(w, h, me)
+		_draw_ability_bar(w, h, me)   # SWEEP 4A HOOK (controls)
 		_draw_health(h, me)
 	if me != null and me.alive and not game.paused and not in_surgery:
 		_draw_scan_ring(w, h, me)   # SWEEP 4A HOOK (scanner)
 		_draw_scan_banner(w, h)
+		_draw_ability_card(w, h)
 	if me != null and not in_surgery:
 		_draw_money(w, h, me)
 	if me != null and not me.alive:
@@ -211,7 +237,7 @@ const SLOT_GOLD := Color(1.0, 0.74, 0.28)
 const SLOT_PX := 56.0          # one hand slot, square
 const SLOT_GAP := 8.0
 const BAR_MARGIN := 16.0       # from the bottom of the screen
-const SMALL_LIFT := 46.0       # the small item row sits this far above the bar top: clear of a lifted slot
+const SMALL_LIFT := 46.0       # the small rows (Alt items, idle abilities) sit this far above the bar top: clear of a lifted slot
 const SMALL_PX := 28.0         # a slot in the Alt (shrunk) row
 const NAME_SECONDS := 2.0      # how long a held item's name hangs above the bar
 const POP_SECONDS := 0.4       # the pickup pop: crosshair to slot
@@ -234,16 +260,18 @@ var slots_drawn: Array = []
 ## The icon item bar (docs/ITEMS_AND_ICONS.md, chunk C): one square per hand slot along the bottom
 ## centre, each showing the item's bare icon on a dark rounded square with its category border, the
 ## key number in a corner and a live count on stacks. The selected slot is lifted and outlined; a bulky
-## stack is ONE wide slot across its two (adjacent) slots. No prices.
+## stack is ONE wide slot across its two (adjacent) slots. No prices. While Alt is held the row slides
+## up and shrinks to the small row the ability icons sit in when idle (and they grow into the bar).
 func _draw_hands(w: float, h: float, me) -> void:
 	drawn.append("hands")
 	var n: int = me.slots.size()
+	var t := clampf(_alt_t, 0.0, 1.0)
 	var sel_head: int = me.selected_head()
 	_track_hands(me, sel_head)
 	slots_drawn = []
 	_slot_ctr.clear()
-	var full := true
-	var units := bar_units(w, h, me.slots, sel_head)
+	var full := t < 0.5
+	var units := bar_units(w, h, me.slots, sel_head, t)
 	# Non-adjacent bulky halves (the pair wraps round the bar): a bracket over both, full size only.
 	if full:
 		for u in units:
@@ -266,7 +294,7 @@ func _draw_hands(w: float, h: float, me) -> void:
 		_slot_ctr[i] = ctr
 		if wide:
 			_slot_ctr[int(u.other)] = ctr
-	_draw_name_flash(w, h - BAR_MARGIN - SLOT_PX, 0.0)
+	_draw_name_flash(w, h - BAR_MARGIN - SLOT_PX, t)
 	_draw_pops(w, h)
 
 
@@ -278,16 +306,21 @@ func _unit_rect(units: Array, slot: int) -> Rect2:
 
 
 ## Where every slot of the bar goes (pure, so a headless test can read it): one unit per square drawn,
-## {slot, rect, wide, ghost, sel, keys, other}. A bulky stack whose two slots sit side by side is ONE
-## unit, wide, holding its head; the unit for a second half that cannot join its head is `ghost`. The
-## selected unit is lifted and grown.
-static func bar_units(w: float, h: float, slots: Array, selected_head: int) -> Array:
+## {slot, rect, wide, ghost, sel, keys, other}. `t` is the Alt blend (0 full bar, 1 the small row). A
+## bulky stack whose two slots sit side by side (and the bar is full size) is ONE unit, wide, holding
+## its head; the unit for a second half that cannot join its head is `ghost`. The selected unit is
+## lifted and grown.
+static func bar_units(w: float, h: float, slots: Array, selected_head: int, t: float) -> Array:
 	var n := slots.size()
 	var x0 := w * 0.5 - (SLOT_PX * n + SLOT_GAP * (n - 1)) * 0.5
 	var y := h - BAR_MARGIN - SLOT_PX
+	var small_y := y - SMALL_LIFT
 	var rects := []
 	for i in n:
-		rects.append(Rect2(x0 + i * (SLOT_PX + SLOT_GAP), y, SLOT_PX, SLOT_PX))
+		var big_r := Rect2(x0 + i * (SLOT_PX + SLOT_GAP), y, SLOT_PX, SLOT_PX)
+		var small_r := Rect2(x0 + i * (SMALL_PX + 4.0), small_y, SMALL_PX, SMALL_PX)
+		rects.append(Rect2(big_r.position.lerp(small_r.position, t), big_r.size.lerp(small_r.size, t)))
+	var full := t < 0.5
 	var out := []
 	var done := {}
 	for i in n:
@@ -300,7 +333,7 @@ static func bar_units(w: float, h: float, slots: Array, selected_head: int) -> A
 		var keys := "%d" % (i + 1)
 		var wide := false
 		var other := -1
-		if kind != "":
+		if full and kind != "":
 			# The stack's other slot.
 			for j in n:
 				if j != head and slots[j].has("of") and int(slots[j].of) == head:
@@ -315,7 +348,7 @@ static func bar_units(w: float, h: float, slots: Array, selected_head: int) -> A
 				keys = "%d" % (mini(mine, pair) + 1)
 				done[pair] = true
 		var sel := head == selected_head
-		if sel:
+		if sel and full:
 			r.position.y -= 8.0
 			r = r.grow(4.0)
 		out.append({"slot": i, "rect": r, "wide": wide, "ghost": is_tail and not wide, "sel": sel, "keys": keys, "other": other})
@@ -541,6 +574,150 @@ func _draw_pops(w: float, h: float) -> void:
 		drawn.append("pickup_pop")
 
 
+## SWEEP 4A HOOK (controls): the 4 ability slots, drawn as circular icon slots (rebuilt from the
+## original flat rectangles). Small top-left of the hands bar normally; while Alt is held they
+## slide/grow into the bar itself (~0.12 s, `_alt_t`) and the item icons shrink to a small row
+## where the abilities were -- the same big/small blend the rectangles used, just applied to a
+## square bounding box that a circle is inscribed in. Each slot: a per-ability vector glyph, a
+## cooldown sweep (now a radial arc instead of a bottom bar), level pips, a cost tag, the key hint,
+## and (Alt held) the ability's name and, when it cannot fire, why.
+func _draw_ability_bar(w: float, h: float, me) -> void:
+	var b := game.abilities
+	if b == null:
+		return
+	drawn.append("abilities")
+	var slots: Array = b.slots_for(me.peer_id)
+	var n: int = slots.size()
+	var box := Vector2(48, 48)
+	var gap := 18.0
+	var x0 := w * 0.5 - (box.x * n + gap * (n - 1)) * 0.5
+	# Big (Alt-held) circles centre on the old hands-bar top edge, leaving room below for the pip
+	# row and the ability name/reason text without crowding the bottom control-hint line.
+	var bar_y := h - BAR_MARGIN - SLOT_PX
+	var big_y := bar_y - 2.0   # just under the small item row, room below for the pips and the name
+	var small := Vector2(26, 26)
+	var small_y := bar_y - SMALL_LIFT
+	var t := clampf(_alt_t, 0.0, 1.0)
+	for i in n:
+		var big_r := Rect2(x0 + i * (box.x + gap), big_y, box.x, box.y)
+		var small_r := Rect2(x0 + i * (small.x + 4.0), small_y, small.x, small.y)
+		# Inverted from the hands bar's own t: idle (t=0, Alt not held) is the SMALL corner row and
+		# Alt held (t=1) grows into the BIG bottom row -- the two bars swap spots rather than
+		# overlapping (see _draw_hands's comment on the shared `_alt_t`).
+		var r := Rect2(small_r.position.lerp(big_r.position, t), small_r.size.lerp(big_r.size, t))
+		var c := r.get_center()
+		var rad := r.size.x * 0.5
+		var id := String(slots[i])
+		var name: String = String(ABILITY_LABEL.get(id, ""))
+		var lvl: int = b.level(me.peer_id, String(b.ABILITY_ID_TO_PATH.get(id, ""))) if id != "" else 0
+		var cd: float = b.cooldown_left(me.peer_id, String(b.ABILITY_ID_TO_PATH.get(id, ""))) if id != "" else 0.0
+		var reason := _slot_reason(me, id, cd)
+		var usable := id != "" and reason == ""
+		var icon := ItemIcons.ability(id) if id != "" else null
+		var in_use := _ability_in_use(me, b, id, lvl, cd)
+		if icon != null:
+			# The round icon carries its own frame; the HUD adds the glow in the ability's colour:
+			# steady when ready, stronger while it runs, dim on cooldown.
+			var gcol: Color = ItemIcons.ABILITY_COLOR.get(id, Color.WHITE)
+			var ga := 0.5 if usable else 0.14
+			if in_use:
+				ga = 0.85 + 0.15 * sin(_t * 9.0)
+			for k in 4:
+				draw_circle(c, rad + 1.0 + k * (3.0 if t > 0.3 else 1.6), Color(gcol, ga * (0.32 - k * 0.075)))
+		else:
+			draw_circle(c, rad, Color(0, 0, 0, 0.55))
+		var ready_pulse := 0.0
+		# SWEEP 4A HOOK (Hive Eyes, chunk 4): a subtle pulse on the ring while a Hive is in range
+		# and the slot is otherwise idle, so you know it is worth pressing.
+		if id == "hive_in" and cd <= 0.0 and not me.get("hive_view") and b.nearest_hive(me, b.hive_range(lvl)) != null:
+			ready_pulse = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.006)
+			draw_arc(c, rad + 3.0, 0.0, TAU, 28, Color("9fe8a0", 0.35 + 0.35 * ready_pulse), 2.0 + ready_pulse * 1.5)
+		var border := Color("f0e6c8", 0.85) if id != "" else Color(0.5, 0.55, 0.6, 0.4)
+		if icon == null:
+			draw_arc(c, rad - 0.75, 0.0, TAU, 28, border, 1.5)
+		if id == "":
+			continue
+		if icon != null:
+			draw_texture_rect(icon, Rect2(c - Vector2(rad, rad), Vector2(rad, rad) * 2.0), false, Color(1, 1, 1, 1.0 if usable else 0.6))
+		else:
+			_draw_ability_icon(id, c, rad, usable)
+		if not usable:
+			draw_circle(c, rad, Color(0, 0, 0, 0.45 if icon == null else 0.3))
+		if cd > 0.0:
+			# A radial sweep standing in for the old bottom cooldown bar: it drains clockwise from
+			# the top as the ability comes back off cooldown.
+			var frac: float = clampf(cd / (20.0 if id == "echo" else 12.0), 0.0, 1.0)
+			draw_arc(c, rad - 3.0, -PI * 0.5, -PI * 0.5 + TAU * frac, 24, Color("5ce0d0", 0.85), 3.0)
+		if t < 0.7:
+			_text(Vector2(c.x - rad, r.position.y - 2), "Alt+%d" % (i + 1), 9, Color("8a9aa0"))
+		for pip in lvl:
+			draw_circle(c + Vector2((pip - (lvl - 1) * 0.5) * 8.0, rad + 5.0), 2.0, Color("9fe8a0"))
+		var cost := String(ABILITY_COST.get(id, ""))
+		if cost != "" and t < 0.7:
+			_text(Vector2(c.x + rad - 30.0, r.position.y + 10.0), cost, 9, Color("e0a020"))
+		if t > 0.4:
+			_text(Vector2(c.x - box.x, c.y + rad + 14.0), _fit(name, 11, box.x * 2.0), 11, Color("eeeeee"), HORIZONTAL_ALIGNMENT_CENTER, box.x * 2.0)
+			if reason != "":
+				_text(Vector2(0, small_y - 8.0), reason, 11, Color("e0a020"), HORIZONTAL_ALIGNMENT_CENTER, w)
+
+
+## Whether the ability is running right now (a Hive view open; Echo's outline still showing).
+func _ability_in_use(me, b, id: String, lvl: int, cd: float) -> bool:
+	if id == "hive_in":
+		return bool(me.get("hive_view"))
+	if id == "echo":
+		return cd > b.ECHO_COOLDOWN - b.echo_seconds(lvl)
+	return false
+
+
+## A small procedural glyph per ability, centered at `c` and scaled off the slot radius `rad`.
+## Echo: concentric arcs opening upward, like a sound pulse. Hive Eyes: a simple almond eye with
+## a pupil. Dimmed (usable == false) glyphs draw at lower alpha, same spirit as the old dim tint.
+func _draw_ability_icon(id: String, c: Vector2, rad: float, usable: bool) -> void:
+	var a := 1.0 if usable else 0.45
+	match id:
+		"echo":
+			var col := Color("5ce0d0", a)
+			draw_circle(c, rad * 0.12, col)
+			for ring in 3:
+				var r2: float = rad * (0.32 + ring * 0.22)
+				draw_arc(c, r2, -PI * 0.62, -PI * 0.38, 10, col, 2.0)
+				draw_arc(c, r2, PI * 0.38, PI * 0.62, 10, col, 2.0)
+		"hive_in":
+			var col := Color("9fe8a0", a)
+			var pts := PackedVector2Array()
+			var k := rad * 0.62
+			for i in 13:
+				var u: float = lerpf(-1.0, 1.0, float(i) / 12.0)
+				pts.append(c + Vector2(u * k, -sqrt(maxf(0.0, 1.0 - u * u)) * k * 0.55))
+			for i in 13:
+				var u: float = lerpf(1.0, -1.0, float(i) / 12.0)
+				pts.append(c + Vector2(u * k, sqrt(maxf(0.0, 1.0 - u * u)) * k * 0.55))
+			draw_polyline(pts, col, 1.75, true)
+			draw_circle(c, rad * 0.22, col)
+			draw_circle(c - Vector2(rad * 0.06, rad * 0.06), rad * 0.07, Color("0a0c0e", a))
+		_:
+			pass
+
+
+## Why a slot cannot fire right now, "" when it can (or it is empty / not the local player's).
+func _slot_reason(me, id: String, cd: float) -> String:
+	if id == "":
+		return ""
+	if not me.alive or me.downed:
+		return "Not now"
+	if cd > 0.0:
+		return "Cooling down (%d s)" % ceili(cd)
+	if id == "hive_in" and (me.carrying != 0 or me.operating):
+		return "Hands busy"
+	if id == "hive_in" and not me.get("hive_view"):
+		var b = game.abilities
+		var lvl: int = b.level(me.peer_id, "hive")
+		if b.nearest_hive(me, b.hive_range(lvl)) == null:
+			return "No Hive in range"
+	return ""
+
+
 ## SWEEP 4A HOOK (scanner): a small progress ring at the crosshair while R is held on a monster.
 func _draw_scan_ring(w: float, h: float, me) -> void:
 	if not bool(me.get("scan_holding")) or float(me.get("scan_progress")) <= 0.001:
@@ -576,6 +753,29 @@ func _draw_scan_banner(w: float, h: float) -> void:
 		draw_line(c, c + Vector2(0, 14 * sy), Color(col, a), 3.0)
 	_text(Vector2(box.position.x, box.position.y + 26), "SCAN COMPLETE", 20, Color(col, a), HORIZONTAL_ALIGNMENT_CENTER, box.size.x)
 	_text(Vector2(box.position.x, box.position.y + 50), "%s  -  database entry updated" % _scan_banner_name.to_upper(), 13, Color(0.8, 0.95, 0.92, a), HORIZONTAL_ALIGNMENT_CENTER, box.size.x)
+
+
+## SWEEP 4A HOOK: the first-ability card, closing itself after a few seconds or on any key.
+func _draw_ability_card(w: float, h: float) -> void:
+	var id := ""
+	var until := 0.0
+	for k in _card_until.keys():
+		if float(_card_until[k]) > until:
+			until = float(_card_until[k])
+			id = String(k)
+	if id == "" or _t > until:
+		return
+	drawn.append("ability_card")
+	var name: String = String(ABILITY_LABEL.get(id, id))
+	var desc: String = String(ABILITY_DESC.get(id, ""))
+	var cost: String = String(ABILITY_COST.get(id, ""))
+	var box := Rect2(w * 0.5 - 190, h * 0.28, 380, 96)
+	draw_rect(box, Color(0.03, 0.04, 0.06, 0.9))
+	draw_rect(box, Color("f0e6c8", 0.6), false, 1.5)
+	_text(Vector2(box.position.x, box.position.y + 24), "New ability: %s" % name, 18, Color("f0e6c8"), HORIZONTAL_ALIGNMENT_CENTER, box.size.x)
+	_text(Vector2(box.position.x + 14, box.position.y + 48), desc, 12, Color("c9d1d9"), HORIZONTAL_ALIGNMENT_LEFT, box.size.x - 28)
+	var foot := "Press any key to close" if cost == "" else "Cost: %s   Press any key to close" % cost
+	_text(Vector2(box.position.x, box.position.y + 82), foot, 11, Color("8a9aa0"), HORIZONTAL_ALIGNMENT_CENTER, box.size.x)
 
 
 ## Shorten a label with an ellipsis until it fits `width` pixels at `size_px`.

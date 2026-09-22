@@ -317,6 +317,16 @@ Pulled and removed again because nothing used them: Kenney character-male-d/e an
 character-female-d/e, Quaternius "Wheel" (poly.pizza, a tyre), the Poly Haven 1K sources of
 the baked models (only the baked GLBs are kept).
 
+## Abilities (sweep 3)
+
+Nothing downloaded. The Echo and Hive Eyes screens are built from code
+(`scripts/abilities/echo_view.gd`, `hive_view.gd`), and the two ability icons are hand-drawn
+vectors (`art/icons/hive_eyes.svg`, `art/icons/echolocation.svg`). The sounds
+`audio/sfx/ability_*.wav` are synthesized by `tools/gen_audio_abilities.mjs` (deterministic, no
+samples).
+
+---
+
 ## Hands, wind-ups and the carry camera (hands worker, 2026-09-14)
 
 Nothing downloaded. The first-person forearms, hands (two-segment fingers, a thumb) and the torch

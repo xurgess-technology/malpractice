@@ -19,8 +19,9 @@ extends Node
 const PartScript := preload("res://scripts/grafting/graft_eye.gd")
 const LootTable := preload("res://scripts/economy/loot_table.gd")
 
-## An eye_hive graft used to grant the Hive Eyes ability at level 1. The ability system went with
-## brains; see docs/backlog/ABILITIES_REMOVED.md for the API to wire this back up to.
+## Part kind -> the ability grafting it grants at level 1. Removing the part takes the ability away.
+## With brains gone this is the only way to earn an ability (docs/backlog/ABILITIES_REMOVED.md).
+const PART_ABILITY := {"eye_hive": "hive_in"}
 ## The eyeball's radius on a surgeon (the minigames' work plane).
 const EYE_RADIUS := 0.0135
 ## And on the body afterwards: the size of the eye it replaces (GraftEye.RADIUS). It used to be a
@@ -59,7 +60,7 @@ func has_graft(p) -> bool:
 	return p != null and graft_of(int(p.peer_id)) != ""
 
 
-## Host: game over. Grafts are lost with the money.
+## Host: game over. Grafts are lost with the money, and the abilities they grant go with them.
 func on_reset() -> void:
 	_graft.clear()
 	_lock.clear()
@@ -194,7 +195,7 @@ func finish(case: Dictionary) -> void:
 	game.say("%s is stitched in. %s can get up." % [label, p.player_name], 4.0)
 
 
-## Host: set (or clear) `peer_id`'s graft.
+## Host: set (or clear) `peer_id`'s graft and the ability that comes with it.
 func apply(peer_id: int, kind: String) -> void:
 	if game == null or not game.is_host():
 		return
@@ -204,10 +205,15 @@ func apply(peer_id: int, kind: String) -> void:
 	else:
 		_graft[peer_id] = kind
 	var p = game.players.get(peer_id)
-	if had != "" and had != kind and p != null:
-		game.tell(p, "The socket is your own again.", 4.0)
-	if kind != "" and kind != had and p != null:
-		game.tell(p, "The Hive eye settles in and starts to see.", 5.0)
+	# The ability the part teaches. It comes with the graft and goes with it.
+	if had != "" and had != kind and PART_ABILITY.has(had):
+		game.abilities.clear_ability(peer_id, String(PART_ABILITY[had]))
+		if p != null:
+			game.tell(p, "The socket is your own again. Hive Eyes is gone.", 4.0)
+	if kind != "" and kind != had and PART_ABILITY.has(kind):
+		game.abilities.set_level(peer_id, String(PART_ABILITY[kind]), 1)
+		if p != null:
+			game.tell(p, "The Hive eye settles in and starts to see. Hive Eyes 1.", 5.0)
 
 
 func _value_of(kind: String) -> int:
@@ -241,9 +247,9 @@ func _physics_process(delta: float) -> void:
 				PartScript.attach(human, kind, BODY_EYE_RADIUS)
 		if kind == "":
 			continue
-		# The glow used to rise while they were in Hive Eyes; nothing drives it high now that the
-		# ability is gone (docs/backlog/ABILITIES_REMOVED.md), so it rests on its ember.
-		var want := 0.0
+		# The glow: low normally, high while they are in Hive Eyes. Replicated, because `hive_view`
+		# is (Player report key "hv"), so every machine works out the same value.
+		var want := 1.0 if bool(p.get("hive_view")) else 0.0
 		var v := move_toward(float(_lock.get(peer, 0.0)), want, delta * LOCK_RATE)
 		_lock[peer] = v
 		# The eye never goes fully dark: LOCK_IDLE is its resting ember. The first-person tint keeps

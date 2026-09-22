@@ -8,15 +8,15 @@ otherwise.
 
 ## The goal
 
-A second graft, the same shape as the eye. The team catches a Sonographer, takes
+**Echo comes from a graft, the same way Hive Eyes does.** The team catches a Sonographer, takes
 its glowing trachea out on an OR table, keeps it in a vat, then swaps it with a surgeon's trachea
-on the player table. The grafted surgeon's throat glows violet through the skin.
+on the player table. The grafted surgeon's throat glows violet through the skin, and they get
+**Echo**.
 
-**The ability reward is gone.** As written, this brief's payoff was the player ability "Echo". The
-whole ability system has since been removed (`docs/backlog/ABILITIES_REMOVED.md`), so a trachea
-graft would grant nothing but the look and the tell. **What a graft is for is an open question**
-(`docs/backlog/SWEEP4B.md`); settle that before building this. Everything else below still stands,
-and every mention of an ability reads as no longer built.
+**Brains and the blender are already gone** (`docs/backlog/ABILITIES_REMOVED.md`), removed ahead of
+this brief, so grafting is the only way to earn an ability. That also means **Echo has no source in
+the game until this part lands**: the ability exists and works, and nothing in a normal shift hands
+it out. Building this is what fixes that.
 
 ## The loop
 
@@ -27,7 +27,8 @@ and every mention of an ability reads as no longer built.
 4. **A surgeon straps themselves** to the player table, and the vat goes on the graft stand.
 5. **Another player runs Trachea Grafting.** The surgeon's own trachea goes into the vat and the
    Sonographer's goes in.
-6. The surgeon's throat glows violet through the skin.
+6. The surgeon now has **Echo, level 1**. Their throat glows low normally and bright while Echo
+   fires.
 7. **Swapping back** is the same surgery with the surgeon's trachea in the vat.
 
 ## Decisions (locked by Zach)
@@ -35,6 +36,9 @@ and every mention of an ability reads as no longer built.
 - **Body parts are named "X's Y":** the Sonographer's trachea, the Hive's eyeball, and a surgeon's
   own parts by name: "Zach's trachea", "Zach's eyeball".
 - **The spoil system is named for body parts**, since eyeballs and tracheas use it.
+- **Echo comes only from the trachea graft.**
+- **The Echo ability itself doesn't change here.** It's still today's loud shriek and outlines.
+  Turning it into the Sonographer's ping is later (docs/backlog/SWEEP4B.md).
 
 ## Calls the theory session made (not yet approved by Zach)
 
@@ -47,13 +51,15 @@ and every mention of an ability reads as no longer built.
   out (it drops into the vat, and the vat's trachea comes up onto the stand). 3. Forceps: seat the
   new one. 4. Suture kit: stitch the throat closed. No botches, the surgeon is awake, and they can
   get up until step 2, as in part one.
-- **A surgeon can have both grafts,** an eye and a trachea: different sites. Refusals work as in part one ("already has one", no vat on the stand, spoiled,
+- **A surgeon can have both grafts,** an eye and a trachea: different sites, different abilities,
+  each at level 1. Refusals work as in part one ("already has one", no vat on the stand, spoiled,
   nobody strapped down), and a vat holding an eyeball can't be used for a trachea graft.
 - **The grafted surgeon's look:** see-through skin down the front of the throat with the violet
-  windpipe glowing through it, matching the Sonographer's throat. It shows in third person, on
-  other players' screens and in the Personnel mirrors. Stitches across the throat.
-- **A first-person tell:** a faint violet glow along the bottom edge of the view (like the eye
-  graft's orange edge).
+  windpipe glowing through it, matching the Sonographer's throat and the Echolocation icon
+  (`art/icons/echolocation.svg`). It shows in third person, on other players' screens and in the
+  Personnel mirrors. Stitches across the throat.
+- **A first-person tell:** a faint violet glow along the bottom edge of the view, stronger while
+  Echo fires (like the eye graft's orange edge).
 - **The database's third tier** ("harvested") now means a part was extracted or grafted.
 
 ## Chunks
@@ -61,16 +67,17 @@ and every mention of an ability reads as no longer built.
 | # | Branch | What | Who | When |
 |---|---|---|---|---|
 | A | `trachea-art` | The surgeon's grafted throat (a `surgeon_graft` style variant with the see-through throat and stitches, `art/stylized/`), and the two trachea item models: the Sonographer's (violet, glowing) and a surgeon's (pale pink cartilage). | Orchestrator's call; Blender-from-Python work | Any time |
-| B | `graft-trachea` | Trachea Extraction, the trachea items, vats holding either part, Trachea Grafting, the refusals, the throat glow (replicated), the first-person tell. Update DESIGN.md and docs/CONTRACTS.md. | Opus, high | After grafting part one's chunk C, the Sonographer's two chunks, and A are all merged |
+| B | `graft-trachea` | Trachea Extraction, the trachea items, vats holding either part, Trachea Grafting, the refusals, the throat glow (replicated), the first-person tell, Echo from the graft. Update DESIGN.md and docs/CONTRACTS.md. | Opus, high | After grafting part one's chunk C, the Sonographer's two chunks, and A are all merged |
 
 **Zach sees:**
 - A: `TRACHEA: the grafted throat and the two tracheas` (renders, or a lab scene).
-- B: `TRACHEA: as Botsworth, give yourself the Sonographer's trachea, then check the mirror`.
+- B: `TRACHEA: as Botsworth, give yourself the Sonographer's trachea, then Echo in the mirror`.
 
 ## Done when
 
 - A whole run of the loop works from a normal shift: catch a Sonographer, extract, vat, strap,
-  graft, swap back, sell a trachea.
+  graft, Echo, swap back, sell a trachea.
 - Headless checks: a trachea spoils outside a vat and not inside; the last extraction cut emits a
-  noise; a surgeon can hold both grafts; an eyeball vat is refused for a trachea graft.
+  noise; the graft gives Echo 1 and swapping back takes it away; a surgeon can hold both grafts; an
+  eyeball vat is refused for a trachea graft.
 - A nettest scenario: the throat glow is seen by the other machine.

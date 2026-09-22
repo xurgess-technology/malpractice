@@ -23,7 +23,7 @@ and this file first. Godot console binary:
 - Multiplayer rules: the host owns monsters, items, cases, damage, money; each client owns its own
   movement and aim. Anything that changes world state must work for a client and replicate:
   continuous state in a report (quantized, copies, small), one-offs as reliable events. Events for
-  your system use your prefix (`cb_`, `dx_`) and arrive in your `on_event`. Interactables
+  your system use your prefix (`cb_`, `dx_`, `ab_`) and arrive in your `on_event`. Interactables
   keep `interact_prompt / interact_hold / interact` with machine-stable `interact_id`s.
 - **Other workers are building against the contracts below at the same time.** When a method from
   another worker does not exist yet on your branch, check with `has_method` and fall back to
@@ -43,6 +43,9 @@ and this file first. Godot console binary:
   anesthetic, drag, strap to a patient table) and dissect it.
 - The bone saw is a weapon with a chance to break on each hit. It is the same item surgery needs.
 - The Night Nurse stays unfightable: the saw and the needle do nothing to her.
+- Two player **abilities**, one per monster: **Hive Eyes** and **Echo**. (How they are earned was
+  rewritten later: brains and the blender are gone, and grafting is the only source now --
+  `docs/backlog/ABILITIES_REMOVED.md`, `docs/CONTRACTS.md` "Abilities".)
 - New monster **The Hive** (sight only, slow, loses interest fast, weak, common near wing
   starts). **The Sonographer** redesign: eyeless, somewhat taller than a surgeon (not extremely),
   ears clear and on the large side of normal (not comical), ears react to sound.
@@ -55,19 +58,20 @@ and this file first. Godot console binary:
 
 - Input: `use` = left mouse (removed from `shove`, which is Q only). `read` (R) opens the guide
   when holding it or aiming at it.
-- `Player`: `use_count` (client -> host in `report_state()`), bot seam `bot_use` (bump to press
-  once). Left mouse increments `use_count` when
+- `Player`: `use_count`, `ability_slot_press` (client -> host in `report_state()`), bot seams
+  `bot_use` and `bot_ability` (bump to press once). Left mouse increments `use_count` when
   `game.combat.is_usable(selected_stack().kind)`, else it shoves. `_consume_actions` calls
-  `game.player_used(p)` (not while downed or carrying a player).
-- `game.combat` (`scripts/combat/combat.gd`) and `game.dissection`
-  (`scripts/dissection/dissection.gd`): stubs, children of Game on every machine. Each has
+  `game.player_used(p)` (not while downed or carrying a player) and `game.player_ability_slot(p, i)`
+  (not while downed).
+- `game.combat` (`scripts/combat/combat.gd`), `game.dissection` (`scripts/dissection/dissection.gd`)
+  and `game.abilities` (`scripts/abilities/abilities.gd`): children of Game on every machine. Each has
   `setup(game)`, `physics_tick(delta)` (every machine, every physics frame), `net_state() ->
-  Dictionary` (host, rides in the global snapshot fields `cb` / `dx`: keep it small and
+  Dictionary` (host, rides in the global snapshot fields `cb` / `dx` / `ab`: keep it small and
   quantized), `apply_net_state(d)` (clients, applied after cases, money and the loop),
   `on_event(kind, data)`. Plus `combat.is_usable(kind)`, `combat.use(p)`,
   `combat.on_monsters_cleared()`, `combat.on_monster_removed(m)` (called by `game.kill_monster`),
-  and `dissection.owns_case(c)` (true skips the vitals drain). Replace your stub entirely; keep
-  its API.
+  `dissection.owns_case(c)` (true skips the vitals drain), `abilities.ability_slot(p, i)` and
+  `abilities.on_reset()` (called from `game.reset_money`). Replace your stub entirely; keep its API.
 - `ShiftLoop.pay_for(c)` returns 0 for a case with `monster: true`.
 
 ## Workers and ownership (all in parallel)
@@ -176,6 +180,24 @@ SEDATE_SECONDS := 75.0     JAB_COOLDOWN := 1.0      JAB_REACH := 1.8
 - Vitals of a monster case = brain condition: botches lower it, nothing drains it. At 0 the case is
   lost ("The brain is ruined."). The last step wins the case: the monster flatlines, and the case is
   removed about 6 s later to free the table.
+
+### Abilities (`scripts/abilities/abilities.gd`)
+
+Two abilities, each 0..3. **How they are earned has changed since this brief** -- brains and the
+blender are gone and grafting is the only source (`docs/CONTRACTS.md` "Abilities"). What each one
+does is unchanged:
+
+- Echo: noise 1.2 at the player (every Sonographer in range comes), a shriek everyone hears
+  (event `ab_echo`), and on that player's machine only, for 2.5 + 0.75 per level seconds, the view
+  darkens and monsters (red), players (white), surgical items (teal), loot (gold) and containers
+  (dim) within 12 m (+6 per level) show as outlines through walls. Cheap: only while active,
+  bounded node count.
+- Hive Eyes: the nearest Hive within 20 m (+10 per level), through walls; that player's view
+  jumps to its eyes for 5 s (+2 per level) with a grainy sickly look; its slot, E or Esc ends it
+  early; it ends if the Hive dies or is sedated or the player is hit. The body stands still and
+  helpless (Player field `hive_view`, report key `hv`; others see the head droop).
+- Cooldowns: Echo about 20 s, Hive Eyes about 12 s. An empty slot gives a short "Nothing happens."
+  hint.
 
 ## After the workers
 

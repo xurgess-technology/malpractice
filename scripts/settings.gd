@@ -55,6 +55,7 @@ const DEFAULTS := {
 	# settings screen) follows a rebind immediately.
 	"key_crouch": KEY_CTRL,
 	"key_jump": KEY_SPACE,
+	"key_ability_alt": KEY_ALT,
 	"key_scan": KEY_R,
 	# CUSTOMIZATION (scripts/personnel/customization.gd): what your surgeon looks like, packed into
 	# one int, chosen at the big mirror in Personnel. Per machine, so it follows you into any shift.
@@ -66,6 +67,7 @@ const DEFAULTS := {
 const REBIND_ACTIONS := {
 	"key_crouch": "crouch",
 	"key_jump": "jump",
+	"key_ability_alt": "ability_alt",
 	"key_scan": "scan",
 }
 
@@ -80,6 +82,7 @@ const RANGES := {
 	"quality": [0, 2],
 	"key_crouch": [0, 4194500],
 	"key_jump": [0, 4194500],
+	"key_ability_alt": [0, 4194500],
 	"key_scan": [0, 4194500],
 	"look": [-1, 1073741823],
 }
