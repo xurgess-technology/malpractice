@@ -1,7 +1,7 @@
 extends Node
 ## Headless checks for the database terminal (sweep 4a chunk 4, docs/SWEEP4A.md "Chunk 4:
 ## Database terminal, guide removal, Hive Eyes and Echo polish"): a completed scan unlocks tier 2,
-## a harvest (dissection or an absorbed brain) unlocks tier 3, the database survives a wipe and a
+## an absorbed brain unlocks tier 3, the database survives a wipe and a
 ## reload (saved under user://), each player's database is their own (another player's scan never
 ## lands in yours), the waiting room's Night Nurse can be scanned, and no `read` action or guide
 ## binder code remains in the project. Terminal redesign, chunk 4: on the break room screen, holding

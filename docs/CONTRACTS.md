@@ -653,8 +653,8 @@ HiveRig.WALK_SPEED 0.85      # rate = speed / WALK_SPEED (0.4..2.4x)
   light on the face; sedated, the eyes go back to the pinpoint.
 - Lying (sedated, dragged, `make_lying`): the poser eases every bone back to rest and brings the arms
   in to the sides. On the OR table (`monster_builder.gd _build_st`) the body is strapped down with its
-  fungus showing; the dissection head that opens is built hidden, only to place the `skull`, `brain`
-  and `injection` sites, since the Hive has no brain (harvest waits on the grafting redesign).
+  fungus showing; the openable head is built hidden, only to place the `injection` and `eye` sites
+  (plus vestigial `skull` and `brain` sites nothing reads any more) -- see "Monster cases".
 
 ### The Sonographer's model (2026-09-18, chunk A of docs/SONOGRAPHER.md)
 
@@ -794,14 +794,13 @@ game.mark_db(kind, field)             # host: sets a field true (once), saves to
     # ("db_full" event) -- there is no continuous replication of the database.
 ```
 
-- `mark_db` is what `game._tick_scan` (sighted/scanned), `dissection.on_case_finished` (a won
-  monster case: harvested) and `brains.drink` (an absorbed brain: harvested) call. It is not
-  cleared by `reset_money()` (a wipe): species knowledge is meant to survive a wipe, and
-  `DatabaseStore.save`/`load_into` make it survive a full reload too.
+- `mark_db` is what `game._tick_scan` (sighted/scanned) and `brains.drink` (an absorbed brain:
+  harvested) call. It is not cleared by `reset_money()` (a wipe): species knowledge is meant to
+  survive a wipe, and `DatabaseStore.save`/`load_into` make it survive a full reload too.
 - A guest's scan or harvest is recorded exactly like the host's own: `_tick_scan` and the
-  dissection/brains hooks are already host-only and iterate every player (`alive_players()`),
-  so whichever peer is aiming or holding the brain, the record it changes is `game.database` on
-  the host. Guests never keep their own copy; their terminal only ever shows a fetched mirror.
+  brains hook are already host-only and iterate every player (`alive_players()`), so whichever
+  peer is aiming or holding the brain, the record it changes is `game.database` on the host.
+  Guests never keep their own copy; their terminal only ever shows a fetched mirror.
 
 ## Hospital (hospital worker, sweep 2 wave 1)
 
@@ -1753,9 +1752,10 @@ game.combat.last_result / swings_seen / rng / break_chance / anim_freeze / pose_
   x 2.1 box centred 0.35 m up, in the monster's own space), on `C.L_INTERACT` only while
   `is_sedated(m)` and nobody drags it. Hold E for `DRAG_HOLD` with empty hands (host-simulated like
   carrying; progress shows through `Player.carry_hold`). While dragging the player walks at
-  `DRAG_SPEED_K`, cannot sprint, shove, use, drop or change slots, and `_update_aim` offers only
-  `Strap the X to the table` on a free patient table (aim id = the table's interact id) or `Put
-  the X down`. Hit (`damage_player`), shoved, knocked out, downed, dead or gone: the monster is let
+  `DRAG_SPEED_K`, cannot sprint, shove, use, drop or change slots, and `_update_aim` offers
+  `Strap the X to the table` on a free patient table (aim id = the table's interact id) only for a
+  kind Procedures has a monster case for (the Hive), else `Put the X down`. Hit (`damage_player`),
+  shoved, knocked out, downed, dead or gone: the monster is let
   go where it lies. Waking while dragged (`is_sedated` false): dropped, turned to the dragger,
   `alert_to`, `game.monster_hit_player(m, q)`.
 - **`monster_pin(m)`**: origin on the floor under the middle of the body, `DRAG_BEHIND` behind the
@@ -1763,11 +1763,14 @@ game.combat.last_result / swings_seen / rng / break_chance / anim_freeze / pose_
   Z, feet toward -Z, head toward +Z. Not dragged: the monster's own transform. A monster with a
   `dragged_by` field places itself there every frame on every machine; `start_drag`,
   `drop_dragged` and `strap` set and clear `m.dragged_by`, and combat clears a stale one.
-- **Strap**: `strap_problem(ti)` is "" in `Phase.SHIFT` with no case on the table and no crew
+- **Strap**: only offered, and only allowed, for a kind `Procedures.is_monster` recognizes (the Hive;
+  GRAFTING part one). `strap_problem(ti)` is "" in `Phase.SHIFT` with no case on the table and no crew
   heading there. The case is exactly `game.add_case({table, patient_id: m.kind, ailment_id:
-  "dissection", monster: true, flags: {sedation: lerp(0.35, 1.0, sedation_left / 75), snapped to
+  "eye_extraction", monster: true, flags: {sedation: lerp(0.35, 1.0, sedation_left / 75), snapped to
   0.01}})`; then `game.monsters.erase(id)`, `on_monster_removed(m)`, `m.queue_free()` (no death
-  effect, no `monster_killed` event), `combat_strap` and "X strapped the Y to the table.".
+  effect, no `monster_killed` event), `combat_strap` and "X strapped the Y to the table.". Dragging
+  any other kind (the Sonographer, the Night Nurse) still works; only strapping is refused, so E on a
+  patient table just puts it down.
 - **Wind-ups** (hands sweep, `scripts/combat/windup.gd`, every machine): every shove, jab and saw
   swing goes WINDUP -> STRIKE -> RECOVER. `WINDUP_TIME` jab 0.35 s, saw 0.3 s; the shove charges
   while held: `SHOVE_MIN` 0.2 s (a tap), full at `SHOVE_FULL` 0.9 s, fires by itself at `SHOVE_MAX`
@@ -1920,92 +1923,72 @@ HumanModel.sample_clip(skel, anim, t) / bone_global(skel, bone) / chain_to(node,
   material per variation; patients get their own.
 - Pieces, sites, clips and speeds: `art/human/README.md`.
 
-## Dissection (dissection worker, sweep 3)
+## Monster cases (dissection worker, sweep 3; GRAFTING part one)
 
 Strapped monsters on the patient tables (`scripts/dissection/`, `game.dissection`). A monster case is
-an ordinary `game.cases` entry: `{table, patient_id: "hive" | "sonographer", ailment_id: "dissection",
+an ordinary `game.cases` entry: `{table, patient_id: "hive", ailment_id: "eye_extraction",
 monster: true, flags: {sedation}}` plus `doses` (re-doses given). The surgery systems operate it like
 any patient; everything below is host authoritative.
 
+The earlier "Dissection" ailment (skull cut, brain harvest, both the Hive and the Sonographer
+strappable) has been removed entirely: a strapped monster's only ailment now is Eyeball Extraction
+(see "Grafting part one" below for the ailment's own steps). Only the Hive can be strapped
+(`Procedures.is_monster`); the Sonographer is a roaming monster only now.
+
 ```gdscript
 # Procedures (scripts/procedures.gd)
-PATIENTS.hive / .sonographer        # monster: true (name, full_name, weight, blurbs.dissection)
-AILMENTS.dissection                   # monster_only: true; steps
-    # {id "open", "Saw open the skull", bone_saw, uses 0, game "saw", variant "skull", site "skull"}
-    # {id "harvest", "Pull out the brain", forceps, uses 0, game "forceps", variant "brain", site "brain"}
+PATIENTS.hive                       # monster: true (name, full_name, weight, blurbs.eye_extraction)
 Procedures.is_monster(patient_id) / is_monster_only(ailment_id)
 Procedures.human_patients() -> ["bob", "seal"]    # roll(), the dev panel, the loop's extra call, the guide
-Procedures.monster_patients() -> ["sonographer", "hive"]
-# roll() and patient_ailments() never return a monster or dissection (same results as before).
+Procedures.monster_patients() -> ["hive"]
+# roll() and patient_ailments() never return a monster ailment.
 
 # game.dissection (scripts/dissection/dissection.gd), child "Dissection" of Game
 owns_case(c) -> bool / owns_table(table) -> bool      # every machine
 sedation(c) -> float                                    # host: precise; clients: replicated (hundredths)
 static sedation_state(s) -> "under" | "stirring" | "awake"   # STIR 0.75, AWAKE 0.35
 static dose_amount(n) -> float                          # DOSE * DOSE_FALLOFF^n = 0.6 * 0.6^n
-static brain_kind(patient_id) -> "brain_hive" | "brain_sonographer"
 table_prompt(p, table) -> String                        # game._table_prompt hands monster tables here
 table_used(p, table) -> bool                            # host, from game._proxy_used: true = it was a re-dose
 redose(p, table) -> float                               # host: one vial from p's hands; returns the sedation added
-on_case_finished(c, won)                                # host, from game.finish_case
-spawn_brain(patient_id, quality, pos) -> Node           # host: game.brains.spawn_brain, else a plain loot item
+on_case_finished(c, won)                                # host, from game.finish_case; always _finish_eye
 dev_strap(kind, sedation := 1.0, table := -1) -> int    # host: tests and the dev panel (request "strap_monster")
 set_sedation(case_id, s)                                # host, tests
-last_brain: {kind, quality, pos, node}                  # tests
-SEDATION_SECONDS 120, SAW_MULT 2.5, THRASH_BOTCH 1.5, THRASH_EVERY 3.0, SHRIEK_NOISE 0.7, REMOVE_AFTER 6.0
+SEDATION_SECONDS 120, THRASH_BOTCH 1.5, THRASH_EVERY 3.0, SHRIEK_NOISE 0.7, REMOVE_AFTER 6.0
 ```
 
-- **Sedation** falls from 1 to 0 in 120 s, 2.5x while the saw is held in the kerf. The host keeps the
-  precise value and writes `flags.sedation` snapped to 0.05 (so the case field is not resent every
-  tick); the global snapshot field `dx` = `{s: {"<case id>": hundredths}}` for every monster case on a
-  table, and clients write it back into their case flags right after the cases apply, so the
-  surgery system's stir code (`flags.sedation`) and the body read the same value everywhere.
+- **Sedation** falls from 1 to 0 in 120 s. The host keeps the precise value and writes
+  `flags.sedation` snapped to 0.05 (so the case field is not resent every tick); the global snapshot
+  field `dx` = `{s: {"<case id>": hundredths}}` for every monster case on a table, and clients write it
+  back into their case flags right after the cases apply, so the surgery system's stir code
+  (`flags.sedation`) and the body read the same value everywhere.
 - 0.35..0.75 the surgery system's existing stirs. Under 0.35 awake: the body thrashes against the
   straps (every machine, from the sedation), shrieks every 3.5-6.5 s (`emit_noise(table, 0.7,
   "shriek")`, event `dx_shriek`), and while someone operates `surgery_botch(1.5)` every 3 s.
 - **Re-dose:** E on the table holding anesthetic (any hand; the selected stack first) re-doses instead
   of operating, also while someone else operates. Prompt: `Re-dose <name> (sedation 42%, +36%)`;
   otherwise `Operate: <step> (sedation 42%)` / `!<reason> (sedation 42%)`. Event `dx_dose`.
-- **Brain condition** is the case's `vitals`: `_sim_shift` does not drain it, and the host clamps it
-  so it never rises (the +8 of `surgery_step_done` is taken back). At 0 the case is lost ("The brain
-  is ruined."). Winning the last step: `spawn_brain(kind, condition / 100, pos)` at the specimen tray
-  beside the head (+0.12 m), `game.mark_db(patient_id, "harvested")` (sweep 4a chunk 4: unlocks
-  tier 3 of the database terminal for that species), event `dx_flatline`, the case becomes
-  `stable` and is removed 6 s later (dead cases too). `ShiftLoop.pay_for` pays 0; monster cases
-  never block clocking out.
+- **The eye's condition** is the case's `vitals`: `_sim_shift` does not drain it, and the host clamps
+  it so it never rises (the +8 of `surgery_step_done` is taken back). At 0 the case is lost ("The eye
+  burst."). See "Grafting part one" for how the last step hands the eye over. `ShiftLoop.pay_for`
+  pays 0; monster cases never block clocking out.
 - **Bodies** (`PatientBody.create` dispatches `Procedures.is_monster(id)` to
   `scripts/dissection/monster_builder.gd`; the node is a normal `PatientBody`): lying along X, head
-  -X, sites `injection`, `skull`, `brain`, leather straps over chest/arms, hips/wrists, thighs, shins
-  (sized for the 0.7 m OR table). Flags `skull_open` (the cap lifts off along the cut over 0.9 s and
-  lies bone side up beside the head), `brain_removed` (empty cavity; the body flatlines), `sedation`.
-  `site_section("skull")` = `{half_up, half_side, axis_depth, shape}`; `site_section("brain")` also
-  carries `half_u`, `brain_radii`, `brain_seed`, `brain_y`, `tray` (site-local Vector3) and `table_up`.
-  Body meta `dx_brain_hidden` (set by the brain step while it draws the moving brain). The head is
-  always this file's own (it opens); the body is `make_lying(kind)` from `Monster` or
-  `scripts/monsters/monster_model.gd` when the copy has its rig: scaled to the 2 m table (the
-  Sonographer 0.9), arms in at the sides (RigShaper cfg `lying_spread`), the rig's `Head` node hidden.
-  The openable head sits at the rig's head bone, face up, wearing the body's own skin material and
-  the walking look's face (`scripts/dissection/monster_rig_look.gd`: the Sonographer's sealed, stitched
-  sockets, brow and large ears; the Hive's filmed eyes, jowls, open mouth and fringe of hair);
-  face pieces past the cut ride the cap. Fit constants (scale, head bone, straps) live in
-  `RigLook.RIG`; `tools/dissectiontest` checks the head bone against them. Thrashing turns the rig's
-  arm and leg bones (`strap_thrash.gd`, a SkeletonModifier3D after the shaper), heaves the body and
-  pulls the straps over the lifting limbs taut. Without the rig: primitives (the Hive a greenish
-  patient in a teal gown, the Sonographer taller, pink-grey, blank-faced, in a white coat).
-- **Minigames:** `saw.gd` variant `skull` (layers Scalp/Bone/Dura, no tourniquet, steady scalp bleed,
-  finishes `{skull_open: true, cut_quality}`; the saw model is hidden until someone saws). `forceps.gd`
-  variant `brain` hands every call to `scripts/dissection/brain_forceps.gd`: clamp each nerve at its
-  ring and draw it in along itself (yanking tears: 2.0), take the brain, lift it straight out (scraping
-  the bone: 1.5 per 0.5 s), carry it to the tray (dropping: 3.0); finishes `{brain_removed: true}`.
-  Net state keys `x y j c k s g l bx bz st h r dr p`. Limb and gunshot behaviour and their self-test
-  output are unchanged; `--selftest=saw` and `--selftest=forceps` also run the variants.
-- OR screen: panels carry `monster` and `sedation`; the canvas tags the number "BRAIN", shows
-  `SEDATION n%` (amber stirring, red and blinking AWAKE), and the status line says BRAIN HARVESTED /
-  BRAIN RUINED.
-- Sounds `dissection_shriek`, `dissection_strap` (creaks while thrashing, local), `dissection_snap`,
-  `dissection_plop`, `dissection_crack`, `dissection_inject` (`tools/gen_audio_dissection.mjs`).
-- Tests: `tools/dissectiontest.tscn` (headless; `-- --shots` windowed into `tools/dissection_shots/`),
-  minigame self-tests, nettest scenario `dissection`.
+  -X, sites `injection`, `eye` (plus vestigial `skull`, `brain` sites the builder still places but
+  nothing reads any more), leather straps over chest/arms, hips/wrists, thighs, shins (sized for the
+  0.7 m OR table). Flags `eye_removed` (the Hive flatlines), `sedation`. The head is always this
+  file's own; for the Hive's stylized rig (`monster_builder._build_st`) the openable head's cap never
+  shows (no cap to lift, no brain -- the skull/brain mesh code is built but hidden). Fit constants
+  (scale, head bone, straps) live in `RigLook.RIG`. Thrashing turns the rig's arm and leg bones
+  (`strap_thrash.gd`, a SkeletonModifier3D after the shaper), heaves the body and pulls the straps
+  over the lifting limbs taut.
+- OR screen: panels carry `monster` and `sedation`; the canvas tags the number "EYE", shows
+  `SEDATION n%` (amber stirring, red and blinking AWAKE), and the status line says EYE OUT / EYE
+  BURST.
+- Sounds `dissection_shriek`, `dissection_strap` (creaks while thrashing, local), `dissection_inject`
+  (`tools/gen_audio_dissection.mjs`); `dissection_crack` and `dissection_plop` are shared with other
+  features (the furnace's flare, the Night Nurse's grab, the Anesthetic Injection) and are not
+  dissection-only despite the name.
 
 ## Networking (net worker, sweep 2)
 
@@ -2237,18 +2220,17 @@ game.vats: item_used(p, item) / hand_put(p) / take_out(p, aim_id) / set_down(p, 
   `spots.vat_benches`, `hospital_builder` turns them into `level_info.vat_spots`. On level build the
   host stands three empty vats on the first three spots and stocks a scalpel, an eye spoon and forceps on the
   OR's storage shelves (neither is in `_shift_item_ids`, so they last the run; a new run resets).
-- **Eyeball Extraction** is the ailment `eye_extraction` (monster-only; steps scalpel "cut", eye
-  spoon "scoop", scalpel "snip" and, since 2026-09-19, forceps "place" -- lifting the cut-free eye
-  into the specimen vat standing on the table, `{"eye_in_vat": true}` -- all `game: "eye"` =
-  `surgery/games/eye_ops.gd`, site `eye` on the Hive's left eyeball). `dissection._finish_eye` puts
-  the eye in that vat when the flag is set, and only falls back to the operator's hand (or the floor
-  by the head) when there is no vat to put it in. A strapped Hive stays `dissection` until its first step: `Dissection.ailment_for(case, p)`
-  gives `eye_extraction` when p holds the scalpel, `dissection` for the bone saw (host: `_pick_ailment`
-  in `table_used`; `SurgerySystem._step_for` for the prompt everywhere). The body keeps its key across
-  the switch. Results `eye_cut`, `eye_out` (the socket empties), `eye_removed` (the Hive flatlines);
-  sedation, stirring and thrash botches are unchanged and vitals are the eye's condition: at 0 the
-  eye bursts. The last step puts an `eye_hive` (value 120 x condition) in the operator's hand
-  (`Dissection.last_operator`, else on the specimen tray); the Hive dies on the table.
+- **Eyeball Extraction** is the ailment `eye_extraction` (monster-only, the Hive's only ailment; steps
+  scalpel "cut", eye spoon "scoop", scalpel "snip" and, since 2026-09-19, forceps "place" -- lifting
+  the cut-free eye into the specimen vat standing on the table, `{"eye_in_vat": true}` -- all
+  `game: "eye"` = `surgery/games/eye_ops.gd`, site `eye` on the Hive's left eyeball).
+  `dissection._finish_eye` puts the eye in that vat when the flag is set, and only falls back to the
+  operator's hand (or the floor by the head) when there is no vat to put it in. Results `eye_cut`,
+  `eye_out` (the socket empties), `eye_removed` (the Hive flatlines); sedation, stirring and thrash
+  botches are unchanged and vitals are the eye's condition: at 0 the eye bursts. The last step puts
+  an `eye_hive` (value 120 x condition) in the operator's hand (`Dissection.last_operator`, else on
+  the specimen tray); the Hive dies on the table. (The earlier "Dissection" ailment -- skull cut,
+  brain harvest -- has been removed; see "Monster cases" below.)
 - **The eye minigames** (`eye_ops.gd`, reusable by the graft): cut = the saw-style violet marking ringed round the eye, left click lowers the scalpel, trace it and the cut opens along it, too fast or off the eye slips it out (click to lower again, cut kept, no damage); scoop = spoon on the cursor, click into the socket, circle it slowly (two turns), too fast slips; snip = eye resting over the socket seen from low, hold **W** (`Minigame.BUTTON_UP`, new bit in `buttons`) to pull it up and reveal the nerve, then click the nerve. ctx knobs: `no_fail` (never botches), `eye_kind`, `eye_radius`. Only a nick of the eyeball and a missed slice botch.
 - Tests: `tools/grafttest.tscn` (headless).
 

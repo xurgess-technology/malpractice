@@ -175,7 +175,7 @@ func _run() -> void:
 		"the Night Nurse refuses the needle, no vial used ('%s')" % game.message)
 	game.knock_down_monster(nurse, Vector3.ZERO, 30.0)   # a calm nurse, out of the way
 	nurse.global_position = o + Vector3(3.0, 0.0, 3.0)
-	var b := await _monster("sonographer", o + Vector3(12.0, 0, 12.0))
+	var b := await _monster("hive", o + Vector3(12.0, 0, 12.0))
 	var bid: int = b.monster_id
 	b.calm = 0.0
 	await _use_on(b)
@@ -285,7 +285,7 @@ func _run() -> void:
 	me.bot_interact = false
 	me.bot_aim_id = ""
 	await _frames(2)
-	_check(cb.dragging(me) == bid and me.aim_prompt.begins_with("Put the Sonographer down"), "dragging again; the prompt says put it down ('%s')" % me.aim_prompt)
+	_check(cb.dragging(me) == bid and me.aim_prompt.begins_with("Put the Hive down"), "dragging again; the prompt says put it down ('%s')" % me.aim_prompt)
 	me.bot_press += 1
 	await _frames(3)
 	_check(cb.dragging(me) < 0 and cb.is_sedated(b) and b.global_position.y - o.y < 0.3, "E away from a table puts it down, still sedated")
@@ -303,7 +303,7 @@ func _run() -> void:
 	_stand(tpos + tside, game.table_yaw_of(ti))
 	me.bot_aim_id = game.table_interact_id(ti)
 	await _frames(3)
-	_check(me.aim_prompt.begins_with("Strap the Sonographer") and me.aim_id == game.table_interact_id(ti), "a free patient table offers to strap it ('%s')" % me.aim_prompt)
+	_check(me.aim_prompt.begins_with("Strap the Hive") and me.aim_id == game.table_interact_id(ti), "a free patient table offers to strap it ('%s')" % me.aim_prompt)
 	var left: float = cb.sedation_left(b)
 	var n_cases: int = game.cases.size()
 	me.bot_press += 1
@@ -312,7 +312,7 @@ func _run() -> void:
 	var want_sed := lerpf(CombatScript.STRAP_SEDATION_MIN, 1.0, clampf(left / CombatScript.SEDATE_SECONDS, 0.0, 1.0))
 	_check(not c.is_empty() and game.cases.size() == n_cases + 1, "strapping adds a case on table %d" % ti)
 	if not c.is_empty():
-		_check(String(c.patient_id) == "sonographer" and String(c.ailment_id) == "dissection" and bool(c.get("monster", false)) and String(c.state) == "on_table" and int(c.table) == ti,
+		_check(String(c.patient_id) == "hive" and String(c.ailment_id) == "eye_extraction" and bool(c.get("monster", false)) and String(c.state) == "on_table" and int(c.table) == ti,
 			"the case is the monster: %s" % str(c))
 		var s := float(c.flags.get("sedation", -1.0))
 		_check(s >= 0.35 and s <= 1.0 and absf(s - want_sed) < 0.03, "flags.sedation from the sedation left (%.2f, expected %.2f)" % [s, want_sed])

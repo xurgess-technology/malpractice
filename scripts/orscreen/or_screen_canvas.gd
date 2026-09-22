@@ -122,7 +122,7 @@ func _draw_panel_wide(r: Rect2, p: Dictionary) -> void:
 	_beat_dot(Vector2(28 + nw + 34, vy + vh * 0.5), p, col, 12.0)
 	var ex := maxf(330.0, 28 + nw + 70)
 	_ecg(Rect2(ex, vy + 14, w - ex - 30, vh - 28), float(p.vitals), _rhythm(p), col, 5.0)
-	_monster_labels(Rect2(16, vy, w - 32, vh), p, 30)   # SWEEP 3 HOOK (dissection)
+	_monster_labels(Rect2(16, vy, w - 32, vh), p, 30)   # GRAFTING part one
 	_pill_note(Rect2(16, vy, w - 32, vh), p, 26)   # SWEEP 4A HOOK (pharmacy, chunk 3)
 	# Checklist
 	var y := vy + vh + 18.0
@@ -156,7 +156,7 @@ func _draw_panel_narrow(r: Rect2, p: Dictionary) -> void:
 	_beat_dot(Vector2(x + 16 + nw + 22, vy + vpx * 0.45), p, col, 8.0)
 	var ex := x + 16 + nw + 44
 	_ecg(Rect2(ex, vy + 8, x + w - 16 - ex, vpx - 6), float(p.vitals), _rhythm(p), col, 4.0)
-	_monster_labels(Rect2(x + 8, vy, w - 16, vpx + 10), p, 18 if third else 22)   # SWEEP 3 HOOK (dissection)
+	_monster_labels(Rect2(x + 8, vy, w - 16, vpx + 10), p, 18 if third else 22)   # GRAFTING part one
 	_pill_note(Rect2(x + 8, vy, w - 16, vpx + 10), p, 16 if third else 20)   # SWEEP 4A HOOK (pharmacy, chunk 3)
 	var y := vy + vpx + 22.0
 	var steps: Array = p.steps
@@ -185,13 +185,13 @@ func _header(r: Rect2, p: Dictionary, name_px: int, sub_px: int) -> void:
 	_txt(Vector2(x + 16, 24 + name_px + sub_px), _fit(ail, sub_px, w - 32), sub_px, AMBER)
 
 
-## SWEEP 3 HOOK (dissection): on a strapped monster's panel the big number is the brain's condition
-## (a "BRAIN" tag on it) and the top right of the box shows the sedation, amber while it stirs and
-## blinking red once it is awake.
+## GRAFTING part one: on a strapped monster's panel the big number is the eye's condition (an "EYE"
+## tag on it) and the top right of the box shows the sedation, amber while it stirs and blinking red
+## once it is awake.
 func _monster_labels(box: Rect2, p: Dictionary, px: int) -> void:
 	if not bool(p.get("monster", false)):
 		return
-	_txt(Vector2(box.position.x + 10, box.position.y + px + 2), "EYE" if bool(p.get("eye", false)) else "BRAIN", px, Color(TEXT, 0.7))
+	_txt(Vector2(box.position.x + 10, box.position.y + px + 2), "EYE", px, Color(TEXT, 0.7))
 	if String(p.state) != "on_table":
 		return
 	var s := float(p.get("sedation", 1.0))
@@ -383,10 +383,10 @@ func _status_line(at: Vector2, p: Dictionary, width: float, px: int) -> void:
 	var col := GREEN
 	match String(p.state):
 		"dead":
-			text = (("EYE BURST" if bool(p.get("eye", false)) else "BRAIN RUINED") if bool(p.get("monster", false)) else "FLATLINE") if _blink(1.0) else ""   # SWEEP 3 HOOK (dissection)
+			text = (("EYE BURST" if bool(p.get("monster", false)) else "FLATLINE")) if _blink(1.0) else ""
 			col = RED
 		"stable":
-			text = ("EYE OUT" if bool(p.get("eye", false)) else "BRAIN HARVESTED") if bool(p.get("monster", false)) else "STABLE"   # SWEEP 3 HOOK (dissection)
+			text = "EYE OUT" if bool(p.get("monster", false)) else "STABLE"
 		_:
 			if String(p.operator) != "":
 				text = "%s OPERATING  %d%%" % [String(p.operator).to_upper(), roundi(float(p.progress) * 100.0)]

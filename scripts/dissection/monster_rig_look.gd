@@ -1,8 +1,8 @@
 extends RefCounted
 ## How a strapped monster wears the walking monster's rig (`make_lying`): the fit on the OR table
 ## and the face of the openable head, copied from scripts/monsters/hive_look.gd so the one on
-## the table is the one from the halls (the stylized Hive and Sonographer are strapped down as their own
-## bodies instead: monster_builder.gd `_build_st`).
+## the table is the one from the halls (the stylized Hive is strapped down as its own body instead:
+## monster_builder.gd `_build_st`).
 ##
 ## Lying-root coordinates are make_lying's frame (along X, head -X, face up, unscaled). The model head
 ## frame is the walking look's head part: +Y up the head, +Z the face, X ear to ear, origin at the head
@@ -13,7 +13,7 @@ const Shapes := preload("res://scripts/monsters/shapes.gd")
 ## Per kind:
 ##   scale        the lying copy is shrunk this much to fit the 2 m table
 ##   offset       added after scaling (the copy's back sinks about 10 cm below its origin; legs rest at y 0)
-##   head_bone    where make_lying puts the head bone (lying root, unscaled; tools/dissectiontest checks it)
+##   head_bone    where make_lying puts the head bone (lying root, unscaled)
 ##   centre       the cranium's centre in the model head frame; radii (ear to ear, up, front) of the
 ##                one ellipsoid that replaces the look's skull pieces and is cut open
 ##   spread       degrees the arms lie out from the sides (the shaper's lying_spread)

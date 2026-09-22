@@ -78,7 +78,7 @@ All items are physical 3D objects: on shelves, in containers, in hands, on the O
 | Tourniquet | AM | no | red trauma bags (corridors, nurse stations); sometimes dropped |
 | Bone saw | AM | no | pegboards (maintenance, storage); sometimes leaning on a gurney |
 
-- **Loot** is what you find to sell at the furnace: five plain kinds (pill bottle, X-ray film, heart monitor, gold watch, portable ultrasound) and six trinkets (desk phone, laptop, defibrillator, reflex hammer, EpiPen, pulse oximeter), which sell too but are rarer and are meant to do one thing each (their jobs come later; see docs/ITEMS_AND_ICONS.md). Loot is scarce: 15 to 20 stacks a shift, about $1,000 in all, so most rooms hold nothing and a harvested brain is a real share of a shift's pay. Anything that isn't bulky can turn up in a container too.
+- **Loot** is what you find to sell at the furnace: five plain kinds (pill bottle, X-ray film, heart monitor, gold watch, portable ultrasound) and six trinkets (desk phone, laptop, defibrillator, reflex hammer, EpiPen, pulse oximeter), which sell too but are rarer and are meant to do one thing each (their jobs come later; see docs/ITEMS_AND_ICONS.md). Loot is scarce: 15 to 20 stacks a shift, about $1,000 in all, so most rooms hold nothing and a harvested Hive eyeball is a real share of a shift's pay. Anything that isn't bulky can turn up in a container too.
 - **Aim and press E** for everything: take items, open and close containers, put things on the OR's storage shelves, clock in, revive, operate.
 - **Two hands.** A batch fills one hand; picking up more of the same consumable merges into it. 1, 2 or the mouse wheel switch hands; G sets the selected stack down gently.
 - **Getting hit or shoved** drops both hands; fragile stacks lose about a third, never all of it.
@@ -133,8 +133,7 @@ The core choice in every fight: **kill it to be safe, or catch it to get paid.**
 
 - **Kill:** the bone saw is a weapon (left mouse while holding it). Hits stagger, a few hits kill. Every hit has a chance to snap the saw, which is also the saw the surgery needs. Swinging is loud. A killed monster pays nothing: organs are only worth anything harvested alive.
 - **Catch:** shove it (stunned), then jab it with anesthetic (left mouse while holding a vial) inside the stun window. It drops, sedated, for a while. Hold E to drag it, E on a free patient table to strap it down. Strapped monsters cannot hurt anyone.
-- **On the table:** sedation wears off, faster with noise (the saw is the loudest). Low sedation makes it stir (the operator's hand shakes); lower still it is awake and thrashing, which botches the work and damages the brain. Anyone can re-dose it with anesthetic from their hands (E at the table), but every dose works for less time than the last.
-- **Dissection:** saw open the skull, pull the brain out with the forceps. Botches cost brain condition instead of patient vitals. The finished monster dies on the table.
+- **On the table:** only a Hive can be strapped down (see Grafting: it is the only monster a surgeon operates on). Sedation wears off, faster with noise. Low sedation makes it stir (the operator's hand shakes); lower still it is awake and thrashing, which botches the work and damages the eye being taken. Anyone can re-dose it with anesthetic from their hands (E at the table), but every dose works for less time than the last.
 - **Brains spoil.** A harvested brain loses value quickly: run it to the crematorium (thrown into the furnace, the only sell point now) or to the break-room blender.
 - **The blender:** blend a brain and drink it to absorb that monster's knowledge. Per player, and lost on a game over along with the money. The ability it grants lands in the next empty slot of your 4-slot ability bar; its level still comes from these same points.
   - (Hive brains teach nothing any more: **Hive Eyes** comes from the graft, below.)
@@ -151,7 +150,7 @@ of: **Hive's eyeball**, **Zach's eyeball**.
 
 - **Take it out.** Strap a Hive to a table and run **Eyeball Extraction** on it with a scalpel and an
   eye spoon: cut round the eye, scoop it out, snip the optic nerve. One eye per Hive, and the Hive
-  dies on the table like any dissection.
+  dies on the table.
 - **Keep it.** A part spoils in a minute or two out in the open, clouding over and losing its value.
   A **specimen vat** stops the clock: a glass jar carried in both hands, put down on the lab benches
   or on the stand beside an OR table. A spoiled part cannot be grafted, only sold.

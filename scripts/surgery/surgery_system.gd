@@ -402,8 +402,8 @@ func _monitor(delta: float) -> void:
 
 # =============================================================================== minigame lifecycle
 
-## GRAFTING part one: the step `player` would begin. A strapped Hive at its first step takes the ailment
-## their tool asks for (scalpel: Eyeball Extraction; bone saw: Dissection), see Dissection.ailment_for.
+## GRAFTING part one: the step `player` would begin. A strapped Hive's only ailment is Eyeball
+## Extraction, see Dissection.ailment_for.
 func _step_for(player) -> Dictionary:
 	var c := _case()
 	var d = game.get("dissection") if game != null else null

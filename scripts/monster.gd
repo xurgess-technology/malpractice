@@ -167,7 +167,7 @@ static func display_name(monster_kind: String) -> String:
 	return "Sonographer"
 
 
-## A still copy lying on its back (monster_model.gd), for dissection bodies.
+## A still copy lying on its back (monster_model.gd), for a strapped monster's table body.
 static func make_lying(monster_kind: String) -> Node3D:
 	return Model.make_lying(monster_kind)
 

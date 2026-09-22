@@ -716,7 +716,7 @@ func _apply_request(sender: int, action: String, a: Dictionary) -> void:
 		"pocket":
 			_set_pocket(String(a.get("kind", "")))   # POCKETS HOOK
 		"strap_monster":
-			# SWEEP 3 HOOK (dissection): a Hive or Sonographer strapped to a patient table.
+			# GRAFTING part one: a Hive strapped to a patient table.
 			game.dissection.dev_strap(String(a.get("kind", "hive")), float(a.get("sedation", 1.0)), int(a.get("table", -1)))
 		"extra_patient":
 			game.dev_extra_patient()

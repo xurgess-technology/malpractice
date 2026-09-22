@@ -3,6 +3,12 @@
 Everything that changes in **Malpractice**, newest first. One minor version per day of work, one
 patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog).
 
+**2026-09-22 (0.10.x)**
+
+- **0.10.0**: Dissection is gone
+    - Removed: The monster-dissection cases -- forceps brain harvest and the skull saw -- and everything that only existed for them: the dissection minigame files, the dev-panel monster-strap flow for it, its headless test and nettest scenario, and the Sonographer's old strapped-patient identity. The Hive's Eyeball Extraction is now the only monster case a strapped patient can have.
+    - Note: The shared gunshot-forceps and limb-amputation-saw minigames are untouched. The Brains hive-AI/loot system (unrelated, same word) is untouched, though its brain-item supply chain ran through the removed dissection code and has no live source left -- matches the removal already planned in docs/GRAFTING.md.
+
 **2026-09-21 (0.9.x)**
 
 - **0.9.2**: DODGE!, rebuilt: fly the bullet out with the lights on

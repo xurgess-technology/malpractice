@@ -32,7 +32,7 @@ extends "res://scripts/surgery/minigame.gd"
 ##          grab {"eye_seated": true}, stitch {"eye_stitched": true}.
 
 ## GRAFTING chunk C: "Seat the new eye with forceps" is its own game, built and driven by this child
-## when ctx.variant is "grab" (the same shape as forceps.gd handing "brain" to brain_forceps.gd).
+## when ctx.variant is "grab".
 const SeatScript := preload("res://scripts/grafting/eye_seat.gd")
 var _seat: Node3D = null
 

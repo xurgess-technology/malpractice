@@ -333,7 +333,7 @@ func _build() -> void:
 	# ---- patient
 	_section(col, "Patient")
 	var p1 := _row(col)
-	var pids: Array = Procedures.human_patients()  # SWEEP 3 HOOK (dissection): monsters strap below
+	var pids: Array = Procedures.human_patients()  # GRAFTING part one: the Hive straps below
 	# downed hook: stitches is for players only. PANEL TESTBED: dev_ailments adds the test-only
 	# procedures (Deep laceration), which a shift never rolls but the panel is tried out with.
 	var aids: Array = Procedures.dev_ailments()
@@ -361,10 +361,9 @@ func _build() -> void:
 	_c["vitals_label"] = _label(p3, "100", 13, ACCENT)
 	(_c["vitals_label"] as Label).custom_minimum_size.x = 40
 	vit.value_changed.connect(func(v): (_c["vitals_label"] as Label).text = "%d" % int(v))
-	# SWEEP 3 HOOK (dissection): strap a monster to a patient table, sedated or already waking.
+	# GRAFTING part one: strap a Hive to a patient table, sedated or already waking.
 	var pm := _row(col)
 	_button(pm, "Strap Hive", func(): _req("strap_monster", {"kind": "hive"}))
-	_button(pm, "Strap Sonographer", func(): _req("strap_monster", {"kind": "sonographer"}))
 	_button(pm, "...waking", func(): _req("strap_monster", {"kind": "hive", "sedation": 0.4}))
 	var p4 := _row(col)
 	_button(p4, "Stock shelf", func(): _req("stock_shelf"))

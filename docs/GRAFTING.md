@@ -58,8 +58,8 @@ from it. The surgeon's own eye goes into the vat and can be swapped back in or s
   anesthetic: the surgeon is simply awake, which is the joke.
 - **Extraction steps (on a Hive):** 1. Scalpel: cut around the eye. 2. Eye spoon: scoop it out.
   3. Scalpel: snip the optic nerve. The usual monster-table rules apply: sedation wears off,
-  stirring shakes the operator's hand, and botches damage the eye the way they damage a brain
-  today. Enough damage bursts it. One eye per Hive; the Hive dies on the table, like a dissection.
+  stirring shakes the operator's hand, and botches damage the eye. Enough damage bursts it. One eye
+  per Hive; the Hive dies on the table.
 - **Getting up:** the strapped surgeon can hold a key to get up **until the scoop** (step 2).
   After that they're committed until the graft is finished.
 - **Any surgeon eye fits any surgeon.** You can end up with a teammate's eye; the label says whose.

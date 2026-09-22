@@ -211,7 +211,7 @@ const VatsScript := preload("res://scripts/grafting/vats.gd")
 const GraftsScript := preload("res://scripts/grafting/grafts.gd")
 var sono_echo: Node = null    # the Sonographer's echo: the fan, the imaging flash, the deafen squeal
 var combat: Node = null       # bone saw swings, anesthetic jabs, dragging and strapping monsters
-var dissection: Node = null   # monster cases on the patient tables: sedation, re-dosing, the brain
+var dissection: Node = null   # monster cases on the patient tables: sedation and re-dosing the Hive
 var _step_operator := 0     # host: who finished the step that is finishing the case (only inside surgery_step_done)
 var vats: Node = null         # GRAFTING part one: specimen vats, eye spoilage (scripts/grafting/vats.gd)
 var grafts: Node = null       # GRAFTING chunk C: Eyeball Grafting on a strapped surgeon (scripts/grafting/grafts.gd)
@@ -286,7 +286,7 @@ func _ready() -> void:
 	or_screen.name = "ORScreen"
 	add_child(or_screen)
 	or_screen.setup(self)
-	# SWEEP 3 HOOK: fighting and capturing monsters, dissection on the patient tables, brains and
+	# SWEEP 3 HOOK: fighting and capturing monsters, monster cases on the patient tables, brains and
 	# the abilities they teach. Same path on every machine.
 	combat = CombatScript.new()
 	combat.name = "Combat"
@@ -1076,11 +1076,11 @@ func _table_prompt(p, table_index: int) -> String:
 				return sp
 			return grafts.empty_table_prompt(p, table_index)   # GRAFTING chunk C: nobody strapped down
 		return ""
-	# Patient exits: a body waiting for the furnace (a patient or a dissected monster).
+	# Patient exits: a body waiting for the furnace (a patient or a strapped monster).
 	if p != null and corpses.is_corpse(c):
 		return corpses.lift_prompt(p, c)
 	if dissection.owns_case(c):
-		return dissection.table_prompt(p, table_index)   # SWEEP 3 HOOK (dissection): re-dose / sedation
+		return dissection.table_prompt(p, table_index)   # re-dose / sedation on a strapped monster
 	var pname: String = Procedures.patient(String(c.patient_id)).get("name", "The patient")
 	if String(c.state) == "stable":
 		return "!%s is stable." % pname
@@ -1936,9 +1936,9 @@ func finish_case(id: int, won: bool) -> void:
 			s.end_current()
 	_apply_cases_locally()
 	if dissection.owns_case(c):
-		# SWEEP 3 HOOK (dissection): a strapped monster: the brain is handed over (or ruined) with its
-		# own wording and no paycheck sting; the case clears itself a few seconds later.
-		dissection.last_operator = operated_by if operated_by != 0 else _step_operator   # GRAFTING part one: the extracted eye goes in their hand
+		# GRAFTING part one: a strapped monster: the eye is handed over (or ruined) with its own
+		# wording and no paycheck sting; the case clears itself a few seconds later.
+		dissection.last_operator = operated_by if operated_by != 0 else _step_operator   # the extracted eye goes in their hand
 		dissection.on_case_finished(c, won)
 		loop.on_case_finished(c)
 		return
@@ -2067,9 +2067,7 @@ func _apply_cases_locally() -> void:
 			_free_body(t)
 	for t in want.keys():
 		var c: Dictionary = want[t]
-		# GRAFTING part one: a strapped Hive turning from dissection into eye extraction keeps its body.
-		var body_ailment: String = "dissection" if String(c.ailment_id) == "eye_extraction" else String(c.ailment_id)
-		var key := "%d|%s|%s" % [int(c.get("id", 0)), c.patient_id, body_ailment]
+		var key := "%d|%s|%s" % [int(c.get("id", 0)), c.patient_id, String(c.ailment_id)]
 		var e: Dictionary = _bodies.get(t, {})
 		if String(e.get("key", "")) != key:
 			_free_body(t)

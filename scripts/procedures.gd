@@ -35,10 +35,10 @@ const PATIENTS := {
 			"laceration": "Came off the rocks at speed. Opened up along one side and is very calm about it.",
 		},
 	},
-	# dissection (sweep 3): strapped monsters. `monster: true` keeps them out of roll(), the dev
-	# panel's patient list and anything else that means a human patient (human_patients()). Their
-	# bodies are built by scripts/dissection/monster_builder.gd; the only ailment they take is
-	# `dissection`.
+	# GRAFTING part one (docs/GRAFTING.md): a strapped Hive. `monster: true` keeps it out of roll(),
+	# the dev panel's patient list and anything else that means a human patient (human_patients()).
+	# Its body is built by scripts/dissection/monster_builder.gd; the only ailment it takes is
+	# `eye_extraction`.
 	"hive": {
 		"name": "The Hive",
 		"full_name": "Hive, unregistered",
@@ -48,19 +48,7 @@ const PATIENTS := {
 		"limb_name": "",
 		"limb_radius_m": 0.05,
 		"blurbs": {
-			"dissection": "Came in through the front door and never left. Still in the gown.",
-		},
-	},
-	"sonographer": {
-		"name": "The Sonographer",
-		"full_name": "Sonographer, unregistered",
-		"body": "sonographer",
-		"monster": true,
-		"weight_kg": 88.0,
-		"limb_name": "",
-		"limb_radius_m": 0.05,
-		"blurbs": {
-			"dissection": "Walked out of the ultrasound room mid-scan. The wand is still fitted to its wrist.",
+			"eye_extraction": "Came in through the front door and never left. Still in the gown.",
 		},
 	},
 }
@@ -126,20 +114,9 @@ const AILMENTS := {
 			{"id": "stitch", "label": "Stitch it in", "item": "suture_kit", "uses": 1, "game": "eye", "variant": "stitch", "site": "eye"},
 		],
 	},
-	# dissection (sweep 3): a strapped monster on a patient table. `monster_only` keeps it out of
-	# roll() and patient_ailments(). The saw and forceps steps play their "skull" / "brain" variants.
-	"dissection": {
-		"name": "Dissection",
-		"code": "DX",
-		"monster_only": true,
-		"steps": [
-			{"id": "open", "label": "Saw open the skull", "item": "bone_saw", "uses": 0, "game": "saw", "variant": "skull", "site": "skull"},
-			{"id": "harvest", "label": "Pull out the brain", "item": "forceps", "uses": 0, "game": "forceps", "variant": "brain", "site": "brain"},
-		],
-	},
-	# GRAFTING part one (docs/GRAFTING.md): the other thing a strapped Hive can have done to it. A
-	# strapped Hive starts as "dissection"; holding the scalpel at the first step makes it this
-	# instead (Dissection.ailment_for). The three steps play the eye minigame's variants.
+	# GRAFTING part one (docs/GRAFTING.md): the thing a strapped Hive has done to it (Dissection is
+	# the monster case system; a strapped Hive's only ailment is this one). The three steps play the
+	# eye minigame's variants.
 	"eye_extraction": {
 		"name": "Eyeball Extraction",
 		"code": "EX",
@@ -160,11 +137,9 @@ const MINIGAME_SCRIPTS := {
 	# 2026-09-21: the Anesthetic Injection, the only sedation game (docs/ARCADE_SURGERY.md 5.1). It is
 	# an arcade panel game with no legacy twin, so it has no ARCADE_* entry and no switch.
 	"anesthetic": "res://scripts/surgery/arcade/inject_arcade.gd",
-	# 2026-09-21: DODGE!, the only bullet extraction (docs/ARCADE_SURGERY.md 5.2). No legacy twin and no
-	# switch. The monster table's brain harvest is a different game and keeps the legacy forceps script
-	# through its own "forceps:brain" key below (a "<game>:<variant>" key here wins over "<game>").
+	# 2026-09-21: DODGE!, the only bullet extraction (docs/ARCADE_SURGERY.md 5.2). No legacy twin and
+	# no switch.
 	"forceps": "res://scripts/surgery/arcade/dodge_arcade.gd",
-	"forceps:brain": "res://scripts/surgery/games/forceps.gd",
 	"tourniquet": "res://scripts/surgery/games/tourniquet.gd",
 	"saw": "res://scripts/surgery/games/saw.gd",
 	"gauze": "res://scripts/surgery/games/gauze.gd",
@@ -174,8 +149,7 @@ const MINIGAME_SCRIPTS := {
 }
 
 ## ARCADE (docs/ARCADE_SURGERY.md): the arcade rebuild of a step, played on the raised panel. Keyed
-## by "<game>" or "<game>:<variant>"; the variant key wins when it exists, so flipping "saw" moves
-## the limb to the arcade version and leaves the monster table's "saw:skull" on the legacy one.
+## by "<game>" or "<game>:<variant>"; the variant key wins when it exists.
 const ARCADE_SCRIPTS := {
 	"gauze:pack": "res://scripts/surgery/arcade/pack_wrap_arcade.gd",   # WHACK! then WRAP!
 	"gauze:stump": "res://scripts/surgery/arcade/wrap_stump_arcade.gd", # WRAP! (the same one)
@@ -194,14 +168,12 @@ const ARCADE_SCRIPTS := {
 ## flip them at runtime (host-authoritative: the host broadcasts, so every machine agrees).
 ## A `static var` so the lab, the warmup and the headless tests can set it without a Game.
 ##
-## A key is "<game>" or "<game>:<variant>"; the variant key wins where it exists, which is how the
-## monster table keeps the legacy saw and brain forceps while the patient tables move over.
+## A key is "<game>" or "<game>:<variant>"; the variant key wins where it exists.
 static var ARCADE_ENABLED := {
 	"gauze:pack": true,
 	"gauze:stump": true,
 	"tourniquet": true,
 	"saw": false,
-	"saw:skull": false,       # the monster table's skull cut: legacy until it gets its own
 	"eye:cut": true,
 	"eye:scoop": true,
 	"eye:snip": true,
@@ -244,7 +216,7 @@ static func roll(seed_value: int, shift: int) -> Dictionary:
 
 
 ## Ailments a patient case can have, sorted (everything but the player-only ones such as stitches,
-## the monster-only dissection and the test-only ones a shift never rolls).
+## the monster-only eye_extraction and the test-only ones a shift never rolls).
 static func patient_ailments() -> Array:
 	var out := []
 	for id in AILMENTS.keys():
@@ -280,12 +252,12 @@ static func is_player_only(ailment_id: String) -> bool:
 	return bool(AILMENTS.get(ailment_id, {}).get("player_only", false))
 
 
-## dissection (sweep 3): the ailment only a strapped monster has.
+## GRAFTING part one: the ailment only a strapped monster has.
 static func is_monster_only(ailment_id: String) -> bool:
 	return bool(AILMENTS.get(ailment_id, {}).get("monster_only", false))
 
 
-## dissection (sweep 3): a monster patient (hive, sonographer).
+## GRAFTING part one: a monster patient (the Hive).
 static func is_monster(patient_id: String) -> bool:
 	return bool(PATIENTS.get(patient_id, {}).get("monster", false))
 
