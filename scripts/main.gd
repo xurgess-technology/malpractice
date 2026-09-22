@@ -700,6 +700,8 @@ func _process(_delta: float) -> void:
 	if _fps_label.visible:
 		_fps_label.text = "%d fps  %s" % [Engine.get_frames_per_second(), QUALITY_NAMES[quality]]
 	_update_mouse()
+	if char_sheet != null:
+		hud.sheet_open = char_sheet.open   # TAB SHEET: the bars stand down while the sheet is up
 	if game.phase != Game.Phase.MENU and shift_fax.has_reason("join"):
 		shift_fax.end("join")   # the host's hospital is built here; the fax goes once frames settle
 	_invite_button.visible = game.paused and Net.backend == "steam" and game.phase != Game.Phase.MENU

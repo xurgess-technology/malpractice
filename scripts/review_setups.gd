@@ -88,6 +88,9 @@ const SETUPS := {
 	# HIT FEEDBACK (2026-09-22): bone saws in hand, two Hives coming for you, and Dr. Botsworth
 	# standing there to saw as well. A landed hit flashes its target red and knocks it back.
 	"hit": {"seed": 4242, "stage": "_hit"},
+	# TAB SHEET (2026-09-22): hit Tab. Both abilities at level 2, rocket boots on and a mixed
+	# handful, so all three rows have something in them and the boots have an Unequip to press.
+	"sheet": {"seed": 4242, "stage": "_sheet"},
 }
 
 
@@ -282,6 +285,20 @@ static func _icons(game: Game) -> void:
 	game.local_player().selected = 0
 	floor_item(game, "heart_monitor", t + Vector3(0.1, 0, 2.3), 1, 200)
 	floor_item(game, "defibrillator", t + Vector3(1.1, 0, 2.3), 1, 300)
+
+
+## TAB SHEET (2026-09-22): open floor by the OR, hands part full, both abilities at level 2 and
+## rocket boots already on. Press Tab: three rows of four, hover an ability for its real numbers,
+## press Unequip and watch the boots land at your feet (then walk over them to put them back on).
+static func _sheet(game: Game) -> void:
+	var t: Vector3 = game.table_pos()
+	place(game, t + Vector3(0.6, 0, 4.0), t + Vector3(0, 1.0, 0))
+	clear_hands(game)
+	give(game, "anesthetic", 3)
+	give(game, "gold_watch", 1, 90)
+	give_abilities(game, 2)
+	game.local_player().put_on_boots()
+	game.local_player().selected = 0
 
 
 ## ITEMS (docs/ITEMS_AND_ICONS.md chunk A): a normal shift; you start in the room with the most loot near

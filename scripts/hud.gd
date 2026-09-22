@@ -31,6 +31,9 @@ var _fuel_show: float = 0.0
 ## 0 = Alt not held (abilities small top-left, items at full size); 1 = Alt held (abilities fill
 ## the bar, items shrink to a small top-left row). ~0.12 s each way per docs/SWEEP4A.md.
 var _alt_t: float = 0.0
+## TAB SHEET: main.gd sets this while the character sheet is up, and the item and ability bars
+## stand down (the sheet is showing the same two rows, bigger).
+var sheet_open: bool = false
 ## Ability id -> world_time its first-ability card should stop showing itself, and which ids have
 ## already had their card (so it only shows once per id per session).
 var _card_until: Dictionary = {}
@@ -87,8 +90,11 @@ func _draw() -> void:
 		_draw_crosshair(w, h)
 		_draw_prompt(w, h, me)
 	if me != null and me.alive and not in_surgery:
-		_draw_hands(w, h, me)
-		_draw_ability_bar(w, h, me)   # SWEEP 4A HOOK (controls)
+		# TAB SHEET: the character sheet shows these same two rows, bigger. Drawing both at once is
+		# the same information twice, so the bars stand down while it is up. Health and messages stay.
+		if not sheet_open:
+			_draw_hands(w, h, me)
+			_draw_ability_bar(w, h, me)   # SWEEP 4A HOOK (controls)
 		_draw_health(h, me)
 	if me != null and me.alive and not game.paused and not in_surgery:
 		_draw_scan_ring(w, h, me)   # SWEEP 4A HOOK (scanner)

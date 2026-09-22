@@ -19,9 +19,11 @@ extends CanvasLayer
 ## Unequipping is host-authoritative: the sheet only bumps `Player.unequip_count`, and
 ## `Game.player_unequip` decides (scripts/game.gd "TAB SHEET").
 
-const SLOT := 64.0
-const GAP := 14.0
-const ROW_GAP := 26.0
+const SLOT := 72.0
+const GAP := 16.0
+## Between the bottom of one row's slots and the top of the next. Big, because a row carries a
+## caption under every slot ("Alt+2", "Gloves") and its own heading above it.
+const ROW_GAP := 62.0
 
 const PAPER := Color("f0e6c8")
 const DIM := Color("8a9aa0")
@@ -141,7 +143,7 @@ func _rows(w: float, h: float) -> Array:
 	var span := SLOT * 4.0 + GAP * 3.0
 	var x0 := w * 0.5 - span * 0.5
 	var total := SLOT * 3.0 + ROW_GAP * 2.0
-	var y0 := h * 0.5 - total * 0.5 + 18.0
+	var y0 := h * 0.5 - total * 0.5
 	var out := []
 	for r in 3:
 		var rects := []
@@ -193,19 +195,20 @@ func _draw_sheet() -> void:
 	_text(Vector2(left, top - 36.0), "ST. DOE'S GENERAL  -  PERSONNEL", 11, DIM)
 	_panel.draw_line(Vector2(left, top - 26.0), Vector2(right, top - 26.0), Color(PAPER, 0.35), 1.0)
 
+	# Up on the header line, not at the foot: the bottom of the screen is the message banner's.
+	_text(Vector2(left, top - 78.0), "Tab closes. The shift does not stop for this.", 11, Color(DIM, 0.8),
+		HORIZONTAL_ALIGNMENT_RIGHT, right - left)
+
 	_draw_hands_row(me, rows[0])
 	_draw_ability_row(me, rows[1])
 	_draw_worn_row(me, rows[2])
-
-	var bottom: float = (rows[2][3] as Rect2).end.y
-	_text(Vector2(left, bottom + 44.0), "Tab closes. The shift does not stop for this.", 11, Color(DIM, 0.8))
 	_draw_hover_card(w, h)
 
 
 ## The label down the left of a row.
 func _row_label(rects: Array, s: String) -> void:
 	var r: Rect2 = rects[0]
-	_text(Vector2(r.position.x, r.position.y - 8.0), s, 12, Color(PAPER, 0.7))
+	_text(Vector2(r.position.x, r.position.y - 10.0), s, 13, Color(PAPER, 0.75))
 
 
 ## Row 1: the same four hand slots the HUD's item bar shows, at rest (no Alt blend, no selection
@@ -298,7 +301,7 @@ func _draw_worn_row(me, rects: Array) -> void:
 ## rule is on screen rather than discovered by pressing.
 func _draw_unequip_button(r: Rect2, me) -> void:
 	var reason := unequip_reason(me)
-	var box := Rect2(r.position.x - 6.0, r.end.y + 22.0, r.size.x + 12.0, 22.0)
+	var box := Rect2(r.position.x - 6.0, r.end.y + 24.0, r.size.x + 12.0, 22.0)
 	var live := reason == ""
 	var hot: bool = live and box.has_point(_panel.get_local_mouse_position())
 	var sb := StyleBoxFlat.new()
@@ -380,10 +383,16 @@ func _draw_hover_card(w: float, h: float) -> void:
 	var body: Array = lines.slice(1)
 	var cw := 300.0
 	var ch := 40.0 + body.size() * 17.0
+	# A fixed column to the right of the rows, not floating off the slot: a card that moves with the
+	# pointer ends up sitting on top of the slots you were about to read.
 	var at: Rect2 = _hover.rect
-	var x := clampf(at.end.x + 14.0, 8.0, w - cw - 8.0)
+	var rows := _rows(w, h)
+	var x := clampf((rows[0][3] as Rect2).end.x + 34.0, 8.0, w - cw - 8.0)
 	var y := clampf(at.get_center().y - ch * 0.5, 8.0, h - ch - 8.0)
 	var box := Rect2(x, y, cw, ch)
+	# A leader from the slot to the card, so a fixed column still reads as "this one".
+	_panel.draw_line(Vector2(at.end.x + 4.0, at.get_center().y), Vector2(box.position.x, box.get_center().y),
+		Color(PAPER, 0.3), 1.0)
 	_panel.draw_rect(box, Color(0.02, 0.03, 0.04, 0.95))
 	_panel.draw_rect(box, Color(PAPER, 0.55), false, 1.5)
 	_text(Vector2(box.position.x + 12.0, box.position.y + 24.0), title, 16, PAPER)
