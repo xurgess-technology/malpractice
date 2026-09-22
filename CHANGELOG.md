@@ -5,6 +5,20 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.21**: The seal's flipper is a hand, and it's nearly all bone
+    - Changed: A seal's fore-flipper is a webbed paw, so SAW! now gives it five thick tapering digits with webbing between them instead of a few thin splines. It's 66% bone against the arm's 40%: narrower, so you cross it quicker, but there's almost nowhere to put the blade that isn't bone.
+    - Fixed: The report card could call your stump ragged while stamping it CLEAN.
+- **0.10.20**: Aim at the grate, not the hole
+    - Fixed: The crematorium's hatch is opened and shut by aiming at the grate itself, which now moves when the grate does. You used to be aiming at the hole in the wall the whole time, whether the grate was over it or not.
+- **0.10.19**: Brains are off the menu
+    - Removed: Brains, all of it. No harvesting them, no watching them rot in your hands, no selling them at the dumpster, and no break-room blender to tip them into. The Hive and the Sonographer keep their heads.
+    - Changed: You still get abilities -- you earn them by grafting now instead. Graft a Hive's eye and Hive Eyes comes with it; lose the eye and you lose the sight.
+    - Note: Echo has nothing to come from until the Sonographer's trachea graft is built. It works fine, there's just no way to get it yet.
+- **0.10.18**: SAW!, rebuilt: the limb is meat, not a progress bar
+    - Changed: SAW! is Pong where the ball is a bone saw and the arm doesn't bounce it back. Every pass strips a layer off whatever the blade actually crosses, and it's off when a gap opens all the way through -- so a careless run leaves a visibly chewed stump instead of a worse number.
+    - Changed: Bone doesn't take more passes, it fights your hands: the blade slows and chatters off its line while it's riding a shaft.
+    - Changed: Human arm or seal flipper, on a toggle. Miss the paddle and the saw gets past you -- that's the only way to botch it.
+    - Note: Still behind the dev panel's Arcade surgery toggle until you've played it.
 - **0.10.17**: Everything on the floor is wearing a little lamp
     - Changed: A dropped item now floats inside a soft ball of light that breathes slowly, so you can tell what's lying in a dark corridor at a glance. The colour tells you what it is: teal for supplies, gold for loot, red for organs, violet for pharmacy stock, green for the big two-handed things.
     - Changed: It's cheaper than the glow it replaces, which was redrawing the item's own model up to four times over.

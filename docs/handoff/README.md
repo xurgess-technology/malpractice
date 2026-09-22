@@ -12,15 +12,14 @@ machine run `tools\slots.bat` to make them. Every branch below is already merged
 | 0.6.10 | Eyeball Extraction, vats | `graft-extract` | Approved | (in CHANGELOG) |
 | 0.6.11 | The icon item bar, icons in the ability bar / database / OR | `icon-bar` | **Not approved.** He had fixes in (slot overlap, name flash, slower pop) but hadn't re-reviewed | [icon-bar.md](icon-bar.md) |
 | 0.6.12 | Loot cut to 11 kinds, EpiPen, pulse oximeter, rooms and pay rebalanced | `items-cut` | **Not approved** (his tweaks were done, he hadn't looked again) | [items-cut.md](items-cut.md) |
-| 0.6.13 | Eyeball Grafting: vat stands, the graft, the eye swap and glow, Hive Eyes only from the graft | `graft-surgery` | **Never played by Zach** | [graft-surgery.md](graft-surgery.md) |
+| 0.6.13 | Eyeball Grafting: vat stands, the graft, the eye swap and glow, Hive Eyes from the graft | `graft-surgery` | **Never played by Zach** | [graft-surgery.md](graft-surgery.md) |
 | (no entry) | The Sonographer model: stretching neck, probe hand, gel skin, tattered coat, the look interface. **Not in the game yet**: nothing hunts with it | `sono-model` | Seven fixes made, **not re-reviewed**; the echo burst was never seen live | [sono-model.md](sono-model.md) |
 
 ## Tests
 
 Run after the merges (see docs/FAILING_TESTS.md for what already fails): grafttest, straptest,
-downedtest, braintest, dissectiontest, hudtest, inventorytest, databasetest, controlstest, loottest,
-monster_lab, the nettest `graft` scenario: all pass. `braintest` was edited: a Hive brain is now
-refused at the blender (Hive Eyes come from the graft). **Not run since the merges:** orscreentest,
+downedtest, dissectiontest, hudtest, inventorytest, databasetest, controlstest, loottest,
+monster_lab, the nettest `graft` scenario: all pass. **Not run since the merges:** orscreentest,
 pockettest, looptest, doortest, mapcheck, the playtest shifts, the other nettest scenarios: the
 full sweep is still owed. devtest still has its one known failure.
 

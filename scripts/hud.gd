@@ -73,8 +73,8 @@ func _process(delta: float) -> void:
 	var alt_held: bool = Input.is_action_pressed("ability_alt")
 	_alt_t = move_toward(_alt_t, 1.0 if alt_held else 0.0, delta / 0.12)
 	# SWEEP 4A HOOK: the first time an ability lands in a slot, a short card for it.
-	if me != null and game.brains != null:
-		for id in (game.brains.slots_for(me.peer_id) as Array):
+	if me != null and game.abilities != null:
+		for id in (game.abilities.slots_for(me.peer_id) as Array):
 			if String(id) != "" and not _card_seen.has(id):
 				_card_seen[id] = true
 				_card_until[id] = _t + 5.0
@@ -491,7 +491,7 @@ func _draw_ring(r: Rect2, f: float, col: Color) -> void:
 
 
 ## How fresh a body part in `s` is: {frac: 1 fresh .. 0 gone, spoiled: bool}, or {} for anything that
-## does not spoil. Eyes and brains come from their own systems; any other kind can carry the numbers in
+## does not spoil. Eyes come from their own system; any other kind can carry the numbers in
 ## its stack as `fresh` (0..1) and `spoiled` (the seam grafting's other parts use).
 func _spoil_of(kind: String, s: Dictionary) -> Dictionary:
 	if game == null:
@@ -499,9 +499,6 @@ func _spoil_of(kind: String, s: Dictionary) -> Dictionary:
 	if Eyes.is_eye(kind) and game.get("vats") != null:
 		var f: float = game.vats.eye_factor(s)
 		return {"frac": 1.0 - Eyes.rot_of(f), "spoiled": Eyes.is_spoiled_factor(f)}
-	if game.brains != null and game.brains.is_brain(kind):
-		var f2: float = game.brains.factor_of(s)
-		return {"frac": clampf((f2 - game.brains.MIN_FACTOR) / (1.0 - game.brains.MIN_FACTOR), 0.0, 1.0), "spoiled": f2 < game.brains.ROTTEN_FACTOR}
 	if s.has("fresh"):
 		return {"frac": float(s.fresh), "spoiled": bool(s.get("spoiled", float(s.fresh) <= 0.0))}
 	return {}
@@ -596,7 +593,7 @@ func _draw_pops(w: float, h: float) -> void:
 ## cooldown sweep (now a radial arc instead of a bottom bar), level pips, a cost tag, the key hint,
 ## and (Alt held) the ability's name and, when it cannot fire, why.
 func _draw_ability_bar(w: float, h: float, me) -> void:
-	var b := game.brains
+	var b := game.abilities
 	if b == null:
 		return
 	drawn.append("abilities")
@@ -725,7 +722,7 @@ func _slot_reason(me, id: String, cd: float) -> String:
 	if id == "hive_in" and (me.carrying != 0 or me.operating):
 		return "Hands busy"
 	if id == "hive_in" and not me.get("hive_view"):
-		var b = game.brains
+		var b = game.abilities
 		var lvl: int = b.level(me.peer_id, "hive")
 		if b.nearest_hive(me, b.hive_range(lvl)) == null:
 			return "No Hive in range"
@@ -861,9 +858,6 @@ func _draw_holds(w: float, h: float) -> void:
 		var full: float = Game.TABLE_UP_HOLD if me.on_table else (Game.TABLE_STRAP_HOLD if strapping else Game.CARRY_HOLD)
 		progress = clampf(me.carry_hold / full, 0.0, 1.0)
 		label = "GETTING UP" if me.on_table else ("STRAPPING IN" if strapping else "LIFTING")
-	elif me != null and game.brains != null and game.brains.blend_progress(me.peer_id) > 0.0:   # SWEEP 3 HOOK (brains)
-		progress = game.brains.blend_progress(me.peer_id)
-		label = "BLENDING"
 	if progress <= 0.0:
 		return
 	drawn.append("hold")

@@ -241,8 +241,8 @@ static func give(game: Game, kind: String, count := 1, value := 0, extra := {}) 
 ## Both abilities (Hive Eyes and Echo) at the given level.
 static func give_abilities(game: Game, level := 2) -> void:
 	var p = game.local_player()
-	game.brains.set_level(p.peer_id, "echo", level)
-	game.brains.set_level(p.peer_id, "hive_in", level)
+	game.abilities.set_level(p.peer_id, "echo", level)
+	game.abilities.set_level(p.peer_id, "hive_in", level)
 	# No "New ability" cards in the way: they are for a first play.
 	var hud = game.get_tree().get_first_node_in_group("hud")
 	if hud != null:
@@ -271,8 +271,8 @@ static func drop_at(game: Game, kind: String, pos: Vector3, count := 1, value :=
 ## ICONS (docs/ITEMS_AND_ICONS.md chunk C): in the operating room facing the table (patient, monitors,
 ## lamp all in view), hands holding a stack, a body part that is starting to spoil, a used-up trinket and
 ## a small loot item, with a heart monitor and a defibrillator on the floor in front to pick up (bulky,
-## wide slot), and both abilities. Switch slots, hold Alt, pick things up; the database is in the break
-## room, a walk away.
+## wide slot), and both abilities. Switch slots, hold Alt, pick things up; the database is in the
+## break room, a walk away.
 static func _icons(game: Game) -> void:
 	var t: Vector3 = game.table_pos()
 	place(game, t + Vector3(0.6, 0, 3.4), t + Vector3(0, 1.0, 0))

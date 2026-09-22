@@ -20,6 +20,7 @@ const PartScript := preload("res://scripts/grafting/graft_eye.gd")
 const LootTable := preload("res://scripts/economy/loot_table.gd")
 
 ## Part kind -> the ability grafting it grants at level 1. Removing the part takes the ability away.
+## With brains gone this is the only way to earn an ability (docs/backlog/ABILITIES_REMOVED.md).
 const PART_ABILITY := {"eye_hive": "hive_in"}
 ## The eyeball's radius on a surgeon (the minigames' work plane).
 const EYE_RADIUS := 0.0135
@@ -59,7 +60,7 @@ func has_graft(p) -> bool:
 	return p != null and graft_of(int(p.peer_id)) != ""
 
 
-## Host: game over. Grafts are lost, like abilities from brains.
+## Host: game over. Grafts are lost with the money, and the abilities they grant go with them.
 func on_reset() -> void:
 	_graft.clear()
 	_lock.clear()
@@ -206,11 +207,11 @@ func apply(peer_id: int, kind: String) -> void:
 	var p = game.players.get(peer_id)
 	# The ability the part teaches. It comes with the graft and goes with it.
 	if had != "" and had != kind and PART_ABILITY.has(had):
-		game.brains.clear_ability(peer_id, String(PART_ABILITY[had]))
+		game.abilities.clear_ability(peer_id, String(PART_ABILITY[had]))
 		if p != null:
 			game.tell(p, "The socket is your own again. Hive Eyes is gone.", 4.0)
 	if kind != "" and kind != had and PART_ABILITY.has(kind):
-		game.brains.set_level(peer_id, String(PART_ABILITY[kind]), 1)
+		game.abilities.set_level(peer_id, String(PART_ABILITY[kind]), 1)
 		if p != null:
 			game.tell(p, "The Hive eye settles in and starts to see. Hive Eyes 1.", 5.0)
 
