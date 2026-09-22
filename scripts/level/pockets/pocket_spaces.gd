@@ -524,6 +524,28 @@ func in_pocket(p: Vector3) -> bool:
 	return space_of(p) != ""
 
 
+## POCKETS 2 phase 1: a pocket space's ambient noise floor at `p`, 0.0 in the hospital and in any
+## space that does not declare one. Sound-hunting monsters subtract it from a noise's loudness
+## before deciding whether they heard it, so a loud room masks quiet things (see
+## scripts/monsters/sonographer_brain.gd `_hear`). It is not an audio effect: what the player's own
+## ears do is `air_factor` and Audio's muffle, and neither is touched by this.
+func ambient_noise_at(p: Vector3) -> float:
+	return ambient_noise_of(space_of(p))
+
+
+## The optional `AMBIENT_NOISE_LEVEL` a pocket's layout script declares, or 0.0. Declaring it is how
+## a new space (docs/POCKET_SPACES_2.md phase 4, the Laundromat) gets a noise floor; the Factory and
+## the Restaurant both declare 0.0, which is the same as not declaring it at all.
+static func ambient_noise_of(kind: String) -> float:
+	var s: GDScript = null
+	match kind:
+		"factory": s = Factory
+		"restaurant": s = Restaurant
+	if s == null:
+		return 0.0
+	return float(s.get_script_constant_map().get("AMBIENT_NOISE_LEVEL", 0.0))
+
+
 ## [seam, to_pocket] when `p` stands in the half of a stub copy nobody should stand in, else [].
 func phantom_at(p: Vector3) -> Array:
 	var q := Vector2(p.x, p.z)

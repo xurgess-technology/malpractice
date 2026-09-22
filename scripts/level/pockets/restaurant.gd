@@ -9,6 +9,11 @@ extends RefCounted
 const Common := preload("res://scripts/level/pockets/pocket_common.gd")
 const Stub := preload("res://scripts/level/pockets/stub.gd")
 
+## POCKETS 2 phase 1: the ambient noise floor a sound-hunting monster stands in here (see
+## PocketSpaces.ambient_noise_at). Nothing in the Restaurant is running either — the kitchen is
+## cold and the room is waiting — so it has no floor and hearing is unchanged.
+const AMBIENT_NOISE_LEVEL := 0.0
+
 const T := 1.5
 const M := 10
 const W := 34

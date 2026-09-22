@@ -225,7 +225,12 @@ var abilities: Node = null    # Echo and Hive Eyes, their levels and slots (scri
 var trinkets: Node = null     # TRINKETS chunk B: what the six trinkets do (scripts/trinkets/trinkets.gd)
 # POCKETS HOOK: pocket spaces (the Factory, the Restaurant), their seams and crossings.
 const PocketSpacesScript := preload("res://scripts/level/pockets/pocket_spaces.gd")
+const PocketPlanScript := preload("res://scripts/level/pockets/pocket_plan.gd")
 var pockets: Node = null
+## POCKETS 2 phase 1, no repeats: the pocket kind this run has already seen. The host sets it when
+## a shift ends, so the next shift's roll leaves that kind out, and sends it to clients with the
+## globals ("px") — a client that rolled from a different pool would build a different hospital.
+var pocket_seen_kind := ""
 
 # DOORS HOOK: every door of the level, and the wings behind the loading gates rebuilt each shift.
 const DoorsScript := preload("res://scripts/doors/doors.gd")
@@ -404,6 +409,9 @@ func start_session(first_seed: int) -> void:
 	# nowhere else (see _next_monster_id).
 	_next_monster_id = 0
 	_next_item_id = 0
+	# POCKETS 2 phase 1: a new run has seen no pocket yet, so nothing is kept out of the first roll.
+	pocket_seen_kind = ""
+	PocketPlanScript.exclude_kind = ""
 	reset_money()  # a new run starts broke; clients get the host's value in the snapshot
 	start_lobby(first_seed, 1)
 
@@ -597,6 +605,12 @@ func _to_next_shift() -> void:
 	# DOORS HOOK: the wings behind the locked gates are rebuilt for this shift (anyone still inside is
 	# walked out to the entrance hall first). Clock-in waits until they are ready.
 	clock_in_pending = false
+	# POCKETS 2 phase 1, no repeats: whatever pocket this run has most recently seen is kept out of
+	# the next shift's roll. Set before the wings (and the pocket with them) are regenerated, and
+	# read off the built pocket rather than the plan, so it is what players actually walked into.
+	if pockets != null and not String(pockets.pocket.get("kind", "")).is_empty():
+		pocket_seen_kind = String(pockets.pocket.kind)
+	PocketPlanScript.exclude_kind = pocket_seen_kind
 	wing_loader.regenerate(maxi(shift, int(wing_loader.generation) + 1))
 	if Net.active:
 		_rpc_shift.rpc(seed_value, shift, phase, _net_seq)
@@ -2375,9 +2389,28 @@ func _spawn_monsters() -> void:
 		_add_monster(MonsterScript.HIVE, pos)
 
 
-## loop: may a wandering monster pick this point? Not inside the entrance building or the neutral
-## area outside (HospitalBuilder.zone_of); noise and chases still lead them anywhere.
-func monster_may_wander_to(p: Vector3) -> bool:
+## loop: may a wandering monster standing at `from` pick this point? Not inside the entrance
+## building or the neutral area outside (HospitalBuilder.zone_of); noise and chases still lead
+## them anywhere.
+##
+## POCKETS 2 phase 1: and not across a seam. Idle wander is fenced at the stub — a wander goal has
+## to be in the same space the monster is already standing in. That leaves the two ways into a
+## pocket the design wants: a monster can still **spawn** inside one (the pocket adds its own
+## points to `monster_spawns`, and spawning does not come through here), and it can still **chase**
+## a player through a seam (a chase steers at the quarry, not at a wander goal). What it can no
+## longer do is idly path from a hallway into a place that does not exist, which is the
+## KNOWN_ISSUES entry: `Monster.random_nav_point` samples the whole navigation map, and the pocket's
+## region is part of it, so roughly half its picks used to be able to land in the pocket.
+##
+## Fencing here rather than in the samplers covers all three brains at once, including the Night
+## Nurse's vanish-and-reappear, which asks for a point up to 400 m away and so reaches the pocket
+## origins out at tile 800 without even needing a seam.
+func monster_may_wander_to(p: Vector3, from: Vector3 = Vector3.INF) -> bool:
+	if pockets != null and from.is_finite():
+		# Same space both ends, and never a goal in a stub's dead half (its far side is the other
+		# copy, so walking to it is walking through the seam).
+		if pockets.space_of(p) != pockets.space_of(from) or not pockets.phantom_at(p).is_empty():
+			return false
 	if not level_info.has("zones"):
 		return true
 	var zone := HospitalZones.zone_of(level_info, p)
@@ -4255,6 +4288,9 @@ func _global_fields() -> Dictionary:
 	# and which wings the level has ("wg").
 	g.merge(doors.net_fields())
 	g["wg"] = wing_loader.generation
+	# POCKETS 2 phase 1: the pocket kind kept out of this shift's roll, so a client's own copy of
+	# the map generator draws from the same pool the host did.
+	g["px"] = pocket_seen_kind
 	g.merge(wall.net_fields())   # terminal redesign: the break room screen ("wt", "wu", "wd")
 	return g
 
@@ -4394,6 +4430,11 @@ func _repl_apply() -> void:
 		g.merge(_cl_g_last[gid])
 	if not g.has("sd"):
 		return
+	# POCKETS 2 phase 1, no repeats: take the host's excluded kind before anything here generates a
+	# map — start_lobby below, and the "wg" wing rebuild at the end of _apply_state.
+	if not is_host():
+		pocket_seen_kind = String(g.get("px", ""))
+		PocketPlanScript.exclude_kind = pocket_seen_kind
 	if phase == Phase.MENU:
 		wing_loader.next_generation = int(g.get("wg", -1))   # DOORS HOOK: build the host's wings
 		start_lobby(int(g.sd), int(g.sh))   # sets _cl_full
