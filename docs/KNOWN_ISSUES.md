@@ -672,18 +672,27 @@ left below is what still applies to the shared strapped-monster infrastructure.
   through walls). The flashlight (a shadow caster) and every sight ray stop at a door.
 - **The main entrance's glass blocks sight rays** like a solid door (its panels are on
   `C.L_WORLD`): nothing sees through it. Monsters never wander into the entrance building anyway.
-- **A leaf folded open past 90% stops colliding** so bodies cutting a doorway corner do not catch on
-  its end; a player hugging the jamb can clip a few centimetres into the open leaf.
-- **PLAYTEST 2026-09-22: monsters walk through doors.** Reported by Zach after a session with real
-  players; he could not tell whether it was closed doors or the *model of the opened state* of the
-  door being walked through. Not yet reproduced or root-caused. The entry above is the obvious first
-  suspect for the open-leaf case -- a leaf past 90% deliberately stops colliding, and what is "a few
-  centimetres" of clip for a player hugging the jamb may be a whole monster walking through the
-  visibly-open leaf, since monsters are bigger and faster and do not path the way a player walks.
-  For the closed-door case, check whether monsters are subject to the same door-opening rules as
-  other agents ("Agents open hinged doors by facing them within about 3 m" below) or whether some
-  monster mover bypasses door collision entirely. Worth checking per monster type: they may not all
-  share a mover.
+- **An open leaf's first 25 cm do not collide** (`Door.OPEN_INSET`), so bodies cutting a doorway
+  corner do not catch on its end, which sits in the doorway's mouth with its cap facing anyone
+  coming through. The rest of the open leaf is solid. Before 2026-09-22 the whole leaf's collider
+  was switched off past 90% open instead, which is the bug below.
+- **PLAYTEST 2026-09-22: monsters walk through doors** -- *found and fixed, the open-leaf half.*
+  A hinged leaf swung wide open stands about 1.4 m straight out into the room, and past 90% open
+  its collider was switched off entirely: the whole visible door model was walk-through, for
+  monsters and players alike (rays across it on `C.L_WORLD` hit nothing; a hunting Hive crossed it
+  in under a second). `Door._apply_pose` now keeps the leaf on `C.L_WORLD` at every pose and swaps
+  the collider for one pulled `OPEN_INSET` back from the hinge, which is what the anti-snag rule
+  above was actually after. `tools/doortest.gd` `_doors_stop_monsters` covers it: 12 sample lines
+  across the open leaf, all three monster kinds against the door shut and standing open, and a bot
+  still walking cleanly through the open doorway.
+  **The closed-door half was not reproduced** and is still open in principle. With the door pinned
+  shut, a hunting Hive, Sonographer and Night Nurse were all stopped by it, and a Sonographer forced
+  into RUSH charging from 8 m at 5.2 m/s bounced off it four times out of four (no tunnelling). A
+  client-side visual desync was also ruled out as the cause: a client animates toward the host's
+  amount at `CLIENT_SPEED` or faster (`Doors.apply_net`), so it is at most a couple of tenths of a
+  second behind, and its own leaves collide the same way. What Zach saw was most likely the open
+  leaf; if it turns up again against a door that is visibly shut on the host, start with the
+  monster's own mover rather than the door.
 - **About 3% of room doors have under 80 degrees of room on the hallway side** (furniture or a
   container near the doorway): they always fold into their tunnel, even toward someone coming out
   of the room, who has to step back while it swings (a bot gets shoved back a little). `DoorPlan.check` guarantees every door still opens wide enough to pass.
