@@ -1,12 +1,26 @@
 class_name ReviewSetups
 extends RefCounted
 ## Named review setups: `--setup=<name>` after `--` (tools/review.ps1 passes it on) opens a review
-## window straight in a shift, solo and hosting, with the player where the setup puts them and the thing
-## to test already staged: no home screen, no lobby, no getting ready (RULES.md, Reviews).
+## window straight in a shift, with the player where the setup puts them and the thing to test
+## already staged: no home screen, no lobby, no getting ready (RULES.md, Reviews).
 ##
 ## main.gd's launch calls requested(); when a name is given (and known) it skips the title menu, starts a
-## solo session on the setup's seed (`--seed=N` overrides it), begins the shift and lets the world settle,
+## session on the setup's seed (`--seed=N` overrides it), begins the shift and lets the world settle,
 ## then calls stage(name, game). An unknown name lists the known ones in the log and opens the menu.
+##
+## Solo or co-op. One window (`-Count 1`, the default) is a solo session, as it always was. With
+## `-Count 2` (or more) tools/review.ps1 hands window 1 `--setup-role=host` and the rest
+## `--setup-role=join`, plus a shared `--setup-port=N`, so the whole set lands in ONE world:
+##   * the host opens an ENet server on that port, drops a lock file (mark_hosting) so the joiners
+##     know it is listening, waits for them to turn up in the lobby, and only then begins the shift
+##     and stages. Staging is host-authoritative world state (placing people, handing out items,
+##     starting a case), so only the host ever runs a stage function.
+##   * a joiner waits for that lock file, joins 127.0.0.1 on the port, and once the shift is under
+##     way stands its own player beside the host's with place_beside(), looking the same way: an
+##     onlooker's view of whatever the setup staged.
+## The host waits for its joiners on purpose. A client that arrives after begin_shift spectates
+## until the next shift's lobby instead of spawning -- and two windows that look right but are not
+## actually playing together is exactly the failure this exists to prevent.
 ##
 ## To add a setup (one function, one line):
 ##   1. add an entry to SETUPS:  "hive_lunge": {"seed": 4242, "stage": "_hive_lunge"},
@@ -15,6 +29,7 @@ extends RefCounted
 ## Then open it:  tools\review.bat 2 "HIVE: does the lunge read?" --setup=hive_lunge
 
 const DEFAULT_SEED := 4242
+const MirrorsScript := preload("res://scripts/personnel/mirrors.gd")
 
 const SETUPS := {
 	"icons": {"seed": 4242, "stage": "_icons"},
@@ -60,6 +75,9 @@ const SETUPS := {
 	# under the board swaps between them in play either way. `--solution` adds the debug overlay.
 	"suture": {"seed": 4242, "stage": "_suture"},
 	"suture_eye": {"seed": 4242, "stage": "_suture_eye"},
+	# MIRRORS (2026-09-22): in front of the entrance's big full-length mirror, hands empty, looking
+	# at your own reflection. `--dist=N` stands N metres off the glass (default 1.4).
+	"mirror": {"seed": 4242, "stage": "_mirror"},
 	# 2026-09-22 (playtest): a downed teammate on the floor by the OR. Carry them over your shoulder
 	# to a table, stitch them up, and watch them get up: the carry pose must not come with them.
 	"downed": {"seed": 4242, "stage": "_downed"},
@@ -67,6 +85,9 @@ const SETUPS := {
 	# open with a Hive parked behind the open leaf, hunting you. The leaf used to have no collider
 	# once the door was open: everything, you included, walked straight through the door model.
 	"doors": {"seed": 4242, "stage": "_doors"},
+	# HIT FEEDBACK (2026-09-22): bone saws in hand, two Hives coming for you, and Dr. Botsworth
+	# standing there to saw as well. A landed hit flashes its target red and knocks it back.
+	"hit": {"seed": 4242, "stage": "_hit"},
 }
 
 
@@ -80,6 +101,56 @@ static func requested() -> String:
 
 static func exists(setup: String) -> bool:
 	return SETUPS.has(setup)
+
+
+# ---------------------------------------------------------------------------
+# co-op review windows (--setup-role / --setup-port / --setup-peers)
+
+## The default port for a co-op review pair. Away from C.DEFAULT_PORT (7777, what a real host
+## uses) and from tools/nettest_run.gd's 7790+, so a review pair and a nettest run can't collide.
+## tools/review.ps1 adds the slot number, so wt-1 and wt-2 can each have a pair up at once.
+const COOP_PORT := 7810
+
+## This window's role in a co-op review set: "host", "join", or "" for the solo default.
+static func role() -> String:
+	return _arg("--setup-role=")
+
+
+## The port the co-op set shares.
+static func port() -> int:
+	var v := _arg("--setup-port=")
+	return int(v) if v.is_valid_int() else COOP_PORT
+
+
+## Host only: how many joining windows to wait for before beginning the shift.
+static func peers() -> int:
+	var v := _arg("--setup-peers=")
+	return int(v) if v.is_valid_int() else 0
+
+
+## The host window drops this file once its server is listening; the joining windows wait for it.
+## It lives in the slot's .godot folder beside the review logs, so tools/review.ps1 can clear a
+## stale one before it launches the pair.
+static func host_lock_path(p: int) -> String:
+	return ProjectSettings.globalize_path("res://.godot/review-host-%d.lock" % p)
+
+
+static func mark_hosting(p: int) -> void:
+	var f := FileAccess.open(host_lock_path(p), FileAccess.WRITE)
+	if f != null:
+		f.store_line(str(Time.get_unix_time_from_system()))
+		f.close()
+
+
+static func host_listening(p: int) -> bool:
+	return FileAccess.file_exists(host_lock_path(p))
+
+
+static func _arg(prefix: String) -> String:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with(prefix):
+			return a.trim_prefix(prefix).strip_edges()
+	return ""
 
 
 static func names() -> Array:
@@ -115,6 +186,18 @@ static func place(game: Game, pos: Vector3, at: Vector3) -> void:
 	p.rotation.y = p._yaw
 	p._pitch = clampf(atan2(d.y, Vector2(d.x, d.z).length()), -1.0, 1.0)
 	p.head.rotation.x = p._pitch
+
+
+## A joining co-op review window: stand the local player beside `other` (another player node), a
+## step to its right and half a step behind, looking past its shoulder at whatever it is facing.
+## The default "where do the extra players stand" -- no setup has to say anything for an onlooker
+## to land somewhere useful, because every setup already points the host at the thing it staged.
+static func place_beside(game: Game, other) -> void:
+	var yaw: float = other.rotation.y
+	var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
+	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+	var pos: Vector3 = other.global_position + right * 1.1 - forward * 0.6
+	place(game, pos, other.global_position + forward * 2.5 + Vector3.UP * 1.2)
 
 
 ## The horizontal direction (of the four axes) from `from` with the most room, so a spot beside a wall
@@ -662,6 +745,53 @@ static func _doors(game: Game) -> void:
 	game.say("The open door is between you and the Hive. Walk into the leaf; watch it come round, not through.", 10.0)
 
 
+## HIT FEEDBACK: a clear stretch of floor with three bone saws in your hands, two Hives walking in
+## at you, and Dr. Botsworth standing beside you as something to swing at that is a PLAYER, not a
+## monster. Hit either and it should wash red for a moment and get knocked a step back -- and the
+## Hive should keep coming at you rather than going down dazed, which is what a shove (Q) does.
+## Swing a Hive and then Q it back to back to see the difference. You cannot be hurt.
+static func _hit(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	# Nothing else going on, and nothing that can end the review early.
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("god", {"on": true})
+	game._clear_monsters()
+	await tree.physics_frame
+	# Somewhere with room to be knocked about in.
+	var base: Vector3 = game._floor_at(game.clock_pos())
+	var out := open_direction(game, base + Vector3.UP * 1.2, 8.0)
+	var side := out.cross(Vector3.UP).normalized()
+	place(game, base, base + out * 4.0 + Vector3.UP * 1.6)
+	clear_hands(game)
+	# Three saws: one snaps on about one swing in eight, and the review should outlive that.
+	give(game, "bone_saw", 1)
+	give(game, "bone_saw", 1)
+	give(game, "bone_saw", 1)
+	give(game, "anesthetic", 3)
+	p.selected = 0
+	p.set_flashlight(true)
+	# Dr. Botsworth, standing still, close enough to saw: the PvP half.
+	var bot: int = game.dev.spawn_bot("bot", p, "Dr. Botsworth", game._floor_at(base + side * 1.4))
+	game.dev.order_bot(bot, "stay")
+	# Two Hives walking in from ahead.
+	var hives: Array = []
+	for i in 2:
+		var at: Vector3 = game._floor_at(base + out * 5.0 + side * (float(i) * 2.0 - 1.0))
+		if not game._point_is_clear(at + Vector3.UP * 1.0):
+			at = game._floor_at(base + out * 3.2)
+		var h = game._add_monster("hive", at)
+		h.brain._hunt(p.global_position)
+		hives.append(h)
+	await tree.physics_frame
+	print("[review] hit: %d Hives and Dr. Botsworth within reach, %d bone saws in hand" % [hives.size(), 3])
+	game.say("Saw the Hives, and saw Botsworth. Red flash, knocked back, still coming. Q shoves (that one stuns).", 10.0)
+
+
 static func _graft_stage(game: Game, vat_kind: String, owner: String, already: bool) -> void:
 	var tree := game.get_tree()
 	var p = game.local_player()
@@ -767,6 +897,25 @@ static func _hover_drop(game: Game) -> void:
 	game.say("Drop everything on the same spot: they float, they glow, they make room.", 9.0)
 
 
+## MIRRORS (2026-09-22): standing in front of the entrance's big full-length mirror, hands empty,
+## looking at your own reflection. `--dist=N` stands N metres off the glass (default 1.4).
+static func _mirror(game: Game) -> void:
+	var pr: Dictionary = game.level_info.get("personnel", {})
+	var m: Dictionary = pr.get("mirror", {})
+	if m.is_empty():
+		print("[review] mirror: this level has no personnel mirror")
+		return
+	var mp: Vector3 = m.position
+	var out := (Basis(Vector3.UP, float(m.get("yaw", 0.0))) * Vector3(0, 0, -1)).normalized()
+	var dist := 1.4
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--dist="):
+			dist = float(a.split("=")[1])
+	var glass: Vector3 = mp + Vector3(0.0, MirrorsScript.BIG_CENTRE.y, 0.0)
+	place(game, game._floor_at(mp + out * dist), glass - Vector3(0.0, 0.3, 0.0))
+	clear_hands(game)
+	game.local_player().selected = 0
+	game.say("Aim at the mirror and press E: cycle your scrubs and your skin, E again to come back.", 10.0)
 ## DOWNED (2026-09-22 playtest): a teammate bleeding on the floor of the OR, a free table beside you
 ## and two suture kits on the floor by it. Hands empty, hold E on them to hoist them over your
 ## shoulder, carry them to the table and press E to lay them down, pick a kit up and stitch them.

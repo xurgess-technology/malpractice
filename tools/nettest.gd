@@ -160,6 +160,7 @@ func _run() -> void:
 		"combat": await _sc_combat()
 		"brains": await _sc_brains()
 		"monsters": await _sc_monsters()   # SWEEP 3 HOOK (monsters)
+		"hit_feedback": await _sc_hit_feedback()   # HIT FEEDBACK: the red flash and the push
 		"sono": await _sc_sono()   # docs/SONOGRAPHER.md chunk B: the Sonographer's echo over the wire
 		"graft": await _sc_graft()   # GRAFTING chunk C
 		"pockets": await _sc_pockets()   # POCKETS
@@ -1802,6 +1803,73 @@ func _sc_monsters():
 			return
 		_send("ng_seen", {})
 	await _finish_together("saw the Hives, one sedated (lying), hit, dragged by me and waking")
+
+
+## HIT FEEDBACK: a landed weapon hit reads on every machine, not just the swinger's. The host lands
+## hits on a Hive and on client 1 (scripts/combat/combat.gd hit_feedback_monster / _player) and the
+## client has to see BOTH of them flash red on its own copies. The knock back is checked on the host,
+## where it happens (a monster's position rides the snapshot, a player's knock rides the `hit`
+## event), and so is the promise that a saw does not stun the way a shove does.
+func _sc_hit_feedback():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		var w: Node = null
+		for m in game.monsters.values():
+			if m.kind == "hive" and not game.combat.is_sedated(m):
+				w = m
+				break
+		if w == null:
+			return _end(false, "no Hive in the shift's roster to hit")
+		w.calm = 120.0   # it stays put instead of wandering off mid-test
+		var victim = game.players[_peer_of(1)]
+		_send("hf_start", {"m": int(w.monster_id), "p": int(victim.peer_id)})
+		await _wall_wait(0.5)
+		# The push: straight back, far enough to read as a knock rather than a twitch.
+		var before: Vector3 = w.global_position
+		game.combat.hit_feedback_monster(w, Vector3.FORWARD)
+		var moved: float = before.distance_to(w.global_position)
+		if moved < 0.3:
+			return _end(false, "the hit pushed the Hive only %.2f m" % moved)
+		# ... and no stun window: that is the shove's, and a saw must not borrow it.
+		if game.combat.stun_window.stuns.has(int(w.monster_id)):
+			return _end(false, "a saw hit opened a stun window on the Hive (it should not stun)")
+		_say("the hit pushed the Hive %.2f m back and opened no stun window" % moved)
+		# Keep flashing both (Vector3.ZERO: flash only, no more pushing) until the client catches each.
+		var t := 0.0
+		while t < 30.0 and _count_msgs("fail") == 0 \
+				and (_count_msgs("hf_monster") == 0 or _count_msgs("hf_player") == 0):
+			game.combat.hit_feedback_monster(w, Vector3.ZERO)
+			game.combat.hit_feedback_player(victim)
+			await _wall_wait(0.3)
+			t += 0.3
+		if _count_msgs("hf_monster") == 0 or _count_msgs("hf_player") == 0:
+			return _end(false, "the client never saw the flash (monster %d, player %d)"
+				% [_count_msgs("hf_monster"), _count_msgs("hf_player")])
+		if game.combat.stun_window.stuns.has(int(w.monster_id)):
+			return _end(false, "the repeated hits opened a stun window on the Hive")
+		await _finish_together("the flash reached the client on a monster and on a player; the push landed, nothing stunned")
+		return
+	if not await _wait_shift_as_client():
+		return
+	if not await _until(func(): return _count_msgs("hf_start") > 0, 60.0, "the hit test to start"):
+		return
+	var d: Dictionary = _msgs("hf_start")[0].data
+	if not await _until(func(): return game.monsters.has(int(d.m)), 20.0, "the Hive on my machine"):
+		return
+	var w: Node = game.monsters[int(d.m)]
+	# The flash is a material_overlay on the target's meshes (scripts/combat/hit_flash.gd), and it
+	# leaves this meta on the model root for as long as it is lit.
+	if not await _until(func(): return is_instance_valid(w) and w.model != null \
+			and w.model.has_meta("_hit_flash_mat"), 40.0, "the Hive flashing red on my machine"):
+		return
+	_send("hf_monster", {})
+	var me := _me()
+	if not await _until(func(): return me.body_visual != null \
+			and me.body_visual.has_meta("_hit_flash_mat"), 40.0, "myself flashing red on my machine"):
+		return
+	_send("hf_player", {})
+	await _finish_together("saw the Hive and my own body flash red from the host's hits")
 
 
 ## docs/SONOGRAPHER.md chunk B: the Sonographer's hunting crosses the wire. The host stands a

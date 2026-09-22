@@ -18,6 +18,8 @@ const MonsterScript := preload("res://scripts/monster.gd")
 ## Hands sweep: every use winds up first (windup.gd); a shove's stun reads on the monster (stun_window.gd).
 const WindupScript := preload("res://scripts/combat/windup.gd")
 const StunWindowScript := preload("res://scripts/combat/stun_window.gd")
+## HIT FEEDBACK: the red flash a connecting saw puts on whatever it hit (hit_flash.gd).
+const HitFlashScript := preload("res://scripts/combat/hit_flash.gd")
 
 const SAW_BREAK_CHANCE := 0.12
 const SWING_COOLDOWN := 0.8
@@ -45,6 +47,19 @@ const FALLBACK_HITS := 2
 const HOST_COOLDOWN_SLACK := 0.8
 ## Strapping maps sedation left (0 .. SEDATE_SECONDS) onto the case's flags.sedation.
 const STRAP_SEDATION_MIN := 0.35
+
+# HIT FEEDBACK (2026-09-22). A saw that connects reads: the target flashes red (hit_flash.gd) and
+# gets knocked back about as hard as a tapped shove -- but NOTHING here stuns. A shoved monster goes
+# down and shows a stun window (stun_window.gd); a sawn one keeps coming at you, just a step further
+# away. Feel numbers, meant to be moved by eye.
+#
+## Metres a sawn monster is shoved straight back, on top of the 0.45 m its own stagger already gives
+## it (monster.take_hit -> brain.stun). ~1.25 m in all: a tapped shove's push is 1.05 m.
+const HIT_PUSH := 0.8
+## The knockback a sawn player takes: a touch under a tapped shove's 11.0 / UP * 2.0 (game.gd
+## player_shoved), so it moves you without the shove's "get off me" heave.
+const HIT_KNOCK := 10.0
+const HIT_KNOCK_UP := 1.8
 
 var game: Node = null
 ## Every machine: the wind-up, strike, recover state of every player (scripts/combat/windup.gd).
@@ -214,16 +229,74 @@ func _swing(p: Node) -> void:
 				game.tell(p, "The %s is dead. Nothing to harvest from it now." % mname, 3.0)
 			_:
 				game._sound("combat_hit", at)
+				hit_feedback_monster(m, dir)   # HIT FEEDBACK: red flash + a step backwards, no stun
 	else:
 		var q: Node = t.node
 		last_result = {"what": "player", "id": q.peer_id}
 		game._sound("combat_hit", at)
 		var god: bool = game.dev_on() and game.dev.is_god(q)
 		if q.invuln <= 0.0 and not god:
-			game.damage_player(q, 1, "saw:%s" % p.player_name, dir * 6.0 + Vector3.UP * 1.5)
+			# HIT FEEDBACK: PvP is the same deal -- the knock rides damage_player's own `hit` event
+			# (the owner applies it, so it is not fought over), and the flash goes out to everyone.
+			game.damage_player(q, 1, "saw:%s" % p.player_name, dir * HIT_KNOCK + Vector3.UP * HIT_KNOCK_UP)
+			hit_feedback_player(q)
 			game.say("%s took a bone saw to %s." % [p.player_name, q.player_name], 3.0)
 	if breaks():
 		_snap_saw(p)
+
+
+# =========================================================================
+# hit feedback: the red flash and the knock back (docs/HANDS_AND_FEEDBACK.md)
+# =========================================================================
+
+## Host: a saw connected with monster `m` and did not kill it. It flashes red on every machine and
+## is pushed HIT_PUSH metres straight back. Deliberately NOT stun_window.host_stunned: a shove
+## stuns, a saw does not. Whatever the monster was doing it carries on doing, one step further off.
+func hit_feedback_monster(m: Node, dir: Vector3) -> void:
+	if m == null or not is_instance_valid(m) or not m.is_inside_tree():
+		return
+	_push_back(m, dir)
+	var id: int = m.monster_id
+	show_hit_flash({"m": id})
+	game._broadcast("cb_flash", {"m": id})
+
+
+## Host: a saw connected with player `q`. The knock itself went out with damage_player's `hit`
+## event; this is just the flash, which everyone sees (the victim's own body is hidden in first
+## person, so for them the hurt reads through the existing screen flinch instead).
+func hit_feedback_player(q: Node) -> void:
+	if q == null or not is_instance_valid(q):
+		return
+	show_hit_flash({"p": int(q.peer_id)})
+	game._broadcast("cb_flash", {"p": int(q.peer_id)})
+
+
+## Host: shove `m` straight back along `dir`, flat, the way a brain's stun push does it
+## (move_and_collide, so walls stop it). Host-only: monster positions are replicated in the
+## snapshot, so clients see the step back without an event of their own.
+func _push_back(m: Node, dir: Vector3) -> void:
+	if not (m is CharacterBody3D) or is_sedated(m) or dragger_of(m) != null:
+		return
+	var d := dir
+	d.y = 0.0
+	if d.length() < 0.01:
+		return
+	(m as CharacterBody3D).move_and_collide(d.normalized() * HIT_PUSH)
+
+
+## Every machine (the host locally, clients off `cb_flash`): light the target up red.
+func show_hit_flash(data: Dictionary) -> void:
+	var node: Node = null
+	if data.has("m"):
+		var m = game.monsters.get(int(data.m))
+		if m != null and is_instance_valid(m):
+			node = m.model if m.model != null else m
+	elif data.has("p"):
+		var q = game.players.get(int(data.p))
+		if q != null and is_instance_valid(q):
+			node = q.body_visual
+	if node != null:
+		HitFlashScript.flash(node)
 
 
 ## Host: one break roll (tests call it directly to measure the rate).
@@ -901,6 +974,8 @@ func on_event(kind: String, data: Dictionary) -> void:
 			windup.on_event(kind, data)
 		"cb_stun":
 			stun_window.on_event(data)
+		"cb_flash":
+			show_hit_flash(data)   # HIT FEEDBACK: the red flash, on every machine
 
 
 ## Host: every monster is about to be freed (clock-out, new level).

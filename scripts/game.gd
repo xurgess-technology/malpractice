@@ -324,6 +324,8 @@ func _ready() -> void:
 	wing_loader.setup(self)
 	wing_loader.extra_builders.append(pockets)   # POCKETS HOOK: the pocket is built and torn down with the wings
 	Net.roster_changed.connect(_on_roster_changed)
+	# CUSTOMIZATION: what everyone looks like arrives on its own channel (scripts/net.gd).
+	Net.looks_changed.connect(_apply_looks)
 	Net.joined_ok.connect(_net_client_forget)  # net: a new connection starts a new replica
 	Net.host_left.connect(func(): end_session("The host left the game."))
 
@@ -1204,6 +1206,15 @@ func _on_roster_changed() -> void:
 		_sync_players()
 
 
+## CUSTOMIZATION: dress every body in whatever Net says that peer picked. Cheap (shader parameters),
+## and it is how a late joiner's surgeon gets their scrubs the moment their look arrives.
+func _apply_looks() -> void:
+	for id in players.keys():
+		var p: Node = players[id]
+		if is_instance_valid(p) and p.has_method("set_look_packed"):
+			p.set_look_packed(Net.look_for(int(id)))
+
+
 ## One Player node per peer in the roster; spawn points are keyed by peer id so
 ## every machine puts everyone in the same place without talking about it.
 func _sync_players() -> void:
@@ -1212,6 +1223,7 @@ func _sync_players() -> void:
 		if players.has(id):
 			continue
 		var p: CharacterBody3D = PlayerScene.new_player(id, Net.name_for(id), id == Net.my_id())
+		p.set_look_packed(Net.look_for(id))   # CUSTOMIZATION
 		players[id] = p
 		_entities.add_child(p)
 		if phase == Phase.LOBBY:
