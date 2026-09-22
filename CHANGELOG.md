@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.5**: The corner HUD catches up
+    - Changed: The Anesthetic Injection, DODGE! and WHACK!/WRAP! (wound and stump) all switch to the standardized corner HUD SUTURE! introduced -- rules as bullets, keybindings as boxed key caps, instead of the old one or two lines of mixed instructions. Each step's own top-right number (dose, vitals, blood lost, coverage) is unchanged.
 - **0.10.4**: SUTURE!, closing the wound
     - Added: SUTURE! -- LinkedIn's Zip, themed as one continuous thread through the whole wound. Follow the numbered anchors in order, fill every open cell once, never cross your own stitch. Skin closes over each cell you thread and reopens if you back up.
     - Added: A deep laceration (4x4, stepping up to 5x5 once you've closed one clean) and an eye socket (6x6, fenced off around the eye) as the two boards.
