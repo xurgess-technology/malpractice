@@ -670,6 +670,18 @@ left below is what still applies to the shared strapped-monster infrastructure.
   misread as "the mirror is broken"). `tools/mirrorshot.gd` now holds camera variants across real
   frames (`_hold_camera`) and dumps each mirror's SubViewport texture on its own, so neither trap
   can bite again.
+- **The mirror menu is never built under `mapcheck` (pre-existing, found 2026-09-22).** Every seed
+  `mapcheck` builds prints `SCRIPT ERROR: Invalid call. Nonexistent function 'new' in base
+  'GDScript'` from `mirrors.gd` `setup`, at
+  `add_child(preload("res://scripts/personnel/mirror_menu.gd").new())`. The preload resolves to a
+  `GDScript` that has not compiled, so the menu node is simply missing; the rest of the level builds
+  and `mapcheck`'s own checks are unaffected, which is why nobody noticed. **Confirmed on plain
+  `main`** (checked at `99a33bd`, where the same statement is line 74) as well as on this branch, so
+  it is not the mirror-lamp work. It does not happen in the real game: a booted shift builds the
+  menu fine, and `mirrors.gd` loaded on its own in `-s` mode instantiates it fine too, so it is a
+  load-order/cycle problem specific to the order `mapcheck` pulls these scripts in
+  (`mirrors.gd` -> `mirror_menu.gd` -> `customization.gd` -> `human_model.gd`). Nobody has chased it
+  further.
 - **Pinstripes follow the model's UV layout, not the body.** The pattern shader steps the UV's x
   coordinate, as specified, but `surgeon_st`'s islands are not laid out consistently: the stripes
   run across the torso and down the legs. It reads as deliberate more than as a bug, and
