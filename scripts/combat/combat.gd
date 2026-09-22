@@ -53,8 +53,9 @@ const STRAP_SEDATION_MIN := 0.35
 # down and shows a stun window (stun_window.gd); a sawn one keeps coming at you, just a step further
 # away. Feel numbers, meant to be moved by eye.
 #
-## Metres a sawn monster is shoved straight back, on top of the 0.45 m its own stagger already gives
-## it (monster.take_hit -> brain.stun). ~1.25 m in all: a tapped shove's push is 1.05 m.
+## Metres a sawn monster is shoved straight back, on top of the 0.45 m brain.stun's own knockback
+## gives it (monster.take_hit). ~1.25 m in all: a tapped shove's push is 1.05 m. That call's freeze
+## is 0 s as of 2026-09-22 (monster.gd STAGGER_SECONDS) -- the push survived it, the stun did not.
 const HIT_PUSH := 0.8
 ## The knockback a sawn player takes: a touch under a tapped shove's 11.0 / UP * 2.0 (game.gd
 ## player_shoved), so it moves you without the shove's "get off me" heave.
