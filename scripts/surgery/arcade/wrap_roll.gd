@@ -33,7 +33,11 @@ var cols := 16
 var rows := 10
 ## Reference px per cell, and where the grid's top-left corner sits on the page.
 var cell_px := 52.0
-var origin := Vector2(64.0, 52.0)
+## 2026-09-22 (the corner HUD retrofit, docs/SUTURE_SPEC.md 6): nudged right from (64, 52) -- the
+## board's own left edge sat close enough behind the new rules/key-cap block that its heavy border
+## line visually ran into the label text. This is the least of the 64 rpx of slack there is before
+## the board's right edge (960 wide, cols x cell_px = 832) runs off the page.
+var origin := Vector2(100.0, 52.0)
 ## Cells the flood-filled wound blob aims for, and the chance it branches into each free neighbour.
 var blob_cells := 14
 var branch_chance := 0.62

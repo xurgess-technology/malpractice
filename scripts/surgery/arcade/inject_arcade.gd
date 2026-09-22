@@ -464,20 +464,26 @@ func hint() -> String:
 	return ""
 
 
-## The shell's corner line: what the keys do right now.
+## SPEC 6: the one-line HUD is off here -- the rules and key caps are drawn in paint_game through the
+## shell's two-block corner helpers instead.
 func hud_line() -> String:
+	return ""
+
+
+## SPEC 6: three short lines saying what you are trying to do, never how to press it.
+func rules() -> Array:
 	match phase:
 		Phase.DRAW:
-			return "SPACE hold: draw   ·   ENTER: done\nright click / wheel: put back"
+			return ["fill the syringe to this patient's dose", "hold too long, or an empty vial, draws in air"]
 		Phase.DEBUBBLE:
-			return "click the barrel: flick\nSPACE: purge   ·   ENTER: continue"
+			return ["clear every bubble before it goes in", "loose ones rise to the needle; stuck ones need a flick beside them"]
 		Phase.INJECT:
 			if locked:
-				return "SPACE hold: push the plunger"
+				return ["push the dose in, slowly"]
 			if held:
-				return "SPACE hold: needle in, let go at the flash\nwheel / A D: angle   ·   click tray: put down"
-			return "click the arm: slap\nclick the tray: take the syringe"
-	return ""
+				return ["find a vein and stop at the flash", "push on past it and the vein blows"]
+			return ["raise a vein, then take up the syringe"]
+	return []
 
 
 ## The shell's grade number: the dose, in mL, deep red while it is off the band.
@@ -1169,6 +1175,7 @@ func paint_game(c: CanvasItem) -> void:
 	for d in _drops:
 		var a: float = 1.0 - float(d[2]) / 0.8
 		ink.dot(c, cv(d[0]), cl(2.6), Color(d[3], (d[3] as Color).a * a))
+	shell.draw_keycaps(c, keys(), shell.draw_rules(c, rules()))
 
 
 ## The needle-up syringe in its inverted vial: stages 1 and 2.
