@@ -112,6 +112,8 @@ func _run() -> void:
 	Settings.set_value("key_jump", KEY_J)
 	Settings.set_value("key_ability_alt", KEY_X)
 	Settings.set_value("key_scan", KEY_V)
+	Settings.set_value("soft_squeal", true)   # the Sonographer's quieter deafen squeal
+	Settings.set_value("look", 12345)   # CUSTOMIZATION: the packed surgeon look
 	await _frames(3)
 	for key in Settings.DEFAULTS.keys():
 		_check(seen.has(key), "changed emitted for %s" % key)
