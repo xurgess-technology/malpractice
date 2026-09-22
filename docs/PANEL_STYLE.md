@@ -34,15 +34,21 @@ shown by `PatientBody._laceration` from the ailment and the case flags), not the
 
 ## Placement and framing
 
-- Anchored at the step's site marker, lifted `panel_lift` (0.24 m) along the site normal.
+- Anchored at the step's site marker, lifted `panel_lift` (0.36 m) along the site normal, which hangs
+  it at a standing onlooker's eye level rather than down among the drapes.
 - Oriented **once**, at open time, to face the operator's final leaned-in camera pose, then frozen
   in the room (`top_level`). It is not a per-frame billboard: it is a fixed object you can walk
   round and look at from the side.
-- 0.52 × 0.347 m (3:2), matching a 1200 × 800 SubViewport that only renders while the panel is open.
+- 0.78 × 0.52 m (3:2), matching a 1200 × 800 SubViewport that only renders while the panel is open.
+  **Sized for the room, not the operator**: `camera_pose()` derives his distance from `panel_size`,
+  so the diagram covers the same share of his screen whatever the board measures, and the texture
+  stays at 1200 × 800 (about one texel per screen pixel at 1080p) rather than growing with it. The
+  size is there so a teammate can wander over and read the game being played.
 - It **stands up** rather than lying over the patient: the step's `camera_pose()` puts the operator
-  well back (`view_tilt_deg`, 32 degrees off straight down) and the panel adds `tilt_bias_deg`
-  (12 degrees) past facing them square on. Square on is easiest to play but nearly edge-on to
-  everyone else in the room; the bias costs the operator nothing and gives onlookers a face to read.
+  well back (`view_tilt_deg`, 40 degrees off straight down) and the panel adds `tilt_bias_deg`
+  (20 degrees) past facing them square on, so the board sits about 60 degrees off the body. The
+  step's share is free -- the panel turns to face him -- and the bias is bought at cos 20 degrees of
+  his square-on view. Square on is easiest to play but nearly edge-on to everyone else in the room.
 - The step's `camera_pose()` is computed so the panel fills about 78% of the view's height at 16:9,
   which leaves the real patient, the table and the room visible around it.
 - Render layer 20, the same one every minigame's props use, so the patient's blood decals (which

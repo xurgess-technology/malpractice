@@ -140,16 +140,14 @@ difficulty factor k = difficulty ^ `difficulty_gain` (0.5):
 | `pop_cost` / `squirt_cost` | 0.004 / 0.02 | dose lost to a pop and to a squirt |
 | `vein_fade` | 1.5 s / k | how long a slap shows the veins |
 | `slap_max` / `pickup_quick` | 0.3 / 0.18 s | how short a click is a slap / a set-down |
-| `angle_min` / `angle_max` | 8 / 80 deg | the needle's range |
-| `scroll_deg` / `key_deg` | 3 / 2 | per wheel notch / per A or D |
+| `needle_angle` | 25 deg | the tilt the syringe is drawn at; not a control any more |
 | `push_hold` | 0.15 s | hold this long before the needle goes in |
 | `cursor_at_tip` | true | the mouse holds the syringe by the needle tip (false: the spec's grip) |
 | `buried_alpha` | 0.5 | how strongly the needle shows under the skin |
 | `debug_overlay` | false | the section 7 overlay (or `--inject-debug`) |
-| `insert_speed` / `insert_max` | 38 x k / 55 px | needle speed and reach |
-| `flash_min` / `tip_tol` | 14 / 9 / k px | the flash wants the tip this deep and this close to a vein |
-| `window_lo` / `window_hi` | 14 / 32 deg | the angle to the vein that flashes (half-width / k) |
-| `blow_past` / `blown_half_x` | 12 / k, 45 px | pushing past the flash blows the vein, for this far either side |
+| `insert_speed` / `insert_max` | 30 x k / 52 px | how fast the needle lowers, and how deep it goes finding nothing |
+| `vein_depth` | 30 px | the depth the needle stops itself at when it went in over a vein |
+| `flash_min` / `tip_tol` | 15.5 / 9 / k px | past this depth a pull-out is a real hole; this close to a vein is a hit |
 | `push_up` / `push_down` / `push_cap` | 0.55 / 0.9 / 1.2 | the plunger's push rate |
 | `drain_k` | 0.09 | drain = rate x this per second |
 | `fast_rate` / `fast_every` | 0.55 / k, 0.9 s | a fast push, and how often one counts |
@@ -157,7 +155,7 @@ difficulty factor k = difficulty ^ `difficulty_gain` (0.5):
 | `tourniquet_item` / `tq_time` | tourniquet / 9 s | what the button spends and how long it holds |
 | `redness_up` / `redness_down` | 0.10 / 0.03 per s | the arm reddening under it |
 | `vitals_per_point` | 0.25 | vitals per point of the spec's score |
-| `pts_miss` / `pts_blown` / `pts_bubble` / `pts_fast` | 8 / 16 / 10 / 6 | the spec's penalties |
+| `pts_miss` / `pts_bubble` / `pts_fast` | 8 / 10 / 6 | the spec's penalties |
 | `pts_dose_max` / `pts_dose_slope` | 40 / 260 | the dose penalty |
 | `cost_air` / `cost_purge_low` / `cost_slap` / `cost_tourniquet_timeout` | 0 | vitals at the unpriced spike sites |
 | audio cues | draw / forceps click / plop / inject / pack / needle / tear / beep crit / cinch | all existing cues |
@@ -417,24 +415,30 @@ needle up through the neck with its bevel in the pool.
 - Enter moves on whenever you like (lit once the barrel is clear); what is left goes in.
 
 **STICK!** The forearm, or the seal's flipper (slate hide, pale folds, speckles), below a wavy ink
-edge; 2-3 seeded veins across it; the instrument tray top left; the tourniquet button top right.
+edge; 2-3 seeded veins across it; the instrument tray in the middle of the top margin (it used to be
+top left, under the corner HUD's rules and key caps); the tourniquet button top right.
 - Bare-handed, click (under 0.3 s) the skin to slap it: the veins show fully and fade out over
   1.5 s / difficulty. Click the tray to take the syringe; a click back on it sets it down.
 - Held, the syringe hangs from the mouse **by its needle tip** (`cursor_at_tip`; the spec held it
-  by the grip, 126 px back, and a miss's hole then landed far from the pointer); wheel +/-3
-  degrees, A/D +/-2 (8-80 degrees below horizontal), turning about the tip. Hold Space for 0.15 s with
-  the tip on the skin and the needle goes in there at 38 px/s x difficulty (max 55): solid down to
-  the entry dimple, then dashed (`buried_alpha` 0.5; the spec's 0.15 hid it) to a ringed tip, which
-  is the exact point the vein test uses and where a miss leaves its hole. A depth readout goes red
-  past 65%. The self-test checks pointer, drawn tip, hit-test tip, hole and dimple land within 1 px,
-  through the page's tilt, at twelve grips and angles.
+  by the grip, 126 px back, and a miss's hole then landed far from the pointer). The tilt is a fixed
+  25 degrees: the wheel/A-D angle, and the angle window that gated the flash, were **cut on
+  2026-09-22** as the reason a stick lined up over a vein missed anyway.
+- Hold Space for 0.15 s with the tip on the skin and the needle lowers in **on that exact point**.
+  Going in is depth, not travel: the tip is pinned to where the mouse was, and the needle sinks by
+  shortening -- the exposed shaft is eaten away and the barrel rides down onto the ringed dimple,
+  which is the drawn tip, the point the vein test uses and where a miss leaves its hole, all one
+  point. `sink` runs 0 to 52 at 30 px/s x difficulty; a depth readout goes red past 75%.
+- **It stops itself.** Whether the stick is good is settled the instant it starts down -- the tip
+  within 9 px / difficulty of a vein -- so there is no release to time. On a vein it stops at depth
+  30 with the hub flashing red and locks in. Off one it goes all the way to 52, finds nothing, and
+  that is MISS! and a puncture mark (letting go past depth 15.5 is the same hole).
+- The self-test's `alignment over 12 sticks` is the guard on all of that: pointer, drawn tip,
+  hit-test tip and the hole all within half a pixel of the point aimed at, through the page's tilt,
+  at four tilts and twelve aims, half of them on a vein and half on empty skin.
 - The spec's section 7 debug overlay: `debug_overlay`, or `--inject-debug` on the command line (it
-  works after `--setup=sedate` too). Veins in green, blown stretches in red, the angle window as
-  dashed rays, a cross at the hit-test tip, and a readout.
-- **The flash**: tip past 15.5 px (about a quarter of the needle, so a graze does not flash), within 9 px / difficulty of a vein, at 14-32 degrees to it (the
-  window narrows about its middle with difficulty). The hub fills red. Let go: locked in.
-- Push on 12 px / difficulty past the flash and the vein blows (BLOWN!, a shake, a bruise; that vein is dead for
-  45 px either side). Let go past 15.5 px with no flash: MISS! and a puncture mark.
+  works after `--setup=sedate` too). Veins in green, the reach as a ring round the tip, a cross at
+  the hit-test tip, and a readout. `--stick` on the same command line (review window or lab) opens
+  the step straight on STICK!, dose drawn and no bubbles, when only the aim is being looked at.
 - **The tourniquet button** pins the veins up for 9 s while the arm reddens, then lets go. It
   spends a real tourniquet from your hands (`Minigame.use_item`; the host takes it out of your
   slots) and is greyed out ("none to spare") without one, or when the rest of the procedure
@@ -450,7 +454,7 @@ empty: "dose delivered...", a 0.9 s beat, done.
 **Costs are live** (no results card, no Retry): every mistake is `mistake()` the moment it happens (the
 burst, blood on the page, the bill),
 at the spec's score penalty x `vitals_per_point` (0.25), with the spec's flavour line as the
-reason. Miss 2.0, blown vein 4.0, each bubble 2.5 (5.0 when r > 12), each fast push 1.5, and at
+reason. Miss 2.0, each bubble 2.5 (5.0 when r > 12), each fast push 1.5, and at
 delivery a dose outside the band min(40, (|error| - band) x 260) x 0.25 (up to 10), "Underdosed"
 or "Overdosed". The spike sites with no price in the spec (air drawn, a purge below the band, the
 slap, the tourniquet running out) cost 0 by default (`cost_*` exports), because what they lead to is

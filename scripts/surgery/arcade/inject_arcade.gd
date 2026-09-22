@@ -15,10 +15,11 @@ extends "res://scripts/surgery/arcade/arcade_game.gd"
 ##           that has reached the needle end -- tap with nothing there and you squirt drug out.
 ##           Space (or Continue) moves on whenever you like: what is left goes into the patient.
 ##   STICK!  The forearm (or flipper). Slap it bare-handed to raise the veins for a moment, take the
-##           syringe off the tray, set the angle with the wheel (or A/D), and hold to push the needle
-##           in. Blood flashes into the hub when the tip is in a vein at a shallow angle to it: let go
-##           and it is in. Push on past the flash and you blow the vein. Let go with nothing and you
-##           have made a hole. Then PUSH!: hold to push the plunger, gently -- the meter goes red if
+##           syringe off the tray, put the needle's tip on a vein and hold Space. The needle lowers in
+##           on that exact spot -- the tip never leaves the point you aimed at -- and stops by itself
+##           the moment it is in the vein, blood flashing into the hub. Aim off the vein and it goes
+##           all the way in and finds nothing: a hole. All the skill is in the aim; there is no
+##           release to time. Then PUSH!: hold to push the plunger, gently -- the meter goes red if
 ##           you shove it -- until the barrel is empty.
 ##   The tourniquet button pins the veins up for a while. It uses up a real tourniquet from your
 ##   hands and is greyed out when you have none to spare.
@@ -32,11 +33,11 @@ extends "res://scripts/surgery/arcade/arcade_game.gd"
 ## spare 5 mm is split top and bottom). Every rule below is in reference px ("rpx").
 ##
 ## A signal (`spiked`) goes out at every one of the spec's spike() sites -- air drawn, purge below the
-## band, slap, miss, blown vein, tourniquet timeout, fast push, and the two billed at delivery (a
-## bubble going in, the dose) -- so vitals, audio or co-op reactions can hang off them later.
+## band, slap, miss, tourniquet timeout, fast push, and the two billed at delivery (a bubble going in,
+## the dose) -- so vitals, audio or co-op reactions can hang off them later.
 
 ## A mistake (or a heart-rate moment) the spec marks with spike(). `kind` is one of: air, purge_low,
-## slap, miss, blown, tourniquet_timeout, fast_push, bubble, dose. Emitted on the operator's machine.
+## slap, miss, tourniquet_timeout, fast_push, bubble, dose. Emitted on the operator's machine.
 signal spiked(kind: String)
 
 enum Phase { DRAW, DEBUBBLE, INJECT, DONE }
@@ -54,7 +55,9 @@ const VIAL := Rect2(388.0, 56.0, 84.0, 90.0)
 const VIAL_NECK_Y := 168.0
 const NEEDLE_TIP_Y := 104.0
 const HUB_Y := 214.0
-const TRAY := Vector2(127.0, 106.0)
+## The tray sits in the middle of the top margin. It used to be at x 127, which put the plate and the
+## syringe lying on it straight under the corner HUD's rules and key caps (SUTURE_SPEC 6).
+const TRAY := Vector2(520.0, 112.0)
 const TRAY_R := Vector2(96.0, 40.0)
 const TQ_BTN := Rect2(772.0, 64.0, 168.0, 50.0)
 const TQ_BAR := Rect2(772.0, 124.0, 168.0, 10.0)
@@ -120,27 +123,25 @@ const ASM_TIP := 126.0
 @export_range(0.3, 6.0, 0.05) var vein_fade := 1.5
 @export_range(0.05, 1.0, 0.01) var slap_max := 0.3
 @export_range(0.05, 0.6, 0.01) var pickup_quick := 0.18
-@export_range(8.0, 45.0, 0.5) var angle_min := 8.0
-@export_range(30.0, 89.0, 0.5) var angle_max := 80.0
-@export_range(0.5, 10.0, 0.5) var scroll_deg := 3.0
-@export_range(0.5, 10.0, 0.5) var key_deg := 2.0
+## The tilt the syringe is drawn at, degrees below horizontal. Not a control any more: the angle used
+## to be set with the wheel (or A/D) and gated the flash, which is what made a stick you had lined up
+## over a vein miss anyway. The needle now goes in wherever the tip is pointed, whatever the tilt.
+@export_range(5.0, 80.0, 0.5) var needle_angle := 25.0
 @export_range(0.0, 1.0, 0.01) var push_hold := 0.15
 ## The mouse holds the syringe by its needle tip, so the needle goes in where you point. False is the
 ## spec's grip at the back of the barrel, 126 px behind the tip -- where a miss's hole then landed a
 ## long way from the pointer.
 @export var cursor_at_tip := true
-## Needle speed into the skin (times difficulty) and how far it can go.
-@export_range(5.0, 150.0, 1.0) var insert_speed := 38.0
-@export_range(20.0, 80.0, 1.0) var insert_max := 55.0
-## The flash wants the tip past this (about a quarter of the needle, so a graze does not flash), within tip_tol of a vein (divided by difficulty), at an angle
-## to the vein inside [window_lo, window_hi] (the window narrows about its middle with difficulty).
+## Needle speed into the skin (times difficulty) and how far it goes before it has plainly found
+## nothing. The tip does not move while it goes in: `sink` is depth, not travel across the page.
+@export_range(5.0, 150.0, 1.0) var insert_speed := 30.0
+@export_range(20.0, 80.0, 1.0) var insert_max := 52.0
+## How deep the vein lies. Hold the needle over one and it stops itself here, blood in the hub.
+@export_range(10.0, 60.0, 0.5) var vein_depth := 30.0
+## Past this depth the needle has made a real hole: letting go early now counts as a miss.
 @export_range(0.0, 40.0, 0.5) var flash_min := 15.5
+## How close to a vein the tip has to be when it goes in (divided by difficulty).
 @export_range(2.0, 30.0, 0.5) var tip_tol := 9.0
-@export_range(0.0, 45.0, 0.5) var window_lo := 14.0
-@export_range(5.0, 60.0, 0.5) var window_hi := 32.0
-## Push this far past the flash (divided by difficulty) and the vein blows, for this far either side.
-@export_range(2.0, 40.0, 0.5) var blow_past := 12.0
-@export_range(5.0, 120.0, 1.0) var blown_half_x := 45.0
 
 ## How strongly the buried part of the needle shows (the spec had 0.15, which hid the tip: a miss
 ## then seemed to leave its hole nowhere near the needle).
@@ -168,7 +169,6 @@ const ASM_TIP := 126.0
 ## what a miss always cost.
 @export_range(0.0, 1.0, 0.01) var vitals_per_point := 0.25
 @export_range(0.0, 40.0, 0.5) var pts_miss := 8.0
-@export_range(0.0, 60.0, 0.5) var pts_blown := 16.0
 @export_range(0.0, 40.0, 0.5) var pts_bubble := 10.0
 @export_range(0.0, 40.0, 0.5) var pts_fast := 6.0
 @export_range(0.0, 100.0, 1.0) var pts_dose_max := 40.0
@@ -195,7 +195,6 @@ const ASM_TIP := 126.0
 @export var squirt_cue := "surgery_inject"
 @export var slap_cue := "surgery_pack"
 @export var stick_cue := "surgery_needle"
-@export var blow_cue := "surgery_tear"
 @export var push_cue := "surgery_inject"
 @export var alarm_cue := "surgery_beep_crit"
 @export var tourniquet_cue := "surgery_tourniquet_cinch"
@@ -215,7 +214,6 @@ var inserting := false
 var sink := 0.0
 var entry := Vector2.ZERO
 var flashed := false
-var flash_adv := 0.0
 var locked := false
 var rate := 0.0
 var dose := 0.0                   ## the share of the barrel locked in
@@ -226,13 +224,10 @@ var tq_on := false
 var tq_left := 0.0
 var tq_avail := false
 var redness := 0.0
-var blown_ranges: Array = []      ## [vein index, x lo, x hi]
 var punctures: Array = []         ## [x, y]
-var bruises: Array = []           ## [x, y]
 var ripples: Array = []           ## [x, y, play_t born]
 var deliver_t := -1.0
 var misses := 0
-var blown := 0
 var fast_pushes := 0
 var slaps := 0
 var pops := 0
@@ -297,8 +292,14 @@ func ink_unit() -> float:
 	return _u()
 
 
+## --stick (reviews and lab shots) skips the first two stages and opens on STICK!, with the dose
+## already drawn and no bubbles: the aim is the only thing being looked at.
+func _stick_only() -> bool:
+	return "--stick" in OS.get_cmdline_user_args()
+
+
 func card_word_for_start() -> String:
-	return "DRAW!"
+	return "STICK!" if _stick_only() else "DRAW!"
 
 
 func build_game() -> void:
@@ -321,9 +322,14 @@ func build_game() -> void:
 	for i in 90:
 		var x := _rng.randf_range(20.0, 940.0)
 		speckles.append(Vector2(x, _rng.randf_range(skin_top(x) + 14.0, 585.0)))
-	angle = 25.0
+	angle = needle_angle
 	if "--inject-debug" in OS.get_cmdline_user_args():
 		debug_overlay = true
+	if _stick_only():
+		fluid = target
+		vial = maxf(0.0, vial - target)
+		phase = Phase.INJECT
+		bubbles.clear()
 	_refresh_tq()
 
 
@@ -402,10 +408,13 @@ func dir() -> Vector2:
 	return Vector2(cos(deg_to_rad(angle)), sin(deg_to_rad(angle)))
 
 
-## Where the tip is right now (rpx).
+## Where the tip is right now (rpx). Once it is going in it is pinned to `entry` -- the point the
+## needle was on when Space went down, which is the point the mouse was on. Going in is depth (`sink`,
+## drawn as the needle disappearing into the arm), never travel across the page: the tip cannot drift
+## off the spot you aimed at, which is what used to make this stage feel like it ignored the cursor.
 func tip() -> Vector2:
 	if inserting or locked:
-		return entry + dir() * sink
+		return entry
 	return grip + dir() * ASM_TIP
 
 
@@ -441,7 +450,7 @@ func keys() -> Array:
 			if locked:
 				return [["Hold Space", "push, gently"]]
 			if held:
-				return [["Wheel / A D", "angle"], ["Hold Space", "needle in"], ["Let go", "at the flash"]]
+				return [["Hold Space", "lower the needle in"]]
 			return [["Click skin", "slap"], ["Click tray", "take syringe"]]
 	return []
 
@@ -459,7 +468,7 @@ func hint() -> String:
 			if locked:
 				return "Push it slowly."
 			if held:
-				return "Shallow to the vein; let go at the flash."
+				return "Put the tip on a vein and hold Space."
 			return "Slap the arm to raise a vein, then take the syringe."
 	return ""
 
@@ -481,7 +490,7 @@ func rules() -> Array:
 			if locked:
 				return ["push the dose in, slowly"]
 			if held:
-				return ["find a vein and stop at the flash", "push on past it and the vein blows"]
+				return ["put the needle's tip on a raised vein", "it stops itself in the vein; off it, you just make a hole"]
 			return ["raise a vein, then take up the syringe"]
 	return []
 
@@ -520,7 +529,7 @@ func stamp_for(word: String) -> Dictionary:
 				"prompt": "SPACE or click to start", "color": I.amber if I != null else Color.ORANGE}
 		"STICK!":
 			return {"goal": "Find a vein and put the dose in it.",
-				"lines": ["Slap the arm to raise one; they fade fast.", "About half the needle in. Stop at the flash."],
+				"lines": ["Slap the arm to raise one; they fade fast.", "Hold it down: it stops itself in the vein."],
 				"prompt": "click or SPACE to start", "color": I.deep_red if I != null else Color.DARK_RED}
 		"PUSH!":
 			return {"goal": "In the vein. Now push the plunger.",
@@ -740,10 +749,10 @@ func _step_bubbles(delta: float) -> void:
 
 # -- INJECT ------------------------------------------------------------------------------------
 
-## Stage 3. The mouse aims, slaps, uses the tray and the tourniquet button; the wheel (or A/D) sets
-## the angle; Space pushes the needle in and, once it is locked in, the plunger.
+## Stage 3. The mouse aims, slaps, uses the tray and the tourniquet button; Space lowers the needle
+## in where the tip is pointed and, once it is locked in, pushes the plunger.
 func _play_inject(p: Vector2, buttons: int, edges: int, down: bool, released: bool,
-		press_len: float, notches: int, delta: float) -> void:
+		press_len: float, _notches: int, delta: float) -> void:
 	var sp: bool = (buttons & BUTTON_ACTION) != 0
 	if locked:
 		return   # the plunger is advance()'s; Space is read there through _push_held
@@ -761,11 +770,6 @@ func _play_inject(p: Vector2, buttons: int, edges: int, down: bool, released: bo
 		return
 	# Holding it: it follows the mouse until the needle goes in.
 	if not inserting:
-		if (edges & BUTTON_LEFT) != 0:
-			angle -= key_deg
-		if (edges & BUTTON_RIGHT) != 0:
-			angle += key_deg
-		angle = clampf(angle + float(notches) * scroll_deg, angle_min, angle_max)
 		grip = _grip_for(p)
 		if down and _press_what == "tray":
 			held = false   # a click back on the tray sets it down
@@ -784,64 +788,73 @@ func _play_inject(p: Vector2, buttons: int, edges: int, down: bool, released: bo
 				entry = t0
 				sink = 0.0
 				flashed = false
+				# The whole stick is decided here, on the point the mouse was on. Nothing after this
+				# is a reaction test: holding Space all the way down is always the best you can do.
+				var hit := vein_near(t0)
+				_in_vein = not hit.is_empty() and float(hit.d) <= tip_tol / k
 	elif not sp:
 		_space_t = 0.0
 	if inserting:
 		if sp:
 			sink = minf(insert_max, sink + insert_speed * k * delta)
-			_check_flash()
+			_check_depth()
 		else:
 			_release_needle()
 
 
 var _space_t := 0.0
+## Whether the tip went in over a vein. Settled the moment the needle starts down; the operator's
+## only (an onlooker reads `flashed` and `locked` off the state blob).
+var _in_vein := false
 
 
-func _check_flash() -> void:
+## The needle lowering itself in. It stops on its own in the vein; with nothing under it, it goes the
+## whole way and has plainly found nothing.
+func _check_depth() -> void:
 	if not inserting:
 		return
-	var t := tip()
-	if not flashed and sink > flash_min:
-		var hit := vein_near(t)
-		if not hit.is_empty() and float(hit.d) <= tip_tol / k and not _is_blown(int(hit.i), t.x):
-			var rel := absf(angle - float(hit.tan))
-			var mid := (window_lo + window_hi) * 0.5
-			var half := (window_hi - window_lo) * 0.5 / k
-			if rel >= mid - half and rel <= mid + half:
-				flashed = true
-				flash_adv = sink
-	if flashed and sink > flash_adv + blow_past / k:
-		var hit2 := vein_near(t)
-		var vi := int(hit2.get("i", 0))
-		blown_ranges.append([vi, snappedf(t.x - blown_half_x, 0.5), snappedf(t.x + blown_half_x, 0.5)])
-		bruises.append([snappedf(t.x, 0.5), snappedf(t.y, 0.5)])
-		blown += 1
-		_spike("blown", pts_blown * vitals_per_point, "Blew the vein: the vein map reads like a bruise atlas", "BLOWN!", t + Vector2(0.0, -40.0), true)
-		_retract()
+	if _in_vein and sink >= vein_depth:
+		sink = vein_depth
+		flashed = true
+		_lock_in()
+		return
+	if sink >= insert_max:
+		_miss()
 		_need_release = true
 
 
+## Blood in the hub and the plunger is yours: PUSH!.
+func _lock_in() -> void:
+	locked = true
+	inserting = false
+	dose = fluid
+	rate = 0.0
+	show_card("PUSH!")
+
+
+## A hole in the arm where the tip is, and the bill for it.
+func _miss() -> void:
+	var t := tip()
+	punctures.append([snappedf(t.x, 0.5), snappedf(t.y, 0.5)])
+	if punctures.size() > 10:
+		punctures.pop_front()
+	misses += 1
+	_spike("miss", pts_miss * vitals_per_point, "Missed the vein: the arm has more holes than the chart explains", "MISS!", t + Vector2(0.0, -40.0))
+	_retract()
+
+
+## Letting go before it has stopped itself: pulling out of a real hole still counts as one.
 func _release_needle() -> void:
-	if flashed:
-		locked = true
-		inserting = false
-		dose = fluid
-		rate = 0.0
-		show_card("PUSH!")
-		return
 	if sink > flash_min:
-		var t := tip()
-		punctures.append([snappedf(t.x, 0.5), snappedf(t.y, 0.5)])
-		if punctures.size() > 10:
-			punctures.pop_front()
-		misses += 1
-		_spike("miss", pts_miss * vitals_per_point, "Missed the vein: the arm has more holes than the chart explains", "MISS!", t + Vector2(0.0, -40.0))
+		_miss()
+		return
 	_retract()
 
 
 func _retract() -> void:
 	inserting = false
 	flashed = false
+	_in_vein = false
 	sink = 0.0
 
 
@@ -990,7 +1003,7 @@ func _complete() -> void:
 	for rr in carried:
 		units += 2 if float(rr) > big_bubble_r else 1
 	var score := 100.0 - dose_pts - float(units) * pts_bubble - float(misses) * pts_miss \
-		- float(blown) * pts_blown - float(fast_pushes) * pts_fast
+		- float(fast_pushes) * pts_fast
 	quality = snappedf(clampf(score / 100.0, 0.05, 1.0), 0.01)
 	var b = body()
 	if b != null and b.has_method("set_sedation"):
@@ -1031,13 +1044,6 @@ func vein_near(p: Vector2) -> Dictionary:
 	return best
 
 
-func _is_blown(vi: int, x: float) -> bool:
-	for br in blown_ranges:
-		if int(br[0]) == vi and x >= float(br[1]) and x <= float(br[2]):
-			return true
-	return false
-
-
 # ---------------------------------------------------------------------------- every machine
 
 func animate(delta: float) -> void:
@@ -1074,7 +1080,7 @@ func on_jolt(_offset: Vector2, _strength: float, _duration: float) -> void:
 func react() -> void:
 	var b = body()
 	var now := {"phase": phase, "air": air_drawn, "pops": pops, "squirts": squirts, "slaps": slaps,
-		"misses": misses, "blown": blown, "flashed": flashed, "locked": locked, "fast": fast_pushes,
+		"misses": misses, "flashed": flashed, "locked": locked, "fast": fast_pushes,
 		"billed": billed, "tq": tq_on, "rip": ripples.size(), "held": held}
 	if _seen.is_empty():
 		_seen = now
@@ -1097,12 +1103,6 @@ func react() -> void:
 		ghost(0.4)
 		if b != null and b.has_method("stir"):
 			b.stir(0.6)
-	if int(now.blown) > int(_seen.blown):
-		audio(blow_cue, -4.0, 0.1)
-		shake(0.6)
-		ghost(0.5)
-		if b != null and b.has_method("stir"):
-			b.stir(0.8)
 	if bool(now.flashed) and not bool(_seen.flashed):
 		audio(stick_cue, -2.0)
 	if bool(now.locked) and not bool(_seen.locked):
@@ -1252,12 +1252,13 @@ func _paint_syringe(c: CanvasItem, debubble: bool) -> void:
 				I.circle(c, cv(Vector2(float(rp[0]), float(rp[1]))), (8.0 + age * 110.0) * _u(), Color(I.ink, 1.0 - age / 0.35), I.detail, 300)
 
 
+## The bubble key. Well right of the corner HUD: the rules and the key caps own the top left.
 func _paint_legend(c: CanvasItem) -> void:
 	var I := ink
-	I.circle(c, cv(Vector2(52.0, 58.0)), 9.0 * _u(), I.ink, I.detail, 401, Color(1, 1, 1, 0.55))
-	I.text(c, cv(Vector2(70.0, 63.0)), "loose: rises, flick the barrel", 13.0)
-	I.ellipse(c, cv(Vector2(52.0, 88.0)), Vector2(5.0, 9.0) * _u(), I.amber, I.detail, 402, I.amber_fill)
-	I.text(c, cv(Vector2(70.0, 93.0)), "stuck: flick right beside it", 13.0)
+	I.circle(c, cv(Vector2(636.0, 58.0)), 9.0 * _u(), I.ink, I.detail, 401, Color(1, 1, 1, 0.55))
+	I.text(c, cv(Vector2(654.0, 63.0)), "loose: rises, flick the barrel", 13.0)
+	I.ellipse(c, cv(Vector2(636.0, 88.0)), Vector2(5.0, 9.0) * _u(), I.amber, I.detail, 402, I.amber_fill)
+	I.text(c, cv(Vector2(654.0, 93.0)), "stuck: flick right beside it", 13.0)
 
 
 func _button(c: CanvasItem, r: Rect2, label: String, sd: int, live := true) -> void:
@@ -1314,10 +1315,6 @@ func _paint_inject(c: CanvasItem) -> void:
 	_prof_mark("veins", tp0)
 	tp0 = Time.get_ticks_usec()
 	# What went wrong on this arm stays on it.
-	for br in bruises:
-		var at := cv(Vector2(float(br[0]), float(br[1])))
-		I.ellipse(c, at, Vector2(30.0, 18.0) * _u(), Color(0, 0, 0, 0), 0.0, 540, I.bruise)
-		I.ellipse(c, at, Vector2(14.0, 9.0) * _u(), Color(I.bruise_core, 0.7), I.detail, 541, I.bruise_core)
 	for pu in punctures:
 		I.circle(c, cv(Vector2(float(pu[0]), float(pu[1]))), 4.5 * _u(), I.deep_red, I.detail, 550, Color(I.deep_red, 0.45))
 	for rp in ripples:
@@ -1354,15 +1351,17 @@ func _paint_inject(c: CanvasItem) -> void:
 
 ## Where every part of the syringe assembly is, in rpx, for a grip `g`, an angle and how far the needle
 ## is in. The ONE place this is worked out: the drawing and the self-test's alignment check both read
-## it, and while the needle is in, `tip` is exactly tip() (the point the vein test and the marks use).
+## it, and `tip` is exactly tip() (the point the vein test and the marks use).
+##
+## Going in is depth, not travel: the needle shows down to where it pierced the skin and no further,
+## so the drawn tip, the entry dimple and the point the vein test uses are one and the same point --
+## the point the mouse was on. `adv` only eats the exposed needle, sliding the barrel down onto it.
 func asm_geometry(g: Vector2, ang: float, adv: float) -> Dictionary:
 	var d := Vector2(cos(deg_to_rad(ang)), sin(deg_to_rad(ang)))
 	var hub := g + d * ASM_BARREL
-	var tp := g + d * ASM_TIP
-	# The needle shows down to where it went into the skin; the rest is under it.
 	var entry_pt := g + d * (ASM_TIP - adv)
-	return {"d": d, "n": Vector2(-d.y, d.x), "hub": hub, "tip": tp, "needle_from": hub + d * 8.0,
-		"entry": entry_pt, "vis_end": entry_pt if adv > 0.0 else tp}
+	return {"d": d, "n": Vector2(-d.y, d.x), "hub": hub, "tip": entry_pt, "needle_from": hub + d * 8.0,
+		"entry": entry_pt, "vis_end": entry_pt}
 
 
 ## The grip the assembly is drawn at right now.
@@ -1373,8 +1372,8 @@ func drawn_grip() -> Vector2:
 
 
 ## The syringe assembly along `ang` from `g` (the grip): barrel, needle, and, once it is in, the
-## buried part dashed from the entry dimple to the tip, which is ringed: the tip is where the vein
-## test happens and where a miss leaves its hole.
+## ringed dimple it went in at. That ring is the tip: where the vein test happens and where a miss
+## leaves its hole. It does not move while the needle goes in -- the exposed needle shortens instead.
 func _paint_assembly(c: CanvasItem, g: Vector2, ang: float, adv: float, live: bool) -> void:
 	var I := ink
 	var geo := asm_geometry(g, ang, adv)
@@ -1415,21 +1414,18 @@ func _paint_assembly(c: CanvasItem, g: Vector2, ang: float, adv: float, live: bo
 	if adv < ASM_NEEDLE * 0.5 - 2.0:
 		I.seg(c, cv(half + n * 4.0), cv(half - n * 4.0), I.ink, 1.4, 606)
 	if adv > 0.0:
-		I.dashed(c, cv(vis_end), cv(tp), Color(I.ink, buried_alpha), I.detail, 5.0, 4.0)
-		# The entry dimple, on the needle's line where it went in, and the tip it is heading for.
-		c.draw_arc(cv(vis_end), 5.0 * _u(), 0.0, TAU, 12, Color(I.ink, 0.6), 1.4 * _u())
-		c.draw_arc(cv(tp), 3.0 * _u(), 0.0, TAU, 10, Color(I.ink, minf(1.0, buried_alpha + 0.2)), 1.4 * _u())
-		var depth := clampf(1.05 * adv / ASM_NEEDLE, 0.0, 1.0)
-		var red := depth > 0.65 and not flashed and not locked
+		# The dimple the needle went in at: the tip, the vein test's point, and where a hole lands.
+		c.draw_arc(cv(tp), 5.0 * _u(), 0.0, TAU, 12, Color(I.ink, 0.6), 1.4 * _u())
+		c.draw_arc(cv(tp), 2.5 * _u(), 0.0, TAU, 10, Color(I.ink, minf(1.0, buried_alpha + 0.2)), 1.4 * _u())
+		var depth := clampf(adv / insert_max, 0.0, 1.0)
+		var red := depth > 0.75 and not flashed and not locked
 		if not locked:
-			I.text(c, cv(vis_end + Vector2(14.0, -12.0)), "depth %d%%" % int(round(depth * 100.0)), 13.0, I.deep_red if red else I.label)
-	if live:
-		I.text(c, cv(g + Vector2(-34.0, -14.0)), "%d°" % int(round(ang)), 13.0, Color(I.label, 0.55), 1)
+			I.text(c, cv(tp + Vector2(14.0, -12.0)), "depth %d%%" % int(round(depth * 100.0)), 13.0, I.deep_red if red else I.label)
 
 
 ## The spec's section 7 debug overlay (`debug_overlay`, or --inject-debug on the command line): the
-## veins in bright green, blown stretches in red, the angle window as dashed rays from the tip, a cross
-## at the exact point the vein test uses, and a readout.
+## veins in bright green, the reach the tip has to land inside as a ring around it, a cross at the
+## exact point the vein test uses, and a readout.
 func _paint_debug(c: CanvasItem) -> void:
 	var I := ink
 	var green := Color(0.1, 0.85, 0.2, 0.9)
@@ -1438,26 +1434,15 @@ func _paint_debug(c: CanvasItem) -> void:
 		for q in (veins[vi] as PackedVector2Array):
 			pts.append(cv(q))
 		c.draw_polyline(pts, green, 2.0)
-	for br in blown_ranges:
-		var va := _vein_at(int(br[0]), float(br[1]))
-		var vb := _vein_at(int(br[0]), float(br[2]))
-		if va.x >= 0.0 and vb.x >= 0.0:
-			c.draw_line(cv(Vector2(va.x, va.y)), cv(Vector2(vb.x, vb.y)), Color(0.9, 0.1, 0.1, 0.9), 4.0)
-	var mid := (window_lo + window_hi) * 0.5
-	var half := (window_hi - window_lo) * 0.5 / k
 	if phase == Phase.INJECT and (held or inserting or locked):
 		var tp := tip()
-		var hit := vein_near(tp)
-		if not hit.is_empty():
-			for off: float in [mid - half, mid + half]:
-				var ang := deg_to_rad(float(hit.tan) + off)
-				I.dashed(c, cv(tp), cv(tp - Vector2(cos(ang), sin(ang)) * 70.0), Color(0.1, 0.6, 0.9, 0.8), 1.4, 5.0, 4.0)
+		c.draw_arc(cv(tp), cl(tip_tol / k), 0.0, TAU, 24, Color(0.1, 0.6, 0.9, 0.8), 2.0)
 		var x := cv(tp)
 		var r := 7.0
 		c.draw_line(x + Vector2(-r, -r), x + Vector2(r, r), Color(0.9, 0.0, 0.6), 2.0)
 		c.draw_line(x + Vector2(-r, r), x + Vector2(r, -r), Color(0.9, 0.0, 0.6), 2.0)
-	var info := "target %.1f mL +/- %.1f   fluid %.2f mL   window %.0f-%.0f deg   angle %.0f   sink %.0f" % [
-		target * barrel_ml, band * barrel_ml, fluid * barrel_ml, mid - half, mid + half, angle, sink]
+	var info := "target %.1f mL +/- %.1f   fluid %.2f mL   reach %.1f rpx   depth %.0f/%.0f (vein at %.0f)" % [
+		target * barrel_ml, band * barrel_ml, fluid * barrel_ml, tip_tol / k, sink, insert_max, vein_depth]
 	c.draw_string(ThemeDB.fallback_font, cv(Vector2(30.0, 590.0)), info, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16, Color(0.1, 0.5, 0.15))
 
 
@@ -1506,7 +1491,6 @@ func warm_all() -> void:
 	flashed = true
 	bubbles = [[SYR_X, 300.0, 9.0, 0.0, 0.0, 0, 0.0], [SYR_X - 40.0, 350.0, 7.0, 0.0, 0.0, 1, 0.0]]
 	punctures = [[300.0, 420.0]]
-	bruises = [[600.0, 420.0]]
 	tq_on = true
 	tq_left = tq_time * 0.5
 	if panel != null:
@@ -1524,10 +1508,10 @@ func net_pack() -> Dictionary:
 	return {
 		"ph": phase, "fl": fluid, "vl": vial, "bb": bs, "ad": air_drawn, "dr": drawing,
 		"hd": held, "gp": grip, "an": angle, "ins": inserting, "av": sink, "en": entry,
-		"fx": flashed, "fa": flash_adv, "lk": locked, "rt": rate, "ds": dose, "ca": carried,
+		"fx": flashed, "lk": locked, "rt": rate, "ds": dose, "ca": carried,
 		"bl": billed, "vs": vis, "tq": tq_on, "tl": tq_left, "ta": tq_avail, "rd": redness,
-		"br": blown_ranges, "pu": punctures, "bz": bruises, "rp": ripples, "dt": deliver_t,
-		"ms": misses, "bw": blown, "fp": fast_pushes, "sl": slaps, "po": pops, "sq": squirts,
+		"pu": punctures, "rp": ripples, "dt": deliver_t,
+		"ms": misses, "fp": fast_pushes, "sl": slaps, "po": pops, "sq": squirts,
 		"se": snappedf(sedation, 0.01),
 	}
 
@@ -1552,18 +1536,15 @@ func net_apply(s: Dictionary) -> void:
 	sink = float(s.get("av", sink))
 	entry = s.get("en", entry)
 	flashed = bool(s.get("fx", flashed))
-	flash_adv = float(s.get("fa", flash_adv))
 	locked = bool(s.get("lk", locked))
 	rate = float(s.get("rt", rate))
 	dose = float(s.get("ds", dose))
-	for key in ["ca", "br", "pu", "bz", "rp"]:
+	for key in ["ca", "pu", "rp"]:
 		var v = s.get(key, null)
 		if v is Array:
 			match key:
 				"ca": carried = (v as Array).duplicate()
-				"br": blown_ranges = (v as Array).duplicate(true)
 				"pu": punctures = (v as Array).duplicate(true)
-				"bz": bruises = (v as Array).duplicate(true)
 				"rp": ripples = (v as Array).duplicate(true)
 	billed = int(s.get("bl", billed))
 	vis = float(s.get("vs", vis))
@@ -1573,7 +1554,6 @@ func net_apply(s: Dictionary) -> void:
 	redness = float(s.get("rd", redness))
 	deliver_t = float(s.get("dt", deliver_t))
 	misses = int(s.get("ms", misses))
-	blown = int(s.get("bw", blown))
 	fast_pushes = int(s.get("fp", fast_pushes))
 	slaps = int(s.get("sl", slaps))
 	pops = int(s.get("po", pops))
@@ -1584,15 +1564,15 @@ func net_apply(s: Dictionary) -> void:
 # ---------------------------------------------------------------------------- bot
 
 ## The bot plays all three stages with what the rules know (it reads the veins off the seed, not
-## off the slap). `skill` 1.0 draws in taps and trims with the wheel, clears the bubbles, sticks at a
-## good angle and pushes in pulses; 0.0 holds the plunger far too long, leaves the bubbles in, misses
-## and blows the vein, and shoves the plunger down in one go. Deterministic: no random draws.
+## off the slap). `skill` 1.0 draws in taps and trims with the wheel, clears the bubbles, puts the
+## needle straight on a vein and pushes in pulses; 0.0 holds the plunger far too long, leaves the
+## bubbles in, stabs wide of the vein, and shoves the plunger down in one go. Deterministic.
 func bot_input(t: float, skill: float) -> Dictionary:
 	var dt: float = clampf(t - _bt, 0.0, 0.1)
 	_bt = t
 	skill = clampf(skill, 0.0, 1.0)
 	if _b.is_empty():
-		_b = {"t": 0.0, "wait": 0.0, "st": 0, "tries": 0, "blows": 0, "aim_i": 0, "click": false, "prev_lmb": false}
+		_b = {"t": 0.0, "wait": 0.0, "st": 0, "tries": 0, "misses0": 0, "aim_i": 0, "click": false, "prev_lmb": false}
 	var out := {"cursor": metres_of_ref(Vector2(SYR_X, 360.0)), "buttons": 0}
 	# A stamp card: take it down with Enter (which is not an action) once it will go.
 	if stamp_waiting():
@@ -1697,28 +1677,39 @@ func _bot_debubble(skill: float, out: Dictionary) -> Dictionary:
 	return _bot_click(Vector2(SYR_X, BARREL_Y1 - 30.0), out)
 
 
-## Where the bot means to put the needle in, and at what angle: [grip, angle, vein index, x].
+## Where the bot means to put the needle in: [grip, angle, vein index, x, the point the tip aims at].
 func _bot_aim(skill: float) -> Array:
 	var xs := [480.0, 330.0, 630.0, 220.0, 740.0, 400.0, 560.0]
 	var tries := int(_b.tries)
+	var d := dir()
 	for n in xs.size() * veins.size():
 		var xi := (int(_b.aim_i) + n) % xs.size()
 		var vi := (n / xs.size()) % maxi(1, veins.size())
 		var pv := _vein_at(vi, float(xs[xi]))
-		if _is_blown(vi, pv.x) or pv.x < 0.0:
+		if pv.x < 0.0:
 			continue
-		var tan_deg := float(pv.z)
-		var a := tan_deg + (window_lo + window_hi) * 0.5
-		# The sloppy hand's first goes come in far too steep for the vein, and miss.
+		var ent := Vector2(pv.x, pv.y)
+		# The sloppy hand's first goes land on the emptiest skin in that column, and find nothing.
 		var bad := int(round(lerpf(2.0, 0.0, skill)))
 		if tries < bad:
-			a += 26.0
-		a = clampf(a, angle_min + 1.0, angle_max - 1.0)
-		var d := Vector2(cos(deg_to_rad(a)), sin(deg_to_rad(a)))
-		var reach := flash_min + 6.0
-		var ent := Vector2(pv.x, pv.y) - d * reach
-		return [ent - d * ASM_TIP, a, vi, pv.x, ent]
-	return [Vector2(480.0, 200.0), 25.0, 0, 480.0, Vector2(480.0, 200.0) + Vector2(cos(deg_to_rad(25.0)), sin(deg_to_rad(25.0))) * ASM_TIP]
+			ent = _emptiest_skin(pv.x)
+		return [ent - d * ASM_TIP, angle, vi, pv.x, ent]
+	var fallback := Vector2(480.0, 400.0)
+	return [fallback - d * ASM_TIP, angle, 0, 480.0, fallback]
+
+
+## The point in this column of skin that is furthest from every vein: where the bot goes to miss.
+func _emptiest_skin(x: float) -> Vector2:
+	var best := Vector2(x, skin_top(x) + 40.0)
+	var far := -1.0
+	var y := skin_top(x) + 14.0
+	while y < 588.0:
+		var d := float(vein_near(Vector2(x, y)).get("d", 999.0))
+		if d > far:
+			far = d
+			best = Vector2(x, y)
+		y += 6.0
+	return best
 
 
 ## The vein's point and tangent at `x`: (x, y, tangent degrees), x -1 when off its ends.
@@ -1779,44 +1770,28 @@ func _bot_inject(skill: float, out: Dictionary) -> Dictionary:
 			var aim := _bot_aim(skill)
 			var g: Vector2 = aim[0]
 			out.cursor = metres_of_ref(aim[4] if cursor_at_tip else g)
-			var err := float(aim[1]) - angle
-			if absf(err) > scroll_deg * 0.55:
-				if not bool(_b.click):
-					out.buttons = BUTTON_SCROLL_UP if err > 0.0 else BUTTON_SCROLL_DOWN
-				_b.click = not bool(_b.click)
-				return out
 			var off: float = (grip + dir() * ASM_TIP).distance_to(aim[4]) if cursor_at_tip else grip.distance_to(g)
 			if float(_b.wait) > 0.0 or off > 1.5:
 				return out
 			_b.st = 13
 			_b.hold_for = 0.0
+			_b.misses0 = misses
 			return out
 		13:
 			var aim2 := _bot_aim(skill)
 			out.cursor = metres_of_ref(aim2[4] if cursor_at_tip else aim2[0])
-			# The sloppy hand blows the first vein it finds: it keeps pushing past the flash.
-			var greedy := int(_b.blows) < int(round(lerpf(1.0, 0.0, skill)))
-			if flashed and not greedy:
-				_b.st = 14
+			if misses > int(_b.get("misses0", 0)):
+				_b.st = 15   # nothing there: it went the whole way and made a hole
 				return out
 			if not inserting and sink <= 0.0 and float(_b.get("hold_for", 0.0)) > push_hold + 0.3:
-				# Blown or never started: it came back out. Try again somewhere else.
-				if blown > int(_b.blows):
-					_b.blows = blown
+				# It never started. Try again somewhere else.
 				_b.tries = int(_b.tries) + 1
 				_b.aim_i = int(_b.aim_i) + 1
 				_b.st = 12
 				_b.wait = 0.3
 				return out
-			if inserting and sink >= insert_max - 0.5 and not flashed:
-				_b.st = 15   # nothing there: let go (a miss)
-				return out
 			_b.hold_for = float(_b.get("hold_for", 0.0)) + 1.0 / 60.0
 			out.buttons = BUTTON_ACTION
-			return out
-		14:
-			# Let go at the flash: it locks in.
-			_b.st = 16
 			return out
 		15:
 			_b.tries = int(_b.tries) + 1
@@ -1845,9 +1820,9 @@ static func self_test() -> Array:
 			g.spiked.connect(func(kd): tally.spikes[kd] = int(tally.spikes.get(kd, 0)) + 1)
 			g.setup(_ctx(pid, 1, 0))
 			var t: float = run_bot(g, skill, 1.0, hash(pid) + int(skill * 100), 120.0)
-			print("[inject self-test] %-4s skill=%.1f  %s  band=%.2f..%.2f  dose=%.3f  pops=%d squirts=%d  bubbles in=%d  missed=%d blown=%d fast=%d  time=%5.1fs  vitals=%5.1f  sedation=%.2f  quality=%.2f  spikes=%s" % [
+			print("[inject self-test] %-4s skill=%.1f  %s  band=%.2f..%.2f  dose=%.3f  pops=%d squirts=%d  bubbles in=%d  missed=%d fast=%d  time=%5.1fs  vitals=%5.1f  sedation=%.2f  quality=%.2f  spikes=%s" % [
 				pid, skill, "DONE" if tally.done else "UNFINISHED", g.target - g.band, g.target + g.band, g.dose, g.pops, g.squirts,
-				g.carried.size(), g.misses, g.blown, g.fast_pushes, t, tally.v, tally.sed, g.quality, str(tally.spikes)])
+				g.carried.size(), g.misses, g.fast_pushes, t, tally.v, tally.sed, g.quality, str(tally.spikes)])
 			out.append({"patient": pid, "skill": skill, "done": tally.done, "time": t, "vitals": tally.v, "sedation": tally.sed})
 			if not tally.done:
 				print("[inject self-test] MISS: every hand has to be able to finish")
@@ -1859,7 +1834,7 @@ static func self_test() -> Array:
 				print("[inject self-test] MISS: skill 0.0 should pay for it and carry a wrong sedation")
 				ok = false
 			if skill == 0.0:
-				for kd in ["miss", "blown", "fast_push", "bubble", "dose"]:
+				for kd in ["miss", "fast_push", "bubble", "dose"]:
 					if not tally.spikes.has(kd):
 						print("[inject self-test] MISS: the sloppy run never hit '%s'" % kd)
 						ok = false
@@ -1882,7 +1857,7 @@ static func self_test() -> Array:
 		ok = false
 	gb.free()
 	gs.free()
-	# Difficulty turns every knob: a harder shift has a narrower band and a narrower angle window.
+	# Difficulty turns every knob: a harder shift has a narrower band and less reach round a vein.
 	var g5 = script.new()
 	g5.setup(_ctx("bob", 5, 0))
 	print("[inject self-test] shift 5: band +/-%.3f (shift 1 +/-%.3f)" % [g5.band, 0.05])
@@ -1899,10 +1874,10 @@ static func self_test() -> Array:
 	# Where you put the needle is where it goes in: cursor, drawn needle, the tip the vein test uses and
 	# the hole a miss leaves all line up, through the page's tilt and shrink, at several angles.
 	var al := _alignment_check(script)
-	print("[inject self-test] alignment over %d sticks: pointer vs drawn needle tip %.2f px, drawn tip vs hit-test tip %.2f px, hole vs tip %.2f px, dimple vs aimed tip %.2f px, dimple off the needle line %.2f px (%d holes, %d bruises, %d flashes)" % [
-		al.n, al.grip, al.tip, al.mark, al.dimple, al.line, al.holes, al.bruises, al.flashes])
-	if al.n < 10 or al.grip > 1.0 or al.tip > 1.0 or al.mark > 1.0 or al.dimple > 1.0 or al.line > 1.0 or al.holes + al.bruises < 3:
-		print("[inject self-test] MISS: the needle, the vein test and the marks must land on the same point")
+	print("[inject self-test] alignment over %d sticks: pointer vs drawn needle tip %.2f px, drawn tip vs hit-test tip %.2f px, hole vs the point aimed at %.2f px, tip drift while going in %.2f px (%d holes, %d found the vein)" % [
+		al.n, al.grip, al.tip, al.mark, al.drift, al.holes, al.flashes])
+	if al.n < 10 or al.grip > 1.0 or al.tip > 0.5 or al.mark > 0.5 or al.drift > 0.5 or al.holes < 3 or al.flashes < 3:
+		print("[inject self-test] MISS: the needle, the vein test and the marks must land on the point the mouse is on")
 		ok = false
 	# The shell: a stamp card waits for its press and that press is the first action (Enter only takes
 	# it down), and an onlooker gets the same bursts and splats as the operator.
@@ -2003,14 +1978,18 @@ static func _tourniquet_check(script: GDScript) -> Array:
 	return r
 
 
-## For grips and angles across the arm: put the cursor where the grip should be (worked out the way
-## the framework does, panel metres -> texture px), push the needle in and let go or blow it. Every
-## distance is in panel texture pixels, the space the player actually sees.
+## THE THING THIS STAGE LIVES OR DIES ON: the needle goes in exactly where the mouse is, and stays
+## there. For aims across the arm -- half of them on a vein, half well off one -- put the cursor where
+## the framework would (panel metres -> texture px), hold Space all the way down, and measure the
+## pointer, the drawn needle tip, the point the vein test uses and the mark left behind against each
+## other. Every distance is in panel texture pixels, the space the player actually sees. The tilt is
+## set by hand each time round: it must make no difference to where the needle lands.
 static func _alignment_check(script: GDScript) -> Dictionary:
 	var dt := 1.0 / 60.0
-	var worst := {"n": 0, "grip": 0.0, "tip": 0.0, "mark": 0.0, "dimple": 0.0, "line": 0.0, "holes": 0, "bruises": 0, "flashes": 0}
+	var worst := {"n": 0, "grip": 0.0, "tip": 0.0, "mark": 0.0, "drift": 0.0, "holes": 0, "flashes": 0}
+	var idx := 0
 	for ang: float in [12.0, 30.0, 52.0, 75.0]:
-		for gp: Vector2 in [Vector2(290.0, 330.0), Vector2(520.0, 390.0), Vector2(760.0, 360.0)]:
+		for xi: float in [290.0, 520.0, 760.0]:
 			var g = script.new()
 			g.setup(_ctx("seal" if int(ang) % 2 == 1 else "bob", 1, 0))
 			g.phase = 2
@@ -2019,6 +1998,20 @@ static func _alignment_check(script: GDScript) -> Dictionary:
 			g.held = true
 			g._need_release = false
 			g.angle = ang
+			# Every other aim is straight at a vein; the rest are at the emptiest skin in that column,
+			# so the run makes both kinds of mark.
+			var pv: Vector3 = g._vein_at(0, xi)
+			var gp := Vector2(pv.x, pv.y)
+			idx += 1
+			if idx % 2 == 0:
+				var far := 0.0
+				var y: float = g.skin_top(xi) + 14.0
+				while y < 588.0:
+					var d0: float = float(g.vein_near(Vector2(xi, y)).get("d", 999.0))
+					if d0 > far:
+						far = d0
+						gp = Vector2(xi, y)
+					y += 6.0
 			var size: Vector2 = g.panel.tex_size()
 			var on_page := func(r: Vector2) -> Vector2: return g.ink.onpage(g.cv(r), size)
 			var cursor: Vector2 = g.metres_of_ref(gp)
@@ -2030,40 +2023,24 @@ static func _alignment_check(script: GDScript) -> Dictionary:
 			# The pointer sits on the needle's drawn tip.
 			worst.grip = maxf(worst.grip, mouse_px.distance_to(on_page.call(aimed)))
 			var holes0: int = g.punctures.size()
-			var bruises0: int = g.bruises.size()
-			var last_tip := Vector2.ZERO
 			var frames := 0
-			while frames < 240:
+			while frames < 400:
 				frames += 1
-				var before: Vector2 = g.tip()
 				g.handle_cursor(cursor, 64, dt)
 				g.tick(dt)
-				if g.bruises.size() > bruises0:
-					worst.mark = maxf(worst.mark, on_page.call(Vector2(g.bruises[-1][0], g.bruises[-1][1])).distance_to(on_page.call(before)))
-					worst.bruises += 1
-					break
-				if g.inserting:
+				if g.inserting or g.locked:
+					# What is drawn, what the vein test uses and what the player pointed at: one point.
 					var geo: Dictionary = g.asm_geometry(g.drawn_grip(), g.angle, g.sink)
 					worst.tip = maxf(worst.tip, on_page.call(geo.tip).distance_to(on_page.call(g.tip())))
-					worst.dimple = maxf(worst.dimple, on_page.call(geo.vis_end).distance_to(on_page.call(aimed)))
-					# The dimple is on the line through the tip along the needle.
-					var d: Vector2 = geo.d
-					var rel: Vector2 = geo.vis_end - g.tip()
-					worst.line = maxf(worst.line, absf(rel.cross(d)) * g._u() * g.ink.page_fit(g.panel.tex_size()))
-					last_tip = g.tip()
-					if g.flashed:
-						worst.flashes += 1
-						break
-					if g.sink >= 40.0:
-						break
-			if g.inserting:
-				# Let go: a miss leaves its hole at the tip (or it locks in on a flash).
-				last_tip = g.tip()
-				g.handle_cursor(cursor, 0, dt)
-				g.tick(dt)
+					worst.drift = maxf(worst.drift, on_page.call(g.tip()).distance_to(on_page.call(aimed)))
+				if g.locked:
+					worst.flashes += 1
+					break
 				if g.punctures.size() > holes0:
-					worst.mark = maxf(worst.mark, on_page.call(Vector2(g.punctures[-1][0], g.punctures[-1][1])).distance_to(on_page.call(last_tip)))
+					# A miss leaves its hole on the point that was aimed at, not somewhere along the needle.
+					worst.mark = maxf(worst.mark, on_page.call(Vector2(g.punctures[-1][0], g.punctures[-1][1])).distance_to(on_page.call(aimed)))
 					worst.holes += 1
+					break
 			worst.n += 1
 			g.free()
 	return worst
@@ -2100,7 +2077,7 @@ static func _shell_check(script: GDScript) -> Dictionary:
 	var spec = script.new()
 	spec.setup(sctx)
 	op.mistake("MISS!", 0.0, "", "miss", Vector2(400, 400))
-	op.mistake("BLOWN!", 0.0, "", "blown", Vector2(600, 400), true)
+	op.mistake("OVERDOSE!", 0.0, "", "dose", Vector2(600, 400), true)
 	op.tick(dt)
 	spec.apply_net_state(op.net_state())
 	spec.tick(dt)

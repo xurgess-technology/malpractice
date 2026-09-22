@@ -319,6 +319,17 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 
 ## Downed players (sweep 2 wave 3)
 
+- **PLAYTEST 2026-09-22: a player stitched up on the table keeps the carry pose.** Reported by Zach
+  after a session with real players: someone went down, was carried to a table and stitched up, and
+  stayed in the over-the-shoulder Carried pose afterwards, so most of the model glitched through the
+  floor. The carried/on-table visual state is not being cleared when the stitches operation finishes
+  and the player is back up. Where to look: `scripts/player.gd` around line 2126 ("Downed hook: set
+  every visual that follows from downed / carried / on_table. Idempotent.") and line 2203-2212 (the
+  Carried clip's origin being placed on the carrier's left shoulder, mirrored), plus whatever
+  `scripts/downed/player_surgery.gd` calls when the operation completes -- the note below says the
+  player table runs its own copy of the surgery system through that adapter rather than going
+  through `game.add_case`, so the revive path there may simply never tell the body to leave the
+  carried pose. Check it on every machine, not just the revived player's: the pose is replicated.
 - **The stitches operation is self-contained.** `game.add_case` / `game.cases` do not exist on this
   branch, so the player table runs its own copy of the surgery system through
   `scripts/downed/player_surgery.gd` (an adapter standing in for the game). The integration wave
@@ -622,6 +633,26 @@ left below is what still applies to the shared strapped-monster infrastructure.
 - **`mapcheck` takes about twice as long** (every seed is generated again with a pocket forced).
 - **The Restaurant is very warm-orange** under the game's teal/amber grade; the tables' tops and the booth
   wood read dark from a distance.
+## Mirrors (2026-09-22 playtest)
+
+- **PLAYTEST 2026-09-22: standing too close to a mirror turns your character completely black.**
+  Reported by Zach after a session with real players. Not yet reproduced or root-caused; it is a
+  lighting problem, not a geometry one (the body is there, it is just unlit).
+  Where to look, in `scripts/personnel/mirrors.gd`: the local player's own body is shown to mirror
+  cameras only, on the `LightRooms.SELF` layer which the first-person camera leaves out (lines
+  15-16, and `Player.set_mirror_self` ~line 196). The mirror camera builds its cull mask as
+  `(main.cull_mask & ~HIDE_FROM_MIRRORS) | LightRooms.SELF` (~line 136, applied ~line 191) -- so the
+  first question is whether the room's **lights** actually illuminate the `SELF` layer, and whether
+  that changes with proximity. `scripts/level/light_rooms.gd` owns which lights light which layers
+  and line 35 there is specifically about this body; note `set_meta("light_dynamic", true)` at
+  mirrors.gd:60 ("light_rooms.gd: leave its layers alone").
+  Two other candidates worth ruling out: the mirror camera's **near plane is pinned to the glass**
+  (line 6, "so the wall behind never shows") -- walking close puts the reflected body right up
+  against that plane; and the render budget, where "of the sink mirrors you can see, the nearest
+  renders every frame and the rest take turns" (line 11), so proximity changes which mirror is on
+  the every-frame path. Check both the full-length entrance mirror and the sink mirrors, since they
+  are different sizes and may not fail alike.
+
 ## Doors and the per-shift wings (doors worker, 2026-09-14)
 
 - **Ceiling fixtures still light through closed doors** (they cast no shadows, as they already lit
@@ -630,6 +661,16 @@ left below is what still applies to the shared strapped-monster infrastructure.
   `C.L_WORLD`): nothing sees through it. Monsters never wander into the entrance building anyway.
 - **A leaf folded open past 90% stops colliding** so bodies cutting a doorway corner do not catch on
   its end; a player hugging the jamb can clip a few centimetres into the open leaf.
+- **PLAYTEST 2026-09-22: monsters walk through doors.** Reported by Zach after a session with real
+  players; he could not tell whether it was closed doors or the *model of the opened state* of the
+  door being walked through. Not yet reproduced or root-caused. The entry above is the obvious first
+  suspect for the open-leaf case -- a leaf past 90% deliberately stops colliding, and what is "a few
+  centimetres" of clip for a player hugging the jamb may be a whole monster walking through the
+  visibly-open leaf, since monsters are bigger and faster and do not path the way a player walks.
+  For the closed-door case, check whether monsters are subject to the same door-opening rules as
+  other agents ("Agents open hinged doors by facing them within about 3 m" below) or whether some
+  monster mover bypasses door collision entirely. Worth checking per monster type: they may not all
+  share a mover.
 - **About 3% of room doors have under 80 degrees of room on the hallway side** (furniture or a
   container near the doorway): they always fold into their tunnel, even toward someone coming out
   of the room, who has to step back while it swings (a bot gets shoved back a little). `DoorPlan.check` guarantees every door still opens wide enough to pass.
