@@ -384,6 +384,8 @@ func lies_by_clip() -> bool:
 const DIVE_SLIDE_SPEED := 2.2
 var _last_pos := Vector3.INF
 var _speed := 0.0
+## Seconds of crossfade still owed to the clip playing now (see the end of _human_clip).
+var _blend_left := 0.0
 
 
 func _human_clip(delta: float, act: Dictionary) -> void:
@@ -442,5 +444,16 @@ func _human_clip(delta: float, act: Dictionary) -> void:
 	var clip: String = String(clips.get(want, want))
 	if clip != _clip and anim.has_animation(clip):
 		_clip = clip
+		_blend_left = blend
 		anim.play(clip, blend)
+	# A crossfade at speed 0 never advances: an AnimationPlayer scales its blend by speed_scale like
+	# everything else, so a body that goes down (or prone) standing still used to start the Crawl
+	# blend, freeze it at nothing, and keep standing upright on every screen but its own until it
+	# crawled a step. Hold the speed up until the blend has run, then freeze -- so a body that stops
+	# moving mid-clip still freezes on the spot, and one that changes clip falls into the new pose
+	# over the clip's own blend first.
+	if _blend_left > 0.0:
+		if rate <= 0.0:
+			rate = 1.0
+		_blend_left = maxf(0.0, _blend_left - delta * rate)
 	anim.speed_scale = rate
