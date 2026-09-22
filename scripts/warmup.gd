@@ -91,6 +91,7 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	_inert(shelf)
 	_report(progress, "economy")
 	AimHighlight.warm(shelf)   # AFFORDANCE HOOK: the aim-highlight rim shader (scripts/aim_highlight.gd)
+	WorldItem.warm_glow(shelf)   # HOVER DROP: the glow a dropped stack picks up (scripts/world_item.gd)
 	SonoEchoScript.warm(shelf)   # the Sonographer's echo: the grainy fan and the imaging flash
 	OrScreenScript.warm(shelf)  # ORSCREEN HOOK: the wall monitor's glass shader and viewport
 	# HUB REDESIGN: the database terminal's bigger desk, and (the more expensive part) its live

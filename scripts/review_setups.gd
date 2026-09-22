@@ -51,6 +51,9 @@ const SETUPS := {
 	# The same WRAP! on a stump: an amputation at the dressing step with a mediocre tourniquet, so a
 	# good half of the cells are still bleeding and want two layers. `--goodtq` for a clean one.
 	"wrap_stump": {"seed": 4242, "stage": "_wrap_stump"},
+	# HOVER DROP (2026-09-22): open floor, four stacks in hand and two already hovering ahead.
+	# Drop everything on the one spot and watch them glow, float and shove each other aside.
+	"hover_drop": {"seed": 4242, "stage": "_hover_drop"},
 }
 
 
@@ -152,6 +155,15 @@ static func give_abilities(game: Game, level := 2) -> void:
 static func floor_item(game: Game, kind: String, pos: Vector3, count := 1, value := 0) -> void:
 	var it = game._spawn_item(kind, count, Transform3D(Basis(), pos + Vector3.UP * 0.3), WorldItem.State.LOOSE)
 	it.value = value
+
+
+## HOVER DROP: let a stack fall at `pos` the way a dropped one does, so it settles into its hover
+## and takes its own spot. (floor_item, above, sets things down flat and still instead.)
+static func drop_at(game: Game, kind: String, pos: Vector3, count := 1, value := 0) -> void:
+	var xf := Transform3D(Basis(), pos + Vector3.UP * 0.9)
+	var it = game._spawn_item(kind, count, xf, WorldItem.State.LOOSE)
+	it.value = value
+	it.toss(xf, Vector3.ZERO)
 
 
 # ---------------------------------------------------------------------------
@@ -603,3 +615,25 @@ static func _eyes(game: Game) -> void:
 					game.vats.places[hi].position as Vector3), WorldItem.State.LOOSE)
 	await _graft_stage(game, "eye_hive", "", false)
 	game.say("Two tables: the Hive's eye comes out into its vat, yours gets swapped. F1: back to your own body.", 9.0)
+
+
+## HOVER DROP (2026-09-22): a clear patch of floor near the OR, four stacks in hand and two already
+## hovering a couple of paces ahead. Tap the drop key over and over at the same spot: each stack
+## should rise off the floor with a soft glow, and any that lands where one already floats hops
+## aside to the nearest free spot instead of overlapping it. Charged throws go the same way once
+## they stop tumbling, and the pickup ball is big enough to aim at from anywhere around it.
+static func _hover_drop(game: Game) -> void:
+	var t: Vector3 = game.table_pos()
+	var base: Vector3 = game._floor_at(t + Vector3(0.0, 1.0, 4.2))
+	var out := open_direction(game, base + Vector3.UP * 1.2, 3.5)
+	place(game, base, base + out * 3.0 + Vector3(0.0, 0.5, 0.0))
+	clear_hands(game)
+	give(game, "gauze", 2)
+	give(game, "anesthetic", 1)
+	give(game, "scalpel", 1)
+	give(game, "forceps", 1)
+	game.local_player().selected = 0
+	var spot: Vector3 = base + out * 1.7
+	drop_at(game, "suture_kit", spot)
+	drop_at(game, "tourniquet", spot + out * 0.1)
+	game.say("Drop everything on the same spot: they float, they glow, they make room.", 9.0)
