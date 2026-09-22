@@ -225,6 +225,8 @@ const DoorsScript := preload("res://scripts/doors/doors.gd")
 const WingLoaderScript := preload("res://scripts/level/wing_loader.gd")
 var doors: Node = null         # scripts/doors/doors.gd, child "Doors"
 var wing_loader: Node = null   # scripts/level/wing_loader.gd, child "WingLoader"
+const MinimapScript := preload("res://scripts/minimap.gd")
+var minimap: Node = null       # MINIMAP: the shared fog of war, scripts/minimap.gd, child "Minimap"
 ## Host: someone clocked in while the wings were still being rebuilt; clock-in happens when ready.
 var clock_in_pending := false
 
@@ -323,6 +325,12 @@ func _ready() -> void:
 	add_child(wing_loader)
 	wing_loader.setup(self)
 	wing_loader.extra_builders.append(pockets)   # POCKETS HOOK: the pocket is built and torn down with the wings
+	# MINIMAP: the party's shared fog of war, host authoritative. Same path on every machine so its
+	# `mm_fog` events line up; the HUD's corner panel draws it (scripts/minimap_panel.gd).
+	minimap = MinimapScript.new()
+	minimap.name = "Minimap"
+	add_child(minimap)
+	minimap.setup(self)
 	Net.roster_changed.connect(_on_roster_changed)
 	# CUSTOMIZATION: what everyone looks like arrives on its own channel (scripts/net.gd).
 	Net.looks_changed.connect(_apply_looks)
@@ -4559,6 +4567,11 @@ func _event(kind: String, data: Dictionary) -> void:
 			mark_own_db(String(data.kind), String(data.field))
 		"wt_pulse":
 			wall.on_pulse(data)   # terminal redesign: someone clicked the break room screen
+		"mm_fog", "mm_fog+":
+			# MINIMAP: the party's shared fog. "mm_fog" is the whole state (a join, a new wing
+			# generation, or the periodic resync); "mm_fog+" is what was just revealed.
+			if minimap != null:
+				minimap.on_event(kind, data)
 		"sound":
 			Audio.play(data.cue, data.get("at"))
 		"cremate":
