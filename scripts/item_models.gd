@@ -12,10 +12,39 @@ const ItemsDB := preload("res://scripts/items.gd")
 
 ## Colour coding (inventory worker, sweep 2): surgical supplies get a teal rim, sellable loot a
 ## gold one, so it is obvious in the dark what the surgery needs. One cached overlay shader,
-## two cached materials, applied as `material_overlay` so shared or imported materials are
-## never modified.
-const TINT_TEAL := Color(0.25, 0.95, 0.85)
-const TINT_GOLD := Color(1.0, 0.72, 0.22)
+## one cached material per colour, applied as `material_overlay` so shared or imported materials
+## are never modified.
+##
+## GLOW BALL (2026-09-22): the palette grew past those two, because a dropped stack now also wears
+## a ball of glow in its colour (scripts/world_item.gd) and "teal, gold or nothing" left half the
+## floor unlabelled. glow_key()/glow_color() below are the one source of truth: the rim an item
+## wears and the orb it sits in are always the same colour.
+const TINT_TEAL := Color(0.25, 0.95, 0.85)      # surgical supplies: what the case needs
+const TINT_GOLD := Color(1.0, 0.72, 0.22)       # sellable loot: what pays
+## The four new ones are deliberately more saturated than teal and gold look on paper: additive
+## light over a lit floor, through the environment's bloom, loses most of its colour, and a pastel
+## orb comes out as a white bubble. These read as red / violet / green at twenty paces.
+const TINT_ORGAN := Color(1.0, 0.14, 0.28)      # eyes and brains: loot that rots
+const TINT_PHARMA := Color(0.58, 0.30, 1.0)     # pharmacy stock: pills, boots
+const TINT_VESSEL := Color(0.26, 1.0, 0.52)     # specimen vats and anything else you carry two-handed
+const TINT_PLAIN := Color(0.58, 0.72, 1.0)      # everything the palette has no opinion about
+## The rim's strength per colour: bright models (teal supplies, bone-white plain) need less than
+## dark ones (gold loot is mostly black plastic and dull metal). Kept low on purpose -- Zach, on the
+## first version: too harsh. A soft edge you notice in the dark, not a glowing outline.
+const TINT_STRENGTH := {
+	"teal": [0.32, 0.012],
+	"gold": [0.38, 0.015],
+	"organ": [0.34, 0.013],
+	"pharma": [0.34, 0.013],
+	"vessel": [0.32, 0.012],
+	"plain": [0.28, 0.010],
+}
+const TINT_COLORS := {
+	"teal": TINT_TEAL, "gold": TINT_GOLD, "organ": TINT_ORGAN,
+	"pharma": TINT_PHARMA, "vessel": TINT_VESSEL, "plain": TINT_PLAIN,
+}
+## The rim no longer breathes: the orb around a dropped stack is the one thing in the world that
+## pulses, so nothing beats against it (scripts/world_item.gd, PULSE_SECONDS).
 const TINT_SHADER := """
 shader_type spatial;
 render_mode unshaded, blend_add, depth_draw_never, cull_back, shadows_disabled;
@@ -27,13 +56,35 @@ uniform float base = 0.035;
 void fragment() {
 	float facing = clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0);
 	float edge = pow(1.0 - facing, 4.5);
-	float breathe = 0.92 + 0.08 * sin(TIME * 1.6);
-	ALBEDO = tint * (edge * rim * breathe + base);
+	ALBEDO = tint * (edge * rim + base);
 }
 """
 
 static var _tint_shader: Shader = null
 static var _tint_mats := {}
+
+
+## Which colour a kind wears, as a key into TINT_COLORS. Organs are checked before loot on purpose:
+## they are in the loot table, but "that red thing on the floor is somebody's eye" is worth its own
+## colour. Kinds are named `eye_*` / `brain_*` (scripts/economy/loot_table.gd).
+static func glow_key(kind: String) -> String:
+	if kind.begins_with("eye_") or kind.begins_with("brain_"):
+		return "organ"
+	if ItemsDB.is_surgical(kind):
+		return "teal"
+	if ItemsDB.is_loot(kind):
+		return "gold"
+	var d := ItemsDB.def(kind)
+	if d.get("wear", false) or d.get("consumable", false):
+		return "pharma"
+	if d.get("bulky", false):
+		return "vessel"
+	return "plain"
+
+
+## The colour a kind's rim and its dropped-stack orb are drawn in.
+static func glow_color(kind: String) -> Color:
+	return TINT_COLORS[glow_key(kind)]
 
 
 static func make(kind: String, count: int = 1) -> Node3D:
@@ -62,7 +113,7 @@ static func make(kind: String, count: int = 1) -> Node3D:
 	return root
 
 
-## make() plus the teal (surgical) or gold (loot) rim. Use this for items in the world, in hands
+## make() plus the kind's rim (glow_key()). Use this for items in the world, in hands
 ## and on the shelf; minigames keep the plain make() for their close-up tools.
 static func make_tinted(kind: String, count: int = 1, soft := false) -> Node3D:
 	var n := make(kind, count)
@@ -70,16 +121,11 @@ static func make_tinted(kind: String, count: int = 1, soft := false) -> Node3D:
 	return n
 
 
-## The overlay material for a kind: teal for surgical supplies, gold for loot, null otherwise.
+## The overlay material for a kind, in its palette colour (glow_key()). Never null: since the orb
+## gives every dropped kind a colour, the rim gives every kind the same one.
 ## `soft` is a fainter rim for stacks held in first person, which fill a big part of the view.
 static func tint_material(kind: String, soft := false) -> Material:
-	var key := ""
-	if ItemsDB.is_surgical(kind):
-		key = "teal"
-	elif ItemsDB.is_loot(kind):
-		key = "gold"
-	if key == "":
-		return null
+	var key := glow_key(kind)
 	var cache_key := key + ("_soft" if soft else "")
 	if _tint_mats.has(cache_key):
 		return _tint_mats[cache_key]
@@ -88,18 +134,17 @@ static func tint_material(kind: String, soft := false) -> Material:
 		_tint_shader.code = TINT_SHADER
 	var m := ShaderMaterial.new()
 	m.shader = _tint_shader
-	var col: Color = TINT_TEAL if key == "teal" else TINT_GOLD
+	var col: Color = TINT_COLORS[key]
 	m.set_shader_parameter("tint", Vector3(col.r, col.g, col.b))
-	# Gold loot is often dark metal and plastic; teal supplies are mostly bright: even them out.
 	var soft_k := 0.4 if soft else 1.0
-	# Toned down (Zach: too harsh): a soft edge you notice in the dark, not a glowing outline.
-	m.set_shader_parameter("rim", (0.32 if key == "teal" else 0.38) * soft_k)
-	m.set_shader_parameter("base", (0.012 if key == "teal" else 0.015) * soft_k)
+	var s: Array = TINT_STRENGTH[key]
+	m.set_shader_parameter("rim", float(s[0]) * soft_k)
+	m.set_shader_parameter("base", float(s[1]) * soft_k)
 	_tint_mats[cache_key] = m
 	return m
 
 
-## Put the kind's rim on every mesh under `node` (no-op for kinds without one).
+## Put the kind's rim on the biggest meshes under `node`.
 ## Every overlay is one more draw of that mesh, so only the TINT_MAX_MESHES biggest parts of a
 ## model get it: the outline reads from the big shapes, the screws and labels do not matter.
 const TINT_MAX_MESHES := 5
