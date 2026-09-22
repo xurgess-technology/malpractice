@@ -81,7 +81,7 @@ The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\
 - **Always add `--fixed-fps 60`** to headless test scenes (about 12x faster).
 - **Run headless tests one at a time per checkout.** Parallel runs in the same directory segfault.
 - Test scenes, each prints `result=PASS` or `FAIL` at the end: `tools/*test.tscn` (braintest,
-  carrycamtest, combattest, controlstest, databasetest, devtest, dissectiontest, doortest,
+  carrycamtest, combattest, controlstest, databasetest, devtest, doortest,
   downedtest, fogtest, inventorytest, looptest, orscreentest, pockettest, settingstest,
   straptest) and
   `tools/monster_lab.tscn`

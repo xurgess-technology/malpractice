@@ -211,9 +211,6 @@ static func _items(game: Game) -> void:
 static func arcade_all_on() -> void:
 	for key in Procedures.ARCADE_ENABLED.keys():
 		var k := String(key)
-		# The monster table's skull cut has no arcade rebuild of its own and stays legacy.
-		if k == "saw:skull":
-			continue
 		if ResourceLoader.exists(String(Procedures.ARCADE_SCRIPTS.get(k, Procedures.ARCADE_SCRIPTS.get(k.get_slice(":", 0), "")))):
 			Procedures.ARCADE_ENABLED[k] = true
 

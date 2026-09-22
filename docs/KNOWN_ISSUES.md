@@ -519,20 +519,20 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
 - **The paramedics push by clip**: `Push` runs at the crew's speed and freezes when the crew stops,
   so a medic stops mid-stride; the front medic walks beside the gurney's head rather than pulling it.
 
-## Dissection (sweep 3)
+## Monster cases / GRAFTING part one (sweep 3, strapped Hive)
+
+The skull-cut / brain-harvest "Dissection" ailment described in earlier notes has been removed
+entirely; a strapped monster's only ailment is now Eyeball Extraction (`docs/GRAFTING.md`). What is
+left below is what still applies to the shared strapped-monster infrastructure.
 
 - **The strapped rig bodies are fitted by measured constants** (`monster_rig_look.gd` `RIG`: scale,
   offset, head bone, strap positions and heights, injection point, limb pivots). If the monsters
   worker changes a look's proportions or `make_lying`, the head can drift off the neck and the straps
-  off the body: `tools/dissectiontest` fails its head-bone check (2 cm) and the table-fit check, but
-  the straps have no check, so look at `tools/dissection_shots/01*`, `02*` after such a change.
-- **The openable head is one ellipsoid**, not the walking look's two skull pieces, so the skull is a
-  little rounder, and the face pieces are copied from `sonographer_look.gd` / `hive_look.gd` (edits
-  there do not reach the table). The Sonographer's brow sits 6 mm further out so it does not sink into
-  the ellipsoid; it keeps the walking head's bright, fine-noise band look, which under the OR lamp
-  (plus the saw's guide glow on the forehead) reads a bit like a bandage. From beside the table the
-  Sonographer's ear bowl (pink with a dark canal dot) can read as an eye at a glance, exactly as it
-  does on the walking monster in profile.
+  off the body; the straps have no automated check.
+- **The openable head is one ellipsoid**, not the walking look's two skull pieces, so it is a little
+  rounder, and the face pieces are copied from `hive_look.gd` (edits there do not reach the table).
+  The cap never opens any more (Eyeball Extraction never sets `skull_open`), so this only affects the
+  head's base shape.
 - **The rig body's back sinks about 4 cm into the table top** (the lying copy's gown back is lower
   than its legs; raised so the legs rest on the table). Hidden by the table from most angles.
 - **Thrashing on the rig body moves whole limbs** from shoulder and hip (single-bone arms and legs, no
@@ -541,36 +541,19 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   no rig equivalent). The head only rocks a little (the operator works on it).
 - **The primitive bodies (no rig) are plainer than Bob and the seal**: smooth lofts, a painted face
   with sphere eyes, no hands to speak of. Only used when the Kenney rig asset is missing.
-- **The saw's calm guide glow shows on the forehead before anyone saws** (the same idle glow limbs
-  have); the saw model itself is hidden until someone saws the skull.
-- **The brain step's camera looks from past the end of the table**, so the body appears upside down
-  above the opening (`05_brain_nerves.png`). Readable, but a surgeon standing at the head end would
-  be the natural view.
-- **The nerves are short**: the gap between the brain and the bone is 1-1.5 cm, so the cords are
-  small; the rings carry the read. The rig heads are smaller than the old primitive heads (about
-  0.11 m half length), so their brains are scaled to 0.92 of what the opening would fit to keep the gap.
 - **Awake thrashing only adds botches, shrieks and body motion.** The operator's hand shake stays
   the surgery system's stir (strongest at sedation 0, roughly every 2.5 s); there is no separate,
   stronger jolt for an awake monster. The head barely moves so the work planes stay on it.
-- **An awake monster shrieks forever** (noise 0.7 every 3.5-6.5 s) until re-dosed, dissected or the
-  shift ends: a forgotten one keeps calling the Sonographer to the OR. No strap breaks (by design).
+- **An awake monster shrieks forever** (noise 0.7 every 3.5-6.5 s) until re-dosed, its eye taken or
+  the shift ends: a forgotten one keeps calling for help. No strap breaks (by design).
 - **Monster cases never block clocking out** (`ShiftLoop._clock_out_blocker` skips them); the next
   shift's `_clear_case` removes a strapped monster left behind. The softlock guard
-  (`_live_requirements`) still counts a monster case's bone saw and forceps.
+  (`_live_requirements`) still counts a monster case's tools.
 - **Holding anesthetic at a monster's table always re-doses** instead of offering to operate, from
   either hand. Set the vials down (or on the shelf) to operate.
 - **`game.case` can be a monster case** (the alias is the first non-player case) when a monster is
   strapped before the phone patient arrives. Old single-case code paths and tests that read
   `game.case` would then look at the monster.
-- **Brain quality is the brain's condition only**; the saw's `cut_quality` is recorded in the flags
-  but not used.
-- **The minigame lab needs `--ailment=dissection`** for monster patients (it infers amputation for
-  the saw and gunshot for the forceps), and `--flags=skull_open:1` to show the opened skull.
-- **Shutdown noise in the nettest logs**: `Condition "!peers.has(p_id)" is true` repeats on clients as
-  the scenario ends; the dissection scenario passes regardless (not checked whether other scenarios
-  print it too).
-- **Warmup builds four more bodies and four more minigames** (both monsters, closed and opened, the
-  skull saw and the brain forceps). `tools/perfprobe.tscn` was not run for this change.
 
 ## Pocket spaces (2026-09-14, pockets worker)
 
@@ -764,7 +747,7 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
 - **The bone saw's guide was a big glowing line.** Replaced with a pre-op skin marking in surgical
   violet: a dashed line with hash ticks across it and a dotted margin either side, a faint sheen for
   the dark OR that takes a soft green/amber/red tint after each pass, and no tooth glow. It sorts
-  under the kerf and the pooled blood; the skull variant uses a narrower spread
+  under the kerf and the pooled blood
   (`tools/lab_shots/saw_mark_*.png`; before: `before_saw_*.png`).
 
 ## Resolved 2026-09-13
@@ -870,7 +853,7 @@ Players, Bob, the paramedics and the downed player on the table use the Blender 
   with no wind-up before it (a resent packet delivered both together); `MIN_SHOWN_WINDUP` covers that
   now. A resend can also stretch the host's measured gap between the wind-up and the release, so an
   over-long claim is capped to that gap + 0.3 s, not to the real hold (seen: 1.22 s held for a 0.25 s
-  hold). Unlagged, `combat`, `monsters`, `downed` and `dissection` all pass.
+  hold). Unlagged, `combat`, `monsters` and `downed` all pass.
 - **Wind-ups make every use feel 0.2-0.35 s slower** by design; the cooldown values are unchanged
   and start at the strike, so the saw's full cycle is 1.1 s (was 0.8) and the jab's 1.35 s (was 1.0).
   Tune `WINDUP_TIME` / cooldowns after playtests.
@@ -1819,8 +1802,8 @@ Rebuilt around that:
   detected locally from Player.scan_progress wrapping; the host still records the scan.
 - **Per-player database:** `game.database` is this machine's player's own. `mark_db(kind, field, p)`
   marks for that player (the host's own directly, a guest's through a "db_update" event their machine
-  saves); `p` null = every player (a dissection harvest is the team's). Bots have none. Existing saves
-  on guests' machines start from whatever they unlock from now on.
+  saves); `p` null = every player (unused currently, nothing calls it that way). Bots have none.
+  Existing saves on guests' machines start from whatever they unlock from now on.
 - **Scan props:** `game.scan_props` (the waiting room's Night Nurse, scan_id -10) are scanned like
   monsters, through a StaticBody on the new `C.L_SCAN` layer (6) only scan rays look at.
 - **Settings fax** (`scripts/settings_screen.gd` rewritten): the settings page is a two-column fax
@@ -1965,9 +1948,9 @@ Zach has played it.
   the site plane sinks into a rounded belly at its ends and only the middle shows. The lift is a
   blunt fix: on a flatter patient it will read as hovering. A proper fix follows the local surface.
 - **`test_only` needed a second ailment list.** `Procedures.patient_ailments()` is what a shift
-  rolls and what three tests assert on exactly (`dissectiontest`, `downedtest`, `grafttest`), so
-  the dev panel and the warmup use the new `dev_ailments()` instead, which adds the test-only ones.
-  If test-only procedures become a normal thing, those tests want revisiting.
+  rolls and what tests assert on exactly (`downedtest`, `grafttest`), so the dev panel and the
+  warmup use the new `dev_ailments()` instead, which adds the test-only ones. If test-only
+  procedures become a normal thing, those tests want revisiting.
 - **The seep rate is tuned against the bot, not a person.** `suture.gd`'s `seep_rate` (0.095) was
   set so the self-test can show that closing the widest stretch first costs about one gush less
   than going end to end. A slow first-timer taking 40 s eats several gushes; that may be too
@@ -2001,9 +1984,6 @@ Phase 0 and 1 of [docs/ARCADE_SURGERY.md](ARCADE_SURGERY.md). Every arcade game 
   against a 15-25 target: both inside, but a small tuning change to `tear_per_rush` pushes one end
   or the other out. The botch threshold is discrete (a tear costs 3.0 when the meter fills), so the
   numbers step rather than slide.
-- **`saw:skull` is pinned to the legacy saw.** The arcade saw can play it (its own layers, a depth
-  band instead of bone circles) but it has never been looked at, and the monster table's fiction is
-  not the same joke. Flipping that key is untested.
 - **The blood that hides the pendulum is flat hard-edged circles.** Readable and unmistakable, but
   crude next to the rest of the panel style.
 - **No arcade sounds of its own.** SAW! reuses `surgery_saw_rasp`, `surgery_saw_grind`,
@@ -2049,9 +2029,9 @@ Phases 0 to 7 of [docs/ARCADE_SURGERY.md](ARCADE_SURGERY.md); the full write-up 
 - **DODGE!'s sloppy bot runs long.** Every tear costs about 4 s (the 2 s TORN! lockout, a reaction,
   22 mm flown again), so a run with more than about six tears is over the 40 s target: Bob at skill
   0.0 takes 52 s for 9 tears. The dials are `torn_lock` and `knock_mm`.
-- **The legacy `forceps.gd` still carries its gunshot game**, now unreachable in a shift (only
-  `forceps:brain` loads it). It could be cut down to the brain harvest's wrapper; `brain_forceps.gd`
-  borrows its `_build_forceps`, `_tool` and `_arms`, so that is not a straight delete.
+- **The legacy `forceps.gd` still carries its gunshot game**, now unreachable in a shift entirely
+  (DODGE! plays "forceps" and the monster table's old brain-harvest variant is gone); only
+  `--selftest=forceps` still loads it.
 - **The arcade self-tests leak 24-60 ObjectDB instances at process exit.** Shared frame, not any one
   game.
 - **Agent worktrees are cut from a stale base.** All eight overnight worktrees arrived on `2cf8e95`

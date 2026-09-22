@@ -42,16 +42,15 @@ const PROCEDURE_TEXT := {
 	"amputation": "An infected limb that can't be saved. Take it off before the infection spreads.",
 	"laceration": "A deep cut that won't close on its own. Stitch it shut.",
 	"stitches": "A downed teammate with a deep gash. Stitch it shut and they get back up.",
-	"dissection": "A sedated monster on the table. Open the skull and pull out the brain.",
 	"eye_extraction": "A strapped Hive on the table. Hold the scalpel to start: cut round the eye, scoop it out, snip the nerve, then lift it into the specimen vat standing on the table with the forceps.",
 }
 
 const SURGERY_TEXT := {
 	"anesthetic": ["Puts the patient under so they don't feel a thing. Too little and they wake up mid-surgery.", "Found in medicine fridges. Glass: dropping it breaks some."],
 	"gauze": ["Rolls of dressing that pack wounds and soak up bleeding.", "Found in nurse station drawers."],
-	"forceps": ["Long tongs for pulling out bullets, and brains.", "Found in steel drawer units. Kept after use."],
+	"forceps": ["Long tongs for pulling out bullets, and seating a graft.", "Found in steel drawer units. Kept after use."],
 	"tourniquet": ["A strap that cuts off the blood to a limb before you saw.", "Found in trauma bags. Kept after use."],
-	"bone_saw": ["Cuts through bone: infected limbs, and monster skulls.", "Found on pegboards. Kept after use."],
+	"bone_saw": ["Cuts through bone: infected limbs.", "Found on pegboards. Kept after use."],
 	"suture_kit": ["Needle and thread for closing a downed teammate's wound.", "Found in trauma bags and drawers."],
 	"scalpel": ["A small blade for the careful cuts: around an eye, and through its nerve.", "Starts on the OR's storage shelves. Kept after use."],
 	"eye_spoon": ["A shallow spoon that slides behind an eye and lifts it out.", "Starts on the OR's storage shelves. Kept after use."],

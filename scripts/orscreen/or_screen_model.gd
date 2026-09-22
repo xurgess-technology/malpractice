@@ -80,13 +80,8 @@ static func _panel(game: Object, c: Dictionary, order: int, shelf_left: Dictiona
 	var vitals := clampf(float(c.get("vitals", game.get("vitals") if game.get("vitals") != null else 100.0)), 0.0, 100.0)
 	if state == "dead":
 		vitals = 0.0
-	# GRAFTING part one: a strapped Hive that hasn't started can go either way (the tool in hand picks;
-	# Dissection.ailment_for). The screen leads with Eyeball Extraction, the default plan, and lists the
-	# saw and forceps too.
-	var fresh_hive := patient_id == "hive" and ailment_id == "dissection" and int(c.get("step_index", 0)) == 0 and state == "on_table"
-	var shown_id := "eye_extraction" if fresh_hive else ailment_id
-	var ail := ProceduresDB.ailment(shown_id)
-	var steps := ProceduresDB.steps(shown_id)
+	var ail := ProceduresDB.ailment(ailment_id)
+	var steps := ProceduresDB.steps(ailment_id)
 	var cur := clampi(int(c.get("step_index", 0)), 0, steps.size())
 	if state == "stable":
 		cur = steps.size()
@@ -96,8 +91,8 @@ static func _panel(game: Object, c: Dictionary, order: int, shelf_left: Dictiona
 		"patient_id": patient_id,
 		"patient_name": _patient_name(game, c),
 		"ailment_id": ailment_id,
-		"ailment_name": String(ail.get("name", ailment_id.capitalize())) + (" (or dissection)" if fresh_hive else ""),
-		"eye": shown_id == "eye_extraction",
+		"ailment_name": String(ail.get("name", ailment_id.capitalize())),
+		"eye": ailment_id == "eye_extraction",
 		"code": String(ail.get("code", "")),
 		"state": state,
 		"vitals": vitals,
@@ -108,7 +103,7 @@ static func _panel(game: Object, c: Dictionary, order: int, shelf_left: Dictiona
 		"ready": false,
 		"operator": "",
 		"progress": 0.0,
-		# SWEEP 3 HOOK (dissection): a strapped monster shows its brain's condition and its sedation.
+		# GRAFTING part one: a strapped monster shows its eye's condition and its sedation.
 		"monster": bool(c.get("monster", false)),
 		"sedation": clampf(float((c.get("flags", {}) as Dictionary).get("sedation", 1.0)), 0.0, 1.0) if c.get("flags") is Dictionary else 1.0,
 		# SWEEP 4A HOOK (pharmacy, chunk 3): a thrown placebo pill's green blip, purely derived
@@ -125,9 +120,7 @@ static func _panel(game: Object, c: Dictionary, order: int, shelf_left: Dictiona
 		})
 	# Supplies for the steps still to come, against what the shelf can still spare for this case.
 	if state == "on_table" or state == "incoming":
-		var need := ProceduresDB.remaining_requirements(shown_id, cur)
-		if fresh_hive:
-			need.merge(ProceduresDB.remaining_requirements("dissection", 0), true)
+		var need := ProceduresDB.remaining_requirements(ailment_id, cur)
 		var kinds := []
 		for kind in ItemsDB.SURGICAL:
 			if need.has(kind):

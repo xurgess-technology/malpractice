@@ -118,7 +118,8 @@ func set_ears(listen: float, yaw: float, delta: float) -> void:
 
 
 ## A still copy lying on its back along X, head toward -X, face up, origin at the middle of its
-## back (the PatientBody convention). Primitives only where the rig is missing. For dissection.
+## back (the PatientBody convention). Primitives only where the rig is missing. For a strapped
+## monster's table body (GRAFTING part one).
 static func make_lying(monster_kind: String) -> Node3D:
 	var root := Node3D.new()
 	root.name = "LyingMonster"

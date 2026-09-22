@@ -64,17 +64,6 @@ const LAYERS := [
 	{"name": "Bone", "to": 0.64, "res": 2.2, "tear": 1.2, "bleed": 0.55, "col": Color(0.82, 0.76, 0.62)},
 	{"name": "Far side", "to": 1.0, "res": 0.9, "tear": 0.8, "bleed": 1.0, "col": Color(0.55, 0.05, 0.06)},
 ]
-## dissection (sweep 3), variant "skull": saw open a strapped monster's skull along the line across
-## its forehead. Same strokes, guide and verdicts as the limb; its own layers, no tourniquet (the
-## scalp bleeds a steady SKULL_BLEED), and at depth 1 the flags get `skull_open` instead of
-## `amputated` (the body lifts the cap off and lays it beside the head).
-const SKULL_LAYERS := [
-	{"name": "Scalp", "to": 0.16, "res": 0.5, "tear": 0.5, "bleed": 0.5, "col": Color(0.5, 0.52, 0.42)},
-	{"name": "Bone", "to": 0.84, "res": 2.0, "tear": 0.75, "bleed": 0.35, "col": Color(0.86, 0.8, 0.66)},
-	{"name": "Dura", "to": 1.0, "res": 0.8, "tear": 0.9, "bleed": 0.8, "col": Color(0.6, 0.28, 0.3)},
-]
-const SKULL_BLEED := 0.35
-const K_SKULL := 0.05
 const MAX_SPLATS := 28
 const MAX_SCORES := 10
 ## Surgical skin-marker violet (gentian violet), for the ink and its resting sheen.
@@ -98,7 +87,6 @@ const MARK_TICK_HW := 0.0009     # half width of a tick
 const MARK_DOTS_AT := 0.0235     # the dotted margin lines either side of the cut
 const MARK_DOT_R := 0.0014
 const MARK_DOT_EVERY := 0.0042
-const SKULL_MARK_SCALE := 0.62   # the skull's marking spread, of the limb's
 
 # -- tuning from ctx -----------------------------------------------------------------------------
 var diff := 1.0
@@ -111,8 +99,7 @@ var bleed := 0.5                  # 0 clean .. 1 pouring, from the tourniquet
 var line_tol := LINE_TOL
 var distal := 1.0
 var size_k := 1.0                 # botch rates per pass shrink for thick limbs so the total stays fair
-var skull := false                # dissection: the "skull" variant
-var layers: Array = LAYERS        # SKULL_LAYERS for the skull
+var layers: Array = LAYERS
 var _bone_i := 2                  # index of the "Bone" layer in `layers`
 
 # -- shared state (the operator simulates it, spectators get it from net_state) -------------------
@@ -209,14 +196,6 @@ func setup(context: Dictionary) -> void:
 	k_cut = K_BASE * pow(0.05 / maxf(0.02, limb_r), 0.75) / pow(diff, 0.8)
 	line_tol = LINE_TOL / sqrt(diff)
 	size_k = 0.05 / maxf(0.02, limb_r)
-	if String(ctx.get("variant", "")) == "skull":
-		skull = true
-		layers = SKULL_LAYERS
-		_bone_i = 1
-		tourniquet = 1.0
-		bleed = SKULL_BLEED
-		k_cut = K_SKULL / pow(diff, 0.8)
-		size_k = 1.0
 	_rng.seed = int(ctx.get("seed", 1)) ^ 0x5a3
 	_update_progress()
 
@@ -233,8 +212,6 @@ func _probe_limb() -> void:
 	# Bob's section reports 7 mm up and 64 mm across; the arm is much rounder than that, and a
 	# sliver would keep the blade and the kerf from sinking in.
 	hu = clampf(maxf(float(sec.half_up), hs * 0.75), 0.01, 0.3)
-	if String(ctx.get("variant", "")) == "skull":
-		hu = clampf(float(sec.half_up), 0.01, 0.3)   # the skull: a shallow cut across a wide head
 
 
 func plane_extent() -> Vector2:
@@ -401,10 +378,7 @@ func _judge_pass(length: float, dur: float) -> void:
 	if depth >= 1.0:
 		var body = ctx.get("body")
 		_amputate_body(body)
-		if skull:
-			finish({"skull_open": true, "cut_quality": cut_quality()})
-		else:
-			finish({"amputated": true, "cut_quality": cut_quality()})
+		finish({"amputated": true, "cut_quality": cut_quality()})
 
 
 func cut_quality() -> float:
@@ -420,7 +394,7 @@ func _amputate_body(body) -> void:
 		return
 	# apply_flags replaces the body's flag set, so carry the earlier results (the tourniquet).
 	var f: Dictionary = (ctx.get("flags", {}) as Dictionary).duplicate()
-	f["skull_open" if skull else "amputated"] = true
+	f["amputated"] = true
 	body.apply_flags(f)
 
 
@@ -441,7 +415,7 @@ func hud_state() -> Dictionary:
 	var title := String(ctx.get("step", {}).get("label", "Saw through the limb"))
 	var hint := "Hold left click and saw back and forth along the line."
 	if done or depth >= 1.0:
-		hint = "It's open." if skull else "It's off."
+		hint = "It's off."
 	elif held:
 		if off_now > 0.35 or verdict == Verdict.OFF:
 			hint = "Off the line! Steer back onto the cut."
@@ -525,25 +499,6 @@ static func self_test() -> Array:
 				print(line)
 				out.append({"patient": pid, "skill": skill, "tq": cond.tq, "done": tally.done, "time": t, "botches": tally.n, "vitals": tally.v, "q": tally.q})
 				g.free()
-	# dissection (sweep 3): the skull variant on both monsters, sedated, stirring and awake (the
-	# awake thrashing botches come from the dissection system, not from here).
-	for sed in [1.0, 0.5, 0.2]:
-		for pid in ["hive", "sonographer"]:
-			for skill in [1.0, 0.5, 0.0]:
-				var g = script.new()
-				var tally := {"n": 0, "v": 0.0, "done": false, "q": 0.0, "flag": false, "reasons": {}}
-				g.botched.connect(func(a, r): tally.n += 1; tally.v += a; tally.reasons[r] = int(tally.reasons.get(r, 0)) + 1)
-				g.finished.connect(func(r): tally.done = true; tally.q = float(r.get("cut_quality", 0.0)); tally.flag = bool(r.get("skull_open", false)) and not r.has("amputated"))
-				g.setup({"patient_id": pid, "patient": Procedures.patient(pid), "ailment_id": "dissection",
-					"step": Procedures.step("dissection", 0), "variant": "skull", "shift": 1,
-					"difficulty": Procedures.difficulty(1), "flags": {"sedation": sed},
-					"seed": hash("skull" + pid), "body": null, "operator": true})
-				var t2: float = load("res://scripts/surgery/games/gauze.gd")._run_bot(g, skill, float(sed), hash(pid) + int(skill * 100))
-				var line2 := "[saw self-test] skull %-10s skill=%.2f sed=%.1f  %s  passes=%3d  time=%5.1fs  botches=%2d vitals=%5.1f  q=%.2f  skull_open=%s  %s" % [
-					pid, skill, sed, "DONE" if tally.done else "UNFINISHED", g.strokes, t2, tally.n, tally.v, tally.q, str(tally.flag), str(tally.reasons)]
-				print(line2)
-				out.append({"patient": pid, "variant": "skull", "skill": skill, "sed": sed, "done": tally.done and tally.flag, "time": t2, "botches": tally.n, "vitals": tally.v, "q": tally.q})
-				g.free()
 	return out
 
 # ---------------------------------------------------------------------------- visuals
@@ -578,8 +533,7 @@ func _build() -> void:
 	# The pre-op marking: violet ink on the skin (dashed line, hash ticks, dotted margins). Drawn on
 	# the skin, so it sorts over the bruise and under the kerf, the dust and the blood.
 	# Just round the limb: a longer box would ink the gown or the table beside it too.
-	# The skull's line runs across a forehead: a narrower spread keeps the margins off the brows.
-	var mark_size := Vector3(MARK_W * (SKULL_MARK_SCALE if skull else 1.0), proj_h, hs * 2.05 + 0.004)
+	var mark_size := Vector3(MARK_W, proj_h, hs * 2.05 + 0.004)
 	_mark_key = "%d|%d" % [int(round(mark_size.z * 1000.0)), int(round(mark_size.x * 1000.0))]
 	_marker = _decal(_texture("marker0|" + _mark_key), mark_size, Vector3(0, proj_y, 0), 2.5)
 	_marker.modulate = INK
@@ -808,9 +762,6 @@ func _update_visuals(delta: float) -> void:
 	_hop = maxf(0.0, _hop - delta * 5.0)
 	var hop := _hop * _hop * 0.012 * absf(sin(_vt * 60.0))
 	_saw.position = Vector3(_vis_bx - sin(deg_to_rad(8.0)) * (0.05 - sink * 0.5), _vis_lift - sink + hop, _vis_bz)
-	if skull:
-		# dissection: nobody at the skull yet, no saw hanging over the monster's face.
-		_saw.visible = operator or held or depth > 0.0
 	_saw.rotation.y = clampf((_vis_bx - kx) * 3.0, -0.25, 0.25)
 	_smear_mat.albedo_color.a = clampf(0.25 * f + blood * 1.5, 0.0, 0.92)
 	var nd := int(clampf(blood * 9.0, 0.0, 6.0))
@@ -881,9 +832,8 @@ func _place_splat(i: int) -> void:
 
 func _start_finale(body) -> void:
 	_finale = true
-	# A static copy of the limb drops away while the body shows its stump. (The skull: the body
-	# itself lifts the cap off when it gets `skull_open`.)
-	if not skull and body != null and is_instance_valid(body) and body.has_method("make_severed_limb"):
+	# A static copy of the limb drops away while the body shows its stump.
+	if body != null and is_instance_valid(body) and body.has_method("make_severed_limb"):
 		_severed = body.make_severed_limb(self)
 	_amputate_body(body)
 	var at := global_position

@@ -9,10 +9,11 @@
 //
 //   dissection_shriek_01/_02  an awake monster screaming on the table: a torn, wavering howl
 //   dissection_strap_01/_02   a limb yanking against a strap: leather creak and a buckle rattle
-//   dissection_snap           a nerve popping free of the brain: a wet elastic pluck
-//   dissection_plop           a brain landing (in the tray or on the drapes): a soft wet slap
-//   dissection_crack          the skull cap coming away: a dry crack and a suck of air
+//   dissection_plop           reused for a heavy, wet landing (also the Anesthetic Injection's needle pop)
+//   dissection_crack          reused for a dry crack (the furnace's flare, the Night Nurse's grab)
 //   dissection_inject         a re-dose going in: a short plunger hiss
+//
+// dissection_snap (a nerve popping free of a brain) was removed with the brain-harvest ailment.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -112,22 +113,6 @@ function strap(variant) {
   return b;
 }
 
-function snap() {
-  const r = rngFor('snap'), b = new Buf(0.35);
-  const bp = biquad('bandpass', 1200, 1.5);
-  let ph = 0;
-  for (let i = 0; i < b.d.length; i++) {
-    const t = i / SR;
-    // An elastic pluck: a falling blip plus a wet burst.
-    const f = 900 * Math.exp(-t * 30) + 180;
-    ph += TAU * f / SR;
-    const pluck = Math.sin(ph) * Math.exp(-t * 28) * 0.8;
-    const wet = bp(r() * 2 - 1, 700 + 1600 * Math.exp(-t * 20)) * Math.exp(-t * 22) * 1.3;
-    b.add(i, pluck + wet);
-  }
-  return b;
-}
-
 function plop() {
   const r = rngFor('plop'), b = new Buf(0.5);
   const lp = biquad('lowpass', 1400, 0.9);
@@ -204,7 +189,6 @@ const FILES = {
   'dissection_shriek_02.wav': [() => shriek(2), -3],
   'dissection_strap_01.wav': [() => strap(1), -6],
   'dissection_strap_02.wav': [() => strap(2), -6],
-  'dissection_snap.wav': [() => snap(), -6],
   'dissection_plop.wav': [() => plop(), -5],
   'dissection_crack.wav': [() => crack(), -5],
   'dissection_inject.wav': [() => inject(), -9],

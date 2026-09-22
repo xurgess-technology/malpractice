@@ -53,8 +53,6 @@ const SCENARIOS := [
 	# docs/SONOGRAPHER.md chunk B: a client sees the neck, the charge, the fan and the deafen, and is
 	# imaged and hunted correctly.
 	{"name": "sono", "scenario": "sono", "clients": 1, "timeout": 300},
-	# dissection (sweep 3): a client operates on a strapped monster while another re-doses it.
-	{"name": "dissection", "scenario": "dissection", "clients": 2, "timeout": 300},
 	# GRAFTING chunk C: the host grafts a Hive eyeball into a client; the other client sees the eye.
 	{"name": "graft", "scenario": "graft", "clients": 2, "timeout": 400},
 	# POCKETS: a client, a carried client and an item through a seam into the Factory.

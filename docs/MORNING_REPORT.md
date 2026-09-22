@@ -53,8 +53,6 @@ still passes its own self-test.
 | CUT THE RIGHT ONE! | EX 3 | `eye:snip` | **ON** | PASS |
 | GRAB! | EX 4, EG 3 | `eye:place`, `eye:grab` | **ON** | PASS |
 | STITCH! ring | EG 4 | `eye:stitch` | **ON** ⚠ | PASS |
-| — | dissection skull | `saw:skull` | off, legacy | no rebuild |
-| — | dissection brain | `forceps:brain` | off, legacy | no rebuild |
 
 ⚠ = passes, but see "what to look at first".
 
@@ -72,9 +70,8 @@ still passes its own self-test.
 | Amputation, hopeless | **stable, 55 vitals** | `sedation 1.62` → `tourniquet 0.442` → `cut_quality 0.54` → `dress_marks "gltllgltgt..."` |
 | Gunshot, hopeless | **DEAD** | died during the dressing; see below |
 
-- **EX and EG could not be driven by a bot end to end.** A strapped Hive starts as `dissection` and
-  only becomes the extraction while the scalpel is in hand at step 0, and the graft needs you
-  strapped to a table. The harness plays the dissection instead. Every EX/EG step passes its own
+- **EX and EG could not be driven by a bot end to end.** A strapped Hive starts as Eyeball
+  Extraction, and the graft needs you strapped to a table. Every EX/EG step passes its own
   self-test individually, and `--setup=arcade_eyes` stages both tables for you to play by hand.
 
 ---
@@ -266,9 +263,7 @@ are collectively too expensive, and that is a call for you, not me. The dials, c
 5. **I switched on the two games their authors wanted held.** You asked for flags true for anything
    that passes and lands near the targets, and both do. You cannot playtest what is switched off.
    Both are flagged at the top of this report instead.
-6. **`saw:skull` and `forceps:brain` are pinned to legacy.** The monster table's two steps have no
-   arcade rebuild and a different fiction.
-7. **Screenshots are gitignored.** About a megabyte each; `docs/screens/` follows what
+6. **Screenshots are gitignored.** About a megabyte each; `docs/screens/` follows what
    `tools/*_shots/` already does. The command to regenerate any of them is in each game's section.
 
 ### Per game

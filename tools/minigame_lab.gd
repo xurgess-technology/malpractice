@@ -446,8 +446,7 @@ func _run_self_test() -> void:
 		get_tree().quit(3)
 		return
 	var started := Time.get_ticks_msec()
-	# The legacy forceps game (now only the monster table's brain harvest: --selftest=forceps:brain)
-	# wants a parent to put its 3D pieces under.
+	# The legacy forceps game wants a parent to put its 3D pieces under.
 	if path.ends_with("games/forceps.gd"):
 		script.call("self_test", self, 12)
 	else:
