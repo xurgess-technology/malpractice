@@ -319,18 +319,16 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 
 ## Downed players (sweep 2 wave 3)
 
-- **A downed player who never crawls is drawn standing** on everyone else's screen (found
-  2026-09-22 while fixing the carry pose; it is on `main` too, checked by stashing the fix).
-  `scripts/hands/body_hands.gd` `_human_clip` plays the Crawl clip with a 0.2 s blend and then sets
-  `anim.speed_scale = 0.0` whenever the body is not moving (`rate = 1.0 if player.moving ... else
-  0.0`, around line 420). A crossfade at speed 0 never advances, so the rig keeps the pose it had --
-  Idle, standing upright -- until the player crawls a step, at which point it blends in properly and
-  stays right. Dev dummies and the primitive fallback are unaffected (they are tipped over by
-  `player.gd`'s `_update_down_pose` instead), which is why no test or screenshot caught it. The same
-  freeze applies to anyone who goes prone standing still. A fix has to let the blend finish before
-  the speed drops (a snap, `blend = 0.0` for the still case, is the cheap version); both want their
-  own look, since it changes how every body goes down and goes prone. `--setup=downed` crawls its
-  staged teammate half a second on purpose to work around it.
+- **A body freezes mid-blend if its clip's speed drops to zero before the crossfade runs.** Fixed
+  2026-09-22: `scripts/hands/body_hands.gd` `_human_clip` now keeps `speed_scale` at 1
+  until the clip's own blend has run, and only then freezes. It used to play Crawl with a 0.2 s
+  blend and set `anim.speed_scale = 0.0` in the same frame for a body that was not moving, and an
+  AnimationPlayer scales its crossfade by `speed_scale` like everything else -- so a player who went
+  down (or prone) standing still kept the Idle pose, drawn bolt upright on every screen but their
+  own, until they crawled a step. What is left of it: the pose a still body freezes on is 0.2 s into
+  the Crawl clip rather than its first frame, and a body that stops moving mid-clip still freezes on
+  the spot with no blend, which is what you want. `downedtest` measures the rig's height over its
+  feet for the regression (1.58 m standing, 0.34 m downed on the spot).
 - **Setting a carried teammate down is snap-to-table, by a radius.** Fixed 2026-09-22 after the
   playtest ("not clicking on the table but still pressing E set down their friend"): while you
   carry someone, standing within `Game.CARRY_TABLE_SNAP` (2.0 m, flat) of a table that would take
