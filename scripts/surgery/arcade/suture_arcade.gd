@@ -1039,6 +1039,7 @@ func paint_game(c: CanvasItem) -> void:
 	if show_solution:
 		_paint_solution(c)
 	_paint_thread(c)
+	_paint_numbers(c)
 	_paint_flash(c)
 	_paint_buttons(c)
 	shell.draw_keycaps(c, [["LMB + PULL FORWARD", "lay thread"], ["LMB + PULL BACKWARD", "undo a stitch"],
@@ -1169,7 +1170,9 @@ func _paint_closures(c: CanvasItem) -> void:
 		if poly.size() < 3:
 			continue
 		c.draw_colored_polygon(poly, Color(ink.skin_human, 0.97))
-		ink.line(c, poly, Color(ink.ink, 0.35), 1.4, 7500 + cell, true)
+		# No outline on the patch: every cell having one turned the closed half of the board into a
+		# field of scallops and buried the grid. The seam line below is the whole tell.
+		ink.line(c, poly, Color(ink.ink, 0.12), 1.0, 7500 + cell, true)
 		var seam := s * 0.30 * k
 		ink.seg(c, cv(at + Vector2(-seam, 0.0)), cv(at + Vector2(seam, 0.0)), Color(ink.ink, 0.22), 1.2, 7600 + cell)
 
@@ -1183,7 +1186,7 @@ func _blob_of(cell: int) -> PackedVector2Array:
 	var pts := PackedVector2Array()
 	for i in 11:
 		var a := TAU * float(i) / 11.0
-		pts.append(Vector2(cos(a), sin(a)) * rng.randf_range(0.82, 1.18))
+		pts.append(Vector2(cos(a), sin(a)) * rng.randf_range(0.90, 1.10))
 	_blob[cell] = pts
 	return pts
 
@@ -1199,29 +1202,41 @@ func _paint_grid(c: CanvasItem) -> void:
 		ink.seg(c, cv(BOARD_AT + Vector2(0.0, o)), cv(BOARD_AT + Vector2(BOARD, o)), col, 1.4, 7740 + i)
 	ink.rect(c, Rect2(cv(BOARD_AT), Vector2(cl(BOARD), cl(BOARD))), Color(ink.ink, 0.8), 3.0, 7780)
 	for cell in n * n:
-		if blocked[cell]:
+		if blocked[cell] or nums.has(cell):
 			continue
-		var at := at_of(cell)
-		if nums.has(cell):
-			var num := int(nums[cell])
-			var on: bool = in_path(cell)
-			var r := s * 0.28
-			ink.circle(c, cv(at), cl(r), ink.ink if on else Color(ink.ink, 0.85), 2.6, 7800 + cell,
-				Color(ink.good, 0.30) if on else Color(ink.paper, 0.92))
-			var f := InkScript.font_upright()
-			var px := int(round(s * 0.36 * _u()))
-			var w: float = f.get_string_size(str(num), HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
-			c.draw_string(f, cv(at) + Vector2(-w * 0.5, px * 0.36), str(num), HORIZONTAL_ALIGNMENT_LEFT,
-				-1.0, px, ink.ink)
-			ink.ops += 1
-		else:
-			ink.dot(c, cv(at), cl(s * 0.075), Color(ink.ink, 0.5))
+		ink.dot(c, cv(at_of(cell)), cl(s * 0.075), Color(ink.ink, 0.5))
 	for key in walls.keys():
 		var a: int = int(key) / 4096
 		var b: int = int(key) % 4096
 		var mid := (at_of(a) + at_of(b)) * 0.5
 		var along: Vector2 = (at_of(b) - at_of(a)).normalized().orthogonal() * s * 0.42
 		ink.seg(c, cv(mid - along), cv(mid + along), ink.ink, 5.0, 7900 + int(key) % 97)
+
+
+## The numbered dots, drawn LAST so the thread runs behind them: a circled numeral that fills in once
+## the needle has taken it. The spec's draw order puts the dots under the thread, but a 4.5 px line
+## straight through the middle of a numeral makes it unreadable, and the numbers are the puzzle.
+func _paint_numbers(c: CanvasItem) -> void:
+	var s := cell_px()
+	var f := InkScript.font_upright()
+	var size := int(round(s * 0.44 * _u()))
+	for cell in nums.keys():
+		var num := int(nums[cell])
+		var on: bool = in_path(int(cell))
+		var at := cv(at_of(int(cell)))
+		# An OPAQUE disc: the thread runs behind it, not through the numeral.
+		ink.circle(c, at, cl(s * 0.34), ink.ink, 3.2, 7800 + int(cell), Color(ink.paper, 1.0))
+		if on:
+			ink.circle(c, at, cl(s * 0.27), Color(ink.good, 0.9), 2.0, 7850 + int(cell),
+				Color(ink.good, 0.22))
+		var txt := str(num)
+		var w: float = f.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+		# The face is a light serif at this size and a thin numeral disappears against the page, so
+		# it is struck twice, half a pixel apart, for weight.
+		for o in [Vector2.ZERO, Vector2(0.8, 0.0), Vector2(0.0, 0.8)]:
+			c.draw_string(f, at + Vector2(-w * 0.5, float(size) * 0.35) + o, txt,
+				HORIZONTAL_ALIGNMENT_LEFT, -1.0, size, ink.ink)
+		ink.ops += 3
 
 
 ## SPEC 5: the eye is fenced -- a dashed surgeon's-marker rectangle inset in the 2x2, inward hatch
@@ -1232,9 +1247,9 @@ func _paint_eye(c: CanvasItem) -> void:
 	var box := Rect2(BOARD_AT + Vector2(float(a) * s, float(a) * s), Vector2(s * 2.0, s * 2.0))
 	var hot: float = _fence / maxf(0.01, flash_time)
 	# The eyeball itself, under the fence.
-	ink.circle(c, cv(box.get_center()), cl(s * 0.78), Color(ink.ink, 0.8), 2.6, 8010, Color("d8cfc0", 0.95))
-	ink.circle(c, cv(box.get_center()), cl(s * 0.34), Color(ink.ink, 0.9), 2.2, 8011, Color("3a5a6a", 0.9))
-	ink.dot(c, cv(box.get_center()), cl(s * 0.14), Color(ink.ink, 0.95))
+	ink.circle(c, cv(box.get_center() - Vector2(0.0, s * 0.10)), cl(s * 0.56), Color(ink.ink, 0.8), 2.6, 8010, Color("d8cfc0", 0.95))
+	ink.circle(c, cv(box.get_center() - Vector2(0.0, s * 0.10)), cl(s * 0.24), Color(ink.ink, 0.9), 2.2, 8011, Color("3a5a6a", 0.9))
+	ink.dot(c, cv(box.get_center() - Vector2(0.0, s * 0.10)), cl(s * 0.10), Color(ink.ink, 0.95))
 	var col: Color = ink.deep_red if hot > 0.0 else Color(ink.deep_red, 0.75)
 	if hot > 0.0:
 		c.draw_rect(Rect2(cv(box.position), box.size * _u()), Color(ink.deep_red, 0.18 * hot))
@@ -1258,7 +1273,11 @@ func _paint_eye(c: CanvasItem) -> void:
 			cv(Vector2(fence.position.x + inw, fence.position.y + fence.size.y * k + inw * 0.4)), col, 1.6, 8140 + i)
 		ink.seg(c, cv(Vector2(fence.end.x, fence.position.y + fence.size.y * k)),
 			cv(Vector2(fence.end.x - inw, fence.position.y + fence.size.y * k - inw * 0.4)), col, 1.6, 8160 + i)
-	ink.text(c, cv(Vector2(box.get_center().x, box.end.y + 15.0)), "DO NOT STITCH", 12.0, col, 1)
+	# INSIDE the fence, under the eyeball: out on the page it landed on the torn ring, or under
+	# whichever numbered dot happened to sit below the eye, and could not be read either way.
+	var lab := Vector2(box.get_center().x, box.get_center().y + s * 0.66)
+	c.draw_rect(Rect2(cv(lab + Vector2(-52.0, -11.0)), Vector2(cl(104.0), cl(16.0))), Color(ink.paper, 0.9))
+	ink.text(c, cv(lab), "DO NOT STITCH", 11.0, col, 1)
 
 
 ## SPEC 4: one ink line, hand-wobbled, with a needle glyph at the head and a dashed lead to the
@@ -1510,6 +1529,14 @@ static func self_test() -> Array:
 		print("[suture self-test] MISS: the grade bands")
 		ok = false
 	# SPEC 5: blood never lands on the board.
+	# SPEC 7: the results card has a Retry, and right mouse takes it -- a slow deliberate puzzle is
+	# worth another go, unlike the live cases the other three steps run.
+	var rt := _retry_check(script)
+	print("[suture self-test] retry: from the %s card, right mouse gave back a board with %d stitches, %.0f%% vitals and %d undos (was %d, %.0f%%, %d)" % [
+		rt.grade, rt.laid, rt.vit, rt.undos, rt.laid0, rt.vit0, rt.undos0])
+	if rt.laid != 0 or rt.vit < 99.9 or rt.undos != 0 or not rt.playing:
+		print("[suture self-test] MISS: Retry must hand back a fresh, playable board")
+		ok = false
 	var splat_r := _splat_check(script)
 	print("[suture self-test] blood: %d splat polygons thrown, %d of them touched the board" % [splat_r[0], splat_r[1]])
 	if splat_r[0] < 10 or splat_r[1] > 0:
@@ -1539,6 +1566,34 @@ static func self_test() -> Array:
 		ok = false
 	print("[suture self-test] %s" % ("PASS" if ok else "FAIL"))
 	return out
+
+
+## Finish a run, then press right mouse on the results card: the step must be playable again.
+static func _retry_check(script: GDScript) -> Dictionary:
+	var dt := 1.0 / 60.0
+	var g = script.new()
+	g.setup(_case("laceration"))
+	_armed(g)
+	g.vit = 40.0
+	g.undos = 7
+	g.solve_t = 50.0
+	for i in mini(6, g.sol.size()):
+		g.path.append(g.sol[i])
+	g._to_result()
+	var r := {"grade": g._grade, "laid0": g.path.size(), "vit0": g.vit, "undos0": g.undos}
+	for i in int(g.result_lock * 60.0) + 4:
+		g.handle_cursor(Vector2.ZERO, 0, dt)
+		g.tick(dt)
+	g.handle_cursor(Vector2.ZERO, BUTTON_SECONDARY, dt)
+	g.tick(dt)
+	g.handle_cursor(Vector2.ZERO, 0, dt)
+	g.tick(dt)
+	r.laid = g.path.size()
+	r.vit = g.vit
+	r.undos = g.undos
+	r.playing = g.armed() and not g.done
+	g.free()
+	return r
 
 
 static func _case(mode_v: String) -> Dictionary:
