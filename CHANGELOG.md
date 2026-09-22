@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.13**: You can tell when you've hit something now
+    - Added: Land a saw hit and whatever you hit washes red for a moment and gets knocked back a step -- monsters and teammates alike. It doesn't stun them: they keep doing whatever they were doing, which is its own kind of bad news.
 - **0.10.12**: Check yourself out in the mirror 🪞
     - Added: Walk up to the big mirror in the personnel room and press E: your surgeon fills the glass head to toe, and arrows by the head and the torso cycle your skin tone and your scrubs. Eight scrub colours, six skin tones, and everyone else sees what you picked.
     - Added: Your look sticks -- it's saved, so you clock in tomorrow wearing what you chose.
