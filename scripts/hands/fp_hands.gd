@@ -46,6 +46,7 @@ var _sprint := 0.0
 var _sway := Vector2.ZERO
 var _last_look := Vector2.INF
 var _pull := 0.0
+var _stow := 0.0   ## 0..1: hands dropped out of view while the laptop map is up (hud.gd draws the laptop)
 var _wall_t := 0.0
 var _shake_t := 0.0
 var _throw = ThrowPoseScript.new()   # THROW HOOK
@@ -145,8 +146,6 @@ func update(delta: float) -> void:
 			"jab":
 				pl = Poses.action_pose(rest_l, Poses.JAB, act)
 				jab = true
-			"saw":
-				pl = Poses.action_pose(rest_l, Poses.SAW, act)
 			"shove":
 				pl = Poses.action_pose(rest_l, Poses.SHOVE_LEFT, act)
 				var keys_r := [Poses.mirror(Poses.SHOVE_LEFT[0]), Poses.mirror(Poses.SHOVE_LEFT[1])]
@@ -162,7 +161,10 @@ func update(delta: float) -> void:
 		pr = right_both
 
 	# ---- THROW HOOK: the drop key's charged throw (scripts/hands/throw_pose.gd)
-	_throw.update(delta, float(player.throw_wind) if act.is_empty() else 0.0, two)
+	var saw_swing := not act.is_empty() and String(act.k) == "saw"   # the saw swings like the hammer
+	var wind: float = WindupScript.saw_wind(act) if saw_swing else (float(player.throw_wind) if act.is_empty() else 0.0)
+	_throw.update(delta, wind, two,
+		float(player.swing_speed))   # TRINKETS chunk B: a reflex-hammer bonk is this pose, sped up
 	if _throw.active():
 		var ww: float = _throw.wind_w()
 		var sw: float = _throw.strike_w()
@@ -205,8 +207,11 @@ func update(delta: float) -> void:
 
 	var bob := Vector3(sin(_bob) * 0.009, -absf(cos(_bob)) * 0.011, 0.0) * _speed
 	var raise_e := Poses.smooth(_raise)
+	var map_up: bool = g != null and g.trinkets != null and _kind == "laptop" and g.trinkets.map_left(player) > 0.0
+	_stow = move_toward(_stow, 1.0 if map_up else 0.0, delta * 5.0)
 	var extra := bob + Vector3(_sway.x, -_sway.y, 0.0) + Vector3(0.0, -0.3 * raise_e, 0.05 * raise_e) \
-		+ Vector3(0.02, -0.13, 0.07) * _sprint + Vector3(0.0, -0.05, WALL_PULL) * _pull
+		+ Vector3(0.02, -0.13, 0.07) * _sprint + Vector3(0.0, -0.05, WALL_PULL) * _pull \
+		+ Vector3(0.0, -0.7, 0.0) * Poses.smooth(_stow)
 	var tilt := Basis(Vector3.RIGHT, -0.55 * raise_e - 0.45 * _sprint - 0.2 * _pull)
 	pose_l = pl
 	pose_r = pr

@@ -38,6 +38,9 @@ extends Node
 ##                    client sees each (sweep 3). Then a Night Nurse grabs the client: it hangs from
 ##                    her hands with its view locked on her face, sees her head snap, drops downed
 ##                    and she is gone
+##   trinkets         (chunk B) client 1 shocks a downed client 2 awake with a defibrillator over the
+##                    wire; client 2 comes up where it lay on its own machine, and the paddles are
+##                    spent on both
 ##   pockets          (--pocket=factory) client 1 walks through a seam into the pocket holding gauze
 ##                    (the host sees it arrive and stay, client 2 sees it jump, never slide across the
 ##                    world); client 2 goes down, client 1 walks out, lifts it and carries it in; then the
@@ -67,6 +70,7 @@ extends Node
 const NAMES := ["Host", "Álvaro", "Bea O'Neil", "Surgeon Chris"]
 const MonsterScript := preload("res://scripts/monster.gd")
 const WindupScript := preload("res://scripts/combat/windup.gd")
+const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
 
 var role := "host"
 var scenario := "deliver"
@@ -158,6 +162,7 @@ func _run() -> void:
 		"hit_feedback": await _sc_hit_feedback()   # HIT FEEDBACK: the red flash and the push
 		"sono": await _sc_sono()   # docs/SONOGRAPHER.md chunk B: the Sonographer's echo over the wire
 		"graft": await _sc_graft()   # GRAFTING chunk C
+		"trinkets": await _sc_trinkets()   # TRINKETS chunk B
 		"pockets": await _sc_pockets()   # POCKETS
 		"doors": await _sc_doors()   # DOORS HOOK
 		"wall": await _sc_wall()   # terminal redesign, chunk 4
@@ -1013,6 +1018,107 @@ func _sc_graft():
 	await _finish_together("the graft, the eye on the body and its glow all reached this machine")
 
 
+## TRINKETS chunk B: a trinket used on a teammate has to work on the other machine. The host knocks
+## client 2 down beside client 1 and hands client 1 a defibrillator. CLIENT 1 clicks it, so the whole
+## client -> host use path runs, and client 2 has to get up **on its own machine, where it lay** --
+## not scattered to the OR table the way a stitching revive does. Client 2 checks the distance
+## itself, because a client owns where it is.
+func _sc_trinkets():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		var c1 = game.players.get(_peer_of(1))
+		var c2 = game.players.get(_peer_of(2))
+		if c1 == null or c2 == null:
+			return _end(false, "missing a client's surgeon on the host")
+		# No teleporting anyone: a client owns its own position, so moving it from here does not
+		# stick. Client 1 walks to the body itself. knock_down_player ignores invulnerability, so
+		# client 2 stays invulnerable while it lies there and no roaming monster can finish it off.
+		game.knock_down_player(c2, "nettest")
+		if not await _until(func(): return c2.downed, 20.0, "client 2 down on the host"):
+			return
+		for i in c1.slots.size():
+			c1.slots[i] = Player.empty_slot()
+		if not game.give_hand(c1, "defibrillator", 1):
+			return _end(false, "client 1 would not take the defibrillator")
+		_send("tk", {"c1": c1.peer_id, "c2": c2.peer_id})
+		var seen := {"lay": c2.global_position}
+		var watch := func():
+			if c2.downed:
+				seen.lay = c2.global_position   # the last spot the host saw it lying on
+		if not await _do_until(watch, func(): return not c2.downed and c2.alive, 120.0, "client 2 back on their feet"):
+			return
+		var moved: float = c2.global_position.distance_to(seen.lay as Vector3)
+		if moved > 1.5:
+			return _end(false, "client 2 was revived %.2f m from where they lay" % moved)
+		if not TrinketsScript.is_spent(c1.selected_stack()):
+			return _end(false, "the defibrillator is not used up on the host")
+		_say("client 1's defibrillator brought client 2 up %.2f m from where they lay, and is spent" % moved)
+		await _finish_together("a client's defibrillator revived another client where they lay, on every machine")
+		return
+	if not await _wait_shift_as_client():
+		return
+	var me := _me()
+	me.bot_active = true
+	if not await _until(func(): return _count_msgs("tk") > 0, 120.0, "the trinket order"):
+		return
+	var order: Dictionary = _msgs("tk")[0].data
+	var c1_id := int(order.c1)
+	var c2_id := int(order.c2)
+	if me.peer_id == c1_id:
+		# Client 1: the one holding the defibrillator. Wait for it, stand over the body, click.
+		if not await _until(func(): return me.holding("defibrillator"), 60.0, "the defibrillator in my hands"):
+			return
+		var body = game.players.get(c2_id)
+		if body == null:
+			return _end(false, "client 2 does not exist on client 1's machine")
+		# Wait for the host's knock-down to reach this machine first: without this, "they are not
+		# downed" is true before the news arrives and nothing ever gets clicked.
+		if not await _until(func(): return body.downed, 60.0, "client 2 to go down on client 1's machine"):
+			return
+		# Stand over the body every frame, but click only twice a second: a click is a reliable RPC
+		# to the host, and sixty a second floods the channel.
+		var zap_at := {"t": 0.0}
+		var zap := func():
+			me.selected = _slot_of("defibrillator")
+			var tp: Vector3 = body.global_position
+			var from: Vector3 = me.global_position - tp
+			from.y = 0.0
+			from = from.normalized() if from.length() > 0.2 else Vector3.BACK
+			me.teleport(_nav_point(tp + from * 1.1))
+			var eye: Vector3 = me.global_position + Vector3.UP * C.EYE_H
+			var d: Vector3 = tp + Vector3.UP * 0.4 - eye
+			me.bot_yaw = atan2(-d.x, -d.z)
+			me.bot_pitch = clampf(atan2(d.y, Vector2(d.x, d.z).length()), -1.2, 1.2)
+			me.bot_move = Vector2.ZERO
+			if _wall() < float(zap_at.t):
+				return
+			zap_at.t = _wall() + 0.5
+			me.bot_use += 1
+		if not await _do_until(zap, func(): return not body.downed and body.alive, 120.0, "client 2 to come up on client 1's machine"):
+			return
+		# The used mark is host-authoritative and rides the hand slots in the snapshot.
+		if not await _until(func(): return TrinketsScript.is_spent(me.selected_stack()), 30.0,
+				"the spent defibrillator to show as spent in my own hands"):
+			return
+		_say("clicked the defibrillator; client 2 is up on this machine and the paddles are spent")
+		await _finish_together("client 1 used a defibrillator on a teammate over the wire")
+		return
+	# Client 2: the one on the floor. It must go down and come back up here, where it lay -- measured
+	# on its own machine, which is the one that owns where it is.
+	if not await _until(func(): return me.downed, 60.0, "being knocked down on my own machine"):
+		return
+	var lay_here := {"p": me.global_position}
+	var lie := func():
+		if me.downed:
+			lay_here.p = me.global_position
+	if not await _do_until(lie, func(): return not me.downed and me.alive, 180.0, "being shocked back up on my own machine"):
+		return
+	var moved_here: float = me.global_position.distance_to(lay_here.p as Vector3)
+	if moved_here > 2.0:
+		return _end(false, "I came up %.2f m from where I went down" % moved_here)
+	_say("shocked awake %.2f m from where I went down, hp %d" % [moved_here, me.hp])
+	await _finish_together("client 2 was revived where it lay by another client's defibrillator")
 ## Downed (sweep 2 wave 3): client 1 goes down, client 2 carries them to the player table and
 ## stitches them up; the host and both clients see every stage.
 func _sc_downed():
