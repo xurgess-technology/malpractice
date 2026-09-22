@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.11**: Stitched up, and standing like a person again
+    - Fixed: A teammate you carried to a table and stitched up got back up still folded over an invisible shoulder, with half of them through the floor. Only everyone *else* saw it, which is why it lasted this long.
 - **0.10.10**: A door you can see is a door you can't walk through
     - Fixed: A hinged door standing wide open was completely walk-through -- the metre of solid door sticking out into the room had no collision at all, so monsters (and you) strolled straight through it. It's solid again, while still not catching you on its end when you cut the doorway corner.
 - **0.10.9**: The surgery board stops chugging
