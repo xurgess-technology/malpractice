@@ -71,6 +71,9 @@ const SETUPS := {
 	# open with a Hive parked behind the open leaf, hunting you. The leaf used to have no collider
 	# once the door was open: everything, you included, walked straight through the door model.
 	"doors": {"seed": 4242, "stage": "_doors"},
+	# HIT FEEDBACK (2026-09-22): bone saws in hand, two Hives coming for you, and Dr. Botsworth
+	# standing there to saw as well. A landed hit flashes its target red and knocks it back.
+	"hit": {"seed": 4242, "stage": "_hit"},
 }
 
 
@@ -664,6 +667,53 @@ static func _doors(game: Game) -> void:
 	await tree.physics_frame
 	print("[review] doors: door %s wide open (%.2f), a Hive behind its leaf at %s" % [best.door_id, best.amount, str(hive.global_position.snappedf(0.1))])
 	game.say("The open door is between you and the Hive. Walk into the leaf; watch it come round, not through.", 10.0)
+
+
+## HIT FEEDBACK: a clear stretch of floor with three bone saws in your hands, two Hives walking in
+## at you, and Dr. Botsworth standing beside you as something to swing at that is a PLAYER, not a
+## monster. Hit either and it should wash red for a moment and get knocked a step back -- and the
+## Hive should keep coming at you rather than going down dazed, which is what a shove (Q) does.
+## Swing a Hive and then Q it back to back to see the difference. You cannot be hurt.
+static func _hit(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	# Nothing else going on, and nothing that can end the review early.
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("god", {"on": true})
+	game._clear_monsters()
+	await tree.physics_frame
+	# Somewhere with room to be knocked about in.
+	var base: Vector3 = game._floor_at(game.clock_pos())
+	var out := open_direction(game, base + Vector3.UP * 1.2, 8.0)
+	var side := out.cross(Vector3.UP).normalized()
+	place(game, base, base + out * 4.0 + Vector3.UP * 1.6)
+	clear_hands(game)
+	# Three saws: one snaps on about one swing in eight, and the review should outlive that.
+	give(game, "bone_saw", 1)
+	give(game, "bone_saw", 1)
+	give(game, "bone_saw", 1)
+	give(game, "anesthetic", 3)
+	p.selected = 0
+	p.set_flashlight(true)
+	# Dr. Botsworth, standing still, close enough to saw: the PvP half.
+	var bot: int = game.dev.spawn_bot("bot", p, "Dr. Botsworth", game._floor_at(base + side * 1.4))
+	game.dev.order_bot(bot, "stay")
+	# Two Hives walking in from ahead.
+	var hives: Array = []
+	for i in 2:
+		var at: Vector3 = game._floor_at(base + out * 5.0 + side * (float(i) * 2.0 - 1.0))
+		if not game._point_is_clear(at + Vector3.UP * 1.0):
+			at = game._floor_at(base + out * 3.2)
+		var h = game._add_monster("hive", at)
+		h.brain._hunt(p.global_position)
+		hives.append(h)
+	await tree.physics_frame
+	print("[review] hit: %d Hives and Dr. Botsworth within reach, %d bone saws in hand" % [hives.size(), 3])
+	game.say("Saw the Hives, and saw Botsworth. Red flash, knocked back, still coming. Q shoves (that one stuns).", 10.0)
 
 
 static func _graft_stage(game: Game, vat_kind: String, owner: String, already: bool) -> void:
