@@ -175,10 +175,20 @@ func _flavour(grade: String) -> String:
 	return "You have wrapped a stump the way one wraps a sandwich."
 
 
+## SPEC 6: the one-line HUD is off here -- the rules and key caps are drawn in paint_game through the
+## shell's two-block corner helpers instead.
 func hud_line() -> String:
-	if stage == Stage.WRAP:
-		return "WASD: steer the roll\nGauze lengthens it, a layer spends it"
 	return ""
+
+
+## SPEC 6: short lines saying what you are trying to do, never how to press it.
+func rules() -> Array:
+	if stage != Stage.WRAP:
+		return []
+	var lines := ["cover every cell of the stump"]
+	if _bleed_cells() > 0:
+		lines.append("cells still bleeding through want two layers")
+	return lines
 
 
 func hud_value() -> Array:
@@ -349,6 +359,7 @@ func paint_game(c: CanvasItem) -> void:
 	ink.draw_grime(c, grime_spots)
 	roll.paint(c, self)
 	_paint_strip(c)
+	shell.draw_keycaps(c, keys(), shell.draw_rules(c, rules()))
 	if _warm:
 		ink.warm(c)
 		c.draw_string(InkScript.font_upright(), Vector2(-100, -100), "WRAP! TANGLE! CLEAN SLOPPY MALPRACTICE",

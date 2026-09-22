@@ -226,11 +226,20 @@ func stamp_for(word: String) -> Dictionary:
 	return {"prompt": "SPACE"}
 
 
-## The corner HUD: the controls, top left.
+## SPEC 6: the one-line HUD is off here -- the rules and key caps are drawn in paint_game through the
+## shell's two-block corner helpers instead.
 func hud_line() -> String:
+	return ""
+
+
+## SPEC 6: three short lines saying what you are trying to do, never how to press it.
+func rules() -> Array:
 	if landed or play_state == Play.DONE:
-		return ""
-	return "SPACE: flap"
+		return []
+	var lines := ["keep the slug off the walls", "fly it out through the mouth of the tract"]
+	if pinch() > 0.05:
+		lines.append("the patient is squirming: the walls are closing in")
+	return lines
 
 
 ## The corner HUD's number: the patient's vitals, deep red when they are in trouble.
@@ -624,6 +633,7 @@ func paint_game(c: CanvasItem) -> void:
 	_paint_dish(c)
 	_paint_slug(c)
 	_paint_strip(c)
+	shell.draw_keycaps(c, keys(), shell.draw_rules(c, rules()))
 	if _warm:
 		ink.warm(c)
 		c.draw_string(InkScript.font_upright(), Vector2(-100, -100), "DODGE! TORN! SQUIRM!",

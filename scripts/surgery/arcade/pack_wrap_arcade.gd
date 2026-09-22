@@ -402,13 +402,23 @@ func _flavour(grade: String) -> String:
 	return "That is not a dressing. That is upholstery."
 
 
+## SPEC 6: the one-line HUD is off here -- the rules and key caps are drawn in paint_game through the
+## shell's two-block corner helpers instead.
 func hud_line() -> String:
+	return ""
+
+
+## SPEC 6: short lines saying what you are trying to do, never how to press it.
+func rules() -> Array:
 	match stage:
 		Stage.WHACK:
-			return "Point at a spurting bleeder\nSPACE hold: pack it"
+			return ["plug every bleeder before he empties", "only a spurting one can be packed"]
 		Stage.WRAP:
-			return "WASD: steer the roll\nGauze lengthens it, a layer spends it"
-	return ""
+			var lines := ["cover every cell of the wound"]
+			if _bleed_cells() > 0:
+				lines.append("cells still bleeding through want two layers")
+			return lines
+	return []
 
 
 ## The one number that decides the grade: what he is losing, then how much is covered.
@@ -803,6 +813,7 @@ func paint_game(c: CanvasItem) -> void:
 	if stage == Stage.WRAP and roll != null:
 		roll.paint(c, self)
 		_paint_wrap_strip(c)
+		shell.draw_keycaps(c, keys(), shell.draw_rules(c, rules()))
 		return
 	if stage == Stage.RESULT and roll != null:
 		roll.paint(c, self)
@@ -813,6 +824,7 @@ func paint_game(c: CanvasItem) -> void:
 	_paint_drips(c)
 	_paint_ring(c)
 	_paint_loss(c)
+	shell.draw_keycaps(c, keys(), shell.draw_rules(c, rules()))
 	if _warm:
 		ink.warm(c)
 		c.draw_string(InkScript.font_upright(), Vector2(-100, -100), "WHACK! WRAP! TOO SOON! TANGLE! CLEAN SLOPPY MALPRACTICE",
