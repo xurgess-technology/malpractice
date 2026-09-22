@@ -633,74 +633,60 @@ left below is what still applies to the shared strapped-monster infrastructure.
   wood read dark from a distance.
 ## Mirrors (2026-09-22 playtest)
 
-- **PLAYTEST 2026-09-22: standing too close to a mirror turns your character completely black.**
-  Reported by Zach after a session with real players. Not yet reproduced or root-caused; it is a
-  lighting problem, not a geometry one (the body is there, it is just unlit).
-  Where to look, in `scripts/personnel/mirrors.gd`: the local player's own body is shown to mirror
-  cameras only, on the `LightRooms.SELF` layer which the first-person camera leaves out (lines
-  15-16, and `Player.set_mirror_self` ~line 196). The mirror camera builds its cull mask as
-  `(main.cull_mask & ~HIDE_FROM_MIRRORS) | LightRooms.SELF` (~line 136, applied ~line 191) -- so the
-  first question is whether the room's **lights** actually illuminate the `SELF` layer, and whether
-  that changes with proximity. `scripts/level/light_rooms.gd` owns which lights light which layers
-  and line 35 there is specifically about this body; note `set_meta("light_dynamic", true)` at
-  mirrors.gd:60 ("light_rooms.gd: leave its layers alone").
-  Two other candidates worth ruling out: the mirror camera's **near plane is pinned to the glass**
-  (line 6, "so the wall behind never shows") -- walking close puts the reflected body right up
-  against that plane; and the render budget, where "of the sink mirrors you can see, the nearest
-  renders every frame and the rest take turns" (line 11), so proximity changes which mirror is on
-  the every-frame path. Check both the full-length entrance mirror and the sink mirrors, since they
-  are different sizes and may not fail alike.
-- **LEADING HYPOTHESIS: it is the cloth material, not the lighting.** In the mirror, the **cloth goes
-  black while the skin on the same body, in the same frame, still renders** (face and hands stay lit
-  and correct; see `tools/mirror_shots/v_no_torch_050.png`). Two materials on one skinned body
-  behaving differently inside one SubViewport is a material / per-instance render-flag problem, and
-  it is a much better lead than lights, layers or cull masks, all of which were measured and ruled
-  out (below). **Chronology matters here: this split was seen in the unmodified build, before
-  `skin_tint` or the per-player skin material existed** -- `human_model.gd` has always given the
-  humans two materials (`Human_Cloth`, `Human_Skin`), with cloth made per spawn and skin shared. So
-  the 0.10.12 customization work did not cause it and is not the place to look. The sharpest
-  untested step is **`gi_mode` on the imported meshes** (Godot imports at `GI_MODE_STATIC`), then the
-  cloth shader itself (`human_cloth.gdshader`: `ALBEDO` collapses to black if its `albedo_tex`
-  sample comes back black, e.g. a mip or sampler problem that the skin shader's own textures dodge).
+- **FIXED 2026-09-22 (mirror-black): standing close to a mirror no longer turns you black.** The
+  cause was not the renderer and not the body: **nothing in this hospital ever lit the side of you
+  that a mirror looks at.** `piece_factory.gd` draws bulbs round both mirrors -- the dressing-room
+  bulbs down both sides and across the top of `full_mirror`, the light bar over `vanity`'s basin --
+  but they were emissive geometry only, with no `Light3D` behind them. Every real fixture hangs
+  overhead and out in the room, so standing at a mirror, facing a wall, left your front lit by the
+  0.13 ambient alone; dark green scrubs under ambient alone are black. The mirror was rendering
+  correctly the whole time, faithfully showing an unlit surface.
+  The measurement that settled it is in `tools/mirrorshot.gd` (`_dump_incident`): light landing on
+  the chest facing the glass was **0.000 at 0.5 m** from the big mirror, 0.133 at 0.8 m and 0.221 at
+  1.2 m -- exactly the reported black / dark-below-the-waist / correct -- while light on the same
+  point facing up was 0.83-1.5 and facing into the room 1.9-2.9 at every distance. The sink mirrors
+  read **0.000 at 0.5, 0.8, 1.2 and 2.0 m**, which is why they looked worse: they have nothing in
+  front of them at all.
+  The fix is `mirrors.gd` `_add_lamp`: one shadowless `OmniLight3D` per mirror, a little proud of
+  the glass, cull-masked by `light_rooms.gd`'s area bits so it cannot light through the wall it
+  hangs on, plus `DYNAMIC` and `SELF`. Front-facing light is now 0.36-0.73 at the big mirror and
+  0.26-0.52 at the sinks, at every distance tested.
+- **What this bug cost, for next time.** Two investigations chased the renderer because the symptom
+  looked like one, and every renderer theory was tested and disproved without the obvious question
+  ("is there any light on that side of him?") ever being asked. For the record, all of these were
+  measured and are *not* involved: light cull masks and the `SELF` layer; `gi_mode` on the imported
+  meshes; the body's AABB and `extra_cull_margin`; the cloth and skin shaders (a plain
+  `StandardMaterial3D` over the whole body is just as black); every screen-space effect in
+  `look.gd` (SSAO, SSIL, both fogs and glow, all off together, no change); the off-axis frustum's
+  offset; and the extreme field of view (a symmetric 70-degree camera from the same eye point is
+  just as dark). A plain white box standing beside the body goes black in the glass in exactly the
+  same way and comes back at 1.2 m, which is the single test that would have pointed the right way
+  from the start -- it takes the body, its materials and its layers out of the picture entirely.
+  Two traps worth knowing: a node added to the tree during `_apply_variant`, just before
+  `force_draw()`, is **not registered with the rendering server yet and draws nothing**, so the
+  earlier "a bright omni 0.9 m from the chest leaves the cloth black" result was not testing what it
+  said it was; and the mirror camera sits *behind* the wall the glass hangs on, so any diagnostic
+  that pulls the near plane in just renders the inside of that wall (a black frame that is easy to
+  misread as "the mirror is broken"). `tools/mirrorshot.gd` now holds camera variants across real
+  frames (`_hold_camera`) and dumps each mirror's SubViewport texture on its own, so neither trap
+  can bite again.
+- **The mirror menu is never built under `mapcheck` (pre-existing, found 2026-09-22).** Every seed
+  `mapcheck` builds prints `SCRIPT ERROR: Invalid call. Nonexistent function 'new' in base
+  'GDScript'` from `mirrors.gd` `setup`, at
+  `add_child(preload("res://scripts/personnel/mirror_menu.gd").new())`. The preload resolves to a
+  `GDScript` that has not compiled, so the menu node is simply missing; the rest of the level builds
+  and `mapcheck`'s own checks are unaffected, which is why nobody noticed. **Confirmed on plain
+  `main`** (checked at `99a33bd`, where the same statement is line 74) as well as on this branch, so
+  it is not the mirror-lamp work. It does not happen in the real game: a booted shift builds the
+  menu fine, and `mirrors.gd` loaded on its own in `-s` mode instantiates it fine too, so it is a
+  load-order/cycle problem specific to the order `mapcheck` pulls these scripts in
+  (`mirrors.gd` -> `mirror_menu.gd` -> `customization.gd` -> `human_model.gd`). Nobody has chased it
+  further.
 - **Pinstripes follow the model's UV layout, not the body.** The pattern shader steps the UV's x
   coordinate, as specified, but `surgeon_st`'s islands are not laid out consistently: the stripes
   run across the torso and down the legs. It reads as deliberate more than as a bug, and
   `stripe_angle` (a uniform) rotates them, but a truly vertical pinstripe everywhere would want the
   cloth UVs re-laid or a body-space coordinate instead of UV.
-- **The mirror menu does not fix this and must not be read as evidence that it is fixed.** Opening
-  the customization menu stands you 1.7 m back, where the reflection is lit, so that screen looks
-  correct while **walking up to a mirror in normal play is still broken**.
-- **REPRODUCED 2026-09-22 (mirror-customize), not yet root-caused.** `tools/mirrorshot.ps1` boots the
-  entrance, stands you at a list of distances from the big mirror and from a sink mirror, dumps what
-  the mirror camera and every nearby light are doing, and saves a shot at each
-  (`tools/mirror_shots/`). What it shows, seed 4242:
-    - **Big mirror**: black body at 0.5 m, dark from the waist down at 0.8 m, correct from 1.2 m out.
-      **Sink mirrors**: dark at every distance tested, 0.5 m to 3.5 m, so they are worse, not
-      different.
-    - The **room around the body stays correctly lit in the same frame**; only the body goes dark,
-      and within the body only the cloth (the split above). That is why it reads as "completely
-      black": the scrubs are dark green, so with only the 0.13 ambient on them they are black, while
-      bright skin still shows.
-  **Ruled out, each by a one-frame A/B in that tool** (`--variants`):
-    - *The light cull masks / the `SELF` layer.* The mirror camera's mask has `SELF` in it at every
-      distance, the body's meshes are all on `SELF`, and 13 of the 13 lights within 14 m already
-      light that layer. Forcing every light in the level to `light_cull_mask = 0xFFFFFFFF` changes
-      nothing.
-    - *Your own torch.* Black with the flashlight off too (it is already excluded from `SELF` at
-      player.gd:627, so the note in graftsurgeryshot.gd about the torch bleaching your face in the
-      glass is stale).
-    - *The body's AABB / light pairing.* The body's transformed AABB is correct (1.41 x 1.79 x 0.38 m,
-      centred on the player), four omnis reach the chest inside their range, and
-      `extra_cull_margin = 4` on every body mesh changes nothing.
-    - *"No light is near enough."* A bright `OmniLight3D` (energy 8, range 6, all layers) placed 0.9 m
-      in front of the chest visibly brightens the **floor** under the body in the reflection and
-      leaves the **cloth black**.
-  So in the mirror's SubViewport the body rejects light **per instance**, while the geometry beside it
-  in the same frame takes it. Untested and still open: `gi_mode` on the imported meshes (Godot
-  imports at `GI_MODE_STATIC`), and the off-axis frustum itself -- `near` is pinned to the glass, so
-  at 0.5 m it is 0.45 with a ~138 degree field of view, and the distance where the body comes right
-  is the distance where that frustum stops being extreme. Nothing here is fixed yet; the mirror menu
-  works around it by standing you 1.7 m back, where the reflection is lit.
 
 ## Doors and the per-shift wings (doors worker, 2026-09-14)
 

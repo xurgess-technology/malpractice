@@ -37,6 +37,23 @@ const SINK_PPM := 260.0
 ## Beyond these distances (metres) a mirror stops rendering.
 const BIG_RANGE := 24.0
 const SINK_RANGE := 14.0
+## The bulbs round the glass, as actual light. piece_factory.gd has always DRAWN them -- the
+## dressing-room bulbs down both sides of "full_mirror" and the light bar over "vanity"'s basin --
+## but they were emissive geometry and nothing more, so no light in this hospital ever fell on the
+## side of you that a mirror looks at. Every fixture hangs overhead and out in the room; stand at a
+## mirror, facing a wall, and your front was lit by the 0.13 ambient alone. Dark green scrubs under
+## ambient alone are black, which is why walking up to a mirror turned you into a silhouette (and
+## why the sinks, which have nothing else in front of them at all, were dark at every distance).
+## A little proud of the glass, so it lights you and not the wall it hangs on.
+const LAMP_COLOUR := Color(1.0, 0.95, 0.82)   # piece_factory.gd's LAMP
+const LAMP_OUT := 0.22
+## Wide and soft rather than bright and short: a lamp only just longer than arm's reach blew the
+## face out at the glass and had already fallen to nothing by the time you stepped back, which is
+## the same silhouette again two metres further out.
+const BIG_LAMP_RANGE := 4.2
+const BIG_LAMP_ENERGY := 0.6
+const SINK_LAMP_RANGE := 3.2
+const SINK_LAMP_ENERGY := 0.5
 ## The mirror cameras see everything the first-person camera does except the first-person hands
 ## (fp_hands.gd HANDS_LAYER) and the dev gun's first-person model (dev_room.gd GUN_FP_LAYER), plus
 ## the local player's own body. Plain numbers: piece_factory.gd preloads this script, and map
@@ -54,6 +71,8 @@ class Mirror extends RefCounted:
 var _mirrors: Array[Mirror] = []
 var _turn := 0
 var _self_on := false
+## light_rooms.gd's grid, kept for the mirror lamps' cull masks (setup).
+var _grid := {}
 ## CUSTOMIZATION (scripts/personnel/mirror_menu.gd): while the mirror menu is up it drives the big
 ## mirror itself -- it wants the picture every frame and the local body shown, whatever the camera
 ## happens to be pointing at -- so the usual per-frame budgeting stands aside.
@@ -62,9 +81,12 @@ var menu_hold := false
 
 ## `spots` is level_info.personnel's builder form (tile-space spots; see entrance.gd), converted by
 ## `to_world` (tile position, height -> Vector3).
-func setup(spots: Dictionary, to_world: Callable) -> void:
+## `grid` is light_rooms.gd's area grid, for the mirror lamps' cull masks: this node carries the
+## "light_dynamic" meta, so light_rooms.apply stops here and never reaches them.
+func setup(spots: Dictionary, to_world: Callable, grid := {}) -> void:
 	name = "Mirrors"
 	set_meta("light_dynamic", true)   # light_rooms.gd: leave its layers alone
+	_grid = grid
 	var m: Dictionary = spots.get("mirror", {})
 	if not m.is_empty():
 		_add(true, BIG_GLASS, _glass_xform(m, BIG_CENTRE, to_world), BIG_PPM)
@@ -138,7 +160,29 @@ func _add(big: bool, glass: Vector2, xf: Transform3D, ppm: float) -> void:
 	mat.uv1_offset = Vector3(1, 0, 0)
 	quad.material_override = mat
 	mr.root.add_child(quad)
+	_add_lamp(mr)
 	_mirrors.append(mr)
+
+
+## The glass's own bulbs, lighting the person in front of it (see LAMP_OUT above for why they have
+## to exist at all). Shadowless like every other fixture here, so light_rooms.gd's area bits are
+## what stops it lighting the room through the wall it hangs on -- which is why it needs the grid
+## rather than the 0xFFFFFFFF a new OmniLight3D comes with. DYNAMIC is everything that moves, and
+## SELF is your own body: the mirror is the only camera that ever sees it, so a lamp that missed
+## that layer would light the room and leave the reflection exactly as black as it was.
+func _add_lamp(mr: Mirror) -> void:
+	var l := OmniLight3D.new()
+	l.name = "Lamp"
+	l.position = Vector3(0, 0, LAMP_OUT)
+	l.omni_range = BIG_LAMP_RANGE if mr.big else SINK_LAMP_RANGE
+	l.light_energy = BIG_LAMP_ENERGY if mr.big else SINK_LAMP_ENERGY
+	l.light_color = LAMP_COLOUR
+	l.shadow_enabled = false   # the flashlight is the only shadow caster
+	mr.root.add_child(l)
+	# mr.root.transform is already world space (see _add), and the level is still being built off the
+	# tree here, so global_position would be the origin and the mask would be for the wrong room.
+	var world: Vector3 = mr.root.transform.origin + mr.root.transform.basis.z.normalized() * LAMP_OUT
+	l.light_cull_mask = LightRooms.light_mask(_grid, world) | LightRooms.DYNAMIC | LightRooms.SELF
 
 
 func _exit_tree() -> void:

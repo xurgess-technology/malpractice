@@ -1315,7 +1315,10 @@ static func _commit_mirrors(p: Dictionary, root: Node3D) -> void:
 		return
 	var mirrors: Node3D = MirrorsScript.new()
 	root.add_child(mirrors)
-	mirrors.setup(spots.personnel, func(pos: Vector2, y: float) -> Vector3: return _w(pos, y))
+	# The grid is for the mirror lamps' cull masks: the Mirrors node carries the "light_dynamic"
+	# meta, so LightRooms.apply stops at it and never reaches them (mirrors.gd _add_lamp).
+	mirrors.setup(spots.personnel, func(pos: Vector2, y: float) -> Vector3: return _w(pos, y),
+			LightRooms.ensure(p.gen))
 
 
 ## Builds at the "lectern" spot MapGen reserved in the break room (docs/CONTRACTS.md "Hospital"
