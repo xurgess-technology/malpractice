@@ -132,6 +132,28 @@ monster strapped down, this is probably worth more than its line count suggests.
 
 ---
 
+## 6. orscreentest: the OR monitor's case panel is wrong in several places
+
+- **Command:** `godot --headless --path . --fixed-fps 60 tools/orscreentest.tscn`
+- **Result:** `[orscreen] FAIL`, with these problems:
+  - `an incoming case shows its supplies`
+  - `step 1 is todo, expected current`
+  - `supplies: 0 rows for 3 needed kinds`
+  - `saw every step of amputation become current ([0, 1])`
+  - `the screen read stable when the shift was won`
+- **Found 2026-09-22** while building the minimap, and confirmed on plain `main` at `c933607` by
+  checking the baseline out directly in the same slot. It was not in this file before.
+- **How many you see varies.** It is a playtest: a bot plays a real shift, so how far it gets
+  changes between runs and so does how many of the five a run reaches. The branch run saw 1 of them
+  (`shifts_won=1`, 438 s); the `c933607` baseline saw all 5 (`shifts_won=0`, 1500 s). Treat **any**
+  of those five names as this entry, and the count as meaningless.
+- **They look like one fault:** every one is the OR wall monitor's case panel disagreeing about a
+  case's steps or its supplies.
+- **Where to look:** `scripts/orscreen/or_screen_model.gd` (what the panel says a case needs and
+  which step is current) against `tools/orscreentest.gd`'s expectations. Nobody has looked yet.
+
+---
+
 ## Running the tests
 
 The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe`
