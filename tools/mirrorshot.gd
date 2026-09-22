@@ -113,13 +113,19 @@ func _menu_shots(glass: Vector3, out: Vector3) -> void:
 		print("[mirrorshot] the mirror has no MirrorMenu child")
 		return
 	# Walk up as if we had just aimed at the glass, then open it the way the E press does.
-	var stand := glass + out * 1.6
+	var stand := glass + out * 1.4
 	stand.y = glass.y
 	me.teleport(game._floor_at(stand))
 	_look_at(glass)
 	await _seconds(1.0)
-	menu.open(me)
+	# Open it the way a player does: aim at the glass, press E. Anything less would not test that
+	# the mirror is really an interactable you can pick out with the crosshair.
+	print("[mirrorshot] aim_id=%s prompt=%s" % [str(me.aim_id), str(me.aim_prompt)])
+	Input.action_press("interact")
+	await get_tree().process_frame
+	Input.action_release("interact")
 	await _seconds(1.5)
+	print("[mirrorshot] menu open? %s" % str(menu.get("_open")))
 	await _grab("menu_00_open")
 	for i in 3:
 		menu._cycle("outfit", 1)
@@ -132,8 +138,11 @@ func _menu_shots(glass: Vector3, out: Vector3) -> void:
 	print("[mirrorshot] look now packed=%d %s" % [Customization.pack(me.look), str(me.look)])
 	print("[mirrorshot] Net.looks=%s  Settings.look=%s"
 			% [str(Net.looks), str(Settings.get_value("look"))])
-	menu.close()
+	Input.action_press("interact")
+	await get_tree().process_frame
+	Input.action_release("interact")
 	await _seconds(1.0)
+	print("[mirrorshot] menu open after the second press? %s" % str(menu.get("_open")))
 	await _grab("menu_03_closed")
 
 

@@ -721,4 +721,4 @@ static func _mirror(game: Game) -> void:
 	place(game, game._floor_at(mp + out * dist), glass - Vector3(0.0, 0.3, 0.0))
 	clear_hands(game)
 	game.local_player().selected = 0
-	game.say("Click the mirror: cycle your scrubs and your skin, then back out with E.", 10.0)
+	game.say("Aim at the mirror and press E: cycle your scrubs and your skin, E again to come back.", 10.0)
