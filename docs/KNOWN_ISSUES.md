@@ -319,17 +319,18 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 
 ## Downed players (sweep 2 wave 3)
 
-- **PLAYTEST 2026-09-22: a player stitched up on the table keeps the carry pose.** Reported by Zach
-  after a session with real players: someone went down, was carried to a table and stitched up, and
-  stayed in the over-the-shoulder Carried pose afterwards, so most of the model glitched through the
-  floor. The carried/on-table visual state is not being cleared when the stitches operation finishes
-  and the player is back up. Where to look: `scripts/player.gd` around line 2126 ("Downed hook: set
-  every visual that follows from downed / carried / on_table. Idempotent.") and line 2203-2212 (the
-  Carried clip's origin being placed on the carrier's left shoulder, mirrored), plus whatever
-  `scripts/downed/player_surgery.gd` calls when the operation completes -- the note below says the
-  player table runs its own copy of the surgery system through that adapter rather than going
-  through `game.add_case`, so the revive path there may simply never tell the body to leave the
-  carried pose. Check it on every machine, not just the revived player's: the pose is replicated.
+- **A downed player who never crawls is drawn standing** on everyone else's screen (found
+  2026-09-22 while fixing the carry pose; it is on `main` too, checked by stashing the fix).
+  `scripts/hands/body_hands.gd` `_human_clip` plays the Crawl clip with a 0.2 s blend and then sets
+  `anim.speed_scale = 0.0` whenever the body is not moving (`rate = 1.0 if player.moving ... else
+  0.0`, around line 420). A crossfade at speed 0 never advances, so the rig keeps the pose it had --
+  Idle, standing upright -- until the player crawls a step, at which point it blends in properly and
+  stays right. Dev dummies and the primitive fallback are unaffected (they are tipped over by
+  `player.gd`'s `_update_down_pose` instead), which is why no test or screenshot caught it. The same
+  freeze applies to anyone who goes prone standing still. A fix has to let the blend finish before
+  the speed drops (a snap, `blend = 0.0` for the still case, is the cheap version); both want their
+  own look, since it changes how every body goes down and goes prone. `--setup=downed` crawls its
+  staged teammate half a second on purpose to work around it.
 - **The stitches operation is self-contained.** `game.add_case` / `game.cases` do not exist on this
   branch, so the player table runs its own copy of the surgery system through
   `scripts/downed/player_surgery.gd` (an adapter standing in for the game). The integration wave

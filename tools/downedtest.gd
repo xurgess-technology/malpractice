@@ -294,6 +294,45 @@ func _dev_room() -> void:
 	dev.request("revive_all")
 	await _frames(2)
 
+	# ---- the carry pose lets go once they are stitched up (playtest 2026-09-22)
+	# A dev dummy is a target dummy with no rig, so this leg uses the bot: it wears the rigged human
+	# body, whose crawl, carry and lying poses are animation clips. Stopping those clips freezes the
+	# body in the pose it had, and the pose before the table is the fireman's carry -- so a player
+	# carried there stood up still folded over an imaginary shoulder, half of them under the floor.
+	await _frames(2)
+	_check(bot.body_hands != null and bot.body_hands.lies_by_clip(), "a bot wears the rigged human body (lying and carried are clips)")
+	game.knock_down_player(bot, "test")
+	await _seconds(0.6)
+	me.slots = Player.empty_slots()
+	_stand(bot.global_position + Vector3(0, 0, 1.4), 0.0)
+	me.bot_aim_id = "pl_%d" % bid
+	me.bot_interact = true
+	await _seconds(1.3)
+	me.bot_interact = false
+	await _frames(3)
+	_check(me.carrying == bid and bot.carried_by == me.peer_id, "picked the bot up for the pose check")
+	_check(_clip_of(bot) == "Carried" and _posing(bot), "over the shoulder, the body plays the Carried clip ('%s')" % _clip_of(bot))
+	var ti2: int = game.free_patient_table()
+	_stand_at_table(ti2, 1.5)
+	await _frames(3)
+	me.bot_aim_id = game.table_interact_id(ti2)
+	await _frames(3)
+	me.bot_press += 1
+	await _frames(3)
+	_check(bot.on_table and me.carrying == 0, "the bot is laid on a free table")
+	game.give_hand(me, "suture_kit", 1)
+	await _frames(2)
+	game.player_surgery.surgery.bot_skill = 1.0
+	me.bot_press += 1
+	ok = await _until(func(): return me.operating, 5.0)
+	ok = await _until(func(): return not bot.downed, 40.0) and ok
+	await _frames(3)
+	_check(ok and bot.alive and not bot.on_table and bot.body_visual.visible, "stitched up: the body is drawn again, off the table")
+	_check(_posing(bot) and _clip_of(bot) != "Carried", "stitched up, the body lets go of the carry pose ('%s')" % _clip_of(bot))
+	_check(bot.body_visual.position.is_equal_approx(Vector3.ZERO) and bot.body_visual.rotation.is_equal_approx(Vector3.ZERO),
+		"stitched up, the body stands on the player's own feet (at %s)" % bot.body_visual.position)
+	game.player_surgery.surgery.bot_skill = -1.0
+
 	# ---- bleeding out
 	var did2: int = dev.spawn_bot("dummy")
 	var d2: Player = game.players[did2]
@@ -328,6 +367,19 @@ func _stand_at_table(ti: int, dist: float) -> void:
 # =========================================================================
 # helpers
 # =========================================================================
+
+## The clip this player's body is playing right now, as everyone else's machine draws it ("" for a
+## body with no rig, or one whose clips have been stopped).
+func _clip_of(p: Player) -> String:
+	if p.body_hands == null or p.body_hands.anim == null:
+		return ""
+	return String(p.body_hands.anim.current_animation)
+
+
+## True while that body's rig is still animating (a stopped one keeps the pose it froze in).
+func _posing(p: Player) -> bool:
+	return p.body_hands != null and p.body_hands.anim != null and p.body_hands.anim.is_playing()
+
 
 func _stand(pos: Vector3, yaw := 0.0) -> void:
 	me.teleport(game._floor_at(pos))
