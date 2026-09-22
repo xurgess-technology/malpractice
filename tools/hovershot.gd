@@ -36,7 +36,8 @@ func _run() -> void:
 	await _shot("01_before")
 
 	# Six stacks, every one of them dropped at the same spot two paces ahead.
-	var kinds := ["gauze", "anesthetic", "scalpel", "forceps", "suture_kit", "tourniquet"]
+	# GLOW BALL: one of every palette colour, so the shots show the orbs differing by kind.
+	var kinds := ["gauze", "gold_watch", "eye_surgeon", "brain_hive", "placebo_pills", "specimen_vat"]
 	for i in kinds.size():
 		_clear()
 		bot.selected = 0
@@ -87,8 +88,21 @@ func _run() -> void:
 		bot.set_flashlight(false)
 		await _frames(20)
 		await _shot("05b_row_dark")
-		bot.set_flashlight(true)
 		bot.bot_prone = false
+		# GLOW BALL: the actual use case. Standing, well back, flashlight still off: can you tell
+		# there is something on the floor, and what kind of something? Only as far back as the room
+		# allows -- walking backwards through a wall photographs the wall.
+		var centre: Vector3 = base + fwd * 2.0
+		var away := _longest_open(centre, 9.0)
+		var far: float = _clear_back(centre, away, 9.0)
+		for d in [minf(far, 3.5), far]:
+			_look_from(centre + away * d, centre + Vector3.UP * 0.35)
+			await _frames(60)
+			await _shot("05c_row_dark_%.1fm" % d)
+		bot.set_flashlight(true)
+		await _frames(30)
+		await _shot("05d_row_lit_far")
+		_look_from(base - fwd * 0.6, base + fwd * 2.0)
 		await _frames(30)
 
 	# A charged throw: it should fly, tumble, then stand up into its hover wherever it lands.
@@ -110,11 +124,67 @@ func _run() -> void:
 		await _frames(20)
 		print("[hovershot] aiming from 1.8 m: aim_id='%s' prompt='%s'" % [bot.aim_id, bot.aim_prompt])
 		await _shot("08_aim_prompt")
+	await _orb_cost(base, fwd)
 	print("[hovershot] done")
 	get_tree().quit(0)
 
 
-## How many glow shells a stack is carrying (0 means the glow never got built).
+## GLOW BALL: what a floor full of loot costs. Fills the patch with stacks, looks at the lot, and
+## times the same view with every orb drawn and with every orb hidden.
+func _orb_cost(base: Vector3, fwd: Vector3) -> void:
+	var kinds := ["gauze", "gold_watch", "eye_surgeon", "brain_hive", "placebo_pills", "anesthetic"]
+	var side := Vector3(fwd.z, 0, -fwd.x)
+	var mine: Array = []
+	for i in 30:
+		# Put them straight into the hover in a fixed grid, rather than dropping them: settling
+		# scatters them around the room and then the camera is timing an empty wall.
+		var p := base + fwd * (1.6 + float(i / 6) * 0.7) + side * (float(i % 6) - 2.5) * 0.7
+		var it = game._spawn_item(kinds[i % kinds.size()], 1, Transform3D(Basis(), p), WorldItem.State.LOOSE)
+		it.place(Transform3D(Basis(), game._floor_at(p) + Vector3.UP * WorldItem.HOVER_HEIGHT), WorldItem.State.LOOSE)
+		it._set_hovering(true)
+		mine.append(it)
+	_look_from(base - fwd * 1.0, base + fwd * 3.0 + Vector3.UP * 0.3)
+	bot.set_flashlight(false)
+	await _frames(60)
+	var orbs := []
+	for it in mine:
+		orbs.append_array((it as Node).find_children("HoverGlowFx", "MeshInstance3D", true, false))
+	# Wall clock, vsync off: --fixed-fps would pin every delta to 1/60 and measure nothing.
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	await _frames(30)
+	# Alternate on/off several times: one block each way measures the machine warming up as much
+	# as it measures the orbs.
+	var with_orbs := 0.0
+	var without := 0.0
+	var draws := [0, 0]
+	for round_i in 4:
+		for o in orbs:
+			(o as MeshInstance3D).visible = true
+		await _frames(20)
+		with_orbs += await _avg_ms(120)
+		draws[0] = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+		if round_i == 0:
+			await _shot("09_orb_cost")
+		for o in orbs:
+			(o as MeshInstance3D).visible = false
+		await _frames(20)
+		without += await _avg_ms(120)
+		draws[1] = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	with_orbs /= 4.0
+	without /= 4.0
+	print("[hovershot] orb cost: %d stacks staged, %d orbs -- %.2f ms/frame with, %.2f ms/frame without (%+.2f ms); draw calls %d vs %d" % [
+		mine.size(), orbs.size(), with_orbs, without, with_orbs - without, draws[0], draws[1]])
+
+
+## Average wall-clock frame time in ms over `n` frames.
+func _avg_ms(n: int) -> float:
+	var t0 := Time.get_ticks_usec()
+	for i in n:
+		await RenderingServer.frame_post_draw
+	return float(Time.get_ticks_usec() - t0) / float(n) / 1000.0
+
+
+## How many glow orbs a stack is carrying (0 means the glow never got built, 1 is right).
 func _glow_shells(it: Node) -> int:
 	return it.find_children("HoverGlowFx", "MeshInstance3D", true, false).size()
 
@@ -160,6 +230,31 @@ func _clear_spot() -> Vector3:
 		if clear:
 			return s
 	return game.table_pos() + Vector3(4, 0, 0)
+
+
+## The compass direction with the most open floor in it, so "from a distance" is a real distance.
+func _longest_open(from: Vector3, want: float) -> Vector3:
+	var best := Vector3(1, 0, 0)
+	var best_d := -1.0
+	for i in 16:
+		var a := TAU * float(i) / 16.0
+		var dir := Vector3(cos(a), 0.0, sin(a))
+		var d := _clear_back(from, dir, want)
+		if d > best_d:
+			best_d = d
+			best = dir
+	return best
+
+
+## How far you can stand back from `from` along `dir` before you are inside a wall.
+func _clear_back(from: Vector3, dir: Vector3, want: float) -> float:
+	var eye := from + Vector3.UP * 0.9
+	var q := PhysicsRayQueryParameters3D.create(eye, eye + dir * want)
+	q.collision_mask = C.L_WORLD
+	var hit := get_viewport().world_3d.direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return want
+	return maxf(1.5, eye.distance_to(hit.position) - 0.6)
 
 
 func _clear() -> void:

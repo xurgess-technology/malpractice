@@ -1178,10 +1178,16 @@ Loot (`scripts/economy/`):
   shortcut), with the monsters; supplies come later, with each accepted patient.
 
 Colour coding (`scripts/item_models.gd`): `ItemModels.make_tinted(kind, count, soft := false)`,
-`apply_tint(node, kind, soft)`, `tint_material(kind, soft) -> Material` (teal for surgical, gold for
-loot, null otherwise; one cached shader, applied as `material_overlay` on a model's 5 biggest
-meshes). Use it for anything that shows an item in the world, in hands or on a shelf; minigames
-keep the plain `make()`. `soft` is the fainter rim for first-person held stacks.
+`apply_tint(node, kind, soft)`, `tint_material(kind, soft) -> Material` (never null; one cached
+shader and one material per colour, applied as `material_overlay` on a model's 5 biggest meshes).
+Use it for anything that shows an item in the world, in hands or on a shelf; minigames keep the
+plain `make()`. `soft` is the fainter rim for first-person held stacks.
+
+`ItemModels.glow_key(kind)` / `glow_color(kind)` is the one palette, shared by that rim and by the
+ball of glow a dropped stack sits in (`scripts/world_item.gd`): **teal** surgical, **gold** loot,
+**red** organs (`eye_*`, `brain_*` -- loot, but worth their own colour), **violet** pharmacy stock
+(worn or consumable and not surgical), **green** two-handed vessels, **blue-white** for anything
+else. Add a kind to a bucket there and both follow.
 
 Money (host authoritative, replicated as `g.mn`, survives `start_lobby`):
 

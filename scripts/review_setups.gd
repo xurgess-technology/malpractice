@@ -875,9 +875,11 @@ static func _eyes(game: Game) -> void:
 	game.say("Two tables: the Hive's eye comes out into its vat, yours gets swapped. F1: back to your own body.", 9.0)
 
 
-## HOVER DROP (2026-09-22): a clear patch of floor near the OR, four stacks in hand and two already
-## hovering a couple of paces ahead. Tap the drop key over and over at the same spot: each stack
-## should rise off the floor with a soft glow, and any that lands where one already floats hops
+## HOVER DROP (2026-09-22): a clear patch of floor near the OR, four stacks in hand and a row of
+## six of every colour already hovering a couple of paces ahead (GLOW BALL: teal supply, gold loot,
+## red organ, violet pharmacy stock, green vat). Tap the drop key over and over at the same spot:
+## each stack should rise off the floor inside a soft ball of its own colour, and any that lands
+## where one already floats hops
 ## aside to the nearest free spot instead of overlapping it. Charged throws go the same way once
 ## they stop tumbling, and the pickup ball is big enough to aim at from anywhere around it.
 static func _hover_drop(game: Game) -> void:
@@ -886,15 +888,21 @@ static func _hover_drop(game: Game) -> void:
 	var out := open_direction(game, base + Vector3.UP * 1.2, 3.5)
 	place(game, base, base + out * 3.0 + Vector3(0.0, 0.5, 0.0))
 	clear_hands(game)
-	give(game, "gauze", 2)
-	give(game, "anesthetic", 1)
-	give(game, "scalpel", 1)
-	give(game, "forceps", 1)
+	# GLOW BALL (2026-09-22): four hands' worth spanning four colours, so dropping them shows the
+	# palette as well as the shoving-aside.
+	give(game, "gauze", 2)                                      # teal, surgical
+	give(game, "gold_watch", 1, 80)                             # gold, loot
+	give(game, "eye_surgeon", 1, 45, {"bt": game.world_time})   # red, an organ
+	give(game, "placebo_pills", 10)                             # violet, pharmacy stock
 	game.local_player().selected = 0
-	var spot: Vector3 = base + out * 1.7
-	drop_at(game, "suture_kit", spot)
-	drop_at(game, "tourniquet", spot + out * 0.1)
-	game.say("Drop everything on the same spot: they float, they glow, they make room.", 9.0)
+	# And a row already hovering ahead, one of every colour, spaced so they read side by side from
+	# across the room: back off, kill the flashlight, and see which is which.
+	var spot: Vector3 = base + out * 2.4
+	var side := Vector3(out.z, 0.0, -out.x).normalized()
+	var row := ["bone_saw", "anesthetic", "laptop", "brain_hive", "rocket_boots", "specimen_vat"]
+	for i in row.size():
+		drop_at(game, row[i], spot + side * (float(i) - 2.5) * 0.85, 1, 60 if row[i] == "laptop" else 0)
+	game.say("A colour per kind. Drop yours on one spot, then back off and kill the light.", 9.0)
 
 
 ## MIRRORS (2026-09-22): standing in front of the entrance's big full-length mirror, hands empty,

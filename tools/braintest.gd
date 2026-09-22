@@ -93,7 +93,7 @@ func _items() -> void:
 	_check(it != null and it.kind == "brain_hive" and int(it.value) == 120, "spawn_brain: a Hive brain at quality 0.8 is worth $120 (%s)" % (str(it.value) if it != null else "null"))
 	_check(absf(float(it.bt) - game.world_time) < 0.05, "its spoil clock starts now")
 	_check(it.find_children("Brain", "MeshInstance3D", true, false).size() == 1, "it has the brain model")
-	_check(_overlay_of(it) == ItemModels.tint_material("brain_hive"), "and wears the gold loot rim")
+	_check(_overlay_of(it) == ItemModels.tint_material("brain_hive"), "and wears the red organ rim (GLOW BALL: organs are loot, but with a colour of their own)")
 	_check(it.interact_prompt(me).contains("$120") and it.interact_prompt(me).contains("fresh"), "its prompt tells value and condition: '%s'" % it.interact_prompt(me))
 	_check(int(it.report().get("bt", -1)) >= 0, "the item report carries bt")
 	# Age it: 135 s old is worth 57.5%.
