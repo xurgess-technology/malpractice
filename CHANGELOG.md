@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.24**: The trinkets do things now
+    - Added: The six trinkets stop being loot you just sell. Each one does its own job -- the defibrillator shocks a downed teammate awake where they lie, the reflex hammer swings, and the rest have their own tricks. They still sell if you'd rather have the money.
 - **0.10.23**: Tab, and a look at yourself
     - Added: Tab opens a character sheet -- what's in your hands, what abilities you've got, and what you're wearing. Hover an ability and it tells you what it actually does at the level you have it, and what the next level would give you.
     - Added: You can take your rocket boots off. They drop at your feet for anyone to pick up. Not while you're in the air, obviously.
