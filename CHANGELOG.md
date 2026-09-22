@@ -5,6 +5,13 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.4**: SUTURE!, closing the wound
+    - Added: SUTURE! -- LinkedIn's Zip, themed as one continuous thread through the whole wound. Follow the numbered anchors in order, fill every open cell once, never cross your own stitch. Skin closes over each cell you thread and reopens if you back up.
+    - Added: A deep laceration (4x4, stepping up to 5x5 once you've closed one clean) and an eye socket (6x6, fenced off around the eye) as the two boards.
+    - Added: The corner HUD gets a new look for this step -- rules as bullets, keybindings as boxed key caps, vitals as the only number in the corner.
+- **0.10.3**: Dropped items hover
+    - Changed: An item on the floor now hovers with a soft glow instead of settling flat wherever it landed, and the box you can grab it from is a lot more forgiving -- basically a full sphere around it.
+    - Changed: Drop one where another's already floating and it hops to the nearest open spot instead of the two overlapping.
 - **0.10.2**: WHACK! and WRAP!, rebuilt: the bleeders get packed, then the wound gets a roll of gauze
     - Changed: WHACK! is one clean hold-to-close commit on a bleeder that's actively spurting, not a click; the blood loss meter only rises while a bleeder is open, and it's drawn as local drips and splats instead of a screen-filling tint.
     - Changed: WRAP! is Snake played straight -- the tail is the gauze in hand, delivering it onto a wound cell spends a segment, and cells that bled through in WHACK! need a second layer.
