@@ -60,9 +60,6 @@ var _throat_kind := ""   # "" their own windpipe, "trachea_sonographer" a grafte
 var _throat_out := false
 var _throat_node: Node3D = null
 var _throat_key := "?"
-## Where the throat site sits: how far up the neck-to-head run, and how far out of the front of it.
-const THROAT_UP := 0.30
-const THROAT_OUT := 0.045
 ## GRAFTING chunk C: the body on the table does not move at all (see set_ailment).
 var still := false
 ## Tools and A/B: build the primitive body.
@@ -418,15 +415,14 @@ func _build_human() -> bool:
 	parts["eye_l"] = _eye_l
 	# GRAFTING part two (docs/GRAFTING_TRACHEA.md): the throat, part way up the neck and out of the
 	# front of it. Lying face up on the table, the model's front points at the ceiling.
-	var nb := skel.find_bone("neck")
-	if nb >= 0:
-		var nxf: Transform3D = to_rig * HumanModel.bone_global(skel, nb)
-		var at: Vector3 = nxf.origin
-		var hb := skel.find_bone("head")
-		if hb >= 0:
-			at = at.lerp((to_rig * HumanModel.bone_global(skel, hb)).origin, THROAT_UP)
-		var front: Vector3 = nxf.basis.orthonormalized() * Vector3.FORWARD
-		_sites["throat"] = Transform3D(Basis(x, y, x.cross(y)), at + front * THROAT_OUT)
+	# Measured the way GraftThroat hangs the grafted throat (DOWN from the head bone toward the neck,
+	# SKIN_AT out of the front), so the window you cut is the one that ends up glowing.
+	var hb := skel.find_bone("head")
+	if hb >= 0:
+		var hxf: Transform3D = to_rig * HumanModel.bone_global(skel, hb)
+		var b := skel.get_bone_global_rest(hb).basis.orthonormalized().inverse()
+		var at: Vector3 = hxf * (b * Vector3(0.0, -GraftThroat.DOWN, -GraftThroat.SKIN_AT))
+		_sites["throat"] = Transform3D(Basis(x, y, x.cross(y)), at)
 	var inj := root.find_child("Site_injection", true, false) as Node3D
 	if inj != null:
 		var ia := inj.get_parent() as BoneAttachment3D

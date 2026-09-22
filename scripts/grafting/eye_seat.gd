@@ -31,6 +31,7 @@ extends Node3D
 
 const Eyes := preload("res://scripts/grafting/eyes.gd")
 const MinigameBase := preload("res://scripts/surgery/minigame.gd")
+const ThroatFree := preload("res://scripts/grafting/throat_free.gd")
 
 enum Stage { SOURCE, HELD, SEATING, SETTLE, DONE }
 
@@ -413,6 +414,9 @@ func _build() -> void:
 	steel.albedo_color = Color(0.78, 0.8, 0.83)
 	steel.metallic = 0.4
 	steel.roughness = 0.35
+	# An open throat is a slit in the neck, the same one the freeing step drew.
+	if part_site == "throat":
+		ThroatFree.build_slit(self, ThroatFree.HALF)
 	# The specimen vat, open, standing on the table where the real one stands.
 	_vat = Node3D.new()
 	_vat.name = "EyeVat"

@@ -369,8 +369,9 @@ static func build_trachea(root0: Node3D, kind: String) -> void:
 
 ## What the surgery steps draw on the work plane for a trachea: `mi` (the mesh instance the step
 ## drives as its "eyeball") stops drawing a sphere and carries a length of windpipe, lying along the
-## throat and shrunk to eyeball scale. Every rule and animation of the step still drives `mi`.
-static func as_trachea(mi: MeshInstance3D, kind: String, radius: float) -> void:
+## plane's X (head to feet on the table) and shrunk to eyeball scale, or to `length` metres when that
+## is given. Every rule and animation of the step still drives `mi`.
+static func as_trachea(mi: MeshInstance3D, kind: String, radius: float, length := 0.0) -> void:
 	if mi == null or not is_instance_valid(mi) or mi.has_node("TracheaPart"):
 		return
 	mi.mesh = null
@@ -379,10 +380,9 @@ static func as_trachea(mi: MeshInstance3D, kind: String, radius: float) -> void:
 		c.queue_free()
 	var holder := Node3D.new()
 	holder.name = "TracheaPart"
-	# Built standing on its base and about 90 mm long: lay it down and shrink it to eyeball scale.
-	var k: float = radius / 0.0135 * 0.5
-	holder.scale = Vector3.ONE * k
-	holder.position = Vector3(0, 0, TRACHEA_LEN * k * 0.5)
-	holder.basis = Basis(Vector3.RIGHT, deg_to_rad(-90.0))
+	# Built standing on its base and about 90 mm long: lay it down along X, centred.
+	var k: float = (length / TRACHEA_LEN) if length > 0.0 else (radius / 0.0135 * 0.5)
+	holder.position = Vector3(-TRACHEA_LEN * k * 0.5, 0, 0)
+	holder.basis = Basis(Vector3.BACK, deg_to_rad(-90.0)) * Basis().scaled(Vector3.ONE * k)
 	mi.add_child(holder)
 	build_trachea(holder, kind)

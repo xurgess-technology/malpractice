@@ -37,6 +37,7 @@ extends "res://scripts/surgery/minigame.gd"
 ## GRAFTING chunk C: "Seat the new eye with forceps" is its own game, built and driven by this child
 ## when ctx.variant is "grab" (the way every eye variant reaches its own helper).
 const SeatScript := preload("res://scripts/grafting/eye_seat.gd")
+const ThroatFreeScript := preload("res://scripts/grafting/throat_free.gd")
 var _seat: Node3D = null
 
 const RING_GAP := 0.0145               # marking ring radius = eye radius + this
@@ -164,6 +165,14 @@ func setup(context: Dictionary) -> void:
 		_hide_body_eye(true)
 		_add_rim()
 		_seat = SeatScript.new()
+		add_child(_seat)
+		_seat.setup(self, ctx, eye_kind, eye_r)
+		_set_layers(self)
+		return
+	if variant == "snip" and part_site == "throat":
+		# The windpipe is cut free at both ends: its own game, not the eye's nerve.
+		_hide_body_eye(true)
+		_seat = ThroatFreeScript.new()
 		add_child(_seat)
 		_seat.setup(self, ctx, eye_kind, eye_r)
 		_set_layers(self)
@@ -391,14 +400,14 @@ func hud_state() -> Dictionary:
 	if hint == "":
 		match variant:
 			"cut":
-				hint = "Click to lower the scalpel onto the eye, then trace the marking slowly." if not down else "Trace the marking. Not too fast."
+				hint = "Click to lower the scalpel onto the %s, then trace the marking slowly." % ("throat" if part_site == "throat" else "eye") if not down else "Trace the marking. Not too fast."
 			"scoop":
 				hint = "Click to lower the spoon into the socket, then circle it slowly and lightly." if not down else "Circle the inside of the socket. Slowly."
 			"snip":
 				# Short: the controls line under it already says which keys (surgery_hud "keys").
 				hint = "Pull the eye up. When the nerve shows, aim at it and click."
 			"stitch":
-				hint = "Click to set the needle on the cut, then trace it round. The socket closes behind you." if not down else "Trace the cut. Not too fast."
+				hint = "Click to set the needle on the cut, then trace it round. The %s closes behind you." % ("throat" if part_site == "throat" else "socket") if not down else "Trace the cut. Not too fast."
 	return {"title": String(ctx.get("step", {}).get("label", "")), "hint": hint, "progress": progress,
 		"gauges": [], "keys": keys()}
 
