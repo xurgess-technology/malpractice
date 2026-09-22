@@ -1,12 +1,26 @@
 class_name ReviewSetups
 extends RefCounted
 ## Named review setups: `--setup=<name>` after `--` (tools/review.ps1 passes it on) opens a review
-## window straight in a shift, solo and hosting, with the player where the setup puts them and the thing
-## to test already staged: no home screen, no lobby, no getting ready (RULES.md, Reviews).
+## window straight in a shift, with the player where the setup puts them and the thing to test
+## already staged: no home screen, no lobby, no getting ready (RULES.md, Reviews).
 ##
 ## main.gd's launch calls requested(); when a name is given (and known) it skips the title menu, starts a
-## solo session on the setup's seed (`--seed=N` overrides it), begins the shift and lets the world settle,
+## session on the setup's seed (`--seed=N` overrides it), begins the shift and lets the world settle,
 ## then calls stage(name, game). An unknown name lists the known ones in the log and opens the menu.
+##
+## Solo or co-op. One window (`-Count 1`, the default) is a solo session, as it always was. With
+## `-Count 2` (or more) tools/review.ps1 hands window 1 `--setup-role=host` and the rest
+## `--setup-role=join`, plus a shared `--setup-port=N`, so the whole set lands in ONE world:
+##   * the host opens an ENet server on that port, drops a lock file (mark_hosting) so the joiners
+##     know it is listening, waits for them to turn up in the lobby, and only then begins the shift
+##     and stages. Staging is host-authoritative world state (placing people, handing out items,
+##     starting a case), so only the host ever runs a stage function.
+##   * a joiner waits for that lock file, joins 127.0.0.1 on the port, and once the shift is under
+##     way stands its own player beside the host's with place_beside(), looking the same way: an
+##     onlooker's view of whatever the setup staged.
+## The host waits for its joiners on purpose. A client that arrives after begin_shift spectates
+## until the next shift's lobby instead of spawning -- and two windows that look right but are not
+## actually playing together is exactly the failure this exists to prevent.
 ##
 ## To add a setup (one function, one line):
 ##   1. add an entry to SETUPS:  "hive_lunge": {"seed": 4242, "stage": "_hive_lunge"},
@@ -89,6 +103,56 @@ static func exists(setup: String) -> bool:
 	return SETUPS.has(setup)
 
 
+# ---------------------------------------------------------------------------
+# co-op review windows (--setup-role / --setup-port / --setup-peers)
+
+## The default port for a co-op review pair. Away from C.DEFAULT_PORT (7777, what a real host
+## uses) and from tools/nettest_run.gd's 7790+, so a review pair and a nettest run can't collide.
+## tools/review.ps1 adds the slot number, so wt-1 and wt-2 can each have a pair up at once.
+const COOP_PORT := 7810
+
+## This window's role in a co-op review set: "host", "join", or "" for the solo default.
+static func role() -> String:
+	return _arg("--setup-role=")
+
+
+## The port the co-op set shares.
+static func port() -> int:
+	var v := _arg("--setup-port=")
+	return int(v) if v.is_valid_int() else COOP_PORT
+
+
+## Host only: how many joining windows to wait for before beginning the shift.
+static func peers() -> int:
+	var v := _arg("--setup-peers=")
+	return int(v) if v.is_valid_int() else 0
+
+
+## The host window drops this file once its server is listening; the joining windows wait for it.
+## It lives in the slot's .godot folder beside the review logs, so tools/review.ps1 can clear a
+## stale one before it launches the pair.
+static func host_lock_path(p: int) -> String:
+	return ProjectSettings.globalize_path("res://.godot/review-host-%d.lock" % p)
+
+
+static func mark_hosting(p: int) -> void:
+	var f := FileAccess.open(host_lock_path(p), FileAccess.WRITE)
+	if f != null:
+		f.store_line(str(Time.get_unix_time_from_system()))
+		f.close()
+
+
+static func host_listening(p: int) -> bool:
+	return FileAccess.file_exists(host_lock_path(p))
+
+
+static func _arg(prefix: String) -> String:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with(prefix):
+			return a.trim_prefix(prefix).strip_edges()
+	return ""
+
+
 static func names() -> Array:
 	return SETUPS.keys()
 
@@ -122,6 +186,18 @@ static func place(game: Game, pos: Vector3, at: Vector3) -> void:
 	p.rotation.y = p._yaw
 	p._pitch = clampf(atan2(d.y, Vector2(d.x, d.z).length()), -1.0, 1.0)
 	p.head.rotation.x = p._pitch
+
+
+## A joining co-op review window: stand the local player beside `other` (another player node), a
+## step to its right and half a step behind, looking past its shoulder at whatever it is facing.
+## The default "where do the extra players stand" -- no setup has to say anything for an onlooker
+## to land somewhere useful, because every setup already points the host at the thing it staged.
+static func place_beside(game: Game, other) -> void:
+	var yaw: float = other.rotation.y
+	var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
+	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+	var pos: Vector3 = other.global_position + right * 1.1 - forward * 0.6
+	place(game, pos, other.global_position + forward * 2.5 + Vector3.UP * 1.2)
 
 
 ## The horizontal direction (of the four axes) from `from` with the most room, so a spot beside a wall
