@@ -135,6 +135,26 @@ func _menu_shots(glass: Vector3, out: Vector3) -> void:
 		menu._cycle("skin", 1)
 		await _seconds(0.8)
 		await _grab("menu_02_skin_%d" % (i + 1))
+	# Patterns, and the pattern-colour row that only exists once there is a pattern.
+	print("[mirrorshot] rows with no pattern: %d" % Customization.visible_axes(me.look).size())
+	for i in 3:
+		menu._cycle("pattern", 1)
+		await _seconds(0.8)
+		print("[mirrorshot] pattern=%s rows=%d" % [Customization.option_name(me.look, "pattern"),
+				Customization.visible_axes(me.look).size()])
+		await _grab("menu_04_pattern_%d" % (i + 1))
+	for i in 2:
+		menu._cycle("pattern_colour", 1)
+		await _seconds(0.8)
+		await _grab("menu_05_patcol_%d" % (i + 1))
+	# Back to None: the pattern-colour row must go away again.
+	menu._cycle("pattern", 1)
+	await _seconds(0.8)
+	print("[mirrorshot] back to %s, rows=%d" % [Customization.option_name(me.look, "pattern"),
+			Customization.visible_axes(me.look).size()])
+	await _grab("menu_06_pattern_none")
+	menu._cycle("pattern", -1)
+	await _seconds(0.8)
 	print("[mirrorshot] look now packed=%d %s" % [Customization.pack(me.look), str(me.look)])
 	print("[mirrorshot] Net.looks=%s  Settings.look=%s"
 			% [str(Net.looks), str(Settings.get_value("look"))])

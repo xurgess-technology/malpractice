@@ -45,9 +45,37 @@ const SKINS := [
 ## that a packed look of 0 is "exactly as the model was built", which is what an unset axis means.
 const SKIN_BAKED := 0
 
+## Scrub patterns. `id` is what the cloth shader's `pattern` uniform takes, and `knobs` are that
+## pattern's shader parameters, so a preset is data and a new one is a list entry rather than a
+## branch in code. "None" is a real option and the default. Every knob the shader exposes can be
+## pinned here: these three are the baseline, not the limit.
+const PATTERNS := [
+	{"name": "None", "id": 0, "knobs": {}},
+	{"name": "Pinstripes", "id": 1,
+		"knobs": {"stripe_count": 46.0, "stripe_width": 0.22, "stripe_angle": 0.0}},
+	{"name": "Polka Dots", "id": 2,
+		"knobs": {"dot_count": 20.0, "dot_radius": 0.19, "dot_stagger": 0.5}},
+	{"name": "Splatter", "id": 3,
+		"knobs": {"splat_scale": 26.0, "splat_threshold": 0.62}},
+]
+
+## What the pattern is printed in. Only offered once a pattern is.
+const PATTERN_COLOURS := [
+	{"name": "Ink", "c": Color("14171a")},
+	{"name": "Bone", "c": Color("e6e0d2")},
+	{"name": "Blood", "c": Color("6e1414")},
+	{"name": "Sky", "c": Color("6f9fc4")},
+	{"name": "Gold", "c": Color("c2a03c")},
+	{"name": "Moss", "c": Color("55702f")},
+]
+
 const AXES := [
 	{"key": "outfit", "label": "Scrubs", "options": OUTFITS, "default": 0},
 	{"key": "skin", "label": "Skin", "options": SKINS, "default": SKIN_BAKED},
+	{"key": "pattern", "label": "Pattern", "options": PATTERNS, "default": 0},
+	# Only offered while there is a pattern to colour in.
+	{"key": "pattern_colour", "label": "Pattern colour", "options": PATTERN_COLOURS, "default": 0,
+		"needs": {"key": "pattern", "not": 0}},
 ]
 
 ## Bits per axis in the packed int: 6 is 64 options, far more than any axis will want, and five
@@ -145,6 +173,14 @@ static func skin_colour(look: Dictionary) -> Color:
 	return SKINS[clampi(int(look.get("skin", SKIN_BAKED)), 0, SKINS.size() - 1)].c
 
 
+static func pattern_of(look: Dictionary) -> Dictionary:
+	return PATTERNS[clampi(int(look.get("pattern", 0)), 0, PATTERNS.size() - 1)]
+
+
+static func pattern_colour(look: Dictionary) -> Color:
+	return PATTERN_COLOURS[clampi(int(look.get("pattern_colour", 0)), 0, PATTERN_COLOURS.size() - 1)].c
+
+
 # ---------------------------------------------------------------------------
 # packing: one int, so a look is a single replicated field and a single settings key
 
@@ -189,6 +225,15 @@ static func apply(body_visual: Node, look: Dictionary) -> void:
 		return
 	var clean := sanitize(look)
 	HumanModel.set_tint(root, outfit_colour(clean))
+	var cloth := HumanModel.cloth_of(root)
+	if cloth != null:
+		var pat := pattern_of(clean)
+		cloth.set_shader_parameter(&"pattern", int(pat.id))
+		cloth.set_shader_parameter(&"pattern_colour", pattern_colour(clean))
+		# A preset only sets its own knobs; the others keep whatever they held, which is harmless
+		# because each pattern reads only its own.
+		for k in (pat.get("knobs", {}) as Dictionary).keys():
+			cloth.set_shader_parameter(StringName(String(k)), (pat.knobs as Dictionary)[k])
 	var skin := HumanModel.skin_of(root)
 	if skin != null:
 		skin.set_shader_parameter(&"skin_tint", skin_colour(clean))
