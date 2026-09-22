@@ -114,6 +114,12 @@ static func _hand_mesh(side: float) -> ArrayMesh:
 	return mesh
 
 
+## CUSTOMIZATION: the sleeve for a given outfit colour, so fp_hands can swap it when the colour
+## changes at the mirror (the mesh bakes the colour in, one cached mesh per colour).
+static func sleeve_mesh(colour: Color) -> ArrayMesh:
+	return _sleeve_mesh(colour)
+
+
 static func _sleeve_mesh(colour: Color) -> ArrayMesh:
 	var key := "sleeve|%s" % colour.to_html(false)
 	if _mesh_cache.has(key):
