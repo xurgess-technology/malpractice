@@ -137,19 +137,6 @@ How to run things is at the bottom of this file.
 - **Where to look:** morgue furnishing in `scripts/level/room_furnish.gd` (where tray anchors are
   placed against walls or equipment) versus the navmesh bake around them.
 
-## 4. devtest: the free camera leaves your body showing when you untick it
-
-- **Command:** `godot --headless --path . --fixed-fps 60 tools/devtest.tscn`
-- **Result:** `result=FAIL failures=1`, the check `unticking it puts you back behind your eyes`
-- **The check:** `tools/devtest.gd`, in `_free_cam()` (around line 496). After the panel's "Free
-  camera" box is unticked it wants `not fc.is_on() and me.camera.current and not me.dev_input_held
-  and not me.body_visual.visible`; one of those is still wrong, most likely the body.
-- **Noticed 2026-09-18** on the `graft-strap` branch and confirmed on `main` at `a50899a` with the
-  branch's changes stashed, so it is not that branch's doing. It was not in this file before, so it
-  broke some time after the 2026-09-17 sweep.
-- **Where to look:** `scripts/dev/free_cam.gd` `stop()` / `_show_body_on`, and whatever else turns
-  the local body on and off (the carry camera's `set_carry_body`, `Player._refresh_self_body`).
-
 ---
 
 ## 6. orscreentest: the OR monitor's case panel is wrong in several places
