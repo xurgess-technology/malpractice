@@ -1163,7 +1163,8 @@ Loot (`scripts/economy/`):
 
 - `loot_table.gd`: `LOOT[kind]` `{name, short, value [min,max], tier 0..3, bulky, fragile, stack,
   batch, rooms {room_kind: weight, "*": any}, surfaces [...], containers {type: weight}, trinket}`, 11 kinds (plain: `pill_bottle`, `xray_film`,
-  `heart_monitor`, `gold_watch`, `ultrasound`; trinkets, which sell and get a job in a later chunk:
+  `heart_monitor`, `gold_watch`, `ultrasound`; trinkets, which sell and each also do one thing, see
+  "Trinkets" below:
   `desk_phone`, `laptop`, `defibrillator`, `reflex_hammer`, `epipen`, `pulse_oximeter`) plus the
   eyes. Room keys are the real generated room kinds (`patient_room`, `supply_closet`,
   `janitor_closet`, `lab`, ...); trinkets are kept rarer than plain loot;
@@ -1202,6 +1203,99 @@ game.economy.money_visible_for(p) -> bool     # HUD: near the pharmacy/furnace, 
 game.economy.request_order({kind: sets})      # this machine's player orders (host direct, client RPC)
 game.economy.open_fax_ui() / .fax_ui          # the order form (scripts/economy/fax_order_ui.gd)
 ```
+
+### Trinkets (docs/ITEMS_AND_ICONS.md chunk B, 2026-09-18)
+
+`scripts/trinkets/trinkets.gd` (`Trinkets`), a child **"Trinkets"** of Game on every machine
+(`game.trinkets`), created in `_ready` beside Combat, Brains, Vats and Grafts. It owns what the six
+trinket loot kinds do. DESIGN.md "Trinkets" is the design; this is the surface.
+
+**The use path.** Left mouse with a trinket selected goes through `Player._local_step` exactly where
+the saw and the needle do: `combat.is_usable(kind)` is tried first, then
+`trinkets.local_try_use(p)`, and only if both refuse does the click become a shove. `local_try_use`
+acts on the host and RPCs `_rpc_use` to the host from a client. There is no wind-up and no charge:
+a trinket resolves the moment the host accepts the click, at most one use per `USE_GAP` (0.25 s) per
+player. `game.player_used` routes the same way for the old `use_count` path.
+
+```gdscript
+trinkets.is_usable(kind) -> bool                 # one of Trinkets.KINDS
+trinkets.local_try_use(p) -> bool                # the clicking machine; false lets the click shove
+trinkets.use(p)                                  # host: do it now
+trinkets.use_prompt(p) -> String                 # every machine, ~10 Hz: the crosshair line
+Trinkets.is_spent(slot_or_item) -> bool          # static: a used-up one-use trinket
+Trinkets.scrap_value(kind) -> int                # what a spent one sells for
+trinkets.last_result                             # host, for tests: {what, kind?, id?}
+```
+
+**Used up.** A spent one-use trinket (`ONE_USE`: `laptop`, `defibrillator`, `epipen`) gets `used: true`
+on its hand slot and its `v` drops to `SCRAP[kind]`. The HUD greys it and draws a crack
+(`hud.gd _draw_crack`). The mark travels through a drop as `WorldItem.x == Trinkets.USED_MARK`
+(`"used"`), and `game.pickup_item` turns that back into `used` on the slot, so a spent trinket stays
+spent for everyone. The furnace needs no change: it pays `s.v`.
+
+**Replicated state** (snapshot `g.tk`, host authoritative, `net_state` / `apply_net_state`):
+`ri` ringing world item ids, `rh` peers with a phone ringing in hand, `mp` peers with a live laptop
+map, `tg` `{monster id: the peer whose pulse oximeter is on it}`, `ep` peers with an EpiPen boost —
+each mapping to the `world_time` it ends — plus two counters, `sp` `{peer: forced turns}` and
+`sw` `{peer: reflex-hammer swings}`, both mod 64. Every machine plays the rings and the heartbeats
+itself from that plus the monster's replicated `md` (mode), so no sound crosses the wire, and it
+runs the swings and the turns off the counters, so no animation does either. A counter rather than
+an event because it cannot be lost or repeated by a dropped packet; a machine seeing one for the
+first time just remembers where it is, so a late joiner neither swings nor spins on arrival.
+
+**Per trinket** (the constants are the tuning; the brief's numbers are their defaults):
+
+- **Desk phone.** `_use_phone` drops a world item at your feet and rings it for `RING_SECONDS`.
+  Every `RING_PERIOD` the host calls `game.emit_noise(pos, RING_LOUDNESS, "phone")` and, because the
+  Hive is deaf, `alert_to(pos)` on every Hive within `RING_HIVE_RANGE`. Picking the phone up ends
+  the ring; nothing is used up. The host also watches every player's selected slot and rolls
+  `PULL_RING_CHANCE` each time a desk phone becomes the selected stack (`ring_in_hand(p)`).
+- **Laptop.** `map_left(p)` (seconds) and `map_blips(p)` (world positions of `Items.is_surgical`
+  world items within `MAP_RANGE`) are what `hud.gd _draw_laptop_map` draws: a north-up plan built
+  from `game.level_info.rows`, an arrow for you, a blip per item, for `MAP_SECONDS`.
+- **Defibrillator.** `revive_in_place(q)` is `game.revive_player` without the scatter: the downed
+  teammate gets up on the spot with `game.REVIVE_HP`, and the same `"revive"` event goes out, so the
+  other machines agree. `DEFIB_NOISE` is emitted as noise kind `"defib"`.
+- **Pulse oximeter.** Uses `combat.find_target` and `combat.can_sedate(m)` — the same window the
+  sedative jab wants — so the Night Nurse (not `Monster.is_capturable`) is refused. On success the
+  stack leaves your hands and `_tagged[monster_id] = peer`. `Trinkets.heart_mode(m)` maps the
+  monster's mode to `"wandering"` / `"suspicious"` / `"hunting"` / `"down"` and
+  `Trinkets.heartbeat_period(m)` to `BEAT_*`; every machine plays `trinkets_heartbeat` at the
+  monster's position at that rate. `trinkets.on_monster_removed(m)`, called from
+  `combat.on_monster_removed` (so both `game.kill_monster` and strapping it to a table come through
+  it), drops the pulse oximeter on the floor where the monster was, worth what it was worth.
+  `on_monsters_cleared` forgets the tags with the level.
+- **Reflex hammer.** A click starts a **swing**, and the bonk lands on the swing's contact frame
+  (`Player.SWING_CONTACT`), not the click frame. The swing is the charged-throw pose
+  (`scripts/hands/throw_pose.gd`) run at `Player.SWING_SPEED`: `Player.start_swing()` scripts
+  `throw_wind` the way holding and releasing the drop key would, only faster, and hands
+  `swing_speed` to `ThrowPose.update()` so the pose plays at the same rate. Nothing new is
+  animated. The swing travels as a counter in `tk.sw` (`{peer: swings}`), and every machine runs
+  its own timer from it, for every player, so the swinger sees it in their own hands and everyone
+  else sees it on their body. The clicking machine starts its own swing on the click for
+  responsiveness and `_tick_swings` leaves an already-running one alone. While a swing plays here,
+  the local timer owns `throw_wind` and the 20 Hz report of it is ignored.
+  The turn itself is quick but not instant (`Player.SPIN_TIME` / `Monster.SPIN_TIME`, both 0.18 s,
+  out-cubic). `spin_player(q)` calls `Player.spin_view()`, which starts that turn on the machine
+  that owns the camera (`tk.sp`, the counter) and on the host's own copy; while it runs it owns
+  `_yaw`, so the mouse cannot fight it, and ordinary look resumes the moment it ends.
+  `spin_monster(m)` calls **`Monster.spin_around()`** (host): the brain is told with the monster
+  already facing the new way (so `HiveBrain._start_search`'s `_look_base` is the *new* heading and
+  it really does search the wrong way), then the body turns over `SPIN_TIME` while `_tick_spin`
+  has the last word on the yaw over whatever `face_dir` asked for. `HiveBrain.spun_around` forgets
+  its target, stops seeing, starts searching, and holds its next sight check until the turn is
+  finished. The Night Nurse is refused before either. A brain without `spun_around` just gets the turn, so the
+  Sonographer (not in the game yet, docs/SONOGRAPHER.md chunk B) will work the moment it lands and
+  can add its own reaction there.
+- **EpiPen.** `jab_epipen(q)` sets the boost; every machine pushes `trinkets.sprint_mult(p)` onto the
+  new **`Player.sprint_mult`** each physics frame, and `player.gd` multiplies `C.SPRINT_SPEED` by it
+  and holds `stamina` at 1 while it is above 1. When `EPI_SECONDS` run out the host sets
+  `p.stun = EPI_COLLAPSE` and broadcasts the existing `"stun"` event.
+
+**Sounds:** `tools/gen_audio_trinkets.mjs` writes `audio/sfx/trinkets_*.wav`
+(`phone_ring`, `phone_pick`, `laptop_open`, `defib_zap`, `heartbeat`, `hammer_bonk`, `clip_on`,
+`epipen`). **Tests:** `tools/trinkettest.tscn` (headless, all six) and the nettest scenario
+`trinkets`.
 
 ### The pharmacy and the crematorium furnace (pharmacy worker, sweep 4A chunk 3; HUB REDESIGN, 2026-09-15)
 
@@ -2589,4 +2683,4 @@ shift 2), nettest scenario `doors`, devtest door checks, `tools/perfprobe.tscn -
 (`{"seed": 4242, "stage": "_name"}`) and one static function that stages things with the helpers
 `place`, `clear_hands`, `give` (a stack, with extra stack keys like `bt`, `used`, `x`), `give_abilities`
 and `floor_item`. An unknown name is logged with the known ones and the menu opens as usual. Setups so
-far: `icons`.
+far: `icons`, `items`, `graft`, `graft_back`, `trinkets`.

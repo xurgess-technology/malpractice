@@ -170,7 +170,7 @@ func update(delta: float) -> void:
 	var action_pose := ""
 	var action_w := 0.0
 	var from_pose := ""
-	if not act.is_empty():
+	if not act.is_empty() and String(act.k) != "saw":   # the saw swings like the hammer (throw pose, below)
 		var k := String(act.k)
 		var u := float(act.u)
 		match int(act.ph):
@@ -233,7 +233,10 @@ func update(delta: float) -> void:
 			tor.x -= 0.1 * float(act.charge)
 	# THROW HOOK: the drop key's charged throw (scripts/hands/throw_pose.gd), over the hold pose.
 	var busy_body: bool = player.carrying != 0 or player.dragging_monster >= 0 or player.downed or player.carried_by != 0 or player.on_table
-	_throw.update(delta, float(player.throw_wind) if act.is_empty() and not busy_body else 0.0, _two)
+	var saw_swing := not act.is_empty() and String(act.k) == "saw"
+	var wind: float = WindupScript.saw_wind(act) if saw_swing else (float(player.throw_wind) if act.is_empty() and not busy_body else 0.0)
+	_throw.update(delta, wind, _two,
+		float(player.swing_speed))   # TRINKETS chunk B: a reflex-hammer bonk is this pose, sped up
 	if _throw.active():
 		var prefix := "throw_both_" if _throw.two else "throw_"
 		for step in [[prefix + "windup", _throw.wind_w()], [prefix + "strike", _throw.strike_w()]]:
