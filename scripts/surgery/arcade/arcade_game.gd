@@ -231,6 +231,17 @@ func stamp_for(_word: String) -> Dictionary:
 	return {"prompt": "SPACE"}
 
 
+## The stamp card to show right now, for the surgery HUD's fixed overlay (surgery_hud.gd): `{shout,
+## card: Dictionary, lock_left, k}`, or `{}` when none is up. Only ever non-empty with the shell.
+func stamp_card() -> Dictionary:
+	if shell == null or card_word == "":
+		return {}
+	if play_state == Play.READY:
+		return {"shout": "READY", "card": {"prompt": "", "wait": "Taking over in", "color": ink.good},
+			"lock_left": card_left, "k": _card_up}
+	return {"shout": card_word, "card": stamp_for(card_word), "lock_left": card_left, "k": _card_up}
+
+
 ## The mouse and key bits that take a stamp card down.
 const DISMISS_BITS := 1 | 64 | 512   # BUTTON_PRIMARY | BUTTON_ACTION | BUTTON_ENTER
 
@@ -410,11 +421,10 @@ func _paint_inner(c: CanvasItem) -> void:
 			if not ec.is_empty():
 				shell.draw_enter(c, ec.at, String(ec.get("label", "")), bool(ec.get("ready", false)))
 			shell.draw_fx(c)
-			if card_word != "":
-				if play_state == Play.READY:
-					shell.draw_stamp(c, "READY", {"prompt": "", "wait": "Taking over in", "color": ink.good}, card_left, _card_up)
-				else:
-					shell.draw_stamp(c, card_word, stamp_for(card_word), card_left, _card_up)
+			# The stamp card itself is NOT drawn here any more (2026-09-22): it used to ride the
+			# panel's own page transform, so it landed somewhere different depending on the step's
+			# site. surgery_hud.gd's fixed overlay draws it instead, from stamp_card() below, always
+			# in the same screen spot in front of the patient.
 		# The step's name goes on the clip, the table small in the board's corner.
 		ink.end_page(c, size, clip_title(), panel.right_text, sh)
 		return
