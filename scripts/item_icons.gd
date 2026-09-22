@@ -2,12 +2,11 @@ class_name ItemIcons
 extends RefCounted
 ## The icons (docs/ITEMS_AND_ICONS.md). Every item kind has a bare icon (art/icons/items/bare/<kind>.svg,
 ## just the object, for the HUD, which draws its own slot) and a framed one (art/icons/items/<kind>.svg,
-## slot, border and a sample count, for anywhere an icon stands alone). Abilities have round framed ones
-## in art/icons/. This is the one place that maps a kind to them, so a kind without an icon yet (anything
+## slot, border and a sample count, for anywhere an icon stands alone). This is the one place that maps
+## a kind to them, so a kind without an icon yet (anything
 ## added after the art) simply answers null and the caller draws a plain slot.
 ##
 ##   ItemIcons.bare(kind) / framed(kind) / grey(kind) -> Texture2D or null
-##   ItemIcons.ability(id) -> Texture2D or null
 ##   ItemIcons.border(kind) -> Color, the category colour (works for kinds with no icon too)
 ##   ItemIcons.category(kind) -> "surgery" | "shop" | "monster" | "equipment" | "loot" | "trinket" | ""
 ##   ItemIcons.is_trinket(kind) / kind_named(name) / has_icon(kind)
@@ -16,9 +15,6 @@ extends RefCounted
 
 const DIR := "res://art/icons/items/"
 const CATEGORIES := "res://art/icons/items/categories.json"
-const ABILITY_FILES := {"hive_in": "res://art/icons/hive_eyes.svg", "echo": "res://art/icons/echolocation.svg"}
-## Ability id -> its colour (the glow the HUD puts behind the round icon).
-const ABILITY_COLOR := {"hive_in": Color("ff8a2a"), "echo": Color("9b6bff")}
 ## Game kinds whose art is filed under another name.
 const ALIAS := {"eye_hive": "hive_eyeball", "eye_surgeon": "surgeon_eyeball"}
 const DEFAULT_BORDER := Color("6a7378")
@@ -28,7 +24,6 @@ static var _loaded := false
 static var _bare := {}
 static var _framed := {}
 static var _grey := {}
-static var _abilities := {}
 
 
 static func file_kind(kind: String) -> String:
@@ -93,12 +88,6 @@ static func grey(kind: String) -> Texture2D:
 	return out
 
 
-static func ability(id: String) -> Texture2D:
-	if not _abilities.has(id):
-		_abilities[id] = _tex(String(ABILITY_FILES[id])) if ABILITY_FILES.has(id) else null
-	return _abilities[id]
-
-
 static func category(kind: String) -> String:
 	_load_data()
 	var e: Dictionary = (_data.get("items", {}) as Dictionary).get(file_kind(kind), {})
@@ -151,5 +140,3 @@ static func preload_all() -> void:
 		framed(k)
 		if category(k) == "monster" or category(k) == "trinket":
 			grey(k)
-	for id in ABILITY_FILES.keys():
-		ability(id)

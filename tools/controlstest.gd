@@ -1,8 +1,7 @@
 extends Node
 ## Headless checks for sweep 4a chunk 1 (docs/SWEEP4A.md "Controls, ability slots and HUD,
-## scanner"): crouch silences footsteps and jump works, Alt+1..4 fires the right ability slot with
-## independent cooldowns, and the scanner needs range/line of sight, resets when either breaks,
-## and marks the species scanned on the host when it completes.
+## scanner"): crouch silences footsteps and jump works, and the scanner needs range/line of sight,
+## resets when either breaks, and marks the species scanned on the host when it completes.
 ##
 ##   godot --headless --fixed-fps 60 --path . tools/controlstest.tscn [-- --seed=N]
 ##
@@ -45,7 +44,6 @@ func _ready() -> void:
 
 func _run() -> void:
 	await _crouch_and_jump()
-	await _ability_slots()
 	await _scanner()
 	await _stances()
 	await _sprint_dive()
@@ -447,7 +445,7 @@ func _shoulder_camera() -> void:
 		main._unhandled_input(ev)
 		order.append(String(Settings.get_value("camera")))
 	_check(order == ["shoulder", "front", "first_person"], "F5 cycles shoulder -> front -> first person (%s)" % str(order))
-	# Hive Eyes, surgery and the rest keep the head: going down drops back to first person.
+	# Surgery and the rest keep the head: going down drops back to first person.
 	Settings.set_value("camera", "first_person")
 	var off := await _until(func(): return not cc.active, 1.5)
 	_check(off and not me._carry_body and not cc.hides_hands(), "back to first person: the rig lets go")
@@ -481,44 +479,12 @@ func _stand_up() -> void:
 	await _frames(3)
 
 
-func _ability_slots() -> void:
-	_say("---- Alt+1..4 fires the right slot, each with its own cooldown")
-	var b: Node = game.brains
-	b.on_reset()
-	me.revive_full()
-	me.bot_move = Vector2.ZERO
-	me.bot_crouch = false
-	b.add_points(me.peer_id, "hive", 1.0)     # -> slot 0, hive_in
-	b.add_points(me.peer_id, "sonographer", 1.0)  # -> slot 1, echo
-	_check(b.slot_of(me.peer_id, "hive_in") == 0 and b.slot_of(me.peer_id, "echo") == 1, "hive_in in slot 1, echo in slot 2")
-	# Fire slot 2 (Echo). Slot 1 (Hive Eyes) must still be off cooldown.
-	me.bot_ability_slot = 1
-	me.bot_ability += 1
-	await _frames(3)
-	_check(b.last_result == "echo", "Alt+2 fires Echo (%s)" % b.last_result)
-	_check(b.cooldown_left(me.peer_id, "sonographer") > 0.0, "Echo's own cooldown is running")
-	_check(b.cooldown_left(me.peer_id, "hive") <= 0.0, "Hive Eyes' cooldown is untouched: each slot cools down on its own")
-	# Now fire slot 1 (Hive Eyes): a Hive to borrow.
-	var wi: Node = b.spawn_hive(game._floor_at(me.global_position + Vector3(0, 0, 10)))
-	await _frames(2)
-	me.bot_ability_slot = 0
-	me.bot_ability += 1
-	await _frames(3)
-	_check(b.last_result == "hive" and me.hive_view, "Alt+1 fires Hive Eyes (%s)" % b.last_result)
-	# Pressing the same slot again ends it, like R used to.
-	me.bot_ability += 1
-	await _frames(3)
-	_check(not me.hive_view, "pressing slot 1 again ends the active ability")
-	game.kill_monster(wi)
-	b.on_reset()
-
-
 func _scanner() -> void:
 	_say("---- scanner: range, line of sight, reset, scanned")
 	# The database persists in user://, shared with any other run or open copy of the game.
 	game.database.clear()
 	var here: Vector3 = me.global_position
-	var wi: Node3D = game.brains.spawn_hive(game._floor_at(here + Vector3(0, 0, 6))) as Node3D
+	var wi: Node3D = game.spawn_hive(game._floor_at(here + Vector3(0, 0, 6))) as Node3D
 	await _frames(2)
 	var to: Vector3 = wi.global_position - me.global_position
 	me.bot_yaw = atan2(-to.x, -to.z)

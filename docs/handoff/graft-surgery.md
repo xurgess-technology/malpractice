@@ -39,16 +39,12 @@ Everything in the chunk C brief, verified headless and in a smoke look:
   item's own shader is hung on the head's BoneAttachment3D with a ring of stitches. It follows every
   clip and shows in third person, on other players' screens, in the carry camera and in the mirrors.
 - **The glow** is a new `instance uniform float lock` on the eye shader (0 a low pinpoint, 1 the
-  whole ball lit). `Grafts` eases it to 1 while that player's `hive_view` is on, which is already
-  replicated, so every machine agrees.
-- **The ability.** Finishing the graft calls `brains.set_level(peer, "hive_in", 1)` (next free slot,
-  new-ability card); swapping back calls the new `brains.clear_ability`, which empties the slot,
-  zeroes the points and ends any Hive Eyes view. The graft lasts the run through death and
+  whole ball lit). `Grafts` holds it at a low ember.
+- **No ability.** The graft used to grant a player ability; the ability system has since been
+  removed (`docs/backlog/ABILITIES_REMOVED.md`). The graft lasts the run through death and
   `grafts.on_reset()` clears it on a game over.
-- **Hive brains teach nothing now.** `Brains.blendable` is false for `brain_hive`; the blender
-  refuses it and `drink` ignores it. Echo, the Discharged brains and the blender are untouched.
 - **The first-person tell**: `scripts/grafting/graft_view.gd` (`main.graft_view`), an orange wash
-  down the LEFT edge, stronger while Hive Eyes runs. **It is its own CanvasLayer at 52, above the
+  down the LEFT edge. **It is its own CanvasLayer at 52, above the
   look pass's grade (layer 50)** -- under it (where the HUD lives) a faint orange on a teal picture
   disappears completely, which cost an hour to find.
 - **The awake patient's camera.** `Player._strapped_look` clamps a strapped surgeon's head to a cone
@@ -56,13 +52,13 @@ Everything in the chunk C brief, verified headless and in a smoke look:
   surgeon round the table, not enough to spin the camera through your own chest.
 - **Body parts are named "X's Y" everywhere** (the coordinator's mid-task rename): "Hive's eyeball",
   "Zach's eyeball", across `Eyes.label`, the loot table, the wall entries, the prompts, grafttest and
-  the contracts note. `Eyes.NOUN` and `Grafts.PART_ABILITY` are the seams a trachea slots into later
+  the contracts note. `Eyes.NOUN` is the seam a trachea slots into later
   (docs/GRAFTING_TRACHEA.md) without a rewrite.
 - **Co-op**: nettest scenario `graft` (host grafts a Hive eyeball into a client's surgeon; the other
-  client checks the graft, the swapped eye on the body with `Human_Eye_L` hidden, and the glow while
-  Hive Eyes runs). **Written but never run** -- see below.
+  client checks the graft, the swapped eye on the body with `Human_Eye_L` hidden, and the glow).
+  **Written but never run** -- see below.
 - **DESIGN.md**: the Hive row now says what you harvest, the lab-wall paragraph mentions the vat
-  benches and the stands, the blender bullet says Hive brains teach nothing, and there is a new
+  benches and the stands, and there is a new
   "Grafting" section. **docs/CONTRACTS.md**: the chunk C section above.
 - **Warmup**: the vat stand, a lying body wearing the grafted eyeball and the `eye_graft` steps'
   minigames all build in `scripts/warmup.gd`.
@@ -84,8 +80,8 @@ Everything in the chunk C brief, verified headless and in a smoke look:
 
 Zach has not seen the graft yet -- he closed the windows before reviewing and asked for review setups
 instead. What came through the coordinator and is **done**: the "X's Y" rename, the vat stand on every
-OR table (there is no player table), keeping the graft generic for a second part kind, removing only
-the Hive-brain route to Hive Eyes, and the `--setup=` skeleton with a `graft` and a `graft_back` setup.
+OR table (there is no player table), keeping the graft generic for a second part kind, and the
+`--setup=` skeleton with a `graft` and a `graft_back` setup.
 
 **Still open, to put in front of him:** the whole feel of it -- the four steps' pacing, the stand's
 model (it reads a bit like an IV pole), how strong the left-edge tint should be
@@ -109,7 +105,7 @@ Both drop straight into a solo shift (no menu, no lobby): the phone is quiet, no
 over. You are strapped to a free OR table with a vat on its stand, already driving Dr. Botsworth
 beside your own head with the scalpel, the eye spoon and the suture kit. Aim at the table and press E
 for each of the four steps (hold the right tool: 1/2/2/3). F1 -> "Back to my own body", hold E to get
-up, then walk to Personnel and look in the big mirror. Alt shows the ability bar with Hive Eyes 1.
+up, then walk to Personnel and look in the big mirror.
 
 Smoke-look shots: `tools\review.bat 2 "SMOKE" -Scene res://tools/graftsurgeryshot.tscn` writes the
 whole loop into `tools/graft_shots/`, and `-Scene res://tools/setupshot.tscn --setup=graft` writes
@@ -121,7 +117,7 @@ Run one at a time in this checkout (`--fixed-fps 60`), newest results:
 
 | Test | Result |
 |---|---|
-| `tools/grafttest.tscn` | **PASS** (0 failures) -- chunk A plus the whole chunk C graft section: the stands, every refusal, all four steps with Dr. Botsworth operating, Hive Eyes 1 in and out, and not getting up after the scoop |
+| `tools/grafttest.tscn` | **PASS** (0 failures) -- chunk A plus the whole chunk C graft section: the stands, every refusal, all four steps with Dr. Botsworth operating, and not getting up after the scoop |
 | `tools/downedtest.tscn` | **PASS** (0 failures) |
 | `tools/straptest.tscn` | **PASS** (0 failures) |
 | `tools/orscreentest.tscn` | **SKIPPED** (see above; unrelated to this branch as far as I can tell) |

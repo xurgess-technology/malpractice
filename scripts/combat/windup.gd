@@ -152,7 +152,7 @@ func _now() -> float:
 func can_act(p: Node) -> bool:
 	if p == null or not is_instance_valid(p) or not p.alive or p.downed or p.stun > 0.0:
 		return false
-	if p.carrying != 0 or p.carried_by != 0 or p.on_table or p.operating or p.hive_view:
+	if p.carrying != 0 or p.carried_by != 0 or p.on_table or p.operating:
 		return false
 	return combat.dragging(p) < 0
 

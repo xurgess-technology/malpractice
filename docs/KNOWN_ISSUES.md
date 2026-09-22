@@ -376,44 +376,6 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 - **`tools/mapcheck.gd` reports seed 112** (a morgue tray anchor 3.3 m off the navmesh); the same
   on `main` before the pod removal.
 
-## Brains (sweep 3, brains worker)
-
-- **Hive Eyes was built against a stand-in Hive.** On the brains branch `Monster.HIVE` does
-  not exist, so `brains.spawn_hive` makes a Sonographer body with `kind = "hive"` (it still
-  hunts by sound). The camera sits at `m.height * 0.93` and 0.34 m in front of the monster's origin
-  along its facing; the real Hive model may need a different eye point (its head can block the
-  view, or the camera can poke through a wall the Hive faces). The sedation end is only reached
-  through `has_method("is_sedated")` and was not exercised (no `sedate` on this branch).
-- **The HUD stays up during Hive Eyes** (crosshair, slots, messages): the view is the Hive's
-  but the HUD is yours. No HUD hook was added.
-- **Echo's veil does not fully hide a lit flashlight cone** (volumetric fog and the post layer draw
-  after it), so the spot on the nearest wall stays faintly visible under the outlines. Outlines of
-  skinned meshes follow their skeleton; only the dev dummy surgeon was checked in a screenshot.
-- **Brains keep spoiling through the paycheck screen and the next lobby** (world_time keeps
-  running), so a brain carried over a shift change is rotten by the next shift. Intended as "brains
-  spoil fast", but worth a look once the loop is tuned.
-- **Absorbed brains are keyed by peer id.** A player who leaves and joins again (a new ENet peer id)
-  starts from nothing; the old entry stays until game over.
-- **A client's shown value can be $1-2 off the host's** while the spoil clock runs: `bt` is snapped
-  to 0.5 s in the item report and a client's world_time is only corrected when more than 1 s off.
-  The host's `current_value` is what the dumpster pays.
-- **Blender placement is a heuristic:** the counter-height cell nearest the time clock with a
-  0.2 m margin, backed toward the nearest wall. On the hospital's entrance building (the same break
-  room every seed) it lands on the free end of the sink counter by the fridge; nothing checks for the
-  models that stand on counters without colliders (the coffee machine, the microwave), so a changed
-  break-room layout could put it inside one. Levels without a break room get a steel stand.
-- **The brain is procedural** (merged ellipsoids, folds in the shader). It reads as a brain from
-  above and behind at hand and table distance (`tools/brain_shots/01..04`); from low side angles the
-  hemispheres still look like two smooth eggs, and the rot mostly changes colour (no geometry
-  change, so the gold rim overlay keeps fitting).
-- **Perf** (`perfprobe -- --brains`, 1600x900 medium, two passes): pharmacy baseline 188-201 fps
-  (1% low 134-150), Echo at level 3 with 66 outlines 180-192 (132-150); corridor baseline 88-94
-  (75-82), Echo 93-96 (81-86); Hive Eyes depends on what the Hive looks at (131-236); five brains
-  in view 102-108 (89-96). Starting Echo takes 1.8-2.8 ms (it walks every container once).
-- **One lagged `nettest --only=brains` run never connected** (port 7941; the client timed out
-  before joining); the same run passed on another port, lagged and unlagged. Probably a port clash
-  with another worktree's nettest.
-
 ## Monsters (sweep 3, monsters worker)
 
 - **Spawning a Hive costs about 6-8 ms** on the machine that builds it (the rig, its animation
@@ -595,7 +557,7 @@ left below is what still applies to the shared strapped-monster infrastructure.
   regions join the map a few frames apart. `tools/mapcheck.gd` waits for both; code that paths the frame
   after a build may get a hospital-only path.
 - **Things the mirrors do not carry across a seam**: a player's head glow, held-item models' own lights,
-  monster sounds (a Sonographer's rattle is heard where it really is), the Echo outlines and Hive Eyes. A
+  monster sounds (a Sonographer's rattle is heard where it really is). A
   Hive does not see a player on the other side of a seam (its sight rays go to the real position), and
   the danger heartbeat counts only monsters in the same space. Hearing does cross: a noise within 26 m of
   a seam is mirrored into the other copy, pulled into the stub (the Sonographer comes through and then
@@ -985,10 +947,10 @@ left below is what still applies to the shared strapped-monster infrastructure.
   every scene (about 14 draw calls: palm, sleeve, finger and thumb pieces, the torch); remote bodies
   add an AnimationPlayer and a SkeletonModifier3D each (no teammates in the probe).
 
-## Controls, ability slots and HUD, scanner (sweep 4a chunk 1, docs/SWEEP4A.md)
+## Controls and HUD, scanner (sweep 4a chunk 1, docs/SWEEP4A.md)
 
-- **The rebind screen has no conflict detection.** Settings > CONTROLS > KEYS (crouch, jump, ability
-  modifier, scan) writes straight to `Settings.set_value("key_*", ...)`, which rebinds the matching
+- **The rebind screen has no conflict detection.** Settings > CONTROLS > KEYS (crouch, jump,
+  scan) writes straight to `Settings.set_value("key_*", ...)`, which rebinds the matching
   InputMap action immediately, but nothing stops binding two of these (or one of these and an
   existing fixed action like `interact`) to the same physical key, and there is no "already in use"
   warning or reset-to-default-only-this-key control (only "Reset to defaults" for everything).
@@ -1001,9 +963,8 @@ left below is what still applies to the shared strapped-monster infrastructure.
   item, carry or wind-up pose, rather than a rig-aware crouched stance blended with those poses.
   Reads correctly (a stooped lean) in the common cases; not verified against every hold pose.
 - **`game.database` (the scanner's sighted/scanned records) has no reset hook.** It is host-only,
-  in-memory, and intentionally not cleared on `reset_money()` / game over the way `brains.on_reset()`
-  clears absorbed brains — species knowledge is meant to persist across a wipe with money — but
-  nothing has exercised that assumption yet (chunk 4 is expected to formalize it when the database
+  in-memory, and intentionally not cleared on `reset_money()` / game over — species knowledge is
+  meant to persist across a wipe with money — but nothing has exercised that assumption yet (chunk 4 is expected to formalize it when the database
   is saved to disk).
 - **Screenshots were not taken.** `tools/gameshot.tscn` needs a windowed run; this chunk was built
   and tested entirely headless, and grabbing 1-3 screenshots was judged not worth the added run in
@@ -1089,12 +1050,12 @@ left below is what still applies to the shared strapped-monster infrastructure.
   or how many players are around**, and if two purchases queue back to back the second capsule
   waits invisibly (no visible queue) until the first clears. Fine for one bottle at a time; would
   need a visible queue or multiple delivery slots if the pharmacy ever sells more than one item.
-- **`tools/inventoryshot.gd`, `tools/braintest.gd`, `tools/brainshot.gd`, `tools/looptest.gd`,
-  `tools/nettest.gd`, `tools/mapcheck.gd` and `tools/perfprobe.gd` were updated to compile and stay
+- **`tools/inventoryshot.gd`, `tools/looptest.gd`, `tools/nettest.gd`, `tools/mapcheck.gd` and
+  `tools/perfprobe.gd` were updated to compile and stay
   gold-free** (the old sell bin/shop/gold pile flows they drove no longer exist), but only
   `inventorytest.gd`, `mapcheck.gd`, `devtest.gd`, `looptest.gd` and one `playtest --god` were
-  actually run this pass per the sweep's token budget; `nettest`'s `economy` scenario, `braintest`,
-  `brainshot` and `inventoryshot` were updated by inspection only and not executed.
+  actually run this pass per the sweep's token budget; `nettest`'s `economy` scenario and
+  `inventoryshot` were updated by inspection only and not executed.
 - **Follow-up (still chunk 3): the crematorium was unreachable on some seeds.**
   `economy.gd`'s `_rect_spot()` finds the furnace/pharmacy's floor height by casting a ray down
   from `probe.y + 1.5`; with `probe.y = 2.0` that ray started at world y=3.5, which is *above* a
@@ -1111,26 +1072,8 @@ left below is what still applies to the shared strapped-monster infrastructure.
   gap independent of the placement bug. The lobby-furniture overlap noted above is unrelated and
   still open.
 
-## Database terminal, guide removal, Hive Eyes and Echo polish (sweep 4a chunk 4, docs/SWEEP4A.md)
+## Database terminal and guide removal (sweep 4a chunk 4, docs/SWEEP4A.md)
 
-- **Hive Eyes cycling and the hold-to-exit key (level 2+) were not built.** `docs/SWEEP4A.md`
-  asks for: at level 1 tapping the slot ends it (built, unchanged from sweep 3); at level 2+
-  tapping cycles to another Hive in range and holding the slot ~0.4 s ends it. Cycling needs
-  `brains.ability_slot()` to pick a different Hive and retarget the same hive session instead
-  of ending it, and holding-vs-tapping needs real key-hold timing, not just the existing discrete
-  press counter (`Player.ability_slot_press`, incremented once per press with no duration). Both
-  would mean widening the replicated ability-press protocol; judged out of proportion to this
-  chunk's budget. What *is* built: `hive_view.gd`'s state machine already has a `_begin_cycle()`
-  path (a short fly-through between two Hives) ready for whoever wires the trigger up, and
-  ending Hive Eyes still works today exactly as it did in sweep 3 (the slot again, or Esc, both via
-  `ability_slot_press`). At any level, only the nearest Hive in range is ever picked.
-- **The fly-through's "no path" straight-line glide was exercised, but only informally**: the test
-  hospital's break room to a nearby Hive always has a navmesh path in practice, so
-  `databasetest`/`braintest` never hit the `NavigationServer3D.map_get_path` returning empty case
-  in a real level. `hive_view._path_from` falls back to a straight line correctly by inspection
-  (and the fallback branch is exercised by construction whenever the map iteration id is 0, e.g.
-  the very first physics frame after a level loads), but nobody has watched it happen on a level
-  where the Hive truly has no path to the player (e.g. across a locked door).
 - **The database terminal's Monsters section is a fixed, hand-written list**
   (`scripts/database/monster_pages.gd`), not derived from any shared "monster kind" registry --
   there isn't one yet. Adding a new monster kind means adding an entry there by hand; nothing
@@ -1144,10 +1087,10 @@ left below is what still applies to the shared strapped-monster infrastructure.
   readable, but visually plainer than the old guide binder's hand-crafted paper aesthetic it
   replaces. No custom shader was added for it either way, so this did not need a
   `Minigame.cached_shader()` registration or a `warmup.gd` entry.
-- **The terminal and Hive Eyes' glazed-eyes glow use plain `StandardMaterial3D`s**, not registered
-  in `scripts/warmup.gd`: neither is a custom shader, and both are visually similar to dozens of
-  other emissive materials already exercised well before a player can reach the break room or
-  trigger Hive Eyes, so a compile-time hitch was judged very unlikely. Not measured with
+- **The terminal's glow uses plain `StandardMaterial3D`s**, not registered
+  in `scripts/warmup.gd`: it is not a custom shader, and it is visually similar to dozens of
+  other emissive materials already exercised well before a player can reach the break room,
+  so a compile-time hitch was judged very unlikely. Not measured with
   `perfprobe` specifically for this chunk (chunk 4 was not asked to run it).
 - **A guest's own scan/harvest is recorded on the host correctly (tested with a second bot `Player`
   at a different peer id in the same process, `databasetest._guest_scan_lands_in_host_db`), but the
@@ -1158,14 +1101,13 @@ left below is what still applies to the shared strapped-monster infrastructure.
 
 ## Sweep 4A final integration (docs/SWEEP4A.md, 2026-09-15)
 
-- **`tools/nettest.gd` had three real breaks against the merged sweep**, none caught by any
+- **`tools/nettest.gd` had real breaks against the merged sweep**, none caught by any
   individual chunk (each was told not to run `nettest_run.gd` to keep its own token budget down):
-  the `brains` scenario called the removed `best_path()` API and asserted on the Hive Eyes camera
-  before its new fly-through (chunk 4) had time to land; the `economy` scenario asserted on money
+  the `economy` scenario asserted on money
   before a furnace sale could register, aimed throws with a fixed world-space offset instead of
   the furnace's actual (rotated) facing, and had no recovery from a throw physically missing the
-  grate. All three fixed; `brains` and `economy` now pass under `--lag=120 --jitter=40 --loss=0.03`
-  (economy correctly reaches $505 after selling a laptop and a gold watch and buying 3 pill
+  grate. All fixed; `economy` now passes under `--lag=120 --jitter=40 --loss=0.03`
+  (it correctly reaches $505 after selling a laptop and a gold watch and buying 3 pill
   bottles).
 - **`combat`'s nettest scenario fails under injected lag** (`--lag=120 --jitter=40 --loss=0.03`):
   the host times out waiting to see a client's over-long melee-charge claim get capped. Confirmed
@@ -1265,10 +1207,9 @@ left below is what still applies to the shared strapped-monster infrastructure.
 
 ## Interactable affordance: aim highlight replacing floating labels (2026-09-15)
 
-- **Only two always-on `Label3D` props were actually found and replaced**: the OR supply shelf's
-  "SUPPLY - SURGICAL" tag (`scripts/supply_shelf.gd`) and the break-room blender's "BLENDER" tag
-  (`scripts/brains/blender.gd`). Both are gone outright; `AimHighlight` (`scripts/aim_highlight.gd`)
-  plus the existing crosshair prompt now carry the "you can interact with this" signal instead.
+- **One always-on `Label3D` prop was actually found and replaced**: the OR supply shelf's
+  "SUPPLY - SURGICAL" tag (`scripts/supply_shelf.gd`). It is gone outright; `AimHighlight`
+  (`scripts/aim_highlight.gd`) plus the existing crosshair prompt now carry the "you can interact with this" signal instead.
   `scripts/economy/economy_props.gd` and `scripts/economy/furnace.gd` (the pharmacy window and the
   furnace, which also carry price/amount `Label3D`s) were deliberately left untouched -- a sibling
   worker owns those files for the entrance/lobby rebuild, and this sweep was scoped to the generic
@@ -1279,13 +1220,6 @@ left below is what still applies to the shared strapped-monster infrastructure.
   label (which table is which, similar in spirit to the hospital's own room-name signs) than a
   "you can interact with this" cue, and the table's own aim highlight now covers the latter. Worth
   a second look if it turns out players read "STAFF" as redundant once they get used to the rim.
-- **The blender's highlight is hard to see in a screenshot taken close up and level with its own
-  overhead lamp** (`tools/affordanceshot.tscn` shot `d_blender_aimed_highlight_on.png`): the lamp's
-  own bright bloom washes out the thin rim on the jar and motor housing at that framing. Confirmed
-  by instrumentation that the rim shells are actually created (6, `AimHighlight.MAX_MESHES`), so
-  this is a lighting/screenshot-framing issue, not a mechanism bug -- the same rim reads clearly on
-  the supply shelf's steel frame in the same run. Worth a look with a wider shot or the lamp dimmed
-  if the blender specifically still feels unclear in a real playtest.
 - **No other floating always-on interactable labels were found** in a full `Label3D` grep of
   `scripts/`: the rest are either transient (the pharmacy's `_spawn_pill_line` flavor quotes in
   `game.gd`, which rise and fade on their own), dev-only (`scripts/dev/dev_level.gd`,
@@ -1362,60 +1296,6 @@ would hang the bot, and the whole shift, forever. Added a generic recovery: afte
 any target, warp the bot to it and force a repath, same as a player would eventually route around
 after strafing off a wedge. Re-verified: 7 of 8 runs clean after the fix; the one remaining
 failure was the already-documented furnace-throw flake below, not this death cascade.
-
-## Circular ability hotbar (2026-09-16)
-
-Rebuilt the Alt+1..4 ability bar (`scripts/hud.gd` `_draw_ability_bar`) from flat rectangles to
-circular icon slots, matching the vector/procedural style the rest of the HUD already uses
-(`_draw_scan_ring`'s `draw_arc`, the hearts' `draw_circle`/`draw_colored_polygon`, etc. -- there
-are still no raster HUD icons anywhere). Each slot is a filled circle with a per-ability glyph
-drawn in a new `_draw_ability_icon()`: Echo is three concentric partial arcs plus a centre dot (a
-sound pulse), Hive Eyes is an almond eye outline with a pupil. The old bottom cooldown bar is now
-a radial arc that drains clockwise from the top; level pips sit in a row just under the circle;
-the Hive Eyes "Hive in range" border pulse is now a ring drawn with `draw_arc` instead of
-`draw_rect`; empty/unusable slots dim the same way as before, just on a circle. `_draw_ability_card`
-(the unlock popup) doesn't reference the bar's shape and was left alone.
-
-While rebuilding this I found and fixed a real, pre-existing bug in the big/small Alt-hold blend
-(`_alt_t`): the ability bar was lerping its rect with the *same* `t` direction as the hands bar
-(`_draw_hands`), so at `t=0` (Alt not held) it rendered at full/"big" size directly on top of the
-hand-slot boxes instead of shrinking into its own small idle corner -- the two bars were meant to
-swap spots, not overlap, per the hands bar's own comment ("cross-fade into each other's spot...
-rather than overlapping"), but the ability bar's lerp was never actually inverted to do that. Fixed
-by swapping which rect is the `t=0` vs `t=1` end for the ability bar only; the hands bar itself was
-untouched. Also nudged the big-mode vertical anchor and the ability name label's offset, since the
-new circles combined with the name/reason text were bumping into the bottom control-hint line at
-1600x900 in the first pass.
-
-Verified:
-- `godot --headless --path . --import` re-imported clean after the script changes.
-- No existing HUD-specific headless test tool exists (grepped `tools/*.gd` for `hud`/`ability_bar`/
-  `_draw_ability_bar`; the closest is `tools/orscreentest.gd`, which covers the OR wall monitor, a
-  different HUD layer, not this one).
-- Added two poses to `tools/gameshot.gd` (`_pose_ability_bar_idle`, `_pose_ability_bar_alt`,
-  shots `40_ability_bar_idle` / `41_ability_bar_alt`) that give the bot Echo/Hive Eyes via
-  `game.brains.set_level()`, force one ability onto a cooldown, and toggle the `ability_alt`
-  input action to capture both the idle-small and Alt-held-big states. Ran windowed (not
-  `--headless`, which returns a null viewport texture) with `-- --only=ability_bar --tag=t3` and
-  actually looked at the resulting screenshots
-  (`tools/game_shots/40_ability_bar_idle_t3.png`, `tools/game_shots/41_ability_bar_alt_t3.png`,
-  gitignored, not committed): circular slots, the Echo/Hive Eyes glyphs, the radial cooldown
-  sweep, level pips, the dimmed empty slots, and the Alt-held big/small swap all render correctly
-  with no overlap or off-screen elements after the `_alt_t` direction fix above.
-- `tools/devtest.tscn` and `tools/inventorytest.tscn` headless: both still `result=PASS
-  failures=0` (devtest) and `result=PASS checks=92 failures=0` (inventorytest), unchanged from
-  before this change, confirming the HUD rework didn't touch anything those exercise.
-
-Known gaps: the per-slot "why can't I use this" reason text (`_slot_reason`) is still drawn
-centred on the *full* screen width per slot (`HORIZONTAL_ALIGNMENT_CENTER, w`), unchanged from the
-original rectangle code -- if two slots ever have a reason at once (e.g. Echo cooling down and
-Hive Eyes out of range simultaneously) their texts stack on top of each other at the same spot
-instead of appearing over their own slot. Not introduced by this rework (the original rectangle
-version had the exact same call shape) and not hit in the two abilities that exist today since
-they're rarely both blocked at once, but worth widening to per-slot placement if a third ability
-ever ships. The new icon shapes (concentric arcs / almond eye) are a first pass at "read clearly
-at 26-52px" -- fine at both the idle and Alt-held sizes in the screenshots above, but not tested
-against colourblind palettes or at ultra-low resolutions.
 
 ## Default over-the-shoulder camera (2026-09-16)
 
@@ -1548,8 +1428,8 @@ into an ordinary crouch-walk. Client-owned local movement throughout, same as th
   third-person crouch torso-lean (`_update_down_pose`'s `body_hands.poser.crouch` blend) and the
   lowered eye height all already show up on every other machine for free, the same way an ordinary
   crouch does. A remote peer doesn't need to know *why* someone is crouched, only that they are.
-- **Blocked during the dive window:** interacting (E), the shove/use left-mouse actions, starting a
-  charged drop, and Alt+1..4 ability slots -- mirrors how `downed`/`winding`/`dragging_monster`
+- **Blocked during the dive window:** interacting (E), the shove/use left-mouse actions and starting
+  a charged drop -- mirrors how `downed`/`winding`/`dragging_monster`
   already gate those same call sites, just with an added `not diving`. Switching the selected item
   slot (plain 1..4 / scroll) was deliberately left allowed, since it's not "interacting" and there's
   no reason to block it. Jumping is already blocked for free (`want_jump` already requires
@@ -1578,9 +1458,9 @@ into an ordinary crouch-walk. Client-owned local movement throughout, same as th
     stays crouched exactly like letting go of an ordinary crouch there already does, and standing
     back up works again once the ceiling is removed. 14 of 14 new checks pass
     (`godot --headless --fixed-fps 60 --path . tools/controlstest.tscn`); found and fixed a real
-    gating bug along the way (the bot-input path's `bot_press`/`bot_use`/`bot_charge`/`bot_ability`
+    gating bug along the way (the bot-input path's `bot_press`/`bot_use`/`bot_charge`
     branches weren't checking `not diving` at all -- only the keyboard paths were -- so a bot could
-    still interact/use/shove/ability mid-dive; the human paths were correct from the start).
+    still interact/use/shove mid-dive; the human paths were correct from the start).
   - Ran the full mandated regression suite: `tools/inventorytest.tscn` (92/92), `tools/devtest.tscn`
     (0 failures), `tools/databasetest.tscn` (12/12), `tools/looptest.tscn` (0 failures),
     `tools/settingstest.tscn` (97/97), and `tools/carrycamtest.tscn` (0 failures except the same 3
@@ -1831,7 +1711,7 @@ Rebuilt around that:
   1.4 m chamber, hatch left open), its face 1.8 m off the south wall.
 - Tests that throw into the furnace open the hatch first and aim at the window's middle (1.5 m):
   looptest (the bot presses E on it), nettest (client 1 presses E, checking the replication),
-  inventorytest and braintest (set_hatch directly). inventorytest's "held laptop wears the gold rim"
+  inventorytest (set_hatch directly). inventorytest's "held laptop wears the gold rim"
   waited 3 physics frames, which after the bigger hub's loot spawn can all run before Player._process
   rebuilds the held model; it waits process frames now (92/92).
 
@@ -1872,9 +1752,8 @@ Rebuilt around that:
   morgue tray anchors (seeds 1, 38, 112). **Failing identically on 1df95f4 (chunk 1), so not from
   chunks 2/3, not fixed yet:** downedtest's 16 dev-room checks (carrying doesn't slow, the dev room's
   player table offers no "Place" prompt so the stitches flow never starts, "the next lobby has
-  everyone back up"), carrycamtest's wall pull-in (3), controlstest's air/touchdown speed (2), and
-  braintest's spoiled brain selling for full price in the furnace (1). nettest (via
-  tools/nettest_run.gd) and looptest are run separately after the commit.
+  everyone back up"), carrycamtest's wall pull-in (3) and controlstest's air/touchdown speed (2).
+  nettest (via tools/nettest_run.gd) and looptest are run separately after the commit.
 
 ## Hub rebuild, chunks 4 and 5: the break room, the hallway (2026-09-16)
 
@@ -1887,18 +1766,15 @@ Rebuilt around that:
   `case_sheet_ui.gd`: one fax page per case from `OrScreenModel.build` (patient, condition, procedure
   steps, supplies short on the shelf), refreshing twice a second; A/D pages, Esc/E closes.
 - The printer's own body is only an aim target (`C.L_INTERACT`); its stand is the solid part, kept
-  below 0.8 m, because the brains blender's counter search (`brains.gd` `_counter_spot`) takes any flat
-  0.8-1.1 m top near the time clock and had put the blender on the printer.
+  below 0.8 m so counter-height prop searches do not mistake it for a free counter top.
 - **Hallway (chunk 5):** set dressing in rows 1 and 4 only (rows 2-3 stay a clear lane): body bags on
   gurneys (`gurney_bag`) and on the floor (`body_bag`), a sheeted body, a toppled gurney
   (`gurney_toppled`, frame on its side with legs and wheels), a wheelchair in the lane, a drag mark
   (`blood_trail`) and pools (`blood_pool`, glass surface so it reads wet). The five hallway fixtures
   are fixed modes (two flicker, two dead, the spine's lit) instead of rolled.
 
-- **Fixed after the chunks 2+3 merge (2026-09-16):** the crematorium furnace priced a sale from a
-  stack without its kind or spoil clock, so a spoiled brain sold for full value (`furnace.gd` now
-  passes `{kind, count, v, bt}`). The other pre-existing failures were tests left behind by the
-  rebuilt rooms, not game bugs: downedtest walked into the dev room furnace's open hatch (the carry
+- **Fixed after the chunks 2+3 merge (2026-09-16):** the pre-existing failures were tests left
+  behind by the rebuilt rooms, not game bugs: downedtest walked into the dev room furnace's open hatch (the carry
   slowdown and player table checks, now a clear lane at z 12.5) and gave the new run's bigger hub
   too little time to build; carrycamtest backed the player onto the pen's waist-high barrier
   instead of a wall; controlstest's dive started in the lobby facing a wall (now the hub's spine).
@@ -1907,7 +1783,7 @@ Rebuilt around that:
 
 - **Terminal 3D viewer** (`scripts/database/model_preview.gd`): a SubViewportContainer with its own
   world beside each page's text: monsters (black silhouette unscanned, the rig once scanned, plus its
-  brain enlarged once harvested), ability brains, items, a procedure's tools in a small grid. Rebuilt
+  brain enlarged once harvested), items, a procedure's tools in a small grid. Rebuilt
   only when the page key changes (the terminal redraws its text every frame). Skinned rigs report
   their rest-pose bounds, so monsters pass `preview_bounds` from MonsterPages' height.
 - **Scanner feedback** (`scripts/scan_fx.gd`, local only): holding R turns the flashlight blue and
@@ -1988,8 +1864,7 @@ Rebuilt around that:
   shows at once). Test: `databasetest` (sign in/out paths, solo), `nettest --only=wall` (two guests).
 - Failing on main before this work too (checked on e1c63e4 in a separate worktree, 2026-09-17):
   doortest "the crew pushed the OR's doors open to bring the gurney through" (every run), looptest
-  "the bot threw the loot into the furnace and sold it for $52" (every run), braintest "nobody is
-  left looking through a Hive" after a game over (flaky, about 1 in 2), mapcheck seed 1's morgue
+  "the bot threw the loot into the furnace and sold it for $52" (every run), mapcheck seed 1's morgue
   tray (known).
 
 ## Right-shoulder carry camera, load on the left shoulder (2026-09-17)

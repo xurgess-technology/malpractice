@@ -5,15 +5,13 @@ extends RefCounted
 ##   SECTIONS                          [{id, title}] in home-grid order
 ##   entries(section, view) -> Array   [{key, title, known}]; unknown entries show "???" and can't open
 ##   page(section, key, view) -> Dict  {title, subtitle, paragraphs: [String], hint, models: [{monster} |
-##                                      {item, count, link, label}], ability: {name, levels: [String]}
-##                                      (monsters); a procedure's steps are a paragraph and its tools
+##                                      {item, count, link, label}]; a procedure's steps are a paragraph and its tools
 ##                                      links (link: a surgery item's key, label over it when pointed at)
 ##
 ## `view` is whose database the screen shows (wall_session.gd view()): {db: {kind: bits (1 sighted,
-## 2 scanned, 4 harvested)}, peer, brains}; nobody signed in is an empty db and peer 0.
+## 2 scanned, 4 harvested)}, peer}; nobody signed in is an empty db and peer 0.
 ## Known: surgery items and procedures always; a monster once scanned; any other item once picked
-## up (game.mark_db(kind, "sighted", player) in pickup_item). Ability names show once harvested,
-## each level's numbers once the player's brain level reaches it.
+## up (game.mark_db(kind, "sighted", player) in pickup_item).
 
 const MonsterPages := preload("res://scripts/database/monster_pages.gd")
 const Pages := preload("res://scripts/database/database_pages.gd")
@@ -27,9 +25,6 @@ const SECTIONS := [
 	{"id": "surgery", "title": "SURGERY ITEMS"},
 	{"id": "other", "title": "OTHER ITEMS"},
 ]
-
-## Which brain path a monster's ability grows on, and its name.
-const ABILITY := {"hive": "Hive Eyes", "sonographer": "Echo"}
 
 const MONSTER_TEXT := {
 	"hive": ["Wanders the wings until it hears something. It can't see: running, dropping things and shoving give you away.", "About 2 doses of anesthetic put it under."],
@@ -68,8 +63,6 @@ const LOOT_BLURBS := {
 	"heart_monitor": "A bedside heart monitor. Takes both hands.",
 	"defibrillator": "A portable defibrillator. Takes both hands.",
 	"ultrasound": "A portable ultrasound. The best find in the wings.",
-	"brain_hive": "A Hive's brain. Drink it to grow Hive Eyes.",
-	"brain_sonographer": "A Sonographer brain. Drink it to grow Echo.",
 	"eye_hive": "The eyeball of a strapped Hive. It clouds over and spoils in a minute or two unless it goes in a vat.",
 	"eye_surgeon": "A surgeon's own eyeball, labelled with whose it is. It spoils outside a vat, too.",
 }
@@ -132,21 +125,6 @@ static func _monster(kind: String, view: Dictionary) -> Dictionary:
 		"paragraphs": MONSTER_TEXT.get(kind, []),
 		"models": [{"monster": kind}],
 	}
-	var tier := _tier(view, kind)
-	var name := "???"
-	var levels: Array = ["???", "???", "???"]
-	if ABILITY.has(kind):
-		var lvl := _level(view, kind)
-		if tier >= 3 or lvl >= 1:
-			name = String(ABILITY[kind]).to_upper()
-		for n in range(1, 4):
-			var brains = view.get("brains")
-			if lvl >= n and brains != null:
-				if kind == "hive":
-					levels[n - 1] = "Reach %.0f m, watch for %.1f s" % [brains.hive_range(n), brains.hive_seconds(n)]
-				else:
-					levels[n - 1] = "Radius %.0f m, lasts %.1f s" % [brains.echo_radius(n), brains.echo_seconds(n)]
-	p["ability"] = {"name": name, "levels": levels}
 	return p
 
 
@@ -212,9 +190,7 @@ static func _other(kind: String) -> Dictionary:
 	var def := LootTable.def(kind)
 	var value: Array = def.get("value", [0, 0])
 	var worth := "Sells for $%d to $%d at the furnace." % [int(value[0]), int(value[value.size() - 1])]
-	if kind.begins_with("brain_"):
-		worth = "Or sell it at the furnace, before it spoils."
-	elif kind.begins_with("eye_"):
+	if kind.begins_with("eye_"):
 		worth = "Sells for less every second it spends out of a vat."
 	return {
 		"title": ItemsDB.display_name(kind).to_upper(),
@@ -239,9 +215,3 @@ static func _tier(view: Dictionary, kind: String) -> int:
 static func _found(view: Dictionary, kind: String) -> bool:
 	return _tier(view, kind) >= 1
 
-
-static func _level(view: Dictionary, path: String) -> int:
-	var brains = view.get("brains")
-	if brains == null or int(view.get("peer", 0)) == 0:
-		return 0
-	return int(brains.level(int(view.peer), path))

@@ -6,10 +6,10 @@ Brief for the orchestrator. Agreed with Zach on 2026-09-18 (theory session).
 
 1. **Cut the item list to 26 items, each with a clear job.** The loot goes from 21 kinds to 11:
    five plain loot items and six **trinkets** that sell but also do one thing.
-2. **Give every item and ability an icon,** drawn in one style, and **replace the text item bar**
+2. **Give every item an icon,** drawn in one style, and **replace the text item bar**
    with an icon bar.
 
-The icons are done: `art/icons/items/` (items) and `art/icons/` (abilities). Look at
+The icons are done: `art/icons/items/`. Look at
 `art/icons/items/sheet.html` in a browser to see them all.
 
 ## The item list
@@ -49,8 +49,7 @@ trinkets sell for a small scrap value once used up.
 
 **Cut (13 kinds):** stethoscope, ear thermometer (`thermometer`), BP cuff, otoscope, patient
 records, wheelchair wheel, sample rack, wedding ring, coffee maker, IV pump, microscope, the old
-pulse oximeter loot, and the brains (the brains go in `docs/GRAFTING_TRACHEA.md`; don't remove them
-here, only the loot). Remove them from `scripts/economy/loot_table.gd`, their models from
+pulse oximeter loot. Remove them from `scripts/economy/loot_table.gd`, their models from
 `loot_models.gd`, and every other mention (dev panel, database, tips, tests, `warmup.gd`).
 
 **Rebalance after the cut:**
@@ -58,7 +57,7 @@ here, only the loot). Remove them from `scripts/economy/loot_table.gd`, their mo
   cafeteria, maintenance and janitor's closet lose theirs in the cut; spread the kept items over
   them with the room weights (the laptop fits the lab, the desk phone the break room, and so on).
 - **Pay:** (superseded) a shift once had to pay within about 10% of before. Loot is now scarce on
-  purpose: 15 to 20 stacks and about $1,000 a shift, so a harvested brain is a real share of the pay.
+  purpose: 15 to 20 stacks and about $1,000 a shift, so a harvested part is a real share of the pay.
   Room coverage is checked over several seeds, not every shift.
 - **Trinkets are rarer than plain loot,** so finding one feels like a find.
 
@@ -69,7 +68,7 @@ here, only the loot). Remove them from `scripts/economy/loot_table.gd`, their mo
 - **Flat colours, a thick dark outline, chunky shapes.** No gradients, no fine hatching. It has to
   read at about 40 px.
 - **Only monster parts glow,** in their monster's colour: the Hive orange, the Sonographer violet.
-- **Items sit on rounded squares, abilities on circles.**
+- **Items sit on rounded squares.**
 - **The slot border's colour is the category:**
 
 | Category | Border |
@@ -90,7 +89,6 @@ here, only the loot). Remove them from `scripts/economy/loot_table.gd`, their mo
   which draws its own slot, border, selection and live count.
 - `art/icons/items/categories.json`: each kind's name, category and glow, plus the border
   colours.
-- `art/icons/hive_eyes.svg`, `art/icons/echolocation.svg`: the ability icons (round, framed).
 - File names are the item kinds. Import the SVGs big enough for their largest use (the database
   card) with mipmaps, so they stay crisp at 40 px. Register them in `scripts/warmup.gd`.
 
@@ -108,8 +106,6 @@ Replaces the text boxes in `scripts/hud.gd` `_draw_hands`.
 - **No prices on the bar.** You find out what something's worth at the furnace.
 - **The name flashes:** whenever the held item changes (switching slots, picking something up), its
   name appears above the bar for about 2 s, then fades.
-- **Alt keeps its current behaviour:** the item bar shrinks into the small top-left row and the
-  ability bar grows into its place, now as small icons.
 
 ### Calls the theory session made (not yet approved by Zach)
 
@@ -121,9 +117,6 @@ Replaces the text boxes in `scripts/hud.gd` `_draw_hands`.
 
 ## Icons everywhere else
 
-- **The ability bar:** the Hive Eyes and Echolocation icons replace the drawn glyphs in the round
-  slots. The HUD adds a glow in the ability's colour: steady when ready, stronger while in use,
-  dim on cooldown (the radial cooldown sweep stays). Any ability without an icon keeps its glyph.
 - **The database** (the break-room screen): item and procedure pages show the framed icon beside
   the turning model, and the section cards use icons.
 - **The OR's "next step needs":** wherever a surgery step names the item it needs (the OR monitor,
@@ -137,13 +130,13 @@ Replaces the text boxes in `scripts/hud.gd` `_draw_hands`.
 |---|---|---|---|---|
 | A | `items-cut` | The cut, the rebalance (rooms and pay), trinket rarity, and the new kinds `epipen` and the new `pulse_oximeter` as items with models (Godot primitives are fine, like the existing loot models). No trinket behaviour yet. | Sonnet, medium | Any time |
 | B | `trinkets` | What the six trinkets do, the scrap value when used up, the noises, networking. | Opus, high (it touches monsters, downed players and cameras over the network) | After A |
-| C | `icon-bar` | The icon item bar, the name flash, bulky wide slots, counts, spoil rings, used-trinket look, the pickup pop; icons in the ability bar, the database and the OR step. | Sonnet, high | Any time; it reads kinds generically, so items without an icon yet (anything grafting hasn't added) fall back to a plain slot |
+| C | `icon-bar` | The icon item bar, the name flash, bulky wide slots, counts, spoil rings, used-trinket look, the pickup pop; icons in the database and the OR step. | Sonnet, high | Any time; it reads kinds generically, so items without an icon yet (anything grafting hasn't added) fall back to a plain slot |
 
 **Zach sees:**
 - A: `ITEMS: walk a shift and see what loot turns up` (a normal shift with a seed or two).
 - B: `TRINKETS: try all six` (the dev room with each trinket laid out, and a monster to tag, bonk
   and escape from; `-Count 2` for the defibrillator and the reflex hammer on a teammate).
-- C: `ICONS: pick things up, switch slots, hold Alt, open the database`.
+- C: `ICONS: pick things up, switch slots, open the database`.
 
 ## Done when
 

@@ -137,10 +137,10 @@ func _static_checks() -> void:
 		root.free()
 		# Every place a kept kind may turn up is a real room kind or the catch-all.
 		_check(not (LootTable.LOOT[k].rooms as Dictionary).is_empty(), "%s has rooms" % k)
-	# The table holds only the kept kinds plus the brains and the grafting parts.
+	# The table holds only the kept kinds plus the grafting parts.
 	for k in LootTable.kinds():
 		var d: Dictionary = LootTable.LOOT[k]
-		_check(KEPT.has(k) or d.get("brain", false) or d.get("eye", false) or k == "specimen_vat", "%s is a kept kind" % k)
+		_check(KEPT.has(k) or d.get("eye", false) or k == "specimen_vat", "%s is a kept kind" % k)
 
 
 func _check(ok: bool, what: String) -> void:

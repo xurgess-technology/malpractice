@@ -8,8 +8,13 @@ older grafting notes.
 
 The first graft in the game, deliberately small. The team catches a Hive, takes one of its eyes
 out on an OR table, keeps it in a specimen vat, then straps a surgeon down and swaps one of their
-eyes for it. The grafted surgeon has one normal eye and one orange Hive eye, and gets **Hive Eyes**
-from it. The surgeon's own eye goes into the vat and can be swapped back in or sold.
+eyes for it. The grafted surgeon has one normal eye and one orange Hive eye. The surgeon's own eye
+goes into the vat and can be swapped back in or sold.
+
+**The ability reward is gone.** As written below, a graft granted the player ability "Hive Eyes".
+The whole ability system has since been removed (`docs/backlog/ABILITIES_REMOVED.md`), so the graft
+grants nothing: it is the look, the first-person tint, and a part you can swap back out. Everything
+else in this brief still stands; read every mention of an ability below as no longer built.
 
 ## The loop
 
@@ -33,7 +38,7 @@ from it. The surgeon's own eye goes into the vat and can be swapped back in or s
 - **The grafted surgeon is awake.** They lie strapped down in first person, looking up, and watch
   the tools come at their own eye. This is the moment the feature exists for, so the patient's
   camera matters: face up, a little freedom to look around, the operator and tools in view.
-- **Eyes spoil outside a vat.** Reuse the brain spoil system: over a minute or two the eye clouds
+- **Eyes spoil outside a vat.** Over a minute or two the eye clouds
   over and dulls. A vat stops the clock. A spoiled eye can't be grafted.
 - **A graft is always a swap, never an empty socket.** You can only operate when the vat on the
   vat on the table holds the eye that goes in. The eye that comes out goes into that vat.
@@ -71,10 +76,7 @@ from it. The surgeon's own eye goes into the vat and can be swapped back in or s
   and eye spoon start in the lab storage in the OR, so the feature is never blocked by a search.
   Vats and their contents last the whole run (the entrance building never changes); a new run
   resets them.
-- **The graft lasts the run,** through death, like rocket boots, and is lost on a game over
-  like abilities from brains today.
-- **Hive Eyes comes only from the graft now.** Remove the Hive brain → blender → Hive Eyes path.
-  Echo moves to a graft too, in part two (docs/GRAFTING_TRACHEA.md), which also removes the blender.
+- **The graft lasts the run,** through death, like rocket boots, and is lost on a game over.
 
 ## Chunks
 
@@ -117,9 +119,7 @@ A and B can run at the same time. C starts after both are merged.
   `surgeon_graft` variant with the left eye as a stitched Hive eye (`art/stylized/README.md`).
   It shows in third person, on other players' screens and in the Personnel mirrors.
 - The glow: the Hive eye material's `Lock` value (0 = low pinpoint, 1 = the whole ball lit).
-  Low normally, high while the surgeon is in Hive Eyes. Replicated.
-- Grafting puts Hive Eyes level 1 in the next free ability slot, with the new-ability card;
-  swapping back removes it. Remove the Hive brain route to Hive Eyes.
+  Low all the time (it used to rise while the ability was in use). Replicated.
 - The first-person orange tint on the left edge.
 - Update DESIGN.md (the Hive row, a Grafting section, the lab wall) and docs/CONTRACTS.md.
 - **Zach sees:** `GRAFT: as Botsworth, give yourself a Hive eye, then check the mirror`
@@ -127,13 +127,12 @@ A and B can run at the same time. C starts after both are merged.
 
 ## Done when
 
-- A whole run of the loop works from a normal shift: catch, extract, vat, strap, graft, Hive Eyes,
+- A whole run of the loop works from a normal shift: catch, extract, vat, strap, graft,
   swap back, sell an eye.
 - It works in co-op: a nettest scenario for the graft, with the eye swap and glow seen by the
   other machine.
 - Headless checks: an eye spoils outside a vat and not inside; a spoiled eye can't be grafted; the
-  graft is refused without a vat on the stand; a graft gives Hive Eyes 1 and swapping back takes it
-  away; you can't get up after the scoop.
+  graft is refused without a vat on the stand; you can't get up after the scoop.
 
 ## Not in this part
 

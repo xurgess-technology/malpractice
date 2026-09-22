@@ -1,14 +1,11 @@
 # Sweep 4A Log
 
-## Chunk 1: Controls, ability slots and HUD, scanner (`s4a-controls`)
-Landed: crouch (silent, no low-ceiling stand-up), grounded jump, hold-R scanner with
-range/LOS/host-recorded sighted+scanned, and the 4-ability-slot system (Alt bar animation,
-per-slot cooldowns, first-ability card) replacing `best_path()`. Guide's `read` moved to E.
-Tests: controlstest (18/18), braintest (82/82), settingstest (84/84), devtest (0 failures),
-two independent `playtest --god --seed=1` runs (PASS). CONTRACTS "Brains" section documents
-`add_ability`/`set_level`/`slot_of`.
-Known issues logged: item slot bar doesn't shrink/slide when Alt is held (only ability icons
-animate — a visual TODO, not a bug); no rebind-conflict detection; scanner LOS is a single
+## Chunk 1: Controls and HUD, scanner (`s4a-controls`)
+Landed: crouch (silent, no low-ceiling stand-up), grounded jump, and the hold-R scanner with
+range/LOS/host-recorded sighted+scanned. Guide's `read` moved to E.
+Tests: controlstest (18/18), settingstest (84/84), devtest (0 failures),
+two independent `playtest --god --seed=1` runs (PASS).
+Known issues logged: no rebind-conflict detection; scanner LOS is a single
 centre raycast, not a cone; crouch's third-person pose is a fixed-weight lean, not blended
 against every hold/carry pose.
 
@@ -50,29 +47,25 @@ this chunk's fix to make — flagged for whoever owns entrance.gd's lobby layout
 check is a per-frame distance poll, not swept, and untested under lag; chunk 4 owns the placebo
 pill database/terminal entry.
 
-## Chunk 4: Database terminal, guide removal, Hive Eyes and Echo polish (`s4a-database`)
-Landed: computer terminal in the break room replaces the guide binder entirely (Monsters/
-Abilities/Items & Procedures sections, tiered monster entries — sighted/scanned/harvested — with
-an X-ray silhouette and level tables, placebo pill entry included); host-owned database saved to
-`user://`, survives a wipe and a reload, syncs to guests; Hive Eyes fly-through camera (navmesh
-path or straight-line glide in, quick glide out, instant snap on a hit, glazed eyes for
-teammates); Echo now shows a visible pulse ring and body pose on every machine. Tests (run
+## Chunk 4: Database terminal, guide removal (`s4a-database`)
+Landed: computer terminal in the break room replaces the guide binder entirely (Monsters and
+Items & Procedures sections, tiered monster entries — sighted/scanned/harvested — with
+an X-ray silhouette, placebo pill entry included); host-owned database saved to
+`user://`, survives a wipe and a reload, syncs to guests. Tests (run
 independently by the orchestrator, not just the build agent): databasetest (new, 12/12),
-braintest (85/85), devtest, dissectiontest, `playtest --god --seed=1`, all clean. Merged with
+devtest, dissectiontest, `playtest --god --seed=1`, all clean. Merged with
 conflicts against chunk 3 (both touched items.gd/item_models.gd — guide removal vs. placebo
 pills — and KNOWN_ISSUES.md); resolved keeping both chunks' work, re-verified after resolving.
-Known issues logged: Hive Eyes cycling and the hold-to-exit key (level 2+) were not wired up
-(scope-trimmed, `hive_view.gd` has a ready `_begin_cycle()` for later); the Monsters list is
+Known issues logged: the Monsters list is
 hand-written, not from a shared registry; the X-ray is a 2D silhouette, not a real model render;
 the terminal's look is plain, no CRT/scanline styling.
 
 ## Final integration
 Fresh import; `playtest --god` on seeds 1, 2 and 3 (all PASS). `nettest_run.gd --lag=120
---jitter=40 --loss=0.03`: found and fixed three real breaks in `tools/nettest.gd` (a removed API
-call, an un-updated Hive Eyes flight timing, and the same throw-timing/orientation/miss-recovery
-bugs already fixed in inventorytest/looptest, now fixed there too) — `brains` and `economy` both
-pass under lag afterward. `combat`'s own lag failure confirmed pre-existing and unrelated to any
+--jitter=40 --loss=0.03`: found and fixed real breaks in `tools/nettest.gd` (the same
+throw-timing/orientation/miss-recovery bugs already fixed in inventorytest/looptest, now fixed
+there too) — `economy` passes under lag afterward. `combat`'s own lag failure confirmed pre-existing and unrelated to any
 of the four chunks (clean with no lag); logged rather than expanded into new scope. `perfprobe`
 across the lobby, the fog lot and the crematorium holds 60fps/60fps 1% low on every quality tier.
-`DESIGN.md` updated for the sweep: the ability bar, the database terminal, the fog lot and driven
+`DESIGN.md` updated for the sweep: the database terminal, the fog lot and driven
 ambulance, the pharmacy and crematorium, placebo pills, no gold bars.

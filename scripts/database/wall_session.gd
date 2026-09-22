@@ -11,7 +11,7 @@ extends Node
 ##   own_db_changed()          game.mark_own_db flipped a field on this machine
 ##   user -> int               the signed-in player's peer id, 0 for nobody
 ##   user_name() -> String
-##   view() -> Dictionary      {db: {kind: bits (1 sighted, 2 scanned, 4 harvested)}, peer, brains}
+##   view() -> Dictionary      {db: {kind: bits (1 sighted, 2 scanned, 4 harvested)}, peer}
 ##   laser_of(p) -> Dictionary where player p's laser lands, on any machine: {from, to, landed,
 ##                             terminal, px} (px (-1, -1) off the screen)
 ##   net_fields() / apply_net(g)
@@ -50,7 +50,7 @@ static func encode(database: Dictionary) -> Dictionary:
 
 
 func view() -> Dictionary:
-	return {"db": _db, "peer": user, "brains": game.brains if game != null else null}
+	return {"db": _db, "peer": user}
 
 
 func user_name() -> String:

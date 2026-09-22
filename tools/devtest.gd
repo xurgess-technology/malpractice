@@ -6,7 +6,7 @@ extends Node
 ##       pharmacy fax's secret order (3141592653 placebo pills, no money) prints a reply page, turns
 ##       dev mode on and builds the hidden room past the parking lot. Then the closet door, the room
 ##       (the gun on monsters, dummies and bots; dispensers, the pen doors, lights and gate), the
-##       panel's tools (shift, go to, database, abilities, no monsters, no game over, infinite
+##       panel's tools (shift, go to, database, no monsters, no game over, infinite
 ##       vitals, money, god mode, noclip, the Night Nurse, pockets) and DEV MODE OFF. Exits 0 when
 ##       all pass.
 ##
@@ -536,7 +536,7 @@ func _loot_and_money() -> void:
 	_check(game.money == 0, "the panel's money reset clears money")
 
 
-## The tools new with dev mode: go to, the database and abilities.
+## The tools new with dev mode: go to and the database.
 func _panel_extras() -> void:
 	var places: OptionButton = main.dev_panel._c["places"]
 	main.dev_panel._refresh()
@@ -557,9 +557,6 @@ func _panel_extras() -> void:
 	_press_panel("Dev room")
 	await _frames(2)
 	_check(dev.in_room(me.global_position), "the panel's Dev room button takes you there")
-	_press_panel("All abilities")
-	await _frames(2)
-	_check(game.brains.slot_of(me.peer_id, "echo") >= 0 and game.brains.slot_of(me.peer_id, "hive_in") >= 0, "the panel's All abilities grants Echo and Hive Eyes")
 	_press_panel("Unlock every entry")
 	_check(game.db_record("hive").harvested and game.db_record("night_nurse").scanned, "Unlock every entry fills this machine's database")
 	_press_panel("Reset database")

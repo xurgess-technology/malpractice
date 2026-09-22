@@ -1,9 +1,8 @@
 extends Node
 ## Headless checks for the database terminal (sweep 4a chunk 4, docs/SWEEP4A.md "Chunk 4:
-## Database terminal, guide removal, Hive Eyes and Echo polish"): a completed scan unlocks tier 2,
-## an absorbed brain unlocks tier 3, the database survives a wipe and a
-## reload (saved under user://), each player's database is their own (another player's scan never
-## lands in yours), the waiting room's Night Nurse can be scanned, and no `read` action or guide
+## Database terminal, guide removal"): a completed scan unlocks tier 2, the database survives a
+## wipe and a reload (saved under user://), each player's database is their own (another player's
+## scan never lands in yours), the waiting room's Night Nurse can be scanned, and no `read` action or guide
 ## binder code remains in the project. Terminal redesign, chunk 4: on the break room screen, holding
 ## the laser on HOLD TO SIGN IN signs in and fills the cards with your database (nobody signed in:
 ## "???"), and SIGN OUT, walking away and the idle timeout each sign you out.
@@ -47,7 +46,6 @@ func _ready() -> void:
 
 func _run() -> void:
 	await _scan_unlocks_tier2()
-	await _harvest_unlocks_tier3()
 	await _guest_scan_stays_theirs()
 	await _scan_waiting_nurse()
 	await _wall_sign_in_and_out()
@@ -65,7 +63,7 @@ func _scan_unlocks_tier2() -> void:
 	me.teleport(game.table_pos() + Vector3(0, 0, -2.0))
 	await _frames(3)
 	var here: Vector3 = me.global_position
-	var wi: Node3D = game.brains.spawn_hive(game._floor_at(here + Vector3(0, 0, 4))) as Node3D
+	var wi: Node3D = game.spawn_hive(game._floor_at(here + Vector3(0, 0, 4))) as Node3D
 	await _frames(2)
 	var to: Vector3 = wi.global_position - me.global_position
 	me.bot_yaw = atan2(-to.x, -to.z)
@@ -94,21 +92,6 @@ func _scan_unlocks_tier2() -> void:
 	game.kill_monster(wi)
 
 
-func _harvest_unlocks_tier3() -> void:
-	_say("---- a harvest (absorbed at the blender) unlocks tier 3")
-	var b: Node = game.brains
-	b.on_reset()
-	game.database.erase("sonographer")
-	_check(not game.db_record("sonographer").harvested, "tier 3 starts locked for the Sonographer")
-	me.take_into("brain_sonographer", 1, 350)
-	var slot := _slot_of("brain_sonographer")
-	me.slots[slot]["bt"] = game.world_time
-	me.selected = slot
-	b.drink(me)
-	await _frames(2)
-	_check(game.db_record("sonographer").harvested, "drinking an absorbed brain marks tier 3 harvested")
-
-
 func _guest_scan_stays_theirs() -> void:
 	_say("---- another player's scan goes in their database, not this one")
 	game.database.erase("hive")
@@ -120,7 +103,7 @@ func _guest_scan_stays_theirs() -> void:
 	game.get_node("Entities").add_child(guest)
 	guest.teleport(game.table_pos() + Vector3(2.0, 0.0, -2.0))   # open OR floor, see _scan_unlocks_tier2
 	await _frames(3)
-	var wi: Node3D = game.brains.spawn_hive(game._floor_at(guest.global_position + Vector3(0, 0, 4))) as Node3D
+	var wi: Node3D = game.spawn_hive(game._floor_at(guest.global_position + Vector3(0, 0, 4))) as Node3D
 	await _frames(2)
 	# This machine's own player looks away, so only the guest sights and scans it.
 	me.bot_yaw = atan2(-(guest.global_position - wi.global_position).x, -(guest.global_position - wi.global_position).z)
@@ -176,7 +159,7 @@ func _persists_across_wipe_and_reload() -> void:
 	_say("---- the database persists across a wipe and a reload")
 	game.database.clear()
 	game.mark_db("night_nurse", "sighted")
-	game.reset_money()   # a "wipe": money and absorbed brains reset, the database must not
+	game.reset_money()   # a "wipe": money resets, the database must not
 	_check(game.db_record("night_nurse").sighted, "sighted survives reset_money() (a wipe)")
 	# A "reload": nothing at all in memory (a fresh process would start here), then load from disk.
 	var fresh: Dictionary = {}

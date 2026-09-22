@@ -1,5 +1,5 @@
 extends Node
-## Boots the real game and saves screenshots of the icon item bar, the ability bar and the database
+## Boots the real game and saves screenshots of the icon item bar and the database
 ## (docs/ITEMS_AND_ICONS.md, chunk C), for the smoke look. Windowed: run it minimized (tools/review.ps1
 ## style WMI launch), never in front of anyone.
 ##
@@ -44,8 +44,6 @@ func _ready() -> void:
 	_look_from(t + Vector3(0.6, 0, 3.4), t + Vector3(0, 1.0, 0))
 	await _frames(20)
 
-	game.brains.set_level(bot.peer_id, "echo", 3)
-	game.brains.set_level(bot.peer_id, "hive_in", 2)
 	var suf := "_%d" % int(get_viewport().get_visible_rect().size.x)
 	for sel in 4:
 		_clear()
@@ -94,17 +92,6 @@ func _ready() -> void:
 	bot.slots[3]["used"] = true
 	await _frames(14)
 	await _shot("bar_spoil_used")
-	# 5. abilities: Alt held.
-	game.brains.set_level(bot.peer_id, "echo", 3)
-	game.brains.set_level(bot.peer_id, "hive_in", 2)
-	game.brains._cd["echo:%d" % bot.peer_id] = game.world_time + 9.0
-	game.brains._cd.erase("hive:%d" % bot.peer_id)
-	await _shot("abilities_idle")
-	Input.action_press("ability_alt")
-	await _frames(30)
-	await _shot("abilities_alt%s" % suf)
-	Input.action_release("ability_alt")
-	await _frames(20)
 	# 6. the table's prompt naming its item.
 	bot.aim_id = "table_0"
 	bot.aim_prompt = "!Hold Forceps to do this."

@@ -363,7 +363,6 @@ func _build() -> void:
 	right.add_child(_section("KEYS"))   # SWEEP 4A HOOK (controls)
 	right.add_child(_rebind_row("key_crouch", "Crouch"))
 	right.add_child(_rebind_row("key_jump", "Jump"))
-	right.add_child(_rebind_row("key_ability_alt", "Ability"))
 	right.add_child(_rebind_row("key_scan", "Scan"))
 
 	_sheet.add_child(_rule())

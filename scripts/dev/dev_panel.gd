@@ -154,7 +154,6 @@ func _build() -> void:
 	_c["gun"] = _check(you, "Dev gun", func(on): _req("gun", {"on": on}))
 	var you2 := _row(col)
 	_button(you2, "Down me", func(): _req("down_me"))   # downed hook
-	_button(you2, "All abilities", func(): _req("abilities"))
 	_button(you2, "Revive all", func(): _req("revive_all"))
 	_label(col, "Gun: left click kills, right click downs. Noclip: Space up, Ctrl down.", 11, DIM)
 	var fc := _row(col)
@@ -310,17 +309,6 @@ func _build() -> void:
 	_button(pk2, "Go there", func(): game.dev.pocket_go(true))
 	_button(pk2, "Back to the start", func(): game.dev.pocket_go(false))
 	_label(col, "Builds the space beside the hospital for this session (no entrances to it).", 11, DIM)
-
-	# ---- brains (SWEEP 3 HOOK, scripts/brains/brains.gd dev_request)
-	_section(col, "Brains")
-	var br1 := _row(col)
-	_button(br1, "Spawn brain: Hive", func(): _req("br_spawn_brain", {"kind": "brain_hive"}))
-	_button(br1, "Sonographer", func(): _req("br_spawn_brain", {"kind": "brain_sonographer"}))
-	_button(br1, "Rotten", func(): _req("br_spawn_brain", {"kind": "brain_sonographer", "age": 200.0}))
-	var br2 := _row(col)
-	_button(br2, "Give brain levels (+1)", func(): _req("br_levels", {"amount": 1.0}))
-	_button(br2, "Reset", func(): _req("br_reset"))
-	_button(br2, "Hive in front", func(): _req("br_spawn_hive"))
 
 	# ---- money (inventory, sweep 2)
 	_section(col, "Money")

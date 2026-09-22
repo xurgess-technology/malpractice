@@ -1,4 +1,4 @@
-# Sweep 3: fight, capture, dissect, absorb — brief for every worker
+# Sweep 3: fight, capture, dissect — brief for every worker
 
 Project: Malpractice, Godot 4.7.2, GDScript. Read `DESIGN.md` (the monsters and "Fighting and
 capturing monsters" sections are the design), `docs/CONTRACTS.md`, `docs/KNOWN_ISSUES.md`
@@ -23,7 +23,7 @@ and this file first. Godot console binary:
 - Multiplayer rules: the host owns monsters, items, cases, damage, money; each client owns its own
   movement and aim. Anything that changes world state must work for a client and replicate:
   continuous state in a report (quantized, copies, small), one-offs as reliable events. Events for
-  your system use your prefix (`cb_`, `dx_`, `br_`) and arrive in your `on_event`. Interactables
+  your system use your prefix (`cb_`, `dx_`) and arrive in your `on_event`. Interactables
   keep `interact_prompt / interact_hold / interact` with machine-stable `interact_id`s.
 - **Other workers are building against the contracts below at the same time.** When a method from
   another worker does not exist yet on your branch, check with `has_method` and fall back to
@@ -40,39 +40,34 @@ and this file first. Godot console binary:
 ## Locked decisions (Zach, 2026-09-13)
 
 - Players can fight monsters. **Kill** with the bone saw (pays nothing) or **capture** (shove, jab
-  anesthetic, drag, strap to a patient table) and dissect for the **brain** (the money / upgrades).
+  anesthetic, drag, strap to a patient table) and dissect it.
 - The bone saw is a weapon with a chance to break on each hit. It is the same item surgery needs.
-- The Night Nurse stays unfightable: the saw and the needle do nothing to her. No brain.
+- The Night Nurse stays unfightable: the saw and the needle do nothing to her.
 - New monster **The Hive** (sight only, slow, loses interest fast, weak, common near wing
   starts). **The Sonographer** redesign: eyeless, somewhat taller than a surgeon (not extremely),
   ears clear and on the large side of normal (not comical), ears react to sound.
 - Strapped monsters cannot hurt anyone. They wake up (stir, then thrash) and need more anesthetic;
   each extra dose works for less time (tolerance).
-- Both the Hive and the Sonographer carry a brain. Brains spoil fast. The **dumpster** (the
-  existing sell bin in the neutral area) is the only sell point.
-- The break-room **blender**: blend and drink a brain to absorb it. Per player; reset on game over
-  with the money. Hive brains teach **Hive Eyes**, Sonographer brains teach **Echo** (R key).
 - No tackle move: shove (Q, or left mouse with nothing usable in hand) opens the capture window.
 - Not in this sweep: Puppet, Rise, side effects, strap breaks.
 
 ## Scaffold already on main (main session)
 
 - Input: `use` = left mouse (removed from `shove`, which is Q only). `read` (R) opens the guide
-  when holding it or aiming at it, otherwise it is the brain ability.
-- `Player`: `use_count`, `ability_count` (client -> host in `report_state()` slots 9 and 10),
-  bot seam `bot_use`, `bot_ability` (bump to press once). Left mouse increments `use_count` when
+  when holding it or aiming at it.
+- `Player`: `use_count` (client -> host in `report_state()`), bot seam `bot_use` (bump to press
+  once). Left mouse increments `use_count` when
   `game.combat.is_usable(selected_stack().kind)`, else it shoves. `_consume_actions` calls
-  `game.player_used(p)` (not while downed or carrying a player) and `game.player_ability(p)`
-  (not while downed).
-- `game.combat` (`scripts/combat/combat.gd`), `game.dissection` (`scripts/dissection/dissection.gd`),
-  `game.brains` (`scripts/brains/brains.gd`): stubs, children of Game on every machine. Each has
+  `game.player_used(p)` (not while downed or carrying a player).
+- `game.combat` (`scripts/combat/combat.gd`) and `game.dissection`
+  (`scripts/dissection/dissection.gd`): stubs, children of Game on every machine. Each has
   `setup(game)`, `physics_tick(delta)` (every machine, every physics frame), `net_state() ->
-  Dictionary` (host, rides in the global snapshot fields `cb` / `dx` / `br`: keep it small and
+  Dictionary` (host, rides in the global snapshot fields `cb` / `dx`: keep it small and
   quantized), `apply_net_state(d)` (clients, applied after cases, money and the loop),
   `on_event(kind, data)`. Plus `combat.is_usable(kind)`, `combat.use(p)`,
   `combat.on_monsters_cleared()`, `combat.on_monster_removed(m)` (called by `game.kill_monster`),
-  `dissection.owns_case(c)` (true skips the vitals drain), `brains.ability(p)`, `brains.on_reset()`
-  (called from `game.reset_money`). Replace your stub entirely; keep its API.
+  and `dissection.owns_case(c)` (true skips the vitals drain). Replace your stub entirely; keep
+  its API.
 - `ShiftLoop.pay_for(c)` returns 0 for a case with `monster: true`.
 
 ## Workers and ownership (all in parallel)
@@ -81,8 +76,7 @@ and this file first. Godot console binary:
 | --- | --- | --- |
 | `monsters` | The Hive; the Sonographer redesign; monster hp, hits, stun, sedation, lying and dragged states; roster and spawn placement | `scripts/monster.gd`, `scripts/monsters/**`, `scripts/perception.gd`, `tools/monster_lab.*`, `tools/gen_audio_monsters.mjs`, `audio/sfx/monsters_*`; hooks: `game._spawn_monsters`, dev panel monster spawn list, `warmup.gd` |
 | `combat` | Saw swings and breaking, anesthetic jabs (monsters and teammates), dragging a sedated monster, strapping it to a patient table, first-person swing/jab animation | `scripts/combat/**`, `tools/combattest.*`, `tools/gen_audio_combat.mjs`; hooks: `player.gd` (drag field, speed, busy flags, aim prompt, held-item animation), `game.gd` (strap path), dev room dispensers if needed |
-| `dissection` | Monster patients and bodies on the table, the `dissection` ailment, sedation decay / stir / thrash, re-dosing with tolerance, brain condition, handing over the brain | `scripts/dissection/**`, `scripts/procedures.gd`, `scripts/patient_body.gd` (create dispatch only), new variants in `scripts/surgery/games/saw.gd` and `forceps.gd`, `tools/dissectiontest.*`, `tools/gen_audio_dissection.mjs`; hooks: `game._table_prompt` / `_proxy_used`, `game.finish_case` wording, OR screen labels, dev panel "strap a monster" |
-| `brains` | Brain items and spoilage, the dumpster wording, the blender, per-player brain levels, Echo, Hive Eyes | `scripts/brains/**`, brain entries in `scripts/economy/loot_table.gd` and `loot_models.gd`, `economy.gd` prompts, `tools/braintest.*`, `tools/gen_audio_brains.mjs`; hooks: `world_item.gd` / `game.gd` pickup, drop and sell paths (spoil time), `player.gd` (Hive Eyes freeze, report key), `main.gd` camera choice |
+| `dissection` | Monster patients and bodies on the table, the `dissection` ailment, sedation decay / stir / thrash, re-dosing with tolerance, brain condition | `scripts/dissection/**`, `scripts/procedures.gd`, `scripts/patient_body.gd` (create dispatch only), new variants in `scripts/surgery/games/saw.gd` and `forceps.gd`, `tools/dissectiontest.*`, `tools/gen_audio_dissection.mjs`; hooks: `game._table_prompt` / `_proxy_used`, `game.finish_case` wording, OR screen labels, dev panel "strap a monster" |
 
 ## Contracts
 
@@ -180,43 +174,11 @@ SEDATE_SECONDS := 75.0     JAB_COOLDOWN := 1.0      JAB_REACH := 1.8
   one vial, sedation `+0.6 * 0.6^n` (n = doses given so far), capped at 1.0. Prompt shows how under
   it is.
 - Vitals of a monster case = brain condition: botches lower it, nothing drains it. At 0 the case is
-  lost ("The brain is ruined."). The last step wins the case: the brain appears by the table via
-  `game.brains.spawn_brain(kind, quality, pos)` (`kind` `brain_hive` / `brain_sonographer`,
-  `quality` = condition / 100; fall back to a plain loot item when the method is missing), the
-  monster flatlines, and the case is removed about 6 s later to free the table.
-
-### Brains (`brains`)
-
-```gdscript
-game.brains.spawn_brain(kind: String, quality: float, pos: Vector3) -> Node   # host
-game.brains.spoil_factor(age_seconds: float) -> float    # 1.0 for 45 s, down to 0.15 at 225 s
-game.brains.current_value(stack_or_item) -> int          # base value * spoil factor
-game.brains.level(peer_id: int, path: String) -> int     # path "hive" | "sonographer", 0..3
-game.brains.points(peer_id: int, path: String) -> float
-```
-
-- Loot kinds `brain_hive` (base about $150) and `brain_sonographer` (about $350), scaled by
-  `quality`; fragile; never spawned by the loot spawner. Spoil start time travels with the item
-  (WorldItem and the hand slot, key `bt`, world_time) through pickups and drops. A spoiling brain
-  looks worse (darker, greener). The dumpster pays `current_value`; its prompts say dumpster.
-- Blender: in the break room (a counter or wall spot from `level_info.rooms`; else near the clock),
-  interact_id `blender`. Holding a brain: hold E 1.5 s to blend, then it is drunk: points for that
-  path +1.0 fresh (factor >= 0.6), +0.75 spoiling, +0.5 rotten; level = floor(points), max 3.
-  Replicated in `br`. Reset by `on_reset()`.
-- R (`brains.ability(p)`): uses the path with more points (tie: Echo); none: a short "Nothing
-  happens." hint. Echo cooldown about 20 s, Hive Eyes about 12 s.
-- Echo: noise 1.2 at the player (every Sonographer in range comes), a shriek everyone hears
-  (event `br_echo`), and on that player's machine only, for 2.5 + 0.75 per level seconds, the view
-  darkens and monsters (red), players (white), surgical items (teal), loot (gold) and containers
-  (dim) within 12 m (+6 per level) show as outlines through walls. Cheap: only while active,
-  bounded node count.
-- Hive Eyes: the nearest Hive within 20 m (+10 per level), through walls; that player's view
-  jumps to its eyes for 5 s (+2 per level) with a grainy sickly look; R, E or Esc ends it early; it
-  ends if the Hive dies or is sedated or the player is hit. The body stands still and helpless
-  (Player field `hive_view`, report key `hv`; others see the head droop).
+  lost ("The brain is ruined."). The last step wins the case: the monster flatlines, and the case is
+  removed about 6 s later to free the table.
 
 ## After the workers
 
-The main session merges all four, runs every test (headless suites, `playtest --god`, nettest
+The main session merges all three, runs every test (headless suites, `playtest --god`, nettest
 all scenarios, perfprobe), fixes the seams, updates the test bot if monsters get in its way,
 updates `docs/`, and reports once.
