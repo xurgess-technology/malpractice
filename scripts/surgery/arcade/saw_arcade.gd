@@ -23,7 +23,7 @@ extends "res://scripts/surgery/arcade/arcade_game.gd"
 ##   For the last three crossings the card says EASY... and the ball speeds up. Take the last one
 ##   off a hard return and you saw into the table.
 ##
-## Result {"amputated": true, "cut_quality": q} (or `skull_open` on the monster table's variant).
+## Result {"amputated": true, "cut_quality": q}.
 
 enum Layer { SKIN, MUSCLE, BONE, FAR }
 
@@ -34,15 +34,6 @@ const LAYERS := {
 	Layer.BONE: {"name": "bone", "res": 2.2, "speed": 120.0, "tear": 1.2},
 	Layer.FAR: {"name": "far side", "res": 0.9, "speed": 170.0, "tear": 0.8},
 }
-## The skull variant, if `saw:skull` is ever pointed at the arcade build. Its "bone" is a band of
-## depth rather than a set of circles.
-const SKULL_LAYERS := {
-	Layer.SKIN: {"name": "scalp", "res": 0.5, "speed": 170.0, "tear": 0.5},
-	Layer.MUSCLE: {"name": "scalp", "res": 0.5, "speed": 170.0, "tear": 0.5},
-	Layer.BONE: {"name": "bone", "res": 2.0, "speed": 125.0, "tear": 0.75},
-	Layer.FAR: {"name": "dura", "res": 0.8, "speed": 165.0, "tear": 0.9},
-}
-
 const SAMPLES := 72
 
 # -- the court --------------------------------------------------------------------------------
@@ -109,7 +100,6 @@ var chips: Array = []             ## [x_mm, y_mm, r_mm]
 var miss_flash := 0.0
 
 # ---- derived from the seed ----
-var skull := false
 var tourniquet := 0.5
 var sec_a := 34.0
 var sec_b := 24.0
@@ -147,12 +137,9 @@ func card_word_for_start() -> String:
 
 
 func build_game() -> void:
-	skull = String(ctx.get("variant", "")) == "skull"
 	var flags: Dictionary = ctx.get("flags", {})
 	var tq = flags.get("tourniquet", 0.5)
 	tourniquet = (1.0 if tq else 0.0) if tq is bool else clampf(float(tq), 0.0, 1.0)
-	if skull:
-		tourniquet = 1.0
 	_rng.seed = int(ctx.get("seed", 1)) ^ 0x5a3
 	_build_section()
 	_serve(1 if _rng.randf() < 0.5 else -1)
@@ -160,7 +147,7 @@ func build_game() -> void:
 
 
 func layer_table() -> Dictionary:
-	return SKULL_LAYERS if skull else LAYERS
+	return LAYERS
 
 
 func paddle_half() -> float:
@@ -185,8 +172,6 @@ func _build_section() -> void:
 		var r := float(ctx.get("patient", {}).get("limb_radius_m", 0.05))
 		hs = r
 		hu = r * 0.8
-	if skull:
-		hu = maxf(hu, hs * 0.42)
 	sec_n = shape
 	# Big enough that the ball is visibly going through an arm and not past one.
 	var k: float = minf(36.0 / (hs * 1000.0), 27.0 / (hu * 1000.0))
@@ -194,9 +179,7 @@ func _build_section() -> void:
 	sec_b = hu * 1000.0 * k
 	sec_c = Vector2.ZERO
 	bones.clear()
-	if skull:
-		pass
-	elif _bone_count() >= 3:
+	if _bone_count() >= 3:
 		var n := _bone_count()
 		var r: float = sec_b * 0.16
 		for i in n:
@@ -237,8 +220,6 @@ func depth_to_y(d: float) -> float:
 
 ## How much of the CUT LINE's chord at this depth is inside bone, 0..1.
 func bone_fraction(d: float) -> float:
-	if skull:
-		return 1.0 if d > 0.16 and d < 0.84 else 0.0
 	var y := depth_to_y(d)
 	var hc := half_chord(y)
 	if hc <= 0.01:
@@ -437,8 +418,6 @@ func _crossing() -> void:
 func _cut_artery() -> void:
 	artery_hit = true
 	spurt = clampf(1.0 - tourniquet, 0.0, 1.0)
-	if skull:
-		spurt = 0.3
 	# It lands where it lands, and it may well land over the ball's line.
 	splat = Vector2(_rng.randf_range(-26.0, 26.0), _rng.randf_range(-16.0, 16.0))
 	_chip(6 + int(spurt * 10.0))
@@ -480,14 +459,11 @@ func _through() -> void:
 	var b = body()
 	if b != null and b.has_method("apply_flags"):
 		var f: Dictionary = (ctx.get("flags", {}) as Dictionary).duplicate()
-		f["skull_open" if skull else "amputated"] = true
+		f["amputated"] = true
 		b.apply_flags(f)
 	audio(thunk_cue, -2.0)
 	quality = cut_quality()
-	if skull:
-		arcade_finish({"skull_open": true, "cut_quality": quality})
-	else:
-		arcade_finish({"amputated": true, "cut_quality": quality})
+	arcade_finish({"amputated": true, "cut_quality": quality})
 
 
 func cut_quality() -> float:

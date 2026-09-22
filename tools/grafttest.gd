@@ -325,7 +325,7 @@ func _run() -> void:
 	dev.request("strap_monster", {"kind": "hive", "sedation": 1.0})
 	await _frames(3)
 	var c := _monster_case("hive")
-	_check(not c.is_empty() and String(c.ailment_id) == "dissection", "a strapped Hive starts as a dissection")
+	_check(not c.is_empty() and String(c.ailment_id) == "eye_extraction", "a strapped Hive starts as Eyeball Extraction")
 	if c.is_empty():
 		return
 	var table := int(c.table)
@@ -336,23 +336,17 @@ func _run() -> void:
 	me.teleport(game._floor_at(game.table_position(table) + Vector3(0, 0, 1.0).rotated(Vector3.UP, game.table_yaw_of(table))))
 	me.bot_move = Vector2.ZERO
 	_clear_hands()
-	var p0 := String(game._table_prompt(me, table))
-	_check(p0.begins_with("!Hold the scalpel") and p0.contains("bone saw"), "empty-handed at a fresh Hive the prompt says what to hold ('%s')" % p0)
-	game.give_hand(me, "bone_saw", 1)
-	var p1 := String(game._table_prompt(me, table))
-	_check(p1.begins_with("Operate: Saw open the skull"), "the bone saw offers dissection ('%s')" % p1)
-	_clear_hands()
 	var panels: Array = load("res://scripts/orscreen/or_screen_model.gd").build(game).panels
 	var kinds := []
 	for pn in panels:
 		if String(pn.get("patient_id", "")) == "hive":
 			_check(String(pn.steps[0].label) == "Cut around the eye" and String(pn.ailment_name).begins_with("Eyeball Extraction") and bool(pn.eye),
-				"the wall monitor leads with Eyeball Extraction for a fresh Hive, not the brain ('%s': '%s')" % [String(pn.ailment_name), String(pn.steps[0].label)])
+				"the wall monitor shows Eyeball Extraction for the strapped Hive ('%s': '%s')" % [String(pn.ailment_name), String(pn.steps[0].label)])
 			var d0: String = game.dissection.ailment_for(_monster_case("hive"), me)
-			_check(d0 == "eye_extraction", "empty-handed, a fresh Hive's plan is extraction (%s)" % d0)
+			_check(d0 == "eye_extraction", "a strapped Hive's only ailment is extraction (%s)" % d0)
 			for sp in pn.supplies:
 				kinds.append(String(sp.kind))
-	_check(not panels.is_empty() and (kinds.has("scalpel") and kinds.has("eye_spoon") and kinds.has("bone_saw")), "the OR screen lists both plans' tools for a fresh Hive (%s)" % str(kinds))
+	_check(not panels.is_empty() and (kinds.has("scalpel") and kinds.has("eye_spoon") and kinds.has("forceps")), "the OR screen lists the extraction's tools (%s)" % str(kinds))
 	game.give_hand(me, "scalpel", 1)
 	await _frames(2)
 	var prompt := String(game._table_prompt(me, table))

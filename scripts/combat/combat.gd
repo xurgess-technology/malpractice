@@ -527,7 +527,8 @@ func drag_prompt(q: Node, m: Node) -> String:
 
 
 ## Player._update_aim while dragging: [aim_id, prompt]. A free patient table offers to strap the
-## monster down; anything else puts it down.
+## monster down (only a kind Procedures has a monster case for -- GRAFTING part one, the Hive);
+## anything else puts it down.
 func drag_aim(p: Node, node: Node) -> Array:
 	var m = game.monsters.get(dragging(p))
 	var mname := monster_name(String(m.kind)) if m != null and is_instance_valid(m) else "it"
@@ -535,7 +536,7 @@ func drag_aim(p: Node, node: Node) -> Array:
 	if node != null and node.has_meta("interact_id"):
 		id = String(node.get_meta("interact_id"))
 	var ti := table_index_for(id)
-	if ti >= 0:
+	if ti >= 0 and m != null and is_instance_valid(m) and Procedures.is_monster(String(m.kind)):
 		var why := strap_problem(ti)
 		if why == "":
 			return [id, "Strap the %s to the table" % mname]
@@ -582,7 +583,8 @@ func dragger_pressed_interact(q: Node, aim: String) -> void:
 	if not game.is_host() or dragging(q) < 0:
 		return
 	var ti := table_index_for(aim)
-	if ti >= 0 and strap_problem(ti) == "":
+	var m: Node = game.monsters.get(dragging(q))
+	if ti >= 0 and strap_problem(ti) == "" and m != null and is_instance_valid(m) and Procedures.is_monster(String(m.kind)):
 		var node: Node = game.find_interactable(aim)
 		if node != null and game._within_reach(q, node):
 			strap(q, ti)
@@ -591,16 +593,17 @@ func dragger_pressed_interact(q: Node, aim: String) -> void:
 
 
 ## Host: strap the monster q drags onto patient table ti: a monster case, and the monster leaves.
+## Only a kind Procedures has a monster case for (GRAFTING part one, the Hive: "eye_extraction").
 func strap(q: Node, ti: int) -> int:
 	if not game.is_host():
 		return -1
 	var m = game.monsters.get(dragging(q))
-	if m == null or not is_instance_valid(m):
+	if m == null or not is_instance_valid(m) or not Procedures.is_monster(String(m.kind)):
 		q.dragging_monster = -1
 		return -1
 	var s := lerpf(STRAP_SEDATION_MIN, 1.0, clampf(sedation_left(m) / SEDATE_SECONDS, 0.0, 1.0))
 	var kind := String(m.kind)
-	var id: int = game.add_case({"table": ti, "patient_id": kind, "ailment_id": "dissection", "monster": true,
+	var id: int = game.add_case({"table": ti, "patient_id": kind, "ailment_id": "eye_extraction", "monster": true,
 		"flags": {"sedation": snappedf(s, 0.01)}})
 	if id < 0:
 		game.tell(q, "The table is taken.", 2.0)

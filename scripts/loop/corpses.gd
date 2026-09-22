@@ -1,6 +1,6 @@
 extends Node
 ## The dead (patient exits, 2026-09-16): anyone who dies on a patient table (a patient who
-## flatlined, or a strapped monster at the end of its dissection) stays there as a body until a
+## flatlined, or a strapped monster at the end of its Eyeball Extraction) stays there as a body until a
 ## player carries it to the crematorium and puts it in the furnace. Clocking out waits for every
 ## body (shift_loop.gd). Burning a body pays nothing.
 ##
@@ -42,7 +42,7 @@ static func is_body(carrying: int) -> bool:
 
 
 ## A finished case that is a body still in the building: a death, or a strapped monster whose
-## dissection ended (it dies on the table either way).
+## Eyeball Extraction ended (it dies on the table either way).
 static func is_corpse(c: Dictionary) -> bool:
 	if c.is_empty() or bool(c.get("cremated", false)) or String(c.get("patient_id", "")) == "player":
 		return false

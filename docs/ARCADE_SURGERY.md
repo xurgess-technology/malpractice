@@ -8,7 +8,7 @@ what exists, what it is really called, and what was decided along the way.
 **Phases 0 to 7 are done (2026-09-20/21). Eleven games, all switched on.** On 2026-09-21 DOSE! and
 the legacy anaesthetic were replaced by the Anesthetic Injection (5.1), the only sedation game, which
 has no switch; and the first DODGE! and the legacy forceps step were replaced by the new DODGE! (5.2),
-which has none either (the monster table's brain harvest keeps the legacy forceps game). Read
+which has none either. Read
 [MORNING_REPORT.md](MORNING_REPORT.md) first: it has the status table, the lab and quick-start
 commands for every game, what to look at first, every judgment call and the known issues.
 
@@ -28,7 +28,7 @@ unedited, and still passes its own self-test.
 | the lab | `godot --path . tools/minigame_lab.tscn -- --game=saw --arcade` |
 | its self-test | `--selftest=saw:arcade` (`--selftest=saw` still runs the legacy one) |
 | the sedation game | `scripts/surgery/arcade/inject_arcade.gd`, in `MINIGAME_SCRIPTS` (no legacy twin, no switch); `--selftest=anesthetic` |
-| DODGE! (the bullet) | `scripts/surgery/arcade/dodge_arcade.gd`, in `MINIGAME_SCRIPTS` (no switch; `forceps:brain` keeps the legacy `forceps.gd`); `--selftest=forceps` |
+| DODGE! (the bullet) | `scripts/surgery/arcade/dodge_arcade.gd`, in `MINIGAME_SCRIPTS` (no switch); `--selftest=forceps` |
 | the ink look | `scripts/surgery/panel/ink.gd`, see PANEL_STYLE.md |
 
 `--quick` does **not** exist on `main` (it is on the unmerged `quick-start` branch), so nothing was
@@ -60,11 +60,7 @@ built for it, per section 3.4.
 
 ## Judgment calls
 
-1. **`saw:skull` is pinned to the legacy game.** The monster table's skull cut is a different
-   fiction and section 5.5 describes the limb, so flipping `saw` moves the amputation to the arcade
-   and leaves the skull alone. The arcade saw does handle the skull variant (its own layers, a
-   depth band instead of bone circles) so the key can be flipped later without breaking.
-2. **Never snap a value that creeps.** The lab and the bot round-trip `net_state()` through
+1. **Never snap a value that creeps.** The lab and the bot round-trip `net_state()` through
    `apply_net_state()` every frame, so a countdown snapped to 0.05 s never counts down. `card_left`,
    `play_t` and `beat_phase` go out raw; everything that moves in jumps is snapped. This cost an
    hour; it is written on the `net_state()` docstring so it does not cost another.
@@ -474,9 +470,7 @@ bubbles, slaps, sticks at the window's middle and pushes in pulses. Self-test
 `forceps` x0, site `gunshot`. GW step 2.
 `scripts/surgery/arcade/dodge_arcade.gd`. **The only bullet extraction** (2026-09-21): it replaced the
 first arcade DODGE! and the legacy `forceps.gd` for this step, so it has no `ARCADE_*` entry and no
-dev-panel switch. The monster table's brain harvest is a different game and still plays the legacy
-`forceps.gd`, through its own `MINIGAME_SCRIPTS["forceps:brain"]` key (`minigame_script()` now looks a
-`"<game>:<variant>"` key up there too). Built from Zach's handoff,
+dev-panel switch. Built from Zach's handoff,
 `docs/SURGERY_SHELL_AND_DODGE_SPEC.md` Part Two; that file's "Decisions" section won wherever it
 disagreed, and the brief this section used to hold (dark tract, flashlight, brake, heartbeat) is
 superseded.
@@ -526,8 +520,7 @@ Rhyme: a side-scroller back out along the bullet's own channel. The forceps alre
   from the flown time. Bursts and splats come across through the shell.
 - **Bot**: taps whenever it predicts it is about to drop below the line ahead; skill sets how often it
   looks and how far its hand drifts, and it takes a card down after a reaction delay. Self-test
-  `--selftest=forceps` (`forceps:arcade` is the same; `--selftest=forceps:brain` runs the legacy brain
-  harvest's).
+  `--selftest=forceps` (`forceps:arcade` is the same).
 - **Review**: `tools\review.bat 2 "DODGE: fly the bullet out" -Front --setup=dodge` (add
   `--undersedated` to see squirm, `--patient=seal` for the seal).
 

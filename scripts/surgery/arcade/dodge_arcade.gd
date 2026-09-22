@@ -1,8 +1,7 @@
 extends "res://scripts/surgery/arcade/arcade_game.gd"
 ## ARCADE SURGERY (docs/ARCADE_SURGERY.md 5.2) -- DODGE!, the bullet extraction. Step "extract" of a
 ## gunshot wound (`forceps`, site `gunshot`), GW step 2. The ONLY gunshot extraction game: it replaced
-## the first arcade DODGE! and the legacy forceps game for this step (the monster table's brain harvest,
-## `forceps:brain`, still plays scripts/surgery/games/forceps.gd). Built from Zach's handoff,
+## the first arcade DODGE! and the legacy forceps game for this step. Built from Zach's handoff,
 ## docs/SURGERY_SHELL_AND_DODGE_SPEC.md Part Two; that file's "Decisions" section wins where they
 ## disagree.
 ##

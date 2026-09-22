@@ -168,19 +168,18 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	# compiles, until the final frames below, and work only runs when may_work allows.
 	shelf.visible = false
 	await _frame(slice)
-	# SWEEP 3 HOOK (dissection): strapped monsters, one closed and awake (thrashing), one opened.
+	# GRAFTING part one: the strapped Hive, one closed and awake (thrashing), one with its eye taken.
 	for mpid in Procedures.monster_patients():
 		for opened in [false, true]:
 			var mb: Node3D = BodyScript.create(mpid)
 			shelf.add_child(mb)
 			mb.position = Vector3(bx, -0.3, -0.8)
 			mb.scale = Vector3.ONE * 0.5
-			mb.set_ailment("dissection")
-			mb.apply_flags({"sedation": 1.0 if opened else 0.1, "skull_open": opened})
-			mb.set_bleeding("skull", 0.6)
+			mb.set_ailment("eye_extraction")
+			mb.apply_flags({"sedation": 1.0 if opened else 0.1, "eye_removed": opened})
+			mb.set_bleeding("eye", 0.6)
 			if opened:
-				bodies["%s|dissection" % mpid] = mb
-				bodies["%s|eye_extraction" % mpid] = mb   # GRAFTING part one: the eye steps work on the same body (site "eye")
+				bodies["%s|eye_extraction" % mpid] = mb   # the eye steps work on this body (site "eye")
 			bx += 0.4
 			await _slice(slice)
 	# DOWNED HOOK: the lying player on the player table (bleeding and stitched) and the table itself.
@@ -321,7 +320,7 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 			var path: String = Procedures.minigame_script(String(step.game), String(step.get("variant", "")))
 			if path == "" or not ResourceLoader.exists(path):
 				continue
-			# SWEEP 3 HOOK (dissection): the skull saw and brain forceps on the monster bodies.
+			# GRAFTING part one: the eye steps on the strapped Hive's body.
 			var pids: Array = ["player"] if Procedures.is_player_only(ail) else (Procedures.monster_patients() if Procedures.is_monster_only(ail) else Procedures.human_patients())
 			# ARCADE: build the legacy game AND the arcade rebuild where one exists, so the first
 			# open never hitches whichever way ARCADE_ENABLED happens to be set.
