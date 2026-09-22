@@ -151,8 +151,8 @@ const MINIGAME_SCRIPTS := {
 ## ARCADE (docs/ARCADE_SURGERY.md): the arcade rebuild of a step, played on the raised panel. Keyed
 ## by "<game>" or "<game>:<variant>"; the variant key wins when it exists.
 const ARCADE_SCRIPTS := {
-	"gauze:pack": "res://scripts/surgery/arcade/pack_arcade.gd",        # WHACK! then WRAP!
-	"gauze:stump": "res://scripts/surgery/arcade/wrap_stump_arcade.gd", # WRAP!
+	"gauze:pack": "res://scripts/surgery/arcade/pack_wrap_arcade.gd",   # WHACK! then WRAP!
+	"gauze:stump": "res://scripts/surgery/arcade/wrap_stump_arcade.gd", # WRAP! (the same one)
 	"tourniquet": "res://scripts/surgery/arcade/squeeze_arcade.gd",     # SQUEEZE!
 	"saw": "res://scripts/surgery/arcade/saw_arcade.gd",                # SAW!
 	"eye:cut": "res://scripts/surgery/arcade/steer_arcade.gd",          # STEER!

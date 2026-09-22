@@ -44,6 +44,13 @@ const SETUPS := {
 	# 2026-09-21 (docs/ARCADE_SURGERY.md 5.2): DODGE!, a gunshot wound at the bullet step, sedated, and
 	# you already operating. `--undersedated` makes the patient squirm; `--patient=seal` swaps in the seal.
 	"dodge": {"seed": 4242, "stage": "_dodge"},
+	# 2026-09-22 (docs/PACK_AND_WRAP_SPEC.md): WHACK! then WRAP!, a gunshot wound at the dressing step
+	# with three tears already carried over from DODGE!, so bleeders are spurting the moment it opens.
+	# `--clean` hands over no tears (the 3-bleeder floor); `--patient=seal` swaps in the seal.
+	"pack_wrap": {"seed": 4242, "stage": "_pack_wrap"},
+	# The same WRAP! on a stump: an amputation at the dressing step with a mediocre tourniquet, so a
+	# good half of the cells are still bleeding and want two layers. `--goodtq` for a clean one.
+	"wrap_stump": {"seed": 4242, "stage": "_wrap_stump"},
 }
 
 
@@ -341,6 +348,80 @@ static func _dodge(game: Game) -> void:
 		else:
 			print("[review] dodge: could not start operating: %s" % why)
 	print("[review] dodge: %s on table %d at the bullet step, sedation %.1f" % [pid, table, sed])
+
+
+## PACK & WRAP (docs/PACK_AND_WRAP_SPEC.md): a gunshot wound on the table at step 3, the dressing,
+## with the bullet already out and THREE TEARS carried over from DODGE! -- so WHACK! opens with five
+## bleeders on the tract and a couple of them already spurting. Hold Space on a spurting one until the
+## ring closes to pack it; pack them all (or bleed him out) and it hands straight over to WRAP!, where
+## WASD steers the gauze roll. `--clean` hands over no tears at all (the three-bleeder floor), so the
+## wrap comes up nearly dry; `--patient=seal` puts the seal on the table. E steps back.
+static func _pack_wrap(game: Game) -> void:
+	arcade_all_on()
+	var pid := "bob"
+	var tears: Array = [0.24, 0.53, 0.79]
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--patient="):
+			pid = a.trim_prefix("--patient=").strip_edges()
+		if a == "--clean":
+			tears = []
+	if not Procedures.PATIENTS.has(pid) or Procedures.is_monster(pid):
+		pid = "bob"
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	game.add_case({"patient_id": pid, "ailment_id": "gunshot", "table": table, "state": "on_table",
+		"step_index": 2, "flags": {"sedation": 1.0, "bullet_removed": true, "tears": tears}})
+	var t: Vector3 = game.table_position(table)
+	place(game, t + Vector3(0.0, 0, 1.15), t + Vector3(0, 1.05, 0))
+	clear_hands(game)
+	give(game, "gauze", 3)
+	game.local_player().selected = 0
+	game.stock_storage("gauze", 3)
+	var tree := game.get_tree()
+	for i in 6:
+		await tree.physics_frame
+	var sys = game.surgery_for_table(table)
+	if sys != null:
+		var why: String = sys.can_begin(game.local_player())
+		if why == "":
+			sys.begin(game.local_player())
+		else:
+			print("[review] pack_wrap: could not start operating: %s" % why)
+	print("[review] pack_wrap: %s on table %d at the dressing step, %d tears carried over" % [pid, table, tears.size()])
+
+
+## THE SAME WRAP! ON A STUMP (docs/PACK_AND_WRAP_SPEC.md 3): an amputation at the dressing step, limb
+## already off, with a mediocre 0.45 tourniquet -- so about half the stump's cells are still bleeding
+## and want two layers instead of one. `--goodtq` puts a clean 0.95 tourniquet on it instead.
+static func _wrap_stump(game: Game) -> void:
+	arcade_all_on()
+	var tq := 0.45
+	for a in OS.get_cmdline_user_args():
+		if a == "--goodtq":
+			tq = 0.95
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	game.add_case({"patient_id": "seal", "ailment_id": "amputation", "table": table, "state": "on_table",
+		"step_index": 3, "flags": {"sedation": 1.0, "tourniquet": tq, "amputated": true}})
+	var t: Vector3 = game.table_position(table)
+	place(game, t + Vector3(0.0, 0, 1.15), t + Vector3(0, 1.05, 0))
+	clear_hands(game)
+	give(game, "gauze", 4)
+	game.local_player().selected = 0
+	game.stock_storage("gauze", 4)
+	var tree := game.get_tree()
+	for i in 6:
+		await tree.physics_frame
+	var sys = game.surgery_for_table(table)
+	if sys != null:
+		var why: String = sys.can_begin(game.local_player())
+		if why == "":
+			sys.begin(game.local_player())
+		else:
+			print("[review] wrap_stump: could not start operating: %s" % why)
+	print("[review] wrap_stump: amputation on table %d at the dressing step, tourniquet %.2f" % [table, tq])
 
 
 ## ARCADE SAW (docs/ARCADE_SURGERY.md 5.5): Bob is on the table sedated with a tourniquet already
