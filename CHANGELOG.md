@@ -5,6 +5,13 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.2**: WHACK! and WRAP!, rebuilt: the bleeders get packed, then the wound gets a roll of gauze
+    - Changed: WHACK! is one clean hold-to-close commit on a bleeder that's actively spurting, not a click; the blood loss meter only rises while a bleeder is open, and it's drawn as local drips and splats instead of a screen-filling tint.
+    - Changed: WRAP! is Snake played straight -- the tail is the gauze in hand, delivering it onto a wound cell spends a segment, and cells that bled through in WHACK! need a second layer.
+    - Changed: The stump dressing plays the same WRAP!, with the tourniquet's quality standing in for pack quality.
+    - Removed: The old WHACK! and WRAP!, off the clipboard shell.
+- **0.10.1**: The stamp card holds still
+    - Changed: The big word every step opens on (SAW!, DRAW!, DODGE!, ...) now shows up in the same spot in front of the patient no matter which step or site it's for, instead of riding the clipboard panel to wherever that step is anchored on the body. A bit bigger, too.
 - **0.10.0**: Dissection is gone
     - Removed: The monster-dissection cases -- forceps brain harvest and the skull saw -- and everything that only existed for them: the dissection minigame files, the dev-panel monster-strap flow for it, its headless test and nettest scenario, and the Sonographer's old strapped-patient identity. The Hive's Eyeball Extraction is now the only monster case a strapped patient can have.
     - Note: The shared gunshot-forceps and limb-amputation-saw minigames are untouched. The Brains hive-AI/loot system (unrelated, same word) is untouched, though its brain-item supply chain ran through the removed dissection code and has no live source left -- matches the removal already planned in docs/GRAFTING.md.
