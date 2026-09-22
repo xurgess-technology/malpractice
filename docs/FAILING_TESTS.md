@@ -131,5 +131,12 @@ The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\
 - Map validation: `godot --headless --path . -s tools/mapcheck.gd`
 - Multiplayer, every scenario as real processes: `godot --headless --path . --script tools/nettest_run.gd`
   (`-- --only=wall,surgery` for a few)
+- **Two work slots must not run nettest at the same time.** `nettest_run.gd`'s ports start at 7790
+  and are numbered per scenario, not per slot, so two slots running it together clash and a scenario
+  fails for no reason (seen 2026-09-22: `monsters` failed on a port clash, then passed alone). If a
+  nettest scenario fails and another slot was also testing, re-run it alone before believing it.
+- **Expect flakes when the machine is loaded.** With four slots running Godot at once, wall-clock
+  timeouts get tight: `rocket_boots` and `downedtest` have each failed once under load and then
+  passed on a quiet re-run. Re-run alone before chasing.
 - Windowed screenshot tools write to `tools/game_shots/` and friends: `menushot`, `faxshot`,
   `tipshot`, `database_shot` (`-- --wall`, `-- --wall2`), `gameshot`, `bootsshot` (rocket boots)
