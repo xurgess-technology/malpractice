@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.28**: Polish
+    - Fixed: The laser surge is audible again -- it had been asking for a sound by the wrong name since the day it was written.
 - **0.10.27**: Sawing something against a wall actually moves it
     - Fixed: The knockback on a saw hit stopped dead the instant it touched anything, so hitting a monster backed against a wall barely shifted it. It slides along the wall now and you get the whole shove wherever you catch them.
 - **0.10.26**: Everyone can strap a monster down again
