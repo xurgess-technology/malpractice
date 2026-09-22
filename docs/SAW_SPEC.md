@@ -39,6 +39,30 @@ Sound	Filtered noise bursts: bandpass for soft tissue and paddle contact, lowpas
 5 · Two patients
 A toggle under the board switches patient and regenerates. Human: 236px wide, two bone shafts (58px and 34px) with meat gutters either side, warm skin. Seal flipper: 168px wide, 4–5 slim phalanges (7–10px) fanned across nearly its full width, and the slate hide from the sedation step — base #67757b with dark blubber rolls banding across the limb, mottled speckle and a few pale sheen flecks. The flipper is the narrower limb but nearly all bone, so it is faster to cross and harder to hold a line through; that trade is the point of the toggle.
 
+**CORRECTION (2026-09-22), by Zach: the flipper's numbers above are wrong and the prose is right.**
+As written, 4–5 phalanges at 7–10px in a 168px limb is 9 of 40 columns — **23% bone, against the
+human arm's 40%**. That makes the flipper the *easier* limb to hold a line through and inverts the
+trade the toggle exists for. The build shipped the stated numbers with this contradiction noted;
+the numbers below supersede them.
+
+What a phocine fore-flipper actually is: a short, webbed **paw**, not a fused wing. **Five** digits
+of roughly equal length, each with a blunt claw. Phocine digits stay distinct and mobile, unlike
+otariids' fused aerofoil. It carries all the major forelimb skeletal elements, foreshortened, and
+the phalanges are robust — trochleated, with long ungual processes, because the animal holds and
+tears prey with them. So a cut across a flipper crosses **five substantial bones separated by
+webbing**, where the human arm crosses two bones with real meat gutters between.
+
+So: **five digits, thick, spanning most of the width, with webbing (not meat) between them** — and
+tapering, since digit I is the most robust in phocids and they slim toward digit V. Target roughly
+**63–67% bone coverage** against the arm's 40%: widths near 26 / 24 / 22 / 19 / 16px across the
+168px limb, webbing between. That makes the flipper genuinely what the prose claims — narrower, so
+faster to cross, but with almost nowhere to put the blade that isn't bone, so far harder to hold a
+line through.
+
+Sources: [NOAA Ocean Today, Seal Anatomy](https://oceantoday.noaa.gov/sealanatomy/) ·
+[SeaWorld, Harbor Seal characteristics](https://seaworld.org/animals/all-about/harbor-seal/characteristics/) ·
+[Clawed forelimbs allow northern seals to eat like their ancient ancestors, R. Soc. Open Sci.](https://royalsocietypublishing.org/doi/10.1098/rsos.172393)
+
 6 · Rendering notes
 Split the arm into two passes. Cell fills go to an offscreen canvas, redrawn only when material changes (a dirty flag set by every decrement and every orphan removal — miss it on the cutting path and the arm appears to update all at once at the end). The ink outline, the red seam inside every exposed edge and the shadow under every exposed upper face are redrawn live each frame on the shared 7Hz wobble clock, so the arm breathes like the paddles and the blade.
 The page stays flat. No halftone screen, no sheet hatching, no centre line — the ink line work carries the drawing. Blood splats land anywhere and stain permanently; chips are short-lived particles in the colour of the layer they came from.
