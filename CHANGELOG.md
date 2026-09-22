@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.22**: A map in the corner, and most of it is blank 🗺️
+    - Added: A little floor plan top right. The hospital hub is already inked in; the wings are blank paper until somebody walks them, and what one of you opens up, all of you can see.
+    - Added: Jogging past a door tells you nothing. You have to open the room and go in before it appears on the map.
 - **0.10.21**: The seal's flipper is a hand, and it's nearly all bone
     - Changed: A seal's fore-flipper is a webbed paw, so SAW! now gives it five thick tapering digits with webbing between them instead of a few thin splines. It's 66% bone against the arm's 40%: narrower, so you cross it quicker, but there's almost nowhere to put the blade that isn't bone.
     - Fixed: The report card could call your stump ragged while stamping it CLEAN.
