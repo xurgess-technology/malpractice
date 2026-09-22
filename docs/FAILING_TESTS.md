@@ -23,6 +23,22 @@ push had never been lost -- the test was shoving a Hive into a wall. Both fixed 
 2026-09-22. Worth remembering while reading the rest of this file: **an entry here is a lead, not a
 verdict.**
 
+`orscreentest` (section 6) went the same way later that day and has been removed: the OR monitor's
+case panel was right about every one of its five reported problems. The test hard-coded a supply
+count from before SUTURE! gave `gunshot` a fourth step, and it had never been taught that a patient
+can die on the table while the shift carries on -- a dead case has no current step and needs no
+more supplies, which is the panel's contract, not a fault. Fixed in `tools/orscreentest.gd`.
+
+So did **section 1b**, `doortest`'s four hinged-door E failures, removed the same day: the doors were
+right and so was the aiming. The test aims by turning the bot's head and then reads `aim_prompt`, but
+the crosshair's ray starts at the *camera*, and with the `camera` setting on "shoulder" the carry
+camera puts that camera 1.4 m behind and 0.5 m right of the head, looking along its own line. The
+first aim target (a whole door) survived that; a thin open leaf at arm's length did not, and the
+three checks after it only failed because that first press never happened. Slots seed their settings
+from Zach's, which say "shoulder", so the test read his view preference. `tools/doortest.gd` now pins
+first person for its run, exactly as `devtest` did for the same reason. That leaves `doortest` failing
+the one gurney check in section 1 and nothing else.
+
 How to run things is at the bottom of this file.
 
 ---
@@ -30,7 +46,9 @@ How to run things is at the bottom of this file.
 ## 1. doortest: the paramedics don't push the OR doors open for the gurney
 
 - **Command:** `godot --headless --path . --fixed-fps 60 tools/doortest.tscn`
-- **Result:** `FAIL (1 of 82 checks)`, the check `the crew pushed the OR's doors open to bring the gurney through`
+- **Result:** `FAIL (1 of 91 checks)`, the check `the crew pushed the OR's doors open to bring the gurney through`
+  — the only check `doortest` still fails, as of 2026-09-22 (the four in the old section 1b were the
+  test's own camera setting and are fixed).
 - **The check:** `tools/doortest.gd`, around line 361. While the paramedic crew is right in the OR
   doorway (`|lp.z| < 0.9`, `|lp.x| < 0.8` in the door's frame), the OR door's `amount` must go past
   0.7 at some point before the patient is on the table. It never does.
@@ -42,21 +60,6 @@ How to run things is at the bottom of this file.
   table"), which changed how the crew and the operating player push each other. That commit is the
   most recent change near this behaviour, but it hasn't been confirmed as the cause.
 
-## 1b. doortest: four more failures in the hinged-door E section
-
-- **Command:** `godot --headless --path . --fixed-fps 60 tools/doortest.tscn`
-- **Result:** these four, alongside the gurney one above:
-  - `the open door can be aimed at:` (the prompt comes back empty)
-  - `E again closes it (-1.00)`
-  - `E from the tunnel side swings it away from the player (-1.00, max_out 90)`
-  - `closed again`
-- **Found 2026-09-22** while fixing the open-leaf collision bug (0.10.10), on plain `main` before
-  that change, so they are not its doing. They were simply never written down: this file recorded
-  only the gurney failure, so `doortest` has been failing 5 checks, not 1, for some unknown time.
-  The totals move because that fix added checks: 5 of 82 before it, 5 of 91 after, the same five.
-- **They look like one fault, not four:** all four are about opening or closing a hinged door with
-  E and reading its prompt, and the `-1.00` values suggest the door's `amount` is not being read at
-  all rather than being wrong. Nobody has looked yet.
 
 ## 1f. pockettest: the Night Nurse follows you through a seam
 
@@ -100,28 +103,6 @@ How to run things is at the bottom of this file.
   before, and seed 149 has too; seed 38 is new as of 2026-09-17.
 - **Where to look:** morgue furnishing in `scripts/level/room_furnish.gd` (where tray anchors are
   placed against walls or equipment) versus the navmesh bake around them.
-
----
-
-## 6. orscreentest: the OR monitor's case panel is wrong in several places
-
-- **Command:** `godot --headless --path . --fixed-fps 60 tools/orscreentest.tscn`
-- **Result:** `[orscreen] FAIL`, with these problems:
-  - `an incoming case shows its supplies`
-  - `step 1 is todo, expected current`
-  - `supplies: 0 rows for 3 needed kinds`
-  - `saw every step of amputation become current ([0, 1])`
-  - `the screen read stable when the shift was won`
-- **Found 2026-09-22** while building the minimap, and confirmed on plain `main` at `c933607` by
-  checking the baseline out directly in the same slot. It was not in this file before.
-- **How many you see varies.** It is a playtest: a bot plays a real shift, so how far it gets
-  changes between runs and so does how many of the five a run reaches. The branch run saw 1 of them
-  (`shifts_won=1`, 438 s); the `c933607` baseline saw all 5 (`shifts_won=0`, 1500 s). Treat **any**
-  of those five names as this entry, and the count as meaningless.
-- **They look like one fault:** every one is the OR wall monitor's case panel disagreeing about a
-  case's steps or its supplies.
-- **Where to look:** `scripts/orscreen/or_screen_model.gd` (what the panel says a case needs and
-  which step is current) against `tools/orscreentest.gd`'s expectations. Nobody has looked yet.
 
 ---
 
