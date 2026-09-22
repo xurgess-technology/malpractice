@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.9**: The surgery board stops chugging
+    - Fixed: Blood on the page was being re-cut into triangles every single frame, so the messier you got the slower it ran. It's baked once now: the worst case went from about 4 ms a frame to effectively nothing, and it no longer gets worse the more you bleed on it.
+    - Fixed: Everyone in the room was redrawing every surgery board at full speed, on every machine, for every table at once. Now only the person actually operating pays full price; onlookers redraw less the further off they are, and not at all when it's off screen. Whole painter is down from 5.6-6.8 ms to 1.9-2.4 ms.
 - **0.10.8**: STICK! goes where you point it
     - Changed: The needle now lands exactly where your cursor is and sinks straight down from there, instead of sliding off along its own angle as it went in. Hold Space and it stops itself the moment it's in the vein -- no more letting go at the flash.
     - Removed: Blowing the vein, and the angle control. Aim is the whole skill now; you can still miss.
