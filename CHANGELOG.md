@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.7**: The order is stamped on the sheet
+    - Changed: The big word a step opens on is drawn on the clipboard page again instead of floating on your screen, so it reads as part of the sheet you're about to play on -- and onlookers can see it on the board too. Still lands in the same spot at the same size whatever the step.
 - **0.10.6**: Pull up a chair, the board's for everyone now
     - Changed: The surgery board is half again as big, sits higher off the patient and stands up steeper, so a teammate walking over can actually read what you're playing instead of squinting at a postcard on someone's chest. The operator's own view is unchanged.
 
