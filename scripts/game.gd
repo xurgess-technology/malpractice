@@ -2592,6 +2592,61 @@ func _scatter_spot(from: Vector3) -> Vector3:
 	return from
 
 
+# HOVER DROP (2026-09-22): a dropped stack comes to rest hovering off the floor (world_item.gd),
+# so it owns a visible ball of space. Two of them must never share one: the second to settle hops
+# aside to the nearest spot that is free of both the level and the other hovering stacks.
+## Floor to the bottom of a hovering stack. Mirrors WorldItem.HOVER_HEIGHT.
+const HOVER_HEIGHT := 0.32
+## Centre-to-centre room two hovering stacks keep between them.
+const HOVER_CLEAR := 0.5
+## Rings tried, nearest first, when the spot it landed on is taken.
+const HOVER_RINGS: Array[float] = [0.55, 0.85, 1.2, 1.7, 2.3]
+
+
+## Host: where the stack `it`, which has just come to rest at `at`, should hover. Its own spot when
+## that is free, otherwise the nearest free one on a widening ring around it.
+func hover_rest_spot(it: Node, at: Vector3) -> Vector3:
+	var base := _floor_at(at)
+	var want := Vector3(at.x, base.y + HOVER_HEIGHT, at.z)
+	if _hover_spot_free(it, want):
+		return want
+	for ring in HOVER_RINGS:
+		var best := want
+		var found := false
+		for i in 12:
+			var a := TAU * float(i) / 12.0 + ring
+			var c := Vector3(at.x + cos(a) * ring, at.y, at.z + sin(a) * ring)
+			var f := _floor_at(Vector3(c.x, base.y + 0.6, c.z))
+			if absf(f.y - base.y) > 0.8:
+				continue   # no floor under it, or a different storey
+			c.y = f.y + HOVER_HEIGHT
+			if not _hover_spot_free(it, c):
+				continue
+			if not found or c.distance_squared_to(want) < best.distance_squared_to(want):
+				best = c
+				found = true
+		if found:
+			return best
+	return want   # nowhere free within reach: overlap beats vanishing
+
+
+## Is `p` free of the level and of every other hovering stack?
+func _hover_spot_free(it: Node, p: Vector3) -> bool:
+	for o in world_items.values():
+		if o == it or not is_instance_valid(o) or not bool(o.hovering):
+			continue
+		if (o.hover_anchor() as Vector3).distance_to(p) < HOVER_CLEAR:
+			return false
+	var space := get_world_3d().direct_space_state
+	var q := PhysicsShapeQueryParameters3D.new()
+	var shape := SphereShape3D.new()
+	shape.radius = 0.22
+	q.shape = shape
+	q.transform = Transform3D(Basis(), p)
+	q.collision_mask = C.L_WORLD
+	return space.intersect_shape(q, 1).is_empty()
+
+
 func _point_is_clear(p: Vector3) -> bool:
 	var space := get_world_3d().direct_space_state
 	var q := PhysicsShapeQueryParameters3D.new()
