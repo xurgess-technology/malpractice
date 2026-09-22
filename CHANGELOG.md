@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.29**: People who go down actually fall over
+    - Fixed: A teammate who went down without crawling anywhere stayed standing bolt upright on everyone else's screen -- a corpse at attention, while they lay there insisting they were bleeding out. They fall over properly now. You never saw it yourself, which is why it lasted this long.
 - **0.10.28**: Polish
     - Fixed: The laser surge is audible again -- it had been asking for a sound by the wrong name since the day it was written.
 - **0.10.27**: Sawing something against a wall actually moves it

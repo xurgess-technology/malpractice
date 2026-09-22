@@ -18,6 +18,7 @@ extends Node
 ##   09_carrying_teammate  a bot teammate over your shoulder at the table (2026-09-22 playtest)
 ##   09_revived_standing   the same teammate standing again after the stitches: no carry pose left
 ##   09b_revived_side      and from the other side, feet on the floor
+##   10_downed_on_the_spot a teammate downed where they stood, never having crawled (2026-09-22)
 ##
 ## A normal hospital (seed 4242) with dev mode on (No monsters, No game over), clocked in with the
 ## phone hung up. 01 is on the hidden dev room's floor; everything with a table is in the hospital's
@@ -242,6 +243,15 @@ func _run() -> void:
 	await _frames(2)
 	game.knock_down_player(pal, "test")
 	await _seconds(0.6)
+	# 10: a teammate who went down on the spot, from where you stand -- the one view the bug showed
+	# in (fixed 2026-09-22: they used to be drawn bolt upright until they crawled a step, on every screen but
+	# their own). Nothing here crawls them first: that is the point of the shot.
+	_stand(game._floor_at(pal.global_position + side * 2.2 + along * 1.2), 0.0)
+	_look_at(pal.global_position + Vector3.UP * 0.4)
+	await _seconds(0.4)
+	_look_at(pal.global_position + Vector3.UP * 0.4)
+	await _frames(3)
+	await _shot("10_downed_on_the_spot")
 	me.slots = Player.empty_slots()   # a carry needs both hands
 	_stand(pal.global_position + side * 1.4, 0.0)
 	_look_at(pal.global_position)
