@@ -20,6 +20,8 @@ extends Node
 ## snapshots really go missing. ENet only.
 
 signal roster_changed
+## CUSTOMIZATION: somebody's look changed (or the whole table arrived).
+signal looks_changed
 signal joined_ok
 signal join_failed(reason: String)
 signal host_left
@@ -32,8 +34,14 @@ signal invite_accepted(lobby_id: int)
 
 ## peer id -> display name
 var names: Dictionary = {}
+## CUSTOMIZATION: peer id -> that surgeon's packed look (scripts/personnel/customization.gd).
+## Replicated exactly like `names`: a client tells the host, the host tells everybody the whole
+## table, so a late joiner learns what everyone already looks like in one message.
+var looks: Dictionary = {}
 ## The name this machine introduces itself with. Survives reset(); set it before join().
 var local_name: String = "Surgeon"
+## The look this machine introduces itself with. Survives reset(); set it before join().
+var local_look: int = 0
 var active: bool = false
 var solo: bool = false
 var backend: String = "solo"
@@ -79,6 +87,9 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_connect_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	# CUSTOMIZATION: the look this machine last picked at a mirror, so it is already ours before we
+	# introduce ourselves to anybody (Settings is the autoload above this one).
+	local_look = int(Settings.get_value("look"))
 	var no_steam := DisplayServer.get_name() == "headless"
 	for a in OS.get_cmdline_user_args():
 		var kv := a.trim_prefix("--").split("=", true, 1)
@@ -157,6 +168,27 @@ func name_for(id: int) -> String:
 	return names.get(id, "Surgeon %d" % id)
 
 
+## CUSTOMIZATION: the packed look for a peer. -1 means we have not heard: that surgeon wears the
+## default for their peer id (Customization.default_look_for).
+func look_for(id: int) -> int:
+	return int(looks.get(id, -1))
+
+
+## CUSTOMIZATION: this machine picked a new look. The host owns the table; a client asks.
+func set_my_look(packed: int) -> void:
+	local_look = int(packed)
+	if solo or not active:
+		looks[my_id()] = local_look
+		looks_changed.emit()
+		return
+	if multiplayer.is_server():
+		looks[HOST_ID] = local_look
+		looks_changed.emit()
+		_send_looks.rpc(looks)
+	else:
+		_tell_look.rpc_id(HOST_ID, local_look)
+
+
 ## Solo play: no peer at all, everything runs locally.
 func start_solo(player_name: String) -> void:
 	reset()
@@ -164,7 +196,9 @@ func start_solo(player_name: String) -> void:
 	solo = true
 	backend = "solo"
 	names = {HOST_ID: player_name}
+	looks = {HOST_ID: local_look}
 	roster_changed.emit()
+	looks_changed.emit()
 
 
 func host(player_name: String, port: int = C.DEFAULT_PORT) -> String:
@@ -178,7 +212,9 @@ func host(player_name: String, port: int = C.DEFAULT_PORT) -> String:
 	active = true
 	backend = "enet"
 	names = {HOST_ID: player_name}
+	looks = {HOST_ID: local_look}
 	roster_changed.emit()
+	looks_changed.emit()
 	return ""
 
 
@@ -230,6 +266,7 @@ func reset() -> void:
 	_steam_connecting_lobby = 0
 	multiplayer.multiplayer_peer = null
 	names.clear()
+	looks.clear()
 	active = false
 	solo = false
 	backend = "solo"
@@ -443,20 +480,24 @@ func _on_peer_connected(id: int) -> void:
 		_set_timeouts(id)
 		# Tell the newcomer everyone who is already here, then let them introduce themselves.
 		_send_roster.rpc_id(id, names)
+		_send_looks.rpc_id(id, looks)
 
 
 func _on_peer_disconnected(id: int) -> void:
 	if multiplayer.is_server():
 		_log_lost(id)
 	names.erase(id)
+	looks.erase(id)
 	roster_changed.emit()
+	looks_changed.emit()
 	if multiplayer.is_server():
 		_send_roster.rpc(names)
+		_send_looks.rpc(looks)
 
 
 func _on_connected() -> void:
 	_set_timeouts(HOST_ID)
-	_introduce.rpc_id(HOST_ID, local_name)
+	_introduce.rpc_id(HOST_ID, local_name, local_look)
 	joined_ok.emit()
 
 
@@ -490,23 +531,42 @@ func _on_server_disconnected() -> void:
 
 
 @rpc("any_peer", "reliable")
-func _introduce(player_name: String) -> void:
+func _introduce(player_name: String, look: int = -1) -> void:
 	if not multiplayer.is_server():
 		return
 	var id := multiplayer.get_remote_sender_id()
+	looks[id] = int(look)
 	var clean := player_name.strip_edges().substr(0, 16)
 	var steam_name := _steam_name_for_peer(id)
 	if steam_name != "":
 		clean = steam_name
 	names[id] = clean if not clean.is_empty() else "Surgeon %d" % id
 	roster_changed.emit()
+	looks_changed.emit()
 	_send_roster.rpc(names)
+	_send_looks.rpc(looks)
 
 
 @rpc("authority", "reliable", "call_remote")
 func _send_roster(roster: Dictionary) -> void:
 	names = roster.duplicate()
 	roster_changed.emit()
+
+
+## CUSTOMIZATION: a client picked a new look at the mirror.
+@rpc("any_peer", "reliable")
+func _tell_look(packed: int) -> void:
+	if not multiplayer.is_server():
+		return
+	looks[multiplayer.get_remote_sender_id()] = int(packed)
+	looks_changed.emit()
+	_send_looks.rpc(looks)
+
+
+@rpc("authority", "reliable", "call_remote")
+func _send_looks(table: Dictionary) -> void:
+	looks = table.duplicate()
+	looks_changed.emit()
 
 
 # =========================================================================

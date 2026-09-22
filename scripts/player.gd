@@ -306,6 +306,7 @@ const HandsFP := preload("res://scripts/hands/fp_hands.gd")
 const LightRoomsSelf := preload("res://scripts/level/light_rooms.gd")
 const BodyHandsScript := preload("res://scripts/hands/body_hands.gd")
 const HumanModel := preload("res://scripts/human/human_model.gd")   # HUMAN HOOK
+const Customization := preload("res://scripts/personnel/customization.gd")   # CUSTOMIZATION
 const CarryCameraScript := preload("res://scripts/camera/carry_camera.gd")
 const NurseGrabScript := preload("res://scripts/monsters/nurse_grab.gd")
 const Grips := preload("res://scripts/hands/grips.gd")
@@ -315,6 +316,13 @@ var carry_cam: RefCounted = null
 ## Local only: the body is shown to the mirror cameras (scripts/personnel/mirrors.gd) / to the carry
 ## camera. It lives on LightRooms.SELF, which the first-person camera only draws for the carry camera.
 var _mirror_self := false
+
+## CUSTOMIZATION (scripts/personnel/customization.gd): what this surgeon looks like. Replicated
+## through Net.looks (the roster channel), so every machine dresses every body the same way; the
+## local player's own choice is saved in Settings and re-introduced on the next join.
+var look: Dictionary = Customization.default_look()
+var _look_packed := -1
+var _look_set := false
 var _carry_body := false
 var _glow: OmniLight3D = null
 ## Test seam: true holds the shove button (charging), false lets go (the shove fires).
@@ -660,9 +668,12 @@ func _make_body() -> Node3D:
 	var root := Node3D.new()
 	root.name = "Body"
 	# HUMAN HOOK: a Blender surgeon (variation by peer id, scrubs tinted to the player's colour); Kenney below.
-	var human: Node3D = HumanModel.spawn(HumanModel.surgeon_for(peer_id), colour)
+	# CUSTOMIZATION: own_skin, so this surgeon's skin material is theirs alone and a skin tone picked
+	# at the mirror does not repaint every other human in the building.
+	var human: Node3D = HumanModel.spawn(HumanModel.surgeon_for(peer_id), colour, true)
 	if human != null:
 		root.add_child(human)
+		Customization.apply(root, look)
 		return root
 	var real: Node3D = Assets.spawn("char/surgeon") if Assets.has("char/surgeon") else null
 	if real != null:
@@ -1839,6 +1850,25 @@ func set_dev_body(on: bool) -> void:
 	refresh_downed_visuals()
 
 
+## CUSTOMIZATION: dress this surgeon. `packed` is a Customization look (Net.looks holds one per
+## peer). Cheap and idempotent: it only writes shader parameters, so callers may spam it.
+func set_look_packed(packed: int) -> void:
+	if _look_set and packed == _look_packed:
+		return
+	_look_set = true
+	_look_packed = packed
+	# -1: nobody has been to a mirror on that machine, so this surgeon wears the default for their
+	# peer id -- which is the colour they always had before any of this existed.
+	look = Customization.default_look_for(peer_id) if packed < 0 else Customization.unpack(packed)
+	colour = Customization.outfit_colour(look)
+	Customization.apply(body_visual, look)
+	if name_tag != null:
+		name_tag.modulate = colour.lightened(0.4)
+	# The first-person sleeves are meshes baked per colour, so they have to be rebuilt.
+	if is_local and hands != null and hands.has_method("recolour"):
+		hands.recolour(colour)
+
+
 ## Mirrors: show the local body to the mirror cameras (on, while one is rendering) or stop.
 func set_mirror_self(on: bool) -> void:
 	if not is_local or on == _mirror_self:
@@ -1859,6 +1889,11 @@ func set_carry_body(on: bool) -> void:
 ## shadowing (the torch sits inside the head), and seen by the first-person camera only for the carry
 ## camera.
 func _refresh_self_body() -> void:
+	# This decides your OWN body only. A teammate's copy is not a self body: it is shown and posed by
+	# refresh_downed_visuals, and letting this run on it would hide it and stop its rig (the carry
+	# pose used to stay frozen on a player who had been stitched up, because set_stand_in got here).
+	if not is_local:
+		return
 	# GRAFTING chunk C: while a lying stand-in body is on the table for you, your own never draws --
 	# not even for the mirrors, the carry camera or the body Dr. Botsworth is driven past.
 	var show := (_mirror_self or _carry_body or dev_body_shown) and not (on_table and stand_in)
@@ -2013,7 +2048,9 @@ func revive_full() -> void:
 	_sprint_toggle = false
 	_sprint_grace = 0.0
 	_clear_downed()
-	_set_visible_alive(true)
+	# Back on your feet is a change of downed state like any other: let the one hook derive the
+	# visuals from it, so the body is drawn and its rig animating again whoever put you back up.
+	refresh_downed_visuals()
 
 
 func revive(with_hp: int) -> void:
@@ -2022,7 +2059,7 @@ func revive(with_hp: int) -> void:
 	dead_time = 0.0
 	invuln = 3.0
 	_clear_downed()
-	_set_visible_alive(true)
+	refresh_downed_visuals()   # drawn, and animating, on every machine again (see revive_full)
 
 
 var _downed_seen := false
@@ -2132,6 +2169,12 @@ func refresh_downed_visuals() -> void:
 	if on_table and (downed or stand_in) and not view_local():
 		body_visual.visible = false
 		name_tag.visible = false
+	# Everyone else's copy of this player: the rig animates exactly while that body is drawn. A body
+	# that stops mid-clip keeps that pose, so anything that hides one (the lying stand-in on the
+	# table) has to hand the clips back when it shows again, or a stitched-up player stands up still
+	# folded over a shoulder. Idempotent, and set_active replays the clip from `want` on the way back.
+	if body_hands != null and not view_local():
+		body_hands.set_active(body_visual.visible)
 	refresh_own_lights()   # GRAFT HOOK: no torch and no head glow on a strapped face
 	if view_local():
 		# GRAFT HOOK: strapped down (or shown to a camera that moved elsewhere), no floating arms.

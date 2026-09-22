@@ -319,17 +319,18 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 
 ## Downed players (sweep 2 wave 3)
 
-- **PLAYTEST 2026-09-22: a player stitched up on the table keeps the carry pose.** Reported by Zach
-  after a session with real players: someone went down, was carried to a table and stitched up, and
-  stayed in the over-the-shoulder Carried pose afterwards, so most of the model glitched through the
-  floor. The carried/on-table visual state is not being cleared when the stitches operation finishes
-  and the player is back up. Where to look: `scripts/player.gd` around line 2126 ("Downed hook: set
-  every visual that follows from downed / carried / on_table. Idempotent.") and line 2203-2212 (the
-  Carried clip's origin being placed on the carrier's left shoulder, mirrored), plus whatever
-  `scripts/downed/player_surgery.gd` calls when the operation completes -- the note below says the
-  player table runs its own copy of the surgery system through that adapter rather than going
-  through `game.add_case`, so the revive path there may simply never tell the body to leave the
-  carried pose. Check it on every machine, not just the revived player's: the pose is replicated.
+- **A downed player who never crawls is drawn standing** on everyone else's screen (found
+  2026-09-22 while fixing the carry pose; it is on `main` too, checked by stashing the fix).
+  `scripts/hands/body_hands.gd` `_human_clip` plays the Crawl clip with a 0.2 s blend and then sets
+  `anim.speed_scale = 0.0` whenever the body is not moving (`rate = 1.0 if player.moving ... else
+  0.0`, around line 420). A crossfade at speed 0 never advances, so the rig keeps the pose it had --
+  Idle, standing upright -- until the player crawls a step, at which point it blends in properly and
+  stays right. Dev dummies and the primitive fallback are unaffected (they are tipped over by
+  `player.gd`'s `_update_down_pose` instead), which is why no test or screenshot caught it. The same
+  freeze applies to anyone who goes prone standing still. A fix has to let the blend finish before
+  the speed drops (a snap, `blend = 0.0` for the still case, is the cheap version); both want their
+  own look, since it changes how every body goes down and goes prone. `--setup=downed` crawls its
+  staged teammate half a second on purpose to work around it.
 - **PLAYTEST 2026-09-22: putting a carried player on the OR table is fiddly, and missing it dumps
   them on the floor.** Zach: "players were sometimes struggling to set picked up players down on the
   OR table and were getting frustrated when not clicking on the table but still pressing E set down
@@ -665,6 +666,37 @@ left below is what still applies to the shared strapped-monster infrastructure.
   renders every frame and the rest take turns" (line 11), so proximity changes which mirror is on
   the every-frame path. Check both the full-length entrance mirror and the sink mirrors, since they
   are different sizes and may not fail alike.
+- **REPRODUCED 2026-09-22 (mirror-customize), not yet root-caused.** `tools/mirrorshot.ps1` boots the
+  entrance, stands you at a list of distances from the big mirror and from a sink mirror, dumps what
+  the mirror camera and every nearby light are doing, and saves a shot at each
+  (`tools/mirror_shots/`). What it shows, seed 4242:
+    - **Big mirror**: black body at 0.5 m, dark from the waist down at 0.8 m, correct from 1.2 m out.
+      **Sink mirrors**: dark at every distance tested, 0.5 m to 3.5 m, so they are worse, not
+      different.
+    - The **room around the body stays correctly lit in the same frame**; only the body goes dark,
+      and within the body it is the **cloth** that goes black while the **skin** (face, hands) still
+      renders. That is the giveaway that it reads as "completely black": the scrubs are dark green,
+      so with only the 0.13 ambient on them they are black, while bright skin still shows.
+  **Ruled out, each by a one-frame A/B in that tool** (`--variants`):
+    - *The light cull masks / the `SELF` layer.* The mirror camera's mask has `SELF` in it at every
+      distance, the body's meshes are all on `SELF`, and 13 of the 13 lights within 14 m already
+      light that layer. Forcing every light in the level to `light_cull_mask = 0xFFFFFFFF` changes
+      nothing.
+    - *Your own torch.* Black with the flashlight off too (it is already excluded from `SELF` at
+      player.gd:627, so the note in graftsurgeryshot.gd about the torch bleaching your face in the
+      glass is stale).
+    - *The body's AABB / light pairing.* The body's transformed AABB is correct (1.41 x 1.79 x 0.38 m,
+      centred on the player), four omnis reach the chest inside their range, and
+      `extra_cull_margin = 4` on every body mesh changes nothing.
+    - *"No light is near enough."* A bright `OmniLight3D` (energy 8, range 6, all layers) placed 0.9 m
+      in front of the chest visibly brightens the **floor** under the body in the reflection and
+      leaves the **cloth black**.
+  So in the mirror's SubViewport the body rejects light **per instance**, while the geometry beside it
+  in the same frame takes it. Untested and still open: `gi_mode` on the imported meshes (Godot
+  imports at `GI_MODE_STATIC`), and the off-axis frustum itself -- `near` is pinned to the glass, so
+  at 0.5 m it is 0.45 with a ~138 degree field of view, and the distance where the body comes right
+  is the distance where that frustum stops being extreme. Nothing here is fixed yet; the mirror menu
+  works around it by standing you 1.7 m back, where the reflection is lit.
 
 ## Doors and the per-shift wings (doors worker, 2026-09-14)
 

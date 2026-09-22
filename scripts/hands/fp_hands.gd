@@ -80,6 +80,17 @@ static func dress(node: Node) -> void:
 		dress(c)
 
 
+## CUSTOMIZATION: the sleeves bake the outfit colour into their mesh, so a colour picked at the
+## mirror is a mesh swap on both arms.
+func recolour(col: Color) -> void:
+	for arm in [arm_r, arm_l]:
+		if arm == null:
+			continue
+		var sleeve := arm.find_child("Sleeve", true, false) as MeshInstance3D
+		if sleeve != null:
+			sleeve.mesh = Arms.sleeve_mesh(col)
+
+
 ## The selected stack changed: lower the hands and bring the new one up.
 func held_changed(kind: String, count: int) -> void:
 	if kind != _kind:

@@ -57,6 +57,10 @@ const DEFAULTS := {
 	"key_jump": KEY_SPACE,
 	"key_ability_alt": KEY_ALT,
 	"key_scan": KEY_R,
+	# CUSTOMIZATION (scripts/personnel/customization.gd): what your surgeon looks like, packed into
+	# one int, chosen at the big mirror in Personnel. Per machine, so it follows you into any shift.
+	# -1 means nobody has been to the mirror yet: the surgeon wears the default for their peer id.
+	"look": -1,
 }
 
 ## Settings key -> the InputMap action it rebinds.
@@ -80,6 +84,7 @@ const RANGES := {
 	"key_jump": [0, 4194500],
 	"key_ability_alt": [0, 4194500],
 	"key_scan": [0, 4194500],
+	"look": [-1, 1073741823],
 }
 
 ## Below this slider position a bus is muted outright.
