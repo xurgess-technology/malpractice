@@ -670,18 +670,26 @@ left below is what still applies to the shared strapped-monster infrastructure.
   misread as "the mirror is broken"). `tools/mirrorshot.gd` now holds camera variants across real
   frames (`_hold_camera`) and dumps each mirror's SubViewport texture on its own, so neither trap
   can bite again.
-- **The mirror menu is never built under `mapcheck` (pre-existing, found 2026-09-22).** Every seed
-  `mapcheck` builds prints `SCRIPT ERROR: Invalid call. Nonexistent function 'new' in base
-  'GDScript'` from `mirrors.gd` `setup`, at
-  `add_child(preload("res://scripts/personnel/mirror_menu.gd").new())`. The preload resolves to a
-  `GDScript` that has not compiled, so the menu node is simply missing; the rest of the level builds
-  and `mapcheck`'s own checks are unaffected, which is why nobody noticed. **Confirmed on plain
-  `main`** (checked at `99a33bd`, where the same statement is line 74) as well as on this branch, so
-  it is not the mirror-lamp work. It does not happen in the real game: a booted shift builds the
-  menu fine, and `mirrors.gd` loaded on its own in `-s` mode instantiates it fine too, so it is a
-  load-order/cycle problem specific to the order `mapcheck` pulls these scripts in
-  (`mirrors.gd` -> `mirror_menu.gd` -> `customization.gd` -> `human_model.gd`). Nobody has chased it
-  further.
+- **Autoloads do not exist under `godot -s`, so any script naming one cannot compile there
+  (2026-09-22).** This was found as "the mirror menu is never built under `mapcheck`": every seed
+  threw `Nonexistent function 'new' in base 'GDScript'` from `mirrors.gd` `setup`. The cause is not
+  a preload cycle. `mapcheck.gd` runs as a `-s` script, which never instantiates the autoloads
+  *and* never registers them as compile-time identifiers, so `mirror_menu.gd` failed on
+  `Identifier not found: Net` (line 271) and `mirrors.gd`'s `preload` of it inherited the failure.
+  Verified directly: a bare `-s` probe reports `Net` absent from the root and `mirror_menu.gd`'s
+  `can_instantiate()` false. **The mirrors half is fixed**: `mirrors.gd` now `load`s the menu behind
+  `_autoloads_present()`, so map validation (which has no player and no menu to open) skips it on
+  purpose instead of throwing, and a real run still builds it (`tools/mirrorshot.ps1 -Extra --menu`
+  prints `menu open? true`).
+- **`mapcheck` still fails to compile its own script, from a second autoload chain (pre-existing).**
+  Separate from the mirrors one above and untouched by that fix: `mapcheck.gd` -> `pocket_spaces.gd`
+  -> `world_item.gd` -> `item_models.gd` -> `vats.gd` -> `game.gd:346`, which names `Net`. It prints
+  `Identifier not found: Net`, four `Failed to compile depended scripts` and
+  `Failed to load script "res://tools/mapcheck.gd"` — yet mapcheck then runs and validates seeds
+  normally, which is why it has gone unnoticed. Nothing throws at runtime. The mirrors trick does
+  not apply here: `game.gd` is the game, and it cannot stop naming its autoloads. Anyone who wants
+  this quiet should look at whether `mapcheck` needs the `world_item`/`item_models` half of the
+  graph at all, or should run as a scene rather than `-s`.
 - **Pinstripes follow the model's UV layout, not the body.** The pattern shader steps the UV's x
   coordinate, as specified, but `surgeon_st`'s islands are not laid out consistently: the stripes
   run across the torso and down the legs. It reads as deliberate more than as a bug, and
