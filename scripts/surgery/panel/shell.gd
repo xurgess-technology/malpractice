@@ -194,9 +194,46 @@ func splat_polys_for(from: int, n: int) -> Array:
 	return out
 
 
+## Profiling: polygons draw_splats() issued on its last pass, baked ones counted once each.
+var splat_polys := 0
+
+# THE BAKED SHEET. Blood stays on the page for the rest of the step and never moves again once it has
+# finished growing, but draw_colored_polygon re-triangulates on the CPU every frame, so a messy page
+# used to cost a millisecond per hundred polygons EVERY FRAME, on the operator's machine and on every
+# onlooker's. Finished splats are triangulated ONCE into a single mesh and drawn in one call, so the
+# page costs the same whether it has two splats on it or two hundred. Only the handful still growing
+# (splat_grow, 0.35 s) take the old per-polygon path. The pixels are identical: the same triangles in
+# the same order with the same colours.
+var _baked: ArrayMesh = null
+## How many entries of _splats are in _baked. They mature in the order they were thrown.
+var _baked_n := 0
+## Polygons the triangulator refused, drawn the slow way for the rest of the step.
+var _baked_odd: Array = []
+
+
 ## Everything thrown so far, scaling up over splat_grow and then staying.
 func draw_splats(c: CanvasItem) -> void:
-	for sp in _splats:
+	splat_polys = 0
+	# Something took splats away (the self-test's splat_polys_for): start the sheet again.
+	if _baked_n > _splats.size():
+		_baked = null
+		_baked_n = 0
+		_baked_odd.clear()
+	# Fold in everything that has stopped growing since last time.
+	var ripe := _baked_n
+	while ripe < _splats.size() and t - float(_splats[ripe][2]) >= splat_grow:
+		ripe += 1
+	if ripe > _baked_n:
+		_bake(ripe)
+	if _baked != null:
+		c.draw_mesh(_baked, null)
+		ink.ops += 1
+		splat_polys += _baked_n
+	for odd in _baked_odd:
+		c.draw_colored_polygon(odd[0], odd[1])
+		ink.ops += 1
+	for i in range(_baked_n, _splats.size()):
+		var sp: Array = _splats[i]
 		var k := clampf((t - float(sp[2])) / splat_grow, 0.0, 1.0)
 		k = 1.0 - pow(1.0 - k, 3.0)
 		var ctr: Vector2 = sp[0]
@@ -209,6 +246,38 @@ func draw_splats(c: CanvasItem) -> void:
 				pts = scaled
 			c.draw_colored_polygon(pts, pc[1])
 			ink.ops += 1
+			splat_polys += 1
+
+
+## Rebuild the baked sheet so it holds _splats[0, upto). Rebuilt whole rather than appended to, so the
+## triangles stay in throw order and the overlaps blend the way they did when each was its own call.
+func _bake(upto: int) -> void:
+	var verts := PackedVector2Array()
+	var cols := PackedColorArray()
+	_baked_odd.clear()
+	for i in upto:
+		for pc in (_splats[i][1] as Array):
+			var pts: PackedVector2Array = pc[0]
+			var col: Color = pc[1]
+			var tri := Geometry2D.triangulate_polygon(pts)
+			if tri.is_empty():
+				# Godot's own draw_colored_polygon would refuse it too, but keep the old path so a
+				# sliver that somehow gets through still looks the way it did.
+				_baked_odd.append([pts, col])
+				continue
+			for idx in tri:
+				verts.append(pts[idx])
+				cols.append(col)
+	_baked_n = upto
+	if verts.is_empty():
+		_baked = null
+		return
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_COLOR] = cols
+	_baked = ArrayMesh.new()
+	_baked.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
 
 ## Canvas px to nudge the whole clipboard by while a serious mistake shakes it.
