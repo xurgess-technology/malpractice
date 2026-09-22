@@ -136,6 +136,11 @@ var dev: Node = null
 
 var _entities: Node3D
 var _snap_accum: float = 0.0
+## Entity ids are identity on the wire: a client makes a node the first time an id appears and
+## never remakes it. So an id is never handed out twice in a session -- these only go up, and only
+## start_session (a new run, a fresh replica on every machine) puts them back to zero. Reusing one
+## across a clear (a new shift's monsters, a new level's loot) left a client driving the old node
+## with the new entity's fields: a Hive wearing a Sonographer's kind, which could not be strapped.
 var _next_monster_id: int = 0
 var _next_item_id: int = 0
 var _rng := RandomNumberGenerator.new()
@@ -380,6 +385,10 @@ func viewed_player() -> Node:
 func start_session(first_seed: int) -> void:
 	shift = 1
 	spectating = 0
+	# A new run: every machine starts an empty replica, so ids may start again from zero here and
+	# nowhere else (see _next_monster_id).
+	_next_monster_id = 0
+	_next_item_id = 0
 	reset_money()  # a new run starts broke; clients get the host's value in the snapshot
 	start_lobby(first_seed, 1)
 
@@ -1345,7 +1354,6 @@ func _clear_items() -> void:
 			it.queue_free()
 	world_items.clear()
 	_shift_item_ids.clear()
-	_next_item_id = 0
 
 
 ## Host: the supplies for the first patient case (legacy name).
@@ -2342,8 +2350,6 @@ func _clear_monsters(keep_dev_room := false) -> void:
 			m.queue_free()
 	monsters.clear()
 	monsters.merge(kept)
-	if kept.is_empty():
-		_next_monster_id = 0
 
 
 # =========================================================================
@@ -4464,6 +4470,13 @@ func _apply_entities(nodes: Dictionary, entities: Dictionary, changed: Dictionar
 		if e.is_empty():
 			continue
 		var node = nodes.get(id)
+		# An id is meant to be handed out once per session (see _next_monster_id), but a host that
+		# reuses one would otherwise leave this node driving the wrong entity for ever: nothing in
+		# apply_remote can change what a node *is*. If the entity no longer matches the node we
+		# made, make it again.
+		if node != null and is_instance_valid(node) and not _entity_matches(node, e):
+			node.queue_free()
+			node = null
 		if node == null or not is_instance_valid(node):
 			node = make.call(id, e)
 			nodes[id] = node
@@ -4475,6 +4488,16 @@ func _apply_entities(nodes: Dictionary, entities: Dictionary, changed: Dictionar
 				if is_instance_valid(nodes[id]):
 					nodes[id].queue_free()
 				nodes.erase(id)
+
+
+## Is `node` still the thing this replicated entity describes? Only the fields a node is *made*
+## from count: a monster's kind ("kind") and an item's kind ("k"). Everything else -- position,
+## state, a stack's count -- is what apply_remote is for.
+func _entity_matches(node: Node, e: Dictionary) -> bool:
+	if not ("kind" in node):
+		return true
+	var want = e.get("kind", e.get("k"))
+	return want == null or String(node.kind) == String(want)
 
 
 func _set_container_open(id: String, open: bool) -> void:

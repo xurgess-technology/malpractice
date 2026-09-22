@@ -332,7 +332,10 @@ func _run() -> void:
 	_stand(tpos + tside, game.table_yaw_of(ti))
 	me.bot_aim_id = game.table_interact_id(ti)
 	await _frames(3)
-	_check(me.aim_id == "" and me.aim_prompt.contains("taken"), "a taken table does not offer to strap ('%s')" % me.aim_prompt)
+	# A Sonographer is not a kind any table would take (only a Hive has a monster case), so the
+	# table's state never comes into it: the prompt just puts it down. The taken table itself is
+	# checked with a Hive at the end of the run, where adding a monster shifts nobody's id.
+	_check(me.aim_id == "" and me.aim_prompt.begins_with("Put the Sonographer down"), "a table offers nothing for a kind it could never take ('%s')" % me.aim_prompt)
 	me.bot_press += 1
 	await _frames(3)
 	_check(cb.dragging(me) < 0 and game.monsters.has(c2.monster_id) and game.cases.size() == n_cases + 1, "E there puts it down instead, no second case")
@@ -372,6 +375,35 @@ func _run() -> void:
 	await _frames(2)
 	_check(cb.net_state().is_empty() or not cb.net_state().get("s", []).has(c3.monster_id if is_instance_valid(c3) else -99), "a killed monster leaves the sedated set")
 	await _windups()
+	await _taken_table(ti, tpos, tside)
+
+
+## A taken table refuses a Hive -- the only kind a table would otherwise take, so the only kind the
+## refusal can be read from. It runs last on purpose: every monster's randomness is seeded from its
+## id (`hash("monster%d" % id)` in scripts/monster.gd), so a monster spawned earlier would shift the
+## stream of every monster after it and quietly change what the wind-up checks see.
+func _taken_table(ti: int, tpos: Vector3, tside: Vector3) -> void:
+	var n_cases: int = game.cases.size()
+	var m := await _monster("hive", o + Vector3(15.0, 0, 13.0))
+	_calm(m)
+	m.sedate(CombatScript.SEDATE_SECONDS)
+	await _frames(2)
+	_check(cb.is_sedated(m), "set-up: a sedated Hive for the taken table")
+	_stand(m.global_position + Vector3(0, 0, 1.6), 0.0)
+	me.bot_aim_id = "mo_%d" % m.monster_id
+	me.bot_interact = true
+	await _seconds(1.2)
+	me.bot_interact = false
+	_check(cb.dragging(me) == m.monster_id, "dragging the Hive")
+	_stand(tpos + tside, game.table_yaw_of(ti))
+	me.bot_aim_id = game.table_interact_id(ti)
+	await _frames(3)
+	_check(me.aim_id == "" and me.aim_prompt.contains("taken"), "a taken table does not offer to strap ('%s')" % me.aim_prompt)
+	me.bot_press += 1
+	await _frames(3)
+	_check(cb.dragging(me) < 0 and game.monsters.has(m.monster_id) and game.cases.size() == n_cases, "E there puts the Hive down instead, no second case")
+	game.kill_monster(m)
+	await _frames(2)
 
 
 ## Hands sweep: the shared wind-up, strike, recover model (docs/HANDS_AND_FEEDBACK.md "Done when").

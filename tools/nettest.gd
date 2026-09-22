@@ -1088,10 +1088,13 @@ func _sc_graft():
 			game.give_hand(op, String(step[0]), 1)
 			await _frames(3)
 			game._proxy_used(game.table_interact_id(table), op)
-			if not await _until(func(): return sys.mg != null and String(sys.mg.get("variant")) == String(step[1]), 30.0, "the %s step" % step[1]):
+			# ARCADE: which step is playing comes from the minigame's ctx, not a property of its
+			# own. The arcade rebuilds (eye:cut is steer_arcade.gd) declare no `variant`, so
+			# mg.get("variant") reads null on them; the framework fills ctx.variant for every one.
+			if not await _until(func(): return _mg_variant(sys) == String(step[1]), 30.0, "the %s step" % step[1]):
 				return
 			var want := String(step[1])
-			if not await _until(func(): return ps.case.is_empty() or String(sys.mg.get("variant")) != want or bool(sys.mg.get("done")), 120.0, "the %s to finish" % want):
+			if not await _until(func(): return ps.case.is_empty() or _mg_variant(sys) != want or bool(sys.mg.get("done")), 120.0, "the %s to finish" % want):
 				return
 		if not await _until(func(): return game.grafts.graft_of(patient.peer_id) == "eye_hive", 30.0, "the graft to take"):
 			return
@@ -2365,6 +2368,15 @@ func _throw_at(pos: Vector3, furn_basis_z: Vector3 = Vector3(0.0, 0.0, 1.0)) -> 
 
 ## Stand within reach of a target (the client owns its position, so a teleport is a legal
 ## move), look at it, and press E at most once a wall-clock second (or hold it).
+## ARCADE: the step a surgery system is playing right now, "" for none. Read from the minigame's
+## ctx, which the framework fills for every minigame; the arcade rebuilds have no `variant`
+## property of their own to read.
+func _mg_variant(sys: Node) -> String:
+	if sys == null or sys.mg == null or not is_instance_valid(sys.mg):
+		return ""
+	return String((sys.mg.ctx as Dictionary).get("variant", ""))
+
+
 func _press_at(pos: Vector3, id: String, hold := false) -> void:
 	var me := _me()
 	# 2026-09-18: at a table, hold the current step's item (a step's tool is used from the hands).
