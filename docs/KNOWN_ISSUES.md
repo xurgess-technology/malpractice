@@ -330,6 +330,19 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
   player table runs its own copy of the surgery system through that adapter rather than going
   through `game.add_case`, so the revive path there may simply never tell the body to leave the
   carried pose. Check it on every machine, not just the revived player's: the pose is replicated.
+- **PLAYTEST 2026-09-22: putting a carried player on the OR table is fiddly, and missing it dumps
+  them on the floor.** Zach: "players were sometimes struggling to set picked up players down on the
+  OR table and were getting frustrated when not clicking on the table but still pressing E set down
+  their friend". Two halves: the table's interact target is hard to hit while carrying someone, and
+  a near-miss falls through to the plain floor drop, so it doesn't merely fail -- it undoes the
+  carry and you start again. The table path itself is fine and has proper prompts and refusals
+  (`game.gd:1060` `_table_prompt` -> `:1064` -> `_downed_place_prompt`, "Place <name> on the
+  table" / "!The table is taken."); it is `drop_carried` (`game.gd:2986`) that has no table
+  awareness, trying a spot ahead of the carrier and snapping it to floor height. Targeting is the
+  camera raycast in `player.gd` ~1433 at `C.INTERACT_RANGE` 2.2 m. A deliberate floor-drop has to
+  stay possible -- the goal is only that a near-miss at a table stops silently becoming one. Note
+  0.10.3 fixed a similar "hard to aim at it" problem for dropped items with a much more generous
+  sphere-shaped pickup volume; same trick may apply.
 - **The stitches operation is self-contained.** `game.add_case` / `game.cases` do not exist on this
   branch, so the player table runs its own copy of the surgery system through
   `scripts/downed/player_surgery.gd` (an adapter standing in for the game). The integration wave
