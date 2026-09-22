@@ -66,6 +66,10 @@ const STEP_PX := 6.0
 ## count -- "raising the layer count adds meat depth, not bone depth".
 const BONE_AT := 2
 
+## The table under the limb. Spec 3: the gap shows TABLE, not void -- so it is plainly steel and
+## never the page, or a hole through the arm reads as blank paper.
+const TABLE := Color("8d949a")
+
 ## Splat index ranges, kept apart so the shell never throws the same blood twice.
 const JUMP_FROM := 60000
 const FLAT_FROM := 61000
@@ -129,7 +133,8 @@ enum State { SERVE, CUT, PART, RESULT }
 @export_group("Results")
 ## Spec 3: the severed piece slides away from the cut over ~2.2 s while the scene fades to the card.
 @export_range(0.4, 6.0, 0.05) var part_time := 2.2
-@export_range(0.0, 400.0, 5.0) var part_slide := 150.0
+## Far enough that the limb has plainly come apart, not so far that the piece leaves the court.
+@export_range(0.0, 400.0, 5.0) var part_slide := 44.0
 ## SPEC 7: stump quality compares material removed against one straight full-width channel (columns x
 ## layers x blade diameter / cell height), allowed 1.5x for the overlap real play cannot avoid.
 ## CALIBRATE THIS AGAINST MEASURED PERFECT PLAY whenever the blade size, the grid or the layer count
@@ -1121,26 +1126,39 @@ func paint_game(c: CanvasItem) -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, -1.0, 110, ink.ink)
 
 
-## Spec 3: THE GAP SHOWS TABLE, NOT VOID.
+## Spec 3: THE GAP SHOWS TABLE, NOT VOID. It has to be plainly a steel table and not the page, or a
+## hole through the arm reads as blank paper and the player cannot tell "gone" from "bone".
 func _paint_table(c: CanvasItem) -> void:
-	var r := limb_rect().grow(9.0)
-	c.draw_rect(Rect2(cv(r.position), r.size * _u()), Color(ink.mat.darkened(0.13), 0.92))
+	var r := limb_rect().grow(10.0)
+	var dst := Rect2(cv(r.position), r.size * _u())
+	c.draw_rect(dst, TABLE)
 	ink.ops += 1
-	ink.rect(c, Rect2(cv(COURT.position), COURT.size * _u()), Color(ink.ink, 0.40), 2.2, 9101)
+	# A couple of long scratches, so it is a surface rather than a grey rectangle.
+	for i in 3:
+		var y: float = r.position.y + r.size.y * (0.22 + 0.28 * float(i))
+		c.draw_line(Vector2(dst.position.x, cv(Vector2(0.0, y)).y), Vector2(dst.end.x, cv(Vector2(0.0, y)).y),
+			Color(TABLE.lightened(0.16), 0.5), cl(1.4))
+	ink.ops += 3
+	ink.rect(c, dst, Color(ink.ink, 0.55), 2.4, 9100)
+	ink.rect(c, Rect2(cv(COURT.position), COURT.size * _u()), Color(ink.ink, 0.35), 2.0, 9101)
 
 
 ## SPEC 2: a cell's appearance is a PURE FUNCTION of its remaining depth and whether its column falls
 ## inside a bone shaft. 4 skin / 3 meat / 2 meat or bone / 1 meat or cracked bone / 0 gone.
+##
+## The five readings have to be tellable apart AT CELL SIZE and across the table, which is what drives
+## the spread: skin is warm and pale, meat darkens as it goes down, bone is ivory and cracked bone is
+## a grubbier grey, and gone is the steel underneath.
 func layer_colour(d: int, bone: bool) -> Color:
 	if d <= 0:
 		return Color(0, 0, 0, 0)
 	if d >= layers:
 		return ink.hide_seal if limb_type == "seal" else ink.skin_human
 	if d == 1:
-		return Color("cdc4ae") if bone else Color("8e3b33")
+		return Color("b6ae96") if bone else Color("63241f")
 	if d == 2:
-		return Color("e6dfcb") if bone else Color("a8453a")
-	return Color("b04a3e")
+		return Color("ece4cc") if bone else Color("9c3a30")
+	return Color("c4695a")
 
 
 ## The slow pass. Only the rows that changed are repainted; the whole 40 x 100 sheet is uploaded in
@@ -1288,9 +1306,9 @@ func _paint_edges(c: CanvasItem) -> void:
 			ink.ops += 1
 		# THE RED SEAM inside every exposed edge, then the ink line over the edge itself. Both wobble:
 		# ink.seg is on the 7 Hz boil, so the arm breathes like the paddles and the blade.
-		var inward := (b - a).orthogonal().normalized() * 1.7
-		ink.seg(c, cv(a - inward), cv(b - inward), seam, 1.9, 9500 + k)
-		ink.seg(c, cv(a), cv(b), line, 1.6, 9700 + k)
+		var inward := (b - a).orthogonal().normalized() * 2.0
+		ink.seg(c, cv(a - inward), cv(b - inward), seam, 2.6, 9500 + k)
+		ink.seg(c, cv(a), cv(b), line, 2.2, 9700 + k)
 
 
 func _paint_chips(c: CanvasItem) -> void:
