@@ -75,7 +75,7 @@ const THROW_FOLLOW_TIME := 0.25
 ## its own timer off the counter in Trinkets' `sw`, so the swing looks the same in the swinger's own
 ## hands and on everyone else's copy of their body.
 const ThrowPoseScript := preload("res://scripts/hands/throw_pose.gd")
-const SWING_SPEED := 2.2
+const SWING_SPEED := 1.7
 ## Seconds of wind-up before the strike fires. At SWING_SPEED the arm is nearly all the way up.
 const SWING_WINDUP := 0.10
 ## The whole thing, wind-up plus the strike and its ease back to rest.

@@ -439,10 +439,12 @@ func _draw_slot(r: Rect2, kind: String, s: Dictionary, keys: String, sel: bool, 
 		_text(Vector2(pill.position.x + 4.5, pill.end.y - 3.5), label, 13, Color("ffffff"))
 
 
-## TRINKETS chunk B (docs/ITEMS_AND_ICONS.md): the laptop's one charge. For a few seconds a plan of
-## the Trinkets.MAP_RANGE metres around you, north up, with the hospital's floor tiles in a dim
-## green, you as an arrow in the middle and a blip for every surgery item within range. It is a bad
-## screen on a dying laptop, so it scans, flickers and goes out.
+## TRINKETS chunk B (docs/ITEMS_AND_ICONS.md): the laptop's one charge. You hold it up in front of your
+## face: the lid rises from the bottom of the screen and its display shows a plan of the
+## Trinkets.MAP_RANGE metres around you, north up, with the hospital's floor tiles in a dim green, you
+## as an arrow in the middle and a blip for every surgery item within range. For the last
+## Trinkets.MAP_LOW_SECONDS the battery is low (the screen stutters, a red battery blinks), then the
+## lid drops away. (fp_hands.gd stows the held model while this is up so there is one laptop, not two.)
 const MAP_PX := 268.0
 const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
 ## mapgen.gd's walkable tile characters (its own WALKABLE_CHARS; repeated here so the HUD does not
@@ -450,7 +452,7 @@ const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
 const MAP_FLOOR_CHARS := ".+,PTM"
 
 
-func _draw_laptop_map(w: float, _h: float, me) -> void:
+func _draw_laptop_map(w: float, h: float, me) -> void:
 	if game == null or game.trinkets == null:
 		return
 	var left: float = game.trinkets.map_left(me)
@@ -459,18 +461,38 @@ func _draw_laptop_map(w: float, _h: float, me) -> void:
 	drawn.append("laptop_map")
 	var range_m: float = TrinketsScript.MAP_RANGE
 	var total: float = TrinketsScript.MAP_SECONDS
-	# Powering up and dying: a quick wipe in, a stutter out.
-	var k: float = clampf((total - left) / 0.35, 0.0, 1.0) * clampf(left / 0.5, 0.0, 1.0)
-	var flicker: float = 0.88 + 0.12 * sin(_t * 31.0) * clampf(1.0 - left / 1.5, 0.0, 1.0)
-	var a := k * flicker
-	if a <= 0.01:
+	var low_s: float = TrinketsScript.MAP_LOW_SECONDS
+	var low: bool = left < low_s
+	# Held up, then lowered: the lid slides in over 0.4 s and drops out over the last 0.35 s.
+	var up: float = clampf((total - left) / 0.4, 0.0, 1.0) * clampf(left / 0.35, 0.0, 1.0)
+	up = up * up * (3.0 - 2.0 * up)
+	if up <= 0.01:
 		return
-	var r := Rect2(w - MAP_PX - 26.0, 26.0, MAP_PX, MAP_PX)
+	# A dying screen: steady, then it stutters (and blanks now and then) while the battery is low.
+	var blink: bool = low and sin(_t * 13.0) > 0.35
+	var a: float = 1.0
+	if low:
+		a = 0.45 if blink else 0.85
+	var lid := Rect2((w - (MAP_PX + 44.0)) * 0.5, h - 30.0 - (MAP_PX + 74.0) + (1.0 - up) * (MAP_PX + 120.0),
+		MAP_PX + 44.0, MAP_PX + 74.0)
+	# The base under it, then the lid.
+	var base := Rect2(lid.position.x - 26.0, lid.end.y - 2.0, lid.size.x + 52.0, 22.0)
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.16, 0.17, 0.19)
+	bsb.set_corner_radius_all(5)
+	draw_style_box(bsb, base)
+	var lsb := StyleBoxFlat.new()
+	lsb.bg_color = Color(0.20, 0.21, 0.23)
+	lsb.border_color = Color(0.36, 0.37, 0.40)
+	lsb.set_border_width_all(2)
+	lsb.set_corner_radius_all(9)
+	draw_style_box(lsb, lid)
+	var r := Rect2(lid.position + Vector2(22.0, 20.0), Vector2(MAP_PX, MAP_PX))
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.03, 0.07, 0.05, 0.9 * a)
+	sb.bg_color = Color(0.03, 0.07, 0.05, 0.96 * a)
 	sb.border_color = Color("7de0a0", 0.75 * a)
 	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(6)
+	sb.set_corner_radius_all(3)
 	draw_style_box(sb, r)
 	var c := r.get_center()
 	var ppm := (MAP_PX * 0.5) / range_m          # pixels per metre
@@ -510,7 +532,17 @@ func _draw_laptop_map(w: float, _h: float, me) -> void:
 	var s2 := Vector2(-f.y, f.x)
 	draw_colored_polygon(PackedVector2Array([c + f * 8.0, c - f * 5.0 + s2 * 5.0, c - f * 5.0 - s2 * 5.0]),
 		Color("ffffff", 0.9 * a))
-	_text(Vector2(r.position.x + 8, r.end.y - 8), "%.0f m  ·  %.1f s" % [range_m, left], 12, Color("7de0a0", 0.8 * a))
+	# Below the screen: the range and time, or the low-battery warning.
+	var y := lid.end.y - 20.0
+	if low:
+		var red := Color("ff4a3d", 1.0 if not blink else 0.35)
+		var bx := lid.position.x + 24.0
+		draw_rect(Rect2(bx, y - 12.0, 30.0, 14.0), red, false, 2.0)
+		draw_rect(Rect2(bx + 30.0, y - 8.0, 3.0, 6.0), red)
+		draw_rect(Rect2(bx + 3.0, y - 9.0, 5.0, 8.0), red)
+		_text(Vector2(bx + 42.0, y), "LOW BATTERY", 13, red)
+	else:
+		_text(Vector2(lid.position.x + 24.0, y), "%.0f m  ·  %.1f s" % [range_m, left], 12, Color("7de0a0", 0.85))
 
 
 ## A small four-point sparkle.

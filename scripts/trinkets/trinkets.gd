@@ -50,8 +50,10 @@ const RING_HIVE_RANGE := 14.0
 const PULL_RING_CHANCE := 0.12
 
 # --- the laptop
-const MAP_SECONDS := 6.0
+const MAP_SECONDS := 7.0
 const MAP_RANGE := 25.0
+## The last stretch of the map is the low-battery warning: the screen stutters and a red battery blinks.
+const MAP_LOW_SECONDS := 2.0
 
 # --- the defibrillator
 const DEFIB_REACH := 2.6
@@ -248,7 +250,7 @@ func use_prompt(p) -> String:
 			var m: Node = t2.node
 			if _tagged.has(int(m.monster_id)):
 				return ""
-			if game.combat == null or not game.combat.can_sedate(m):
+			if not MonsterScript.is_capturable(String(m.kind)):
 				return ""
 			return "[Click] Clip the pulse oximeter on"
 	return ""
@@ -413,10 +415,7 @@ func _use_pulse_ox(p, head: int) -> void:
 		last_result = {"what": "refused", "id": mid}
 		game.tell(p, "The clip will not stay on her.", 2.5)
 		return
-	if game.combat == null or not game.combat.can_sedate(m):
-		last_result = {"what": "shrugged", "id": mid}
-		game.tell(p, "It will not hold still. Shove it first.", 2.5)
-		return
+	# Any monster the Night Nurse rule allows takes the clip, shoved or not.
 	var s: Dictionary = p.slots[head]
 	_tag_value[mid] = int(s.get("v", 0))
 	_tagged[mid] = int(p.peer_id)

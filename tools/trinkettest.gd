@@ -265,19 +265,13 @@ func _pulse_ox() -> void:
 		"the Night Nurse cannot be tagged (%s)" % str(tk.last_result))
 	game.knock_down_monster(nurse, Vector3.ZERO, 300.0)
 	nurse.global_position = game._floor_at(o + Vector3(3.0, 0, 3.0))
-	# A Hive that has not been shoved shrugs it off.
+	# A Hive that has not been shoved takes the clip too.
 	var m := await _monster("hive", o + Vector3(14.0, 0, 10.0))
 	var mid: int = m.monster_id
-	await _use_on(m)
-	_check(me.holding("pulse_oximeter") and String(tk.last_result.get("what", "")) == "shrugged",
-		"not stunned, it will not hold still (%s)" % str(tk.last_result))
-	# Shove it, then clip it on inside the same window the needle wants.
 	_calm(m)
 	_face(m)
 	await _frames(2)
-	game.player_shoved(me)
-	await _frames(2)
-	_check(game.combat.can_sedate(m), "a shove opens the same window the needle uses")
+	_check(not game.combat.can_sedate(m), "set-up: it is not stunned")
 	await _use_on(m)
 	_check(tk.tagged_by(mid) == me.peer_id, "the pulse oximeter goes onto the Hive")
 	_check(not me.holding("pulse_oximeter"), "and it leaves your hands")
