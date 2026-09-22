@@ -12,9 +12,9 @@ Source of truth: Anesthetic Injection.dc.html · reference play space 960 × 600
 ## 1 · Overview and flow
 One mouse-driven scheme throughout. A single state machine drives four states in strict sequence: DRAW → DEBUBBLE → INJECT → RESULTS. Each state shows a one-line italic instruction above the play panel. Space (or a Done/Continue button) advances DRAW and DEBUBBLE; INJECT ends itself when the full dose is depressed; RESULTS offers Retry, which re-rolls every randomized value (target dose, bubble set, vein layout).
 
-All state carried between phases: fluid (0–1 fraction of the barrel, displayed as 0–5 mL), the bubbles array (leftovers from DEBUBBLE are carried into INJECT and scored), and the running stats record (misses, blown veins, bubble units, fast-push count).
+All state carried between phases: fluid (0–1 fraction of the barrel, displayed as 0–5 mL), the bubbles array (leftovers from DEBUBBLE are carried into INJECT and scored), and the running stats record (misses, bubble units, fast-push count).
 
-Cut feature: an in-panel heart-rate monitor existed in earlier iterations and was removed by direction. The code keeps a no-op spike(n) hook at every mistake site (air drawn, purge below band, slap, miss, blown vein, tourniquet timeout, fast push) — preserve these call sites in the port so vitals can be reattached later.
+Cut feature: an in-panel heart-rate monitor existed in earlier iterations and was removed by direction. The code keeps a no-op spike(n) hook at every mistake site (air drawn, purge below band, slap, miss, tourniquet timeout, fast push) — preserve these call sites in the port so vitals can be reattached later.
 
 ## 2 · Art direction
 The minigame lives inside a raised comic panel: a paper-colored canvas in a 3 px ink border, tilted −0.65°, sitting on a flat offset shadow (9 px right, 11 px down, no blur — a printed-page drop, not a soft glow). The mood is grimy clinical: unsettling but readable, never gory.
@@ -88,31 +88,29 @@ Layout. Arm fills the panel below a wavy ink top edge: human skin top ≈ y 292 
 ### 5.2 Needle
 | Mechanic | Rule |
 |---|---|
-| Geometry | assembly along the aim direction: barrel 64 px (mini fluid level inside), needle 62 px, tip at 126 px from the grip. Half-length tick on the needle. Angle readout floats near the grip at ~55% alpha. |
-| Angle | 8–80° from horizontal; scroll ±3°/notch, A/D ±2°/press. Frozen at push start. |
-| Insertion | hold ≥ 0.15 s to start; advance 38 px/s (T), max 55. Position and angle lock at push start; releasing (not in vein) retracts fully. |
-| Depth reading | the needle visibly disappears into the skin: visible length = max(4, 62 − 1.05·advance); the buried remainder is a 15%-alpha dashed ghost; entry dimple at the surface. "depth NN%" readout turns red past 65% without a flash. Ideal stick ≈ half the needle buried. |
-| Vein hit → flash | tip within 9 px of a vein polyline, advance > 14, and \|needle angle − local vein tangent\| within [angleMin 14°, angleMax 32°] (T both). On hit: red flash in the hub, "in the vein — stop". Blown segments never register. |
-| Blow the vein | pushing > 12 px past the flash: purple bruise blob at the tip, that vein disabled for ±45 px of x, needle force-retracts, blown++. |
-| Miss | release with advance > 14 and no flash: small red puncture ring at the tip, misses++. |
-| Lock in | release while flashed → needle locks in place; the dose is recorded at this moment. |
+| Geometry | assembly along the aim direction: barrel 64 px (mini fluid level inside), needle 62 px, tip at 126 px from the grip. Half-length tick on the needle. |
+| Angle | **DECIDED AWAY 2026-09-22.** A fixed 25° tilt, no longer a control: setting it with the wheel or A/D, and gating the flash on it, was the main reason a stick lined up over a vein missed anyway. |
+| Aim | the mouse holds the assembly by the needle tip, so the tip is the cursor. |
+| Insertion | hold ≥ 0.15 s to start; the tip must be on skin. Going in is **depth, not travel**: the tip stays pinned to the point the mouse was on when Space went down, and `sink` runs 0 → 52 at 30 px/s (T). Nothing after the press is a reaction test. |
+| Depth reading | the needle visibly disappears into the skin: the exposed needle shortens by the depth and the barrel rides down onto it, the tip and the entry dimple being one ringed point. "depth NN%" readout turns red past 75% without a flash. |
+| Vein hit → stop | settled the instant the needle starts down: the tip within 9 px of a vein polyline. If it is, the needle **stops itself** at depth 30, red flash in the hub, and locks in. |
+| Miss | the needle reaches depth 52 with no vein under it (or is let go past depth 15): small red puncture ring at the tip, misses++. |
 | Depress plunger | hold to build push rate +0.55/s, decay −0.9/s released (pulsing keeps it low); fluid drains at rate × 0.09/s. A vertical PUSH meter (green lower 55%, red upper 45%) shows the rate; rate > 0.55 counts a fast-push every 0.9 s. At fluid 0: "dose delivered…", 0.9 s beat, then RESULTS. |
 
 ## 6 · Results card
-Modal card over a 35% ink scrim: rotated double-border stamp, a two-column breakdown (Dose "x.x mL / t.t ±0.3 — IN BAND / OVER / UNDER", Bubbles injected, Sticks "n missed · n blown", Push speed "steady hand / n pressure spikes"), one italic flavor line, Retry, and the numeric score in small type. Big bubbles (r > 12) count as 2 bubble units.
+Modal card over a 35% ink scrim: rotated double-border stamp, a two-column breakdown (Dose "x.x mL / t.t ±0.3 — IN BAND / OVER / UNDER", Bubbles injected, Sticks "n missed", Push speed "steady hand / n pressure spikes"), one italic flavor line, Retry, and the numeric score in small type. Big bubbles (r > 12) count as 2 bubble units.
 
 | Scoring (start 100) | Penalty |
 |---|---|
 | Dose outside band | min(40, (\|error\| − band) × 260) |
 | Per bubble unit injected | −10 |
 | Per missed stick | −8 |
-| Per blown vein | −16 |
 | Per fast-push event | −6 |
 
-Grades: CLEAN ≥ 82 (green #4c6b3c) · SLOPPY ≥ 50 (gold #a06a1f) · MALPRACTICE below (red #7c1f24). Flavor line, first match wins: bubbles ≥ 2 → "Something extra is on its way to the heart." · underdose → "Patient may wake up mid-surgery." · overdose → "That is a deeper sleep than anyone scheduled." · blown ≥ 2 → "The vein map now reads like a bruise atlas." · misses ≥ 3 → "The arm has more holes than the chart explains." · any fast push → "You pushed like the elevator was waiting." · else → "Textbook. Suspiciously textbook."
+Grades: CLEAN ≥ 82 (green #4c6b3c) · SLOPPY ≥ 50 (gold #a06a1f) · MALPRACTICE below (red #7c1f24). Flavor line, first match wins: bubbles ≥ 2 → "Something extra is on its way to the heart." · underdose → "Patient may wake up mid-surgery." · overdose → "That is a deeper sleep than anyone scheduled." · misses ≥ 3 → "The arm has more holes than the chart explains." · any fast push → "You pushed like the elevator was waiting." · else → "Textbook. Suspiciously textbook."
 
 ## 7 · Debug & tuning
-A Debug toggle overlays: vein polylines (bright green), blown ranges (red), the acceptable angle cone as dashed rays at angleMin/angleMax from the needle tip, and a readout line with target mL ± band, current fluid, and the angle window. Exposed tuning knobs (T): drawAccel 0.22 (0.05–0.5) · veinFade 1.5 s (0.5–4) · angleMin 14° (5–45) · angleMax 32° (10–60). Keep every (T) value in one tuning resource in Godot.
+A Debug toggle overlays: vein polylines (bright green), the reach the tip has to land inside as a ring around it, a cross on the exact point the vein test uses, and a readout line with target mL ± band, current fluid, the reach and the depth. Exposed tuning knobs (T): drawAccel 0.22 (0.05–0.5) · veinFade 1.5 s (0.5–4) · tipTol 9 px (2–30) · insertSpeed 30 px/s (5–150). Keep every (T) value in one tuning resource in Godot.
 
 ## 8 · Godot port notes
 - Keep the 960 × 600 reference space and scale the panel as a whole; all constants above are in that space.

@@ -34,6 +34,11 @@ var t := 0.0
 
 # -- tuning (reference px, times ink.unit) ----------------------------------------------------------
 var stamp_size := Vector2(516.0, 274.0)   ## ~20% bigger than the original 430x228 (2026-09-22)
+## WHERE THE STAMP LANDS ON THE PAPER, as a fraction of `area`. `area` is the sheet's content rect
+## (ink.content), NOT the step's own layout, and every shelled step lays out on the same 960x600
+## reference page -- so this is the same spot, at the same size, on DRAW!, DODGE!, WHACK!, WRAP! and
+## SUTURE! alike. Move this, not the call sites: a step must never place its own card (2026-09-22).
+var stamp_at := Vector2(0.5, 0.5)
 var stamp_tilt_deg := -6.0
 var burst_life := 1.4
 var burst_radii := Vector2(46.0, 72.0)
@@ -189,9 +194,46 @@ func splat_polys_for(from: int, n: int) -> Array:
 	return out
 
 
+## Profiling: polygons draw_splats() issued on its last pass, baked ones counted once each.
+var splat_polys := 0
+
+# THE BAKED SHEET. Blood stays on the page for the rest of the step and never moves again once it has
+# finished growing, but draw_colored_polygon re-triangulates on the CPU every frame, so a messy page
+# used to cost a millisecond per hundred polygons EVERY FRAME, on the operator's machine and on every
+# onlooker's. Finished splats are triangulated ONCE into a single mesh and drawn in one call, so the
+# page costs the same whether it has two splats on it or two hundred. Only the handful still growing
+# (splat_grow, 0.35 s) take the old per-polygon path. The pixels are identical: the same triangles in
+# the same order with the same colours.
+var _baked: ArrayMesh = null
+## How many entries of _splats are in _baked. They mature in the order they were thrown.
+var _baked_n := 0
+## Polygons the triangulator refused, drawn the slow way for the rest of the step.
+var _baked_odd: Array = []
+
+
 ## Everything thrown so far, scaling up over splat_grow and then staying.
 func draw_splats(c: CanvasItem) -> void:
-	for sp in _splats:
+	splat_polys = 0
+	# Something took splats away (the self-test's splat_polys_for): start the sheet again.
+	if _baked_n > _splats.size():
+		_baked = null
+		_baked_n = 0
+		_baked_odd.clear()
+	# Fold in everything that has stopped growing since last time.
+	var ripe := _baked_n
+	while ripe < _splats.size() and t - float(_splats[ripe][2]) >= splat_grow:
+		ripe += 1
+	if ripe > _baked_n:
+		_bake(ripe)
+	if _baked != null:
+		c.draw_mesh(_baked, null)
+		ink.ops += 1
+		splat_polys += _baked_n
+	for odd in _baked_odd:
+		c.draw_colored_polygon(odd[0], odd[1])
+		ink.ops += 1
+	for i in range(_baked_n, _splats.size()):
+		var sp: Array = _splats[i]
 		var k := clampf((t - float(sp[2])) / splat_grow, 0.0, 1.0)
 		k = 1.0 - pow(1.0 - k, 3.0)
 		var ctr: Vector2 = sp[0]
@@ -204,6 +246,38 @@ func draw_splats(c: CanvasItem) -> void:
 				pts = scaled
 			c.draw_colored_polygon(pts, pc[1])
 			ink.ops += 1
+			splat_polys += 1
+
+
+## Rebuild the baked sheet so it holds _splats[0, upto). Rebuilt whole rather than appended to, so the
+## triangles stay in throw order and the overlaps blend the way they did when each was its own call.
+func _bake(upto: int) -> void:
+	var verts := PackedVector2Array()
+	var cols := PackedColorArray()
+	_baked_odd.clear()
+	for i in upto:
+		for pc in (_splats[i][1] as Array):
+			var pts: PackedVector2Array = pc[0]
+			var col: Color = pc[1]
+			var tri := Geometry2D.triangulate_polygon(pts)
+			if tri.is_empty():
+				# Godot's own draw_colored_polygon would refuse it too, but keep the old path so a
+				# sliver that somehow gets through still looks the way it did.
+				_baked_odd.append([pts, col])
+				continue
+			for idx in tri:
+				verts.append(pts[idx])
+				cols.append(col)
+	_baked_n = upto
+	if verts.is_empty():
+		_baked = null
+		return
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_COLOR] = cols
+	_baked = ArrayMesh.new()
+	_baked.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
 
 ## Canvas px to nudge the whole clipboard by while a serious mistake shakes it.
@@ -334,31 +408,21 @@ func draw_enter(c: CanvasItem, at: Vector2, label: String, ready: bool) -> void:
 
 ## A stamp card over the live game (no scrim). `card` is {goal, lines, prompt, color}. `lock_left`
 ## above 0 shows the countdown instead of the prompt; `k` 0..1 is how long it has been up (the pop).
-## Turned about the card's own middle, on top of the page's own transform -- so it rides wherever
-## `area` (the clipboard's page rect) is right now. See draw_stamp_fixed for a card that does not.
+##
+## THE CARD IS PART OF THE PAPER. It is drawn inside begin_page/end_page, on top of the page's own
+## transform, so it lies on the tilted sheet under the clip and the border, turns with the board and
+## shakes with it -- one continuous surface, not an overlay that hands you off to a separate board.
+## An onlooker across the room reads it off the physical clipboard. It sits at `stamp_at` on `area`
+## (the same spot and size on every step), turned about its own middle.
 func draw_stamp(c: CanvasItem, shout: String, card: Dictionary, lock_left: float, k: float) -> void:
 	var page_xf: Transform2D = _page_xf_now
-	_draw_stamp_body(c, shout, card, lock_left, k, page_xf * Transform2D(deg_to_rad(stamp_tilt_deg), area.get_center()))
-	c.draw_set_transform_matrix(page_xf)
-
-
-## The same stamp card, pinned at `at` (this CanvasItem's own local px) instead of riding the
-## clipboard's page transform and `area` -- for a HUD overlay that wants the card to land in the
-## same screen spot every time, whatever step is up and wherever its panel happens to be anchored
-## on the patient (docs/ARCADE_SURGERY.md; ArcadeGame.stamp_card() feeds this from surgery_hud.gd).
-func draw_stamp_fixed(c: CanvasItem, shout: String, card: Dictionary, lock_left: float, k: float, at: Vector2) -> void:
-	_draw_stamp_body(c, shout, card, lock_left, k, Transform2D(deg_to_rad(stamp_tilt_deg), at))
-	c.draw_set_transform_matrix(Transform2D.IDENTITY)
-
-
-## The card's look, drawn in a frame already turned and popped about its own middle; `base_xf` is
-## that frame before the pop-in scale (draw_stamp and draw_stamp_fixed each build their own).
-func _draw_stamp_body(c: CanvasItem, shout: String, card: Dictionary, lock_left: float, k: float, base_xf: Transform2D) -> void:
+	var at: Vector2 = area.position + area.size * stamp_at
 	var u := ink.unit
 	var size := stamp_size * u
 	var col: Color = card.get("color", ink.ink)
 	var pop := 1.0 - pow(1.0 - clampf(k * 5.0, 0.0, 1.0), 3.0)
-	c.draw_set_transform_matrix(base_xf * Transform2D().scaled(Vector2.ONE * lerpf(0.9, 1.0, pop)))
+	c.draw_set_transform_matrix(page_xf * Transform2D(deg_to_rad(stamp_tilt_deg), at)
+		* Transform2D().scaled(Vector2.ONE * lerpf(0.9, 1.0, pop)))
 	var box := Rect2(-size * 0.5, size)
 	c.draw_rect(box, Color(ink.paper, 0.8))
 	ink.rect(c, box, col, 5.0, 8601)
@@ -388,6 +452,8 @@ func _draw_stamp_body(c: CanvasItem, shout: String, card: Dictionary, lock_left:
 		c.draw_string(fb, Vector2(-pw * 0.5, box.end.y - 18.0 * u), prompt, HORIZONTAL_ALIGNMENT_LEFT, -1.0, pp,
 			Color(ink.ink, 0.5) if lock_left > 0.0 else ink.ink)
 	ink.ops += 6
+	# Back to the page's own frame, so whatever draws after this still lands on the sheet.
+	c.draw_set_transform_matrix(page_xf)
 
 
 ## The page transform in force, set by whoever draws (so a stamp can turn about its own middle and go
