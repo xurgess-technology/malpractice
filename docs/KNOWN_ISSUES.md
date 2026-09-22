@@ -936,6 +936,12 @@ left below is what still applies to the shared strapped-monster infrastructure.
   things are aimed at the way they look, but at 1 m to the side a table right in front of the head
   needs the crosshair on it, not the head pointed at it (bots that aim by yaw from the head, like
   `tools/downedtest.gd`, use `bot_aim_id` and are unaffected; `tools/carrycamtest.gd` aims the camera).
+  This bites any test that aims by head yaw and then reads `aim_prompt`, because the carry camera is
+  active in ordinary play whenever the `camera` setting is "shoulder" or "front" -- and each slot
+  seeds its settings from Zach's, which say "shoulder". It is what made four of `doortest`'s
+  hinged-door E checks fail (2026-09-22; the door code was right). Such a test pins
+  `Settings.set_value("camera", "first_person")` for its run and puts the old mode back, as
+  `tools/doortest.gd` and `tools/devtest.gd` now do.
 - **nettest `combat` under `--lag=120 --jitter=40 --loss=0.03` is flaky here.** Of seven lagged runs,
   three on `--port=9970` lost every connection because another session was running
   `full_shift_lag` on the same port at the same time (use a free `--port`); on `--port=9990` three of
