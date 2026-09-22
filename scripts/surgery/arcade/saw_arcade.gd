@@ -83,13 +83,34 @@ enum State { SERVE, CUT, PART, RESULT }
 ## Spec 5: human 236 px wide, seal flipper 168 px.
 @export_range(80.0, 400.0, 1.0) var human_limb_w := 236.0
 @export_range(60.0, 400.0, 1.0) var seal_limb_w := 168.0
-## Spec 5's phalanges, as stated: 4-5 of them, 7-10 px each. NOTE THE SPEC ARGUES WITH ITSELF HERE --
-## it also calls the flipper "nearly all bone", but 5 x 8.5 px in a 168 px limb is a QUARTER of it,
-## less than the arm's 92 px of 236. The stated numbers are what is built; widen this pair if the
-## flipper should actually feel bonier than the arm (self_test prints both limbs' bone share, so the
-## trade is visible the moment it is changed).
-@export var seal_phalanx_px := Vector2(7.0, 10.0)
+## SPEC 5's CORRECTION (2026-09-22): the flipper's original numbers -- 4-5 phalanges at 7-10 px --
+## were wrong and its prose was right. Those numbers came to 9 of 40 columns, 23% bone against the
+## arm's 40%, which made the flipper the EASIER limb to hold a line through and inverted the trade
+## the toggle exists for. The build shipped them with the contradiction noted; this is the fix.
+##
+## A phocine fore-flipper is a short webbed PAW, not a fused wing: FIVE digits of roughly equal
+## length, each blunt-clawed, staying distinct and mobile (unlike otariids, whose digits fuse into a
+## stiff aerofoil). It carries all the major forelimb elements, foreshortened, and the phalanges are
+## robust -- trochleated, with long ungual processes, because the animal holds and tears prey with
+## them. So a cut across a flipper crosses FIVE SUBSTANTIAL BONES SEPARATED BY WEBBING, where the arm
+## crosses two bones with real meat gutters between.
+##
+## Hence: five digits, thick, tapering (digit I is the most robust in phocids and they slim toward
+## digit V), spanning most of the width -- 26 / 24 / 22 / 19 / 16 px across the 168 px limb, which is
+## the 63-67% bone the correction asks for. self_test prints BOTH limbs' share, and the arm is the
+## control: if its 40% moves, something is wrong with this code and not with the anatomy.
+##
+## Sources: NOAA Ocean Today "Seal Anatomy" · SeaWorld, harbour seal characteristics · "Clawed
+## forelimbs allow northern seals to eat like their ancient ancestors", R. Soc. Open Sci. 2018.
+##
+## The pair is (narrowest digit, widest digit) and the taper runs between them, so the whole fan is
+## still one knob.
+@export var seal_phalanx_px := Vector2(16.0, 26.0)
 @export_range(2, 9) var seal_phalanges := 5
+## THE WEBBING (see _build_bone). Webbing is thinner than the digits it spans, and the depth counter
+## already expresses "thinner" -- so a web column starts this many layers down. 0 makes the gaps
+## plain non-bone columns, which is the honest fallback: thinner meat by another name.
+@export_range(0, 3) var seal_web_thin := 1
 
 # -- the material (spec 2) ---------------------------------------------------------------------
 @export_group("Material")
@@ -150,7 +171,13 @@ enum State { SERVE, CUT, PART, RESULT }
 @export_range(0.0, 120.0, 1.0) var score_grace := 25.0
 ## What "- ragged" is worth: the penalty at the far edge of "a little ragged", and how much more a
 ## properly chewed stump piles on beyond it.
-@export_range(0.0, 60.0, 1.0) var ragged_penalty_mid := 14.0
+##
+## `mid` is 23 so the penalty has just cleared the CLEAN threshold (100 - 23 = 77, under 78) the
+## moment the stump stops being "a little ragged" -- 22 lands on 77.66 and ROUNDS BACK to 78, which
+## is exactly the boundary the self-test caught. THE CARD MUST NOT ARGUE WITH ITSELF: a report
+## reading "Stump ragged (1.62x)" over a CLEAN stamp is the kind of thing a player notices and
+## cannot explain. At 14 the words and the stamp disagreed across the whole first half of the band.
+@export_range(0.0, 60.0, 1.0) var ragged_penalty_mid := 23.0
 @export_range(0.0, 60.0, 1.0) var ragged_penalty_far := 34.0
 @export_range(0, 100) var grade_clean := 78
 @export_range(0, 100) var grade_sloppy := 45
@@ -201,6 +228,9 @@ var _grade := ""
 # ---- from the seed (rebuilt from limb_type and gen on every machine) ----
 ## A column is bone or it is not (spec 2: "whether its column falls inside a bone shaft").
 var bone_col: Array[bool] = []
+## What each column's stack STARTS at. `layers` everywhere on the arm; a web column on the flipper
+## starts lower, because webbing is thinner than the digits it spans (see _build_bone).
+var col_start: PackedByteArray = PackedByteArray()
 var hide_tint: PackedColorArray = PackedColorArray()   ## the seal's hide, worked out once per limb
 var grime_spots: Array = []
 
@@ -287,14 +317,16 @@ func generate() -> void:
 	_rng.seed = hash("saw|%d|%s|%d" % [int(ctx.get("seed", 1)), limb_type, gen])
 	depth = PackedByteArray()
 	depth.resize(COLS * ROWS)
-	for i in COLS * ROWS:
-		depth[i] = layers
 	_sever = PackedByteArray()
 	_sever.resize(COLS * ROWS)
 	_touch = PackedInt32Array()
 	_touch.resize(COLS * ROWS)
 	_touch_id = 1
+	# The bone layout decides how deep each column's stack starts, so it comes before the fill.
 	_build_bone()
+	for cyi in ROWS:
+		for cxi in COLS:
+			depth[cyi * COLS + cxi] = col_start[cxi]
 	_build_hide()
 	removed = 0
 	strokes = 0
@@ -317,24 +349,45 @@ func generate() -> void:
 	_rest_on_paddle()
 
 
-## SPEC 5. Human: two bone shafts (58 px and 34 px) with meat gutters either side. Seal flipper: 4-5
-## slim phalanges (7-10 px) fanned across nearly its full width. A column is bone when its centre
-## falls inside a shaft -- and that per-column fact, not a silhouette, is what the blade reads.
+## SPEC 5, as corrected. Human: two bone shafts (58 px and 34 px) with real MEAT GUTTERS either side.
+## Seal flipper: FIVE thick tapering digits with WEBBING between them. A column is bone when its
+## centre falls inside a shaft -- and that per-column fact, not a silhouette, is what the blade reads.
+##
+## The digits taper the way a phocid's do, digit I the most robust down to digit V, so the profile
+## below is the spec's 26 / 24 / 22 / 19 / 16 px expressed as positions between the knob's narrowest
+## and widest. Nothing here is randomised: the anatomy is five digits, not "four or five".
+const PHOCID_TAPER := [1.0, 0.8, 0.6, 0.3, 0.0]
+## How much of the limb's edge is margin rather than digit or web.
+const SEAL_EDGE := 5.0
+
 func _build_bone() -> void:
 	bone_col = []
 	bone_col.resize(COLS)
 	for i in COLS:
 		bone_col[i] = false
+	col_start = PackedByteArray()
+	col_start.resize(COLS)
+	for i in COLS:
+		col_start[i] = layers
 	var w := limb_w()
 	var shafts: Array = []
 	if limb_type == "seal":
-		var n := _rng.randi_range(maxi(2, seal_phalanges - 1), seal_phalanges)
-		var span := w * 0.88
-		var edge := w * 0.06
+		var n: int = maxi(2, seal_phalanges)
+		var widths := PackedFloat32Array()
+		var total := 0.0
 		for i in n:
-			var width := _rng.randf_range(seal_phalanx_px.x, seal_phalanx_px.y)
-			var mid := edge + span * (float(i) + 0.5) / float(n) + _rng.randf_range(-2.5, 2.5)
-			shafts.append([mid - width * 0.5, width])
+			# The spec's taper for the canonical five; a plain slim-down for any other count.
+			var t: float = float(PHOCID_TAPER[i]) if n == PHOCID_TAPER.size() \
+				else 1.0 - float(i) / float(maxi(1, n - 1))
+			var width: float = lerpf(seal_phalanx_px.x, seal_phalanx_px.y, t)
+			widths.append(width)
+			total += width
+		# Digits first, then whatever is left is shared out as webbing between them.
+		var web: float = maxf(1.0, (w - SEAL_EDGE * 2.0 - total) / float(maxi(1, n - 1)))
+		var x := SEAL_EDGE
+		for i in n:
+			shafts.append([x, widths[i]])
+			x += widths[i] + web
 	else:
 		# Gutter, the big shaft, gutter, the small shaft, gutter: 48 + 58 + 48 + 34 + 48 = 236.
 		var gut := (w - 92.0) / 3.0
@@ -346,6 +399,15 @@ func _build_bone() -> void:
 			if mid >= float(s[0]) and mid <= float(s[0]) + float(s[1]):
 				bone_col[cxi] = true
 				break
+	# WEBBING (spec 5's correction: digits separated by webbing, where the arm has meat gutters).
+	# The grid has no notion of tissue TYPE, so nothing here invents one -- but it does carry a depth
+	# counter per cell, and webbing's honest difference from a digit is that it is THINNER. So a web
+	# column simply starts lower, and cuts through in fewer passes. seal_web_thin = 0 turns that off
+	# and leaves the gaps as plain non-bone columns, which is thinner meat by another name.
+	if limb_type == "seal" and seal_web_thin > 0:
+		for cxi in COLS:
+			if not bone_col[cxi]:
+				col_start[cxi] = maxi(2, layers - seal_web_thin)
 
 
 ## SPEC 5: the seal's slate hide from the sedation step -- ink.hide_seal (#67757b) with dark blubber
@@ -940,8 +1002,18 @@ func _check_through() -> void:
 
 ## SPEC 7's reference: ONE STRAIGHT FULL-WIDTH CHANNEL -- columns x layers x blade diameter / cell
 ## height.
+##
+## It sums the columns' OWN depths rather than multiplying by `layers`, so the reference is what a
+## straight channel through THIS limb actually costs. On the arm every column starts at `layers` and
+## this is the spec's formula unchanged, to the number; on the flipper, whose webbing starts thinner,
+## it stops quietly over-crediting the seal for material that was never there. Keeping the reference
+## honest per limb is how the seal gets calibrated without bending `overlap_allow`, which is SHARED
+## with the arm and would silently re-grade both.
 func reference_channel() -> float:
-	return float(COLS) * float(layers) * (BLADE_R * 2.0 / cell_h())
+	var stack := 0
+	for cxi in COLS:
+		stack += int(col_start[cxi]) if col_start.size() == COLS else layers
+	return float(stack) * (BLADE_R * 2.0 / cell_h())
 
 
 ## Material removed against that reference, allowed `overlap_allow` (1.5x) for the overlap real play
@@ -1149,10 +1221,12 @@ func _paint_table(c: CanvasItem) -> void:
 ## The five readings have to be tellable apart AT CELL SIZE and across the table, which is what drives
 ## the spread: skin is warm and pale, meat darkens as it goes down, bone is ivory and cracked bone is
 ## a grubbier grey, and gone is the steel underneath.
-func layer_colour(d: int, bone: bool) -> Color:
+## `start` is the column's own full depth: webbing is thinner than a digit, but it is still SKIN on
+## top, so "untouched" is per column and not a single global number. -1 means the usual full stack.
+func layer_colour(d: int, bone: bool, start := -1) -> Color:
 	if d <= 0:
 		return Color(0, 0, 0, 0)
-	if d >= layers:
+	if d >= (layers if start < 0 else start):
 		return ink.hide_seal if limb_type == "seal" else ink.skin_human
 	if d == 1:
 		return Color("b6ae96") if bone else Color("63241f")
@@ -1177,8 +1251,8 @@ func _bake() -> void:
 		for cxi in COLS:
 			var i := cyi * COLS + cxi
 			var dv := int(depth[i])
-			var col := layer_colour(dv, bone_col[cxi])
-			if seal and dv >= layers:
+			var col := layer_colour(dv, bone_col[cxi], col_start[cxi])
+			if seal and dv >= int(col_start[cxi]):
 				col = hide_tint[i]
 			if _sever[i] == 1:
 				col.a = 0.0
@@ -1196,7 +1270,8 @@ func _bake() -> void:
 				var col := Color(0, 0, 0, 0)
 				if _sever[i] == 1:
 					var dv := int(depth[i])
-					col = hide_tint[i] if (seal and dv >= layers) else layer_colour(dv, bone_col[cxi])
+					col = hide_tint[i] if (seal and dv >= int(col_start[cxi])) \
+						else layer_colour(dv, bone_col[cxi], col_start[cxi])
 				im.set_pixel(cxi, cyi, col)
 		_tex_cut = ImageTexture.create_from_image(im)
 	_row_lo = ROWS - 1
@@ -1612,22 +1687,63 @@ static func self_test() -> Array:
 			or int(gr.flat) != 0 or int(gr.rag) >= int(gr.best):
 		print("[saw self-test] MISS: the grade bands")
 		ok = false
+	print("[saw self-test] card agrees with itself: the first stump that reads '%s' scores %d %s" % [
+		String(gr.edge_stump), int(gr.edge), String(gr.edge_w)])
 	# A stump chewed to twice the allowance must cost the grade on its own, with nothing else wrong.
 	if String(gr.rag_w) == "CLEAN":
 		print("[saw self-test] MISS: a ragged stump alone must lose CLEAN -- the stump IS the score here")
 		ok = false
+	if String(gr.edge_stump) == "ragged" and String(gr.edge_w) == "CLEAN":
+		print("[saw self-test] MISS: the report cannot read 'Stump ragged' over a CLEAN stamp")
+		ok = false
 
-	# SPEC 5's claim about the two patients, measured: the flipper is nearly all bone and gives the
-	# blade far less relief than the arm's meat gutters.
+	# SPEC 5's claim about the two patients, measured. The CONTRAST is the point of the toggle, so
+	# both limbs are always reported together: a number for the flipper on its own says nothing about
+	# whether swapping patient means anything, and the arm is the control -- if its share moves, this
+	# code is wrong, not the anatomy.
+	var share := {}
+	# The worst a blade may ever wander: the value at the gate, where chatter is by definition
+	# strongest, since spec 4 has it scaling DOWN from there as coverage rises.
+	var g_chatter_cap: float = float(bn.chatter_gate) + 0.001
 	for lt: String in ["human", "seal"]:
 		var lc := _limb_check(script, lt)
 		print("[saw self-test] %-5s limb: %.0f px wide, %d shafts over %d of %d columns; along one straight pass the blade sat over %.0f%% bone on average, above the gate for %.0f%% of the crossing, crossing the gate %d times" % [
 			lt, float(lc.width), int(lc.shafts), int(lc.bone_cols), COLS, float(lc.mean) * 100.0,
 			float(lc.over) * 100.0, int(lc.flips)])
+		print("[saw self-test]   %-5s shafts land at %s px with %s px between them; a shaft's stack starts at %d layers, the gaps at %d" % [
+			lt, str(lc.runs), str(lc.gaps), int(lc.digit_start), int(lc.web_start)])
+		print("[saw self-test]   %-5s at its own coverage the blade drags %.0f%% slower and wanders %.2f rad/s, for %.0f%% of the crossing" % [
+			lt, float(lc.slow) * 100.0, float(lc.chatter), float(lc.over) * 100.0])
+		# A limb that is mostly bone must not be several times worse to hold than one with gutters:
+		# that is what chatter_at_full exists to stop (spec 4).
+		if float(lc.chatter) > g_chatter_cap:
+			print("[saw self-test] MISS: %s chatters harder than the gate itself -- chatter must scale DOWN with coverage" % lt)
+			ok = false
 		out.append({"limb": lt, "bone_cols": int(lc.bone_cols), "mean_bone": float(lc.mean),
 			"shafts": int(lc.shafts), "flips": int(lc.flips)})
+		share[lt] = lc
 		if int(lc.bone_cols) <= 0:
 			print("[saw self-test] MISS: a limb with no bone in it")
+			ok = false
+	var hu: Dictionary = share.get("human", {})
+	var se: Dictionary = share.get("seal", {})
+	if not hu.is_empty() and not se.is_empty():
+		print("[saw self-test] the toggle: arm %d shafts / %.0f%% bone, flipper %d digits / %.0f%% bone -- the flipper is %+.0f points bonier and %.0f px narrower" % [
+			int(hu.shafts), float(hu.mean) * 100.0, int(se.shafts), float(se.mean) * 100.0,
+			(float(se.mean) - float(hu.mean)) * 100.0, float(hu.width) - float(se.width)])
+		# SPEC 5's corrected claim: five digits, and the flipper genuinely the bonier limb. The arm is
+		# the control at two shafts and ~40%.
+		if int(se.shafts) != 5:
+			print("[saw self-test] MISS: a phocine fore-flipper has FIVE digits")
+			ok = false
+		if float(se.mean) <= float(hu.mean):
+			print("[saw self-test] MISS: the flipper must be the BONIER limb, or the toggle's trade is inverted")
+			ok = false
+		if float(se.mean) < 0.63 or float(se.mean) > 0.67:
+			print("[saw self-test] MISS: the flipper wants 63-67%% bone, reads %.0f%%" % (float(se.mean) * 100.0))
+			ok = false
+		if int(hu.shafts) != 2 or absf(float(hu.mean) - 0.40) > 0.02:
+			print("[saw self-test] MISS: the arm is the control and must not have moved")
 			ok = false
 
 	# The only botch, and where it leaves the blade.
@@ -1782,6 +1898,20 @@ static func _bone_check(script: GDScript) -> Dictionary:
 	return r
 
 
+static func _first_bone(g) -> int:
+	for cxi in COLS:
+		if g.bone_col[cxi]:
+			return cxi
+	return 0
+
+
+static func _first_non_bone(g) -> int:
+	for cxi in COLS:
+		if not g.bone_col[cxi]:
+			return cxi
+	return 0
+
+
 static func _speed_scale(g, frac: float) -> float:
 	if frac <= g.bone_gate:
 		return 1.0
@@ -1895,8 +2025,33 @@ static func _limb_check(script: GDScript, limb: String) -> Dictionary:
 	for cxi in COLS:
 		if g.bone_col[cxi] and (cxi == 0 or not g.bone_col[cxi - 1]):
 			shafts += 1
+	# The shafts as they actually landed on the grid, in px, so the taper and the webbing between the
+	# digits are checkable and not just asserted.
+	var runs: Array = []
+	var gaps: Array = []
+	var run := -1
+	for cxi in range(0, COLS + 1):
+		var here: bool = cxi < COLS and g.bone_col[cxi]
+		if here and run < 0:
+			run = cxi
+		elif not here and run >= 0:
+			runs.append(roundf(float(cxi - run) * g.cell_w()))
+			run = -1
+	var prev := -1
+	for cxi in COLS:
+		if g.bone_col[cxi]:
+			if prev >= 0 and cxi - prev > 1:
+				gaps.append(roundf(float(cxi - prev - 1) * g.cell_w()))
+			prev = cxi
 	var r := {"width": g.limb_w(), "bone_cols": n, "mean": total / float(steps),
-		"over": float(over) / float(steps), "flips": flips, "shafts": shafts}
+		"over": float(over) / float(steps), "flips": flips, "shafts": shafts,
+		"runs": runs, "gaps": gaps, "web_start": int(g.col_start[_first_non_bone(g)]),
+		"digit_start": int(g.col_start[_first_bone(g)])}
+	# What the limb's own coverage actually does to the blade. This matters far more for the flipper
+	# now that it is over the gate for the whole crossing rather than 37% of it.
+	r["chatter"] = _chatter_scale(g, float(r.mean))
+	r["slow"] = 1.0 - _speed_scale(g, float(r.mean))
+	r["peak_chatter"] = _chatter_scale(g, 1.0)
 	g.free()
 	return r
 
@@ -1947,6 +2102,12 @@ static func _grade_check(script: GDScript) -> Dictionary:
 	g.removed = int(g.reference_channel() * g.overlap_allow * 2.0)
 	r["rag"] = g.grade_score()
 	r["rag_w"] = g.grade_word()
+	# THE CARD MUST NOT ARGUE WITH ITSELF: the moment the stump reads "ragged", the stamp cannot
+	# still say CLEAN, even with nothing else wrong.
+	g.removed = int(g.reference_channel() * g.overlap_allow * (g.ragged_ratio + 0.01))
+	r["edge"] = g.grade_score()
+	r["edge_w"] = g.grade_word()
+	r["edge_stump"] = g.stump_word()
 	g.flatlined = true
 	g.vit = 0.0
 	r["flat"] = g.grade_score()
