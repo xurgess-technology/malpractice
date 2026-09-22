@@ -252,9 +252,31 @@ func _dev_room() -> void:
 	me.bot_aim_id = tid
 	await _frames(3)
 	_check(me.aim_prompt.begins_with("Place "), "carrying to a free patient table offers to place them ('%s' at %s)" % [me.aim_prompt, tid])
+	# PLAYTEST 2026-09-22: standing at the table but aiming off it still offers the table, and the
+	# drop key is what puts them down on the floor there.
+	me.bot_aim_id = ""
+	me.bot_pitch = 0.9   # a real miss: the camera is up at the ceiling, nowhere near the table
+	await _frames(3)
+	_check(me.aim_prompt.begins_with("Place "), "aiming off the table still offers to place them ('%s')" % me.aim_prompt)
+	_check(me.aim_id == tid, "the near-miss prompt aims at the table itself ('%s')" % me.aim_id)
+	me.drop_count += 1
+	await _frames(3)
+	_check(me.carrying == 0 and not dummy.on_table and dummy.global_position.y < game.player_table_top().y - 0.4,
+		"the drop key still puts them down on the floor at a table (y %.2f)" % dummy.global_position.y)
+	_stand(dummy.global_position + Vector3(0, 0, 1.4), 0.0)
+	me.bot_aim_id = "pl_%d" % did
+	me.bot_interact = true
+	await _seconds(1.3)
+	me.bot_interact = false
+	_check(me.carrying == did, "picked up again after the deliberate floor drop")
+	_stand_at_table(ti, 1.5)
+	me.bot_aim_id = ""
+	me.bot_pitch = 0.9
+	await _frames(3)
 	me.bot_press += 1
 	await _frames(3)
-	_check(dummy.on_table and me.carrying == 0 and dummy.carried_by == 0, "E at the patient table lays them on it")
+	_check(dummy.on_table and me.carrying == 0 and dummy.carried_by == 0, "E while missing the table lays them on it, not on the floor")
+	me.bot_pitch = -0.3   # back to looking at the table for the stitches below
 	_check(int(game.player_table.get("index", -1)) == ti, "player_table names that table while they lie there (%s)" % str(game.player_table.get("index", -1)))
 	var top := game.player_table_top()
 	_check(Vector2(dummy.global_position.x - top.x, dummy.global_position.z - top.z).length() < 1.0 and absf(dummy.global_position.y - top.y) < 0.05, "the body lies on the table top")

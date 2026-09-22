@@ -1027,10 +1027,15 @@ func _scenario_combat() -> void:
 	var before: Vector3 = w.global_position
 	var r1: String = w.take_hit(Vector3.RIGHT, 1, "saw:lab")
 	await get_tree().physics_frame
-	check("a first saw hit staggers the Hive (%s, knocked %.2f m, hp %d)" % [r1, w.global_position.distance_to(before), w.hp], r1 == "stagger" and w.mode == Modes.Mode.STUNNED and w.hp == 1 and w.global_position.distance_to(before) > 0.2)
+	# A saw hit knocks it back and does NOT freeze it (monster.gd STAGGER_SECONDS is 0 as of
+	# 2026-09-22). The frame after the blow it is already back on its feet: still hurt, still
+	# pushed, but not stunned. Only a SHOVE stuns -- that is checked in tools/combattest.gd.
+	check("a first saw hit knocks the Hive back without stunning it (%s, knocked %.2f m, hp %d, mode %d)" % [r1, w.global_position.distance_to(before), w.hp, w.mode], r1 == "stagger" and w.mode != Modes.Mode.STUNNED and w.hp == 1 and w.global_position.distance_to(before) > 0.2)
 	check("the hit bumps hit_count for every machine (%d)" % w.hit_count, w.hit_count == 1 and int(w.report().hc) == 1)
 	await wait(1.0)
-	check("after the stagger it goes after the hitter (mode RUSH)", w.mode == Modes.Mode.RUSH, "mode=%d" % w.mode)
+	# It turns on whoever hit it rather than wandering off: RUSH if it can see them, SEARCH while it
+	# is still working its way to where the blow came from.
+	check("after the hit it goes after the hitter (mode RUSH or SEARCH)", w.mode == Modes.Mode.RUSH or w.mode == Modes.Mode.SEARCH, "mode=%d" % w.mode)
 	check("a second hit kills it", w.take_hit(Vector3.RIGHT, 1, "saw:lab") == "killed" and w.hp == 0)
 	var results_d: Array = []
 	for i in 4:

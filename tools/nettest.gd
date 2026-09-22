@@ -508,6 +508,12 @@ func _sc_leave_items():
 	var at: Vector3 = _msgs("check_drop")[0].data.pos
 	if not await _until(func(): return _items_near("gauze", at, 2.5) > 0 and _items_near("anesthetic", at, 2.5) > 0, 20.0, "the dropped stacks in my world"):
 		return
+	# GLOW BALL (2026-09-22): a client is told a stack is hovering by one byte in the snapshot and
+	# builds the orb itself. If that ever stops happening, the floor goes dark for everyone but the
+	# host and nobody notices until a playtest.
+	if not await _until(func(): return _glowing_near(at, 2.5) >= 2, 20.0, "both stacks glowing in my world"):
+		return
+	_say("both dropped stacks hover and wear their glow ball on my machine")
 	_send("drop_seen", {})
 	await _finish_together("I see the leaver's stacks on the floor")
 
@@ -1119,9 +1125,20 @@ func _sc_downed():
 	var ti := int(_msgs("downed")[0].data.get("table", -1))
 	var table_at: Vector3 = game.table_position(ti) if ti >= 0 else game.player_table.position
 	var table_id: String = game.table_interact_id(ti) if ti >= 0 else "player_table"
-	var place := func(): _press_at(table_at + Vector3.UP * 0.9, table_id)
-	if not await _do_until(place, func(): return target.on_table, 40.0, "laying them on the table"):
+	# PLAYTEST 2026-09-22: the client presses E at the table with the camera pointed up, well off it.
+	# The near-miss must still lay them on the table, not dump them on the floor at the host.
+	var place := func():
+		_press_at(table_at + Vector3.UP * 0.9, "")
+		var m = _me()
+		m.bot_pitch = 0.9   # camera well off the table: the press must still reach the table
+		if m.aim_prompt.begins_with("Place") and Time.get_ticks_msec() >= _press_at_ms:
+			m.bot_press += 1
+			_press_at_ms = Time.get_ticks_msec() + 1000
+	if not await _do_until(place, func(): return target.on_table or target.carried_by == 0, 40.0, "laying them on the table"):
 		return
+	if not target.on_table:
+		return _end(false, "a near-miss at the table dropped the teammate on the floor")
+	_me().bot_pitch = 0.0
 	game.player_surgery.surgery.bot_skill = 1.0
 	var operate := func():
 		if not game.player_surgery.surgery.is_local_operating():
@@ -2181,6 +2198,21 @@ func _items_near(kind: String, pos: Vector3, radius: float) -> int:
 	for it in game.world_items.values():
 		if it.kind == kind and Vector2(it.global_position.x - pos.x, it.global_position.z - pos.z).length() <= radius:
 			n += int(it.count)
+	return n
+
+
+## GLOW BALL (2026-09-22): how many stacks near `pos` are hovering AND have actually built their
+## ball of glow (scripts/world_item.gd, "HoverGlowFx"). The orb is local cosmetics on every machine,
+## so on a client this proves the snapshot's hover byte arrived and was acted on.
+func _glowing_near(pos: Vector3, radius: float) -> int:
+	var n := 0
+	for it in game.world_items.values():
+		if not bool(it.hovering):
+			continue
+		if Vector2(it.global_position.x - pos.x, it.global_position.z - pos.z).length() > radius:
+			continue
+		if not (it as Node).find_children("HoverGlowFx", "MeshInstance3D", true, false).is_empty():
+			n += 1
 	return n
 
 

@@ -3031,6 +3031,61 @@ func drop_carried(q: Node) -> void:
 	_broadcast("placed", {"id": p.peer_id, "pos": spot})
 
 
+## PLAYTEST 2026-09-22: how far a carrier may stand from a table's centre and still count as being
+## "at" it. Within this, E lays the teammate on the table even when the camera missed it, and the
+## floor drop moves to the drop key, so a near-miss never silently dumps them on the floor.
+const CARRY_TABLE_SNAP := 2.0
+
+
+## Every machine: the table a carrier is plainly standing at and that would take their teammate,
+## as {"id": <interact id>, "index": <patient table index, -1 for the player table>}, else {}.
+## The prompt (every machine) and the placement (host) read the same answer, so a client's E cannot
+## turn into a floor drop on the way over.
+func carry_table_target(q: Node) -> Dictionary:
+	if q == null or not is_instance_valid(q) or q.carrying == 0 or phase != Phase.SHIFT:
+		return {}
+	if q.downed or not q.alive or corpses.is_body(q.carrying):
+		return {}
+	var best := {}
+	var best_d := CARRY_TABLE_SNAP
+	if downed_any_table:
+		for t in patient_tables:
+			var ti := int(t.index)
+			if not _downed_place_prompt(q, ti).begins_with("Place"):
+				continue
+			var d := _carry_table_distance(q, table_position(ti))
+			if d < best_d:
+				best_d = d
+				best = {"id": table_interact_id(ti), "index": ti}
+	elif not player_table.is_empty() and player_table_prompt(q).begins_with("Place"):
+		var d := _carry_table_distance(q, player_table.position)
+		if d < best_d:
+			best_d = d
+			best = {"id": "player_table", "index": -1}
+	return best
+
+
+func _carry_table_distance(q: Node, pos: Vector3) -> float:
+	var a: Vector3 = q.global_position
+	return Vector2(a.x - pos.x, a.z - pos.z).length()
+
+
+## True when the carrier is aiming straight at a table that is refusing them ("!The table is
+## taken."). Pressing E then keeps the carry instead of dumping the teammate on the floor.
+func carry_table_refused(q: Node, aim: String) -> bool:
+	if q == null or aim == "":
+		return false
+	if aim == "player_table":
+		return player_table_prompt(q).begins_with("!")
+	if not aim.begins_with("table"):
+		return false
+	for t in patient_tables:
+		var ti := int(t.index)
+		if table_interact_id(ti) == aim:
+			return _table_prompt(q, ti).begins_with("!")
+	return false
+
+
 ## Host: a carrier pressed E. On the player table it lays them there, anywhere else it puts them down.
 func carrier_pressed_interact(q: Node, aim: String) -> void:
 	if not is_host() or q.carrying == 0:
@@ -3052,6 +3107,15 @@ func carrier_pressed_interact(q: Node, aim: String) -> void:
 			if node != null and _within_reach(q, node) and _downed_place_prompt(q, ti).begins_with("Place"):
 				place_on_player_table(q, ti)
 				return
+	# PLAYTEST 2026-09-22: the camera missed the table but the carrier is standing right at one
+	# that would take them: lay them on it instead of dumping them on the floor.
+	var near := carry_table_target(q)
+	if not near.is_empty():
+		place_on_player_table(q, int(near.get("index", -1)))
+		return
+	# Aimed straight at a table that said no ("!The table is taken."): keep carrying, say nothing.
+	if carry_table_refused(q, aim):
+		return
 	drop_carried(q)
 
 

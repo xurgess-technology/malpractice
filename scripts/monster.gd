@@ -27,8 +27,18 @@ const MAX_MONSTERS := 5
 ## Hives have their own cap.
 const MAX_HIVES := 8
 
-## A saw blow knocks it back and off balance this long.
-const STAGGER_SECONDS := 0.7
+## How long a saw blow leaves it off balance. ZERO ON PURPOSE (2026-09-22): a saw hit does not stun.
+## This was 0.7 s and predates the hit feedback in scripts/combat/combat.gd. Once a landed hit also
+## washed the target red and shoved it back, a freeze on top read as a stun -- exactly what that
+## feedback was asked not to be. A sawn monster keeps coming at you, just a step further off; the
+## flash and the push are the feedback now.
+##
+## Zero rather than deleted, because this is a feel call: put 0.7 back and the old stagger returns.
+## brain.stun() is still CALLED, and still earns its keep at zero seconds -- it does the 0.45 m
+## knockback, it points the monster at whoever hit it (`then_hunt`, so it turns and rushes you
+## rather than wandering off), and its `maxf(timer, seconds)` guard means a saw hit can't cut short
+## a stun a SHOVE opened. Only the freeze goes.
+const STAGGER_SECONDS := 0.0
 ## Getting up after sedation wears off, before it hunts.
 const WAKE_STAGGER := 1.2
 
@@ -300,7 +310,8 @@ func can_be_hurt() -> bool:
 
 
 ## A blow from `source` ("saw:<player name>", "dev", ...) travelling along `dir`.
-## Returns "stagger" (a short stun, knocked back), "killed" (hp reached 0: the CALLER then calls
+## Returns "stagger" (survived, knocked back -- the name is the wire value, not a stun: see
+## STAGGER_SECONDS), "killed" (hp reached 0: the CALLER then calls
 ## game.kill_monster(m)) or "immune" (the Night Nurse; nothing happens).
 func take_hit(dir: Vector3, amount: int, _source: String) -> String:
 	if not can_be_hurt():

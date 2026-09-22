@@ -13,7 +13,11 @@ extends RigidBody3D
 ## stacks own a visible ball of space each, so they must not overlap: when one settles where
 ## another already hovers the host hops it (a little arc) to the nearest free spot. The hop, the
 ## hover height and the free-spot choice are the host's (replicated as ordinary transforms); the
-## bob and the glow's breathing are local cosmetics on every machine.
+## bob and the glow's pulse are local cosmetics, run off the replicated world clock so they look
+## the same on every machine.
+##
+## GLOW BALL (2026-09-22): that glow is a ball -- one soft additive sphere around the stack, in the
+## colour its kind wears (ItemModels.glow_key), breathing once every PULSE_SECONDS. See ORB_SHADER.
 
 const FogRingScript := preload("res://scripts/level/fog_ring.gd")   # SWEEP 4A HOOK (fog lot, chunk 2)
 
@@ -30,25 +34,46 @@ const HOVER_BOB_SECONDS := 2.8
 const RISE_SECONDS := 0.28
 const HOP_SECONDS := 0.45
 
-const GLOW_SHADER := """
+## GLOW BALL (2026-09-22): the hover glow used to be copies of the model's own meshes drawn with a
+## rim falloff -- up to four extra draws of a real model per stack, and it only ever reshaped the
+## silhouette. It is now ONE small sphere per stack: a soft ball of light the item floats inside, in
+## the kind's palette colour (ItemModels.glow_key), so a glance across a dark ward says both "there
+## is something on the floor" and "it is a surgical supply / loot / somebody's eye".
+##
+## Additive, unlit, depth-tested but never depth-written, and brightest through the middle, falling
+## to exactly zero at the silhouette -- so it has no edge of its own, and where the ball cuts the
+## floor or a wall there is nothing to see.
+const ORB_SHADER := """
 shader_type spatial;
 render_mode unshaded, blend_add, depth_draw_never, cull_back, shadows_disabled;
 
-uniform vec3 tint : source_color = vec3(0.72, 0.88, 0.82);
-uniform float amount = 1.0;
-
-void vertex() {
-	VERTEX += NORMAL * 0.006;
-}
+uniform vec3 tint : source_color = vec3(0.80, 0.86, 0.98);
+uniform float strength = 0.09;
+uniform float pulse = 1.0;
 
 void fragment() {
 	float facing = clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0);
-	float edge = pow(1.0 - facing, 2.2);
-	ALBEDO = tint * (0.085 + 0.26 * edge) * amount;
+	// Steep on purpose. A gentler curve fills the whole disc evenly and the environment's bloom
+	// turns that into a milky bubble you can read a newspaper by; this keeps the light gathered
+	// around the item and gone by the time it reaches the silhouette.
+	float ball = pow(facing, 6.0);
+	ALBEDO = tint * ball * strength * pulse;
 }
 """
-## Same spirit as AimHighlight.MAX_MESHES: glow the big readable shapes, not every screw.
-const GLOW_MAX_MESHES := 4
+## How bright the ball is at its middle, per palette colour. Small numbers: the world environment
+## blooms anything additive, so this is roughly a third of what looks right with the glow off.
+## Gold loot and the plain white default sit lower -- those read hotter against a dark corridor
+## than teal or violet do. Tune by eye.
+const ORB_STRENGTH := {
+	"teal": 0.095, "gold": 0.075, "organ": 0.09,
+	"pharma": 0.095, "vessel": 0.09, "plain": 0.07,
+}
+## One slow breath, in seconds. Deliberately twice HOVER_BOB_SECONDS: the ball brightens and dims
+## on exactly half the rhythm the stack floats up and down on, so the two never beat against each
+## other. Tune by eye.
+const PULSE_SECONDS := 5.6
+## How far the brightness swings: 0.72 to 1.0 of ORB_STRENGTH.
+const PULSE_DEPTH := 0.14
 const _GLOW_NAME := "HoverGlowFx"
 
 var item_id: int = 0
@@ -84,8 +109,11 @@ var _hop_to := Vector3.ZERO
 var _hop_basis_from := Basis()
 var _hop_basis_to := Basis()
 
-static var _glow_mat: ShaderMaterial = null
+static var _orb_shader: Shader = null
+static var _orb_mats := {}            # palette key -> ShaderMaterial (shared by every stack of that colour)
+static var _orb_mesh: SphereMesh = null
 static var _pulse_frame: int = -1
+static var _pulse_t: float = 0.0      # the shared clock the bob and the pulse both run on
 
 
 static func new_item(id: int, item_kind: String, item_count: int) -> WorldItem:
@@ -219,72 +247,92 @@ func _set_hovering(on: bool) -> void:
 	_set_glow(on)
 
 
-static func glow_material() -> ShaderMaterial:
-	if _glow_mat == null:
-		var sh := Shader.new()
-		sh.code = GLOW_SHADER
-		_glow_mat = ShaderMaterial.new()
-		_glow_mat.shader = sh
-	return _glow_mat
+## The one sphere every orb in the world draws. Coarse on purpose: a blob with no edge does not
+## need silhouette detail, and this mesh is potentially on screen dozens of times.
+static func orb_mesh() -> SphereMesh:
+	if _orb_mesh == null:
+		_orb_mesh = SphereMesh.new()
+		_orb_mesh.radius = 1.0
+		_orb_mesh.height = 2.0
+		_orb_mesh.radial_segments = 20
+		_orb_mesh.rings = 10
+	return _orb_mesh
 
 
-## Warmup hook (scripts/warmup.gd): compile the glow shader once, up front, so the first dropped
-## item of a session doesn't hitch.
+## One material per palette colour, shared by every stack of that colour: six at most, so a floor
+## full of loot is a handful of materials and the pulse is a handful of uniform writes a frame.
+static func orb_material(key: String) -> ShaderMaterial:
+	if _orb_mats.has(key):
+		return _orb_mats[key]
+	if _orb_shader == null:
+		_orb_shader = Shader.new()
+		_orb_shader.code = ORB_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = _orb_shader
+	var col: Color = ItemModels.TINT_COLORS[key]
+	m.set_shader_parameter("tint", Vector3(col.r, col.g, col.b))
+	m.set_shader_parameter("strength", float(ORB_STRENGTH[key]))
+	_orb_mats[key] = m
+	return m
+
+
+## Warmup hook (scripts/warmup.gd): draw one orb of every colour once, up front, so the first
+## dropped item of a session doesn't hitch on a shader compile.
 static func warm_glow(parent: Node3D) -> void:
-	var probe := MeshInstance3D.new()
-	probe.name = "HoverGlowWarm"
-	probe.mesh = BoxMesh.new()
-	probe.material_override = glow_material()
-	parent.add_child(probe)
+	for key in ItemModels.TINT_COLORS.keys():
+		var probe := MeshInstance3D.new()
+		probe.name = "HoverGlowWarm_" + String(key)
+		probe.mesh = orb_mesh()
+		probe.material_override = orb_material(key)
+		probe.scale = Vector3.ONE * 0.05
+		parent.add_child(probe)
 
 
-## A copy of the model's biggest meshes, added as children of them (so they inherit the transform
-## for free), drawn additive and unlit with a rim falloff: the same trick as the aim highlight, a
-## touch stronger and always on. One shared material, so the breathing costs one uniform a frame.
+## GLOW BALL: one soft sphere of light around the model, in the kind's colour. It hangs off the
+## visual, so it rides the hover bob with the stack, and it is sized to the model's footprint: a
+## bone saw owns a bigger ball than a vial. One draw per dropped stack.
 func _set_glow(on: bool) -> void:
 	if _visual == null:
 		return
-	var parts: Array = []
-	if _visual is MeshInstance3D:
-		parts.append(_visual)
-	parts.append_array(_visual.find_children("*", "MeshInstance3D", true, false))
+	var orb := _visual.get_node_or_null(_GLOW_NAME)
 	if not on:
-		for mi in parts:
-			if mi.has_node(_GLOW_NAME):
-				mi.get_node(_GLOW_NAME).queue_free()
+		if orb != null:
+			orb.queue_free()
 		return
-	parts.sort_custom(func(a, b): return _aabb_vol(a) > _aabb_vol(b))
-	for i in mini(parts.size(), GLOW_MAX_MESHES):
-		var mi: MeshInstance3D = parts[i]
-		if mi.mesh == null or mi.has_node(_GLOW_NAME):
-			continue
-		var shell := MeshInstance3D.new()
-		shell.name = _GLOW_NAME
-		shell.mesh = mi.mesh
-		shell.material_override = glow_material()
-		shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mi.add_child(shell)
-
-
-static func _aabb_vol(mi: MeshInstance3D) -> float:
-	if mi.mesh == null:
-		return 0.0
-	var s := mi.mesh.get_aabb().size * mi.scale
-	return s.x * s.y + s.y * s.z + s.x * s.z
+	if orb != null:
+		return
+	var fp := ItemModels.footprint(kind)
+	var mi := MeshInstance3D.new()
+	mi.name = _GLOW_NAME
+	mi.mesh = orb_mesh()
+	mi.material_override = orb_material(ItemModels.glow_key(kind))
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Centred on the model, a comfortable margin wider than it, and never so big it lights a room.
+	mi.scale = Vector3.ONE * clampf(0.5 * maxf(maxf(fp.x, fp.y), fp.z) + 0.11, 0.22, 0.38)
+	mi.position.y = maxf(fp.y, 0.1) * 0.5
+	_visual.add_child(mi)
 
 
 ## Local cosmetics on every machine: the model drifts up and down inside the body (the body itself
-## stays exactly where the host put it, so nothing about the bob can desync), and the shared glow
-## breathes once for the whole world.
+## stays exactly where the host put it, so nothing about the bob can desync), and every orb in the
+## world breathes together.
+##
+## Both run off the host's `world_time`, which every machine already has from the snapshot, so the
+## bob and the pulse are at the same point of their cycle on your screen and your teammate's --
+## not each machine's own uptime. The first hovering stack of a frame reads the clock and writes
+## the pulse; the rest reuse it, so a floor full of loot costs one lookup and a few uniforms.
 func _process(_delta: float) -> void:
 	if _visual == null or not hovering:
 		return
-	var t := float(Time.get_ticks_msec()) * 0.001
-	_visual.position.y = sin((t + float(item_id) * 0.7) * TAU / HOVER_BOB_SECONDS) * HOVER_BOB
 	var f := Engine.get_process_frames()
 	if _pulse_frame != f:
 		_pulse_frame = f
-		glow_material().set_shader_parameter("amount", 0.82 + 0.18 * sin(t * 1.7))
+		var g := _game()
+		_pulse_t = float(g.world_time) if g != null else float(Time.get_ticks_msec()) * 0.001
+		var p := (1.0 - PULSE_DEPTH) + PULSE_DEPTH * sin(_pulse_t * TAU / PULSE_SECONDS)
+		for m in _orb_mats.values():
+			(m as ShaderMaterial).set_shader_parameter("pulse", p)
+	_visual.position.y = sin((_pulse_t + float(item_id) * 0.7) * TAU / HOVER_BOB_SECONDS) * HOVER_BOB
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,20 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.18**: SAW!, rebuilt: the limb is meat, not a progress bar
+    - Changed: SAW! is Pong where the ball is a bone saw and the arm doesn't bounce it back. Every pass strips a layer off whatever the blade actually crosses, and it's off when a gap opens all the way through -- so a careless run leaves a visibly chewed stump instead of a worse number.
+    - Changed: Bone doesn't take more passes, it fights your hands: the blade slows and chatters off its line while it's riding a shaft.
+    - Changed: Human arm or seal flipper, on a toggle. Miss the paddle and the saw gets past you -- that's the only way to botch it.
+    - Note: Still behind the dev panel's Arcade surgery toggle until you've played it.
+- **0.10.17**: Everything on the floor is wearing a little lamp
+    - Changed: A dropped item now floats inside a soft ball of light that breathes slowly, so you can tell what's lying in a dark corridor at a glance. The colour tells you what it is: teal for supplies, gold for loot, red for organs, violet for pharmacy stock, green for the big two-handed things.
+    - Changed: It's cheaper than the glow it replaces, which was redrawing the item's own model up to four times over.
+- **0.10.16**: Polish on yesterday's two
+    - Changed: Sawing a monster no longer freezes it for a beat. It gets shoved back, it turns on you, and it keeps coming -- which is the whole point. Note this also means you can't saw something to open a window to sedate it any more; that's a shove's job.
+    - Fixed: Pinstripe scrubs run the same way down the whole body instead of going sideways across the chest.
+- **0.10.15**: Putting your friend on the table actually works now
+    - Fixed: Standing at a table with a teammate over your shoulder puts them on it when you press E, wherever you happen to be looking. Missing the table by a few degrees used to dump them on the floor, which meant picking them up and trying again.
+    - Changed: Want them on the floor? That's G now, while carrying. Aiming at a table that's already taken keeps hold of them instead of dropping them.
 - **0.10.14**: Scrubs with a bit of personality
     - Added: Pick a pattern for your scrubs at the mirror -- pinstripes, polka dots or a splatter that you can absolutely pass off as camo -- and a colour to print it in. Or None, if you're a coward.
 - **0.10.13**: You can tell when you've hit something now
