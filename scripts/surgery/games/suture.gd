@@ -77,8 +77,9 @@ enum Grade { MISS, TEAR, SLOPPY, GOOD }
 @export_range(0.3, 1.0, 0.01) var view_fill := 0.78
 ## How far the operator's camera is pulled back from straight over the site, in degrees. The panel
 ## turns to face it, so this is also how far the panel stands up off the patient (plus the panel's
-## own tilt_bias_deg): low is a board lying on the body, high is a screen standing over it.
-@export_range(0.0, 60.0, 1.0) var view_tilt_deg := 32.0
+## own tilt_bias_deg): low is a board lying on the body, high is a screen standing over it. Standing
+## it up this way is free to the operator -- the panel turns with him and he keeps his square-on view.
+@export_range(0.0, 60.0, 1.0) var view_tilt_deg := 40.0
 @export_range(20.0, 90.0, 1.0) var view_fov := 50.0
 
 # ---- state (all of it replicated) ----
@@ -399,8 +400,8 @@ func lamp_scale() -> float:
 ## Framed so the panel fills `view_fill` of the view's height, leaving the real patient, the table
 ## and the room visible round its edges. The camera ends up square on to the panel.
 func camera_pose() -> Dictionary:
-	var lift: float = float(_panel.panel_lift) if _panel != null else 0.2
-	var h: float = float(_panel.panel_size.y) if _panel != null else 0.28
+	var lift: float = float(_panel.panel_lift) if _panel != null else 0.36
+	var h: float = float(_panel.panel_size.y) if _panel != null else 0.52
 	var d: float = (h / maxf(0.1, view_fill)) * 0.5 / tan(deg_to_rad(view_fov) * 0.5)
 	var tilt := deg_to_rad(view_tilt_deg)
 	return {"height": lift + d * cos(tilt), "back": d * sin(tilt), "fov": view_fov, "look": lift}

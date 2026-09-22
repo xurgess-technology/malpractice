@@ -35,8 +35,11 @@ signal mistake_made(kind: String, word: String)
 # -- the panel --------------------------------------------------------------------------------
 ## How much of the view's height the panel fills. The rest is the real patient, table and room.
 @export_range(0.3, 1.0, 0.01) var view_fill := 0.78
-## How far the operator's camera is pulled back from straight over the site, in degrees.
-@export_range(0.0, 60.0, 1.0) var view_tilt_deg := 32.0
+## How far the operator's camera is pulled back from straight over the site, in degrees. The panel
+## turns to face it, so this is also how far the board stands up off the patient -- and it is the
+## FREE half of standing it up, since the operator keeps his square-on view however high it goes.
+## The panel's own tilt_bias_deg adds the rest.
+@export_range(0.0, 60.0, 1.0) var view_tilt_deg := 40.0
 @export_range(20.0, 90.0, 1.0) var view_fov := 50.0
 
 # -- the command card -------------------------------------------------------------------------
@@ -168,7 +171,7 @@ func uses_panel() -> bool:
 
 
 func plane_extent() -> Vector2:
-	return panel.half_size() if panel != null else Vector2(0.26, 0.174)
+	return panel.half_size() if panel != null else Vector2(0.39, 0.26)
 
 
 func input_plane() -> Transform3D:
@@ -180,8 +183,8 @@ func lamp_scale() -> float:
 
 
 func camera_pose() -> Dictionary:
-	var lift: float = float(panel.panel_lift) if panel != null else 0.24
-	var h: float = float(panel.panel_size.y) if panel != null else 0.3467
+	var lift: float = float(panel.panel_lift) if panel != null else 0.36
+	var h: float = float(panel.panel_size.y) if panel != null else 0.52
 	var d: float = (h / maxf(0.1, view_fill)) * 0.5 / tan(deg_to_rad(view_fov) * 0.5)
 	var tilt := deg_to_rad(view_tilt_deg)
 	return {"height": lift + d * cos(tilt), "back": d * sin(tilt), "fov": view_fov, "look": lift}
