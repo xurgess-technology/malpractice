@@ -387,7 +387,9 @@ var _invite_button: Button
 
 func _build_invite_button() -> void:
 	var layer := CanvasLayer.new()
-	layer.layer = 6
+	# Only ever shown while paused (see the visibility line below), so it must sit above the
+	# pause/settings fax (menu_layer, 51) or that fax paints right over it.
+	layer.layer = 52
 	add_child(layer)
 	_invite_button = Button.new()
 	_invite_button.text = "Invite Steam friends"
