@@ -218,7 +218,8 @@ func _home_point() -> Vector3:
 		var p := home + Vector3(cos(a), 0.0, sin(a)) * rng.randf_range(2.0, HOME_RADIUS)
 		if ready:
 			p = NavigationServer3D.map_get_closest_point(map, p)
-		if m.game != null and m.game.has_method("monster_may_wander_to") and not m.game.monster_may_wander_to(p):
+		# POCKETS 2 phase 1: fenced to the space the Hive itself stands in as well.
+		if m.game != null and m.game.has_method("monster_may_wander_to") and not m.game.monster_may_wander_to(p, m.global_position):
 			continue
 		if p.distance_to(m.global_position) > 1.0:
 			return p

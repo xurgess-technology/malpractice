@@ -12,6 +12,11 @@ extends RefCounted
 const Common := preload("res://scripts/level/pockets/pocket_common.gd")
 const Stub := preload("res://scripts/level/pockets/stub.gd")
 
+## POCKETS 2 phase 1: the ambient noise floor a sound-hunting monster stands in here (see
+## PocketSpaces.ambient_noise_at). The Factory is meant to be too big and too quiet: nothing runs,
+## so it has no floor and monsters hear here exactly what they hear in the hospital.
+const AMBIENT_NOISE_LEVEL := 0.0
+
 const T := 1.5
 const M := 10
 const RW := 60
