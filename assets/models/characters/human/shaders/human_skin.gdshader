@@ -28,6 +28,12 @@ uniform float pallor : hint_range(0.0, 1.0) = 0.0;
 uniform float grey : hint_range(0.0, 1.0) = 0.0;     // flatlined
 uniform float breath = 0.0;                            // PatientBody sets it; the model breathes by its chest bone
 uniform float infect_uv_scale = 90.0;                  // noise cells per UV unit for the infection's mottling
+// CUSTOMIZATION (scripts/personnel/customization.gd): the player's chosen skin tone. The baked skin
+// is shifted towards `skin_tint` by luminance, so freckles, lips and shading survive; when
+// `skin_tint` equals `skin_baked` (the colour the texture is painted in) the output is unchanged,
+// which is what every human but a player uses.
+uniform vec3 skin_tint : source_color = vec3(0.753, 0.541, 0.388);
+uniform vec3 skin_baked : source_color = vec3(0.753, 0.541, 0.388);
 
 varying vec2 uv2v;
 
@@ -45,6 +51,10 @@ void fragment() {
 	vec3 a = texture(albedo_tex, UV).rgb;
 	vec3 m = texture(mask_tex, UV).rgb;
 	float rough = texture(rough_tex, UV).g;
+	// Skin tone first, so the wounds, infection and pallor below are painted over the chosen skin
+	// instead of being recoloured themselves.
+	float skin_l = dot(a, vec3(0.2126, 0.7152, 0.0722)) / max(dot(skin_baked, vec3(0.2126, 0.7152, 0.0722)), 0.002);
+	a = max(a + (skin_tint - skin_baked) * skin_l, vec3(0.0));
 	vec3 flesh = vec3(0.16, 0.012, 0.012);
 	float g = smoothstep(0.15, 0.7, m.g) * gash;
 	float w = smoothstep(0.2, 0.8, m.b) * wound;

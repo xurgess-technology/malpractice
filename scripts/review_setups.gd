@@ -15,6 +15,7 @@ extends RefCounted
 ## Then open it:  tools\review.bat 2 "HIVE: does the lunge read?" --setup=hive_lunge
 
 const DEFAULT_SEED := 4242
+const MirrorsScript := preload("res://scripts/personnel/mirrors.gd")
 
 const SETUPS := {
 	"icons": {"seed": 4242, "stage": "_icons"},
@@ -60,6 +61,9 @@ const SETUPS := {
 	# under the board swaps between them in play either way. `--solution` adds the debug overlay.
 	"suture": {"seed": 4242, "stage": "_suture"},
 	"suture_eye": {"seed": 4242, "stage": "_suture_eye"},
+	# MIRRORS (2026-09-22): in front of the entrance's big full-length mirror, hands empty, looking
+	# at your own reflection. `--dist=N` stands N metres off the glass (default 1.4).
+	"mirror": {"seed": 4242, "stage": "_mirror"},
 }
 
 
@@ -697,3 +701,24 @@ static func _hover_drop(game: Game) -> void:
 	drop_at(game, "suture_kit", spot)
 	drop_at(game, "tourniquet", spot + out * 0.1)
 	game.say("Drop everything on the same spot: they float, they glow, they make room.", 9.0)
+
+
+## MIRRORS (2026-09-22): standing in front of the entrance's big full-length mirror, hands empty,
+## looking at your own reflection. `--dist=N` stands N metres off the glass (default 1.4).
+static func _mirror(game: Game) -> void:
+	var pr: Dictionary = game.level_info.get("personnel", {})
+	var m: Dictionary = pr.get("mirror", {})
+	if m.is_empty():
+		print("[review] mirror: this level has no personnel mirror")
+		return
+	var mp: Vector3 = m.position
+	var out := (Basis(Vector3.UP, float(m.get("yaw", 0.0))) * Vector3(0, 0, -1)).normalized()
+	var dist := 1.4
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--dist="):
+			dist = float(a.split("=")[1])
+	var glass: Vector3 = mp + Vector3(0.0, MirrorsScript.BIG_CENTRE.y, 0.0)
+	place(game, game._floor_at(mp + out * dist), glass - Vector3(0.0, 0.3, 0.0))
+	clear_hands(game)
+	game.local_player().selected = 0
+	game.say("Click the mirror: cycle your scrubs and your skin, then back out with E.", 10.0)
