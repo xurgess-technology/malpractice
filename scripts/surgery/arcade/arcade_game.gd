@@ -357,6 +357,9 @@ func _panel_frame(delta: float, operating: bool) -> void:
 		panel.open(Vector3(0.0, float(pose.height), float(pose.back)))
 	elif not want and panel.is_open():
 		panel.close()
+	# My own panel repaints every frame; an onlooker's earns its rate (surgery_panel.gd).
+	if not panel.spectate_test:
+		panel.operator_view = bool(ctx.get("operator", false))
 	panel.tick(delta)
 
 
@@ -388,10 +391,26 @@ var paint_usec := 0
 var paint_count := 0
 
 
+## Where the paint time went since the last read: {section: usec}.
+var paint_parts := {}
+
+
+## Charge `now - t0` usec to `key` and return the clock, to start the next section from.
+func _part(key: String, t0: int) -> int:
+	var now := Time.get_ticks_usec()
+	paint_parts[key] = int(paint_parts.get(key, 0)) + (now - t0)
+	return now
+
+
 func take_paint_stats() -> Array:
-	var r := [paint_usec, paint_count]
+	var r := [paint_usec, paint_count, paint_parts.duplicate(),
+		shell.splat_polys if shell != null else 0, shell._splats.size() if shell != null else 0,
+		ink.quads if ink != null else 0]
+	if ink != null:
+		ink.quads = 0
 	paint_usec = 0
 	paint_count = 0
+	paint_parts = {}
 	return r
 
 
@@ -406,14 +425,18 @@ func _paint_inner(c: CanvasItem) -> void:
 	if panel == null:
 		return
 	if ink != null:
+		var pt := Time.get_ticks_usec()
 		var size: Vector2 = panel.tex_size()
 		ink.t = _ink_t
 		var sh: Vector2 = shell.shake_offset() if shell != null else Vector2.ZERO
 		ink.begin_page(c, size, sh)
+		pt = _part("page", pt)
 		if shell != null:
 			shell._page_xf_now = Transform2D().translated(sh) * ink.page_transform(size)
 			shell.draw_splats(c)
+			pt = _part("splats", pt)
 		paint_game(c)
+		pt = _part("game", pt)
 		if shell != null:
 			var hv: Array = hud_value()
 			shell.draw_hud(c, hud_line(), String(hv[0]) if hv.size() > 0 else "", bool(hv[1]) if hv.size() > 1 else false)
@@ -421,12 +444,14 @@ func _paint_inner(c: CanvasItem) -> void:
 			if not ec.is_empty():
 				shell.draw_enter(c, ec.at, String(ec.get("label", "")), bool(ec.get("ready", false)))
 			shell.draw_fx(c)
+			pt = _part("hud", pt)
 			# The stamp card itself is NOT drawn here any more (2026-09-22): it used to ride the
 			# panel's own page transform, so it landed somewhere different depending on the step's
 			# site. surgery_hud.gd's fixed overlay draws it instead, from stamp_card() below, always
 			# in the same screen spot in front of the patient.
 		# The step's name goes on the clip, the table small in the board's corner.
 		ink.end_page(c, size, clip_title(), panel.right_text, sh)
+		_part("clip", pt)
 		return
 	paint_game(c)
 	if card_word != "":
