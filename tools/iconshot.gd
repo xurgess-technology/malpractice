@@ -44,8 +44,8 @@ func _ready() -> void:
 	_look_from(t + Vector3(0.6, 0, 3.4), t + Vector3(0, 1.0, 0))
 	await _frames(20)
 
-	game.brains.set_level(bot.peer_id, "echo", 3)
-	game.brains.set_level(bot.peer_id, "hive_in", 2)
+	game.abilities.set_level(bot.peer_id, "echo", 3)
+	game.abilities.set_level(bot.peer_id, "hive_in", 2)
 	var suf := "_%d" % int(get_viewport().get_visible_rect().size.x)
 	for sel in 4:
 		_clear()
@@ -95,10 +95,10 @@ func _ready() -> void:
 	await _frames(14)
 	await _shot("bar_spoil_used")
 	# 5. abilities: Alt held.
-	game.brains.set_level(bot.peer_id, "echo", 3)
-	game.brains.set_level(bot.peer_id, "hive_in", 2)
-	game.brains._cd["echo:%d" % bot.peer_id] = game.world_time + 9.0
-	game.brains._cd.erase("hive:%d" % bot.peer_id)
+	game.abilities.set_level(bot.peer_id, "echo", 3)
+	game.abilities.set_level(bot.peer_id, "hive_in", 2)
+	game.abilities._cd["echo:%d" % bot.peer_id] = game.world_time + 9.0
+	game.abilities._cd.erase("hive:%d" % bot.peer_id)
 	await _shot("abilities_idle")
 	Input.action_press("ability_alt")
 	await _frames(30)

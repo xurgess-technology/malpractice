@@ -46,8 +46,6 @@ const SCENARIOS := [
 	{"name": "two_patients", "scenario": "two_patients", "clients": 2, "timeout": 300},
 	# sweep 3: a client fights and captures monsters.
 	{"name": "combat", "scenario": "combat", "clients": 2, "timeout": 300},
-	# brains (sweep 3): a client picks up and blends brains, uses Hive Eyes and Echo.
-	{"name": "brains", "scenario": "brains", "clients": 1, "timeout": 240},
 	# SWEEP 3 HOOK (monsters): sedation, hits, dragged_by and waking reach a client.
 	{"name": "monsters", "scenario": "monsters", "clients": 1, "timeout": 240},
 	# docs/SONOGRAPHER.md chunk B: a client sees the neck, the charge, the fan and the deafen, and is
@@ -55,6 +53,8 @@ const SCENARIOS := [
 	{"name": "sono", "scenario": "sono", "clients": 1, "timeout": 300},
 	# GRAFTING chunk C: the host grafts a Hive eyeball into a client; the other client sees the eye.
 	{"name": "graft", "scenario": "graft", "clients": 2, "timeout": 400},
+	# TRINKETS chunk B: a client's defibrillator revives another client where they lie.
+	{"name": "trinkets", "scenario": "trinkets", "clients": 2, "timeout": 400},
 	# POCKETS: a client, a carried client and an item through a seam into the Factory.
 	{"name": "pockets", "scenario": "pockets", "clients": 2, "timeout": 300, "extra": ["--pocket=factory"]},
 	# DOORS: gates locked and unlocking, E on a door, a late joiner, the next shift's wings.

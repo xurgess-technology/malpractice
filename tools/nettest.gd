@@ -34,14 +34,13 @@ extends Node
 ##   combat           sweep 3: client 1 kills a monster with the bone saw, shoves and jabs another,
 ##                    drags it and straps it to a free patient table; the host checks the case and
 ##                    client 2 watches the swings, the drag and the strapped case
-##   brains           (sweep 3) the client picks up a Hive brain (its spoil clock replicated),
-##                    blends and drinks it at the blender, looks through a Hive with Hive Eyes and
-##                    comes back, then drinks a Sonographer brain and shrieks Echo; the host sees the
-##                    points, the hive view and the echo noise
 ##   monsters         host + 1 client: a Hive sedated, hit, dragged and woken on the host; the
 ##                    client sees each (sweep 3). Then a Night Nurse grabs the client: it hangs from
 ##                    her hands with its view locked on her face, sees her head snap, drops downed
 ##                    and she is gone
+##   trinkets         (chunk B) client 1 shocks a downed client 2 awake with a defibrillator over the
+##                    wire; client 2 comes up where it lay on its own machine, and the paddles are
+##                    spent on both
 ##   pockets          (--pocket=factory) client 1 walks through a seam into the pocket holding gauze
 ##                    (the host sees it arrive and stay, client 2 sees it jump, never slide across the
 ##                    world); client 2 goes down, client 1 walks out, lifts it and carries it in; then the
@@ -71,6 +70,7 @@ extends Node
 const NAMES := ["Host", "Álvaro", "Bea O'Neil", "Surgeon Chris"]
 const MonsterScript := preload("res://scripts/monster.gd")
 const WindupScript := preload("res://scripts/combat/windup.gd")
+const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
 
 var role := "host"
 var scenario := "deliver"
@@ -158,11 +158,11 @@ func _run() -> void:
 		"two_patients": await _sc_two_patients()
 		"downed": await _sc_downed()
 		"combat": await _sc_combat()
-		"brains": await _sc_brains()
 		"monsters": await _sc_monsters()   # SWEEP 3 HOOK (monsters)
 		"hit_feedback": await _sc_hit_feedback()   # HIT FEEDBACK: the red flash and the push
 		"sono": await _sc_sono()   # docs/SONOGRAPHER.md chunk B: the Sonographer's echo over the wire
 		"graft": await _sc_graft()   # GRAFTING chunk C
+		"trinkets": await _sc_trinkets()   # TRINKETS chunk B
 		"pockets": await _sc_pockets()   # POCKETS
 		"doors": await _sc_doors()   # DOORS HOOK
 		"wall": await _sc_wall()   # terminal redesign, chunk 4
@@ -859,122 +859,6 @@ func _sc_economy():
 	await _finish_together("sold loot into the furnace, bought %d pill bottles, and kept the %s through a whole shift" % [PILL_BUYS, KEEP])
 
 
-## SWEEP 3 (brains): a client picks up a brain, blends it, uses Hive Eyes and Echo.
-func _sc_brains():
-	if role == "host":
-		if not await _until(func(): return Net.names.size() == clients + 1 and game.players.size() == clients + 1 and game.brains.blender != null, 90.0, "the client and the blender"):
-			return
-		await _wall_wait(1.0)
-		var c1 = game.players.get(_peer_of(1))
-		var at: Vector3 = c1.global_position
-		var map := get_viewport().world_3d.navigation_map
-		var b1: Node = game.brains.spawn_brain("brain_hive", 1.0, at + Vector3(1.0, 0.3, 0.0))
-		var b2: Node = game.brains.spawn_brain("brain_sonographer", 0.5, at + Vector3(-1.0, 0.3, 0.0))
-		var b3: Node = game.brains.spawn_brain("brain_sonographer", 0.3, at + Vector3(0.0, 0.3, 1.0))
-		b3.bt = game.world_time - 400.0   # rotten long ago (fresh / spoiling depend on how fast the bot is)
-		var wi: Node = game.brains.spawn_hive(NavigationServer3D.map_get_closest_point(map, at + Vector3(0, 0, 9)))
-		wi.set_physics_process(false)   # a still Hive: the test is about the view, not the chase
-		_send("brains", {"items": [b1.item_id, b2.item_id, b3.item_id], "bts": [b1.bt, b2.bt, b3.bt], "hive": wi.monster_id})
-		var seen := {"hive": false, "echo": false}
-		var watch := func():
-			if c1.hive_view and not seen.hive:
-				seen.hive = true
-				_say("the client is looking through a Hive (hv)")
-			for n in game.recent_noises(1.5):
-				if String(n.kind) == "echo" and is_equal_approx(float(n.loudness), 1.2) and (n.pos as Vector3).distance_to(c1.global_position) < 4.0:
-					if not seen.echo:
-						_say("heard the client's Echo (noise 1.2)")
-					seen.echo = true
-		if not await _do_until(watch, func(): return seen.hive and seen.echo and _count_msgs("ok") >= 1, 200.0, "the client's hive view and echo (hive %s echo %s)" % [str(seen.hive), str(seen.echo)]):
-			return
-		var w: float = game.brains.points(c1.peer_id, "hive")
-		var d: float = game.brains.points(c1.peer_id, "sonographer")
-		# Hive fresh 1.0; the second Sonographer brain was fresh or spoiling by the time it was drunk
-		# (1.0 or 0.75), the third rotten (0.5).
-		if w != 1.0 or not (is_equal_approx(d, 1.25) or is_equal_approx(d, 1.5)):
-			return _end(false, "host points for the client: hive %.2f sonographer %.2f, expected 1.00 / 1.25..1.5" % [w, d])
-		await _finish_together("the client drank three brains (%.2f / %.2f), looked through a Hive and shrieked Echo" % [w, d])
-		return
-	if not await _until(func(): return game.phase != Game.Phase.MENU and _me() != null and _count_msgs("brains") > 0 and game.brains.blender != null, 90.0, "the brains"):
-		return
-	var me := _me()
-	me.bot_active = true
-	me.bot_invulnerable = true
-	var ids: Dictionary = _msgs("brains")[0].data
-	var bs := game.brains
-	for pass_i in 3:
-		var kind := "brain_hive" if pass_i == 0 else "brain_sonographer"
-		var item_id := int(ids.items[pass_i])
-		if not await _until(func(): return game.world_items.has(item_id), 20.0, "the %s on my machine" % kind):
-			return
-		var it = game.world_items[item_id]
-		if not await _until(func(): return float(it.bt) > -100000.0, 10.0, "the %s's spoil clock on my machine" % kind):
-			return
-		if absf(float(it.bt) - float(ids.bts[pass_i])) > 0.51:
-			return _end(false, "brain %d's spoil clock is %.1f here, %.1f on the host" % [pass_i, float(it.bt), float(ids.bts[pass_i])])
-		if pass_i == 2 and bs.condition(bs.factor_of(it)) != "rotten":
-			return _end(false, "the old brain should look rotten on my machine, factor %.2f" % bs.factor_of(it))
-		var take := func():
-			var node = game.world_items.get(item_id)
-			if node != null:
-				_press_at(node.global_position, "it_%d" % item_id)
-		if not await _do_until(take, func(): return me.holding(kind), 40.0, "picking up the " + kind):
-			return
-		me.selected = _slot_of(kind)
-		if not await _until(func(): return me.slots[_slot_of(kind)].has("bt"), 10.0, "bt in my hand slot"):
-			return
-		var path := "hive" if pass_i == 0 else "sonographer"
-		var blend := func():
-			var i := _slot_of(kind)
-			if i >= 0:
-				me.selected = i
-			_press_at(bs.blender.global_position, "blender", true)
-		var before: float = bs.points(Net.my_id(), path)
-		if not await _do_until(blend, func(): return not me.holding(kind) and bs.points(Net.my_id(), path) > before, 40.0, "blending the " + kind):
-			return
-		me.bot_interact = false
-		me.bot_aim_id = ""
-		_say("drank the %s: hive %.2f sonographer %.2f" % [kind, bs.points(Net.my_id(), "hive"), bs.points(Net.my_id(), "sonographer")])
-		if pass_i == 0:
-			# Hive Eyes: R, then R again to come back.
-			me.teleport(_stand_spot(game.monsters[int(ids.hive)].global_position + Vector3(0, 0, -8)))
-			await _wall_wait(0.5)
-			me.bot_ability += 1
-			if not await _until(func(): return me.hive_view and bs.local_hive_active() and bs.camera() != null, 20.0, "Hive Eyes on my machine"):
-				return
-			_say("hive view on at t=%.1f: %s" % [game.world_time, str(bs._hive)])
-			# SWEEP 4A HOOK (Hive Eyes fly-through, chunk 4): the camera doesn't land at the
-			# Hive the instant hive_view turns on -- it flies there over FLIGHT_IN seconds
-			# first (docs/SWEEP4A.md, "the flight takes about 1-1.5s"). 30 frames (0.5s) was
-			# timed for the old instant-snap behaviour; wait out the flight the same way
-			# braintest.gd does before checking where the camera actually is.
-			await _frames(int(bs.hive_view.FLIGHT_IN * 60) + 6)
-			var cam: Camera3D = bs.camera()
-			var wm = game.monsters.get(int(ids.hive))
-			if cam == null or wm == null or cam.global_position.distance_to(wm.global_position) > 2.5:
-				return _end(false, "the Hive Eyes camera is not at the Hive: cam %s, hive %s, target %d, hive %s" % [str(cam.global_position if cam != null else null), str(wm.global_position if wm != null else null), int(bs.hive_view.monster_id), str(bs._hive)] + " msg=" + game.message + " t=%.1f" % game.world_time)
-			me.bot_ability += 1
-			if not await _until(func(): return not me.hive_view and not bs.local_hive_active(), 20.0, "coming back from Hive Eyes"):
-				return
-			_say("looked through the Hive and came back")
-	# 1.00 Hive against 1.25+ Sonographer: Hive Eyes landed in the first slot (hive drunk
-	# first), Echo in the second (SWEEP 4A HOOK, chunk 1: best_path()/single-R-ability is gone,
-	# replaced by fixed per-slot abilities -- Alt+2 fires whichever landed second, not "whichever
-	# path has more points").
-	if bs.points(Net.my_id(), "sonographer") <= bs.points(Net.my_id(), "hive"):
-		return _end(false, "expected sonographer points ahead of hive (hive %.2f sonographer %.2f)" % [bs.points(Net.my_id(), "hive"), bs.points(Net.my_id(), "sonographer")])
-	var echo_slot: int = bs.slot_of(Net.my_id(), "echo")
-	if echo_slot < 0:
-		return _end(false, "Echo never landed in a slot")
-	me.bot_ability_slot = echo_slot
-	await _wall_wait(0.5)
-	me.bot_ability += 1
-	if not await _until(func(): return bs.echo_view.active and float(bs.last_echo.get("r", 0.0)) >= 18.0, 20.0, "Echo on my machine"):
-		return
-	_say("Echo: %d outlines of %d things" % [bs.echo_view.ghosts.size(), bs.echo_view.target_count])
-	await _finish_together("picked up and drank three brains, used Hive Eyes and Echo")
-
-
 ## loop (sweep 2): two patients on two tables, two clients operating on different tables at once.
 func _sc_two_patients():
 	if role == "host":
@@ -1098,7 +982,7 @@ func _sc_graft():
 				return
 		if not await _until(func(): return game.grafts.graft_of(patient.peer_id) == "eye_hive", 30.0, "the graft to take"):
 			return
-		if game.brains.slot_of(patient.peer_id, "hive_in") < 0:
+		if game.abilities.slot_of(patient.peer_id, "hive_in") < 0:
 			return _end(false, "the graft gave no Hive Eyes slot")
 		_say("grafted: %s, vat now %s" % [game.grafts.graft_of(patient.peer_id), String(vat.x)])
 		# The glow: hive_view is replicated, so the other machine must light the eye up too.
@@ -1137,6 +1021,107 @@ func _sc_graft():
 	await _finish_together("the graft, the eye on the body and its glow all reached this machine")
 
 
+## TRINKETS chunk B: a trinket used on a teammate has to work on the other machine. The host knocks
+## client 2 down beside client 1 and hands client 1 a defibrillator. CLIENT 1 clicks it, so the whole
+## client -> host use path runs, and client 2 has to get up **on its own machine, where it lay** --
+## not scattered to the OR table the way a stitching revive does. Client 2 checks the distance
+## itself, because a client owns where it is.
+func _sc_trinkets():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		var c1 = game.players.get(_peer_of(1))
+		var c2 = game.players.get(_peer_of(2))
+		if c1 == null or c2 == null:
+			return _end(false, "missing a client's surgeon on the host")
+		# No teleporting anyone: a client owns its own position, so moving it from here does not
+		# stick. Client 1 walks to the body itself. knock_down_player ignores invulnerability, so
+		# client 2 stays invulnerable while it lies there and no roaming monster can finish it off.
+		game.knock_down_player(c2, "nettest")
+		if not await _until(func(): return c2.downed, 20.0, "client 2 down on the host"):
+			return
+		for i in c1.slots.size():
+			c1.slots[i] = Player.empty_slot()
+		if not game.give_hand(c1, "defibrillator", 1):
+			return _end(false, "client 1 would not take the defibrillator")
+		_send("tk", {"c1": c1.peer_id, "c2": c2.peer_id})
+		var seen := {"lay": c2.global_position}
+		var watch := func():
+			if c2.downed:
+				seen.lay = c2.global_position   # the last spot the host saw it lying on
+		if not await _do_until(watch, func(): return not c2.downed and c2.alive, 120.0, "client 2 back on their feet"):
+			return
+		var moved: float = c2.global_position.distance_to(seen.lay as Vector3)
+		if moved > 1.5:
+			return _end(false, "client 2 was revived %.2f m from where they lay" % moved)
+		if not TrinketsScript.is_spent(c1.selected_stack()):
+			return _end(false, "the defibrillator is not used up on the host")
+		_say("client 1's defibrillator brought client 2 up %.2f m from where they lay, and is spent" % moved)
+		await _finish_together("a client's defibrillator revived another client where they lay, on every machine")
+		return
+	if not await _wait_shift_as_client():
+		return
+	var me := _me()
+	me.bot_active = true
+	if not await _until(func(): return _count_msgs("tk") > 0, 120.0, "the trinket order"):
+		return
+	var order: Dictionary = _msgs("tk")[0].data
+	var c1_id := int(order.c1)
+	var c2_id := int(order.c2)
+	if me.peer_id == c1_id:
+		# Client 1: the one holding the defibrillator. Wait for it, stand over the body, click.
+		if not await _until(func(): return me.holding("defibrillator"), 60.0, "the defibrillator in my hands"):
+			return
+		var body = game.players.get(c2_id)
+		if body == null:
+			return _end(false, "client 2 does not exist on client 1's machine")
+		# Wait for the host's knock-down to reach this machine first: without this, "they are not
+		# downed" is true before the news arrives and nothing ever gets clicked.
+		if not await _until(func(): return body.downed, 60.0, "client 2 to go down on client 1's machine"):
+			return
+		# Stand over the body every frame, but click only twice a second: a click is a reliable RPC
+		# to the host, and sixty a second floods the channel.
+		var zap_at := {"t": 0.0}
+		var zap := func():
+			me.selected = _slot_of("defibrillator")
+			var tp: Vector3 = body.global_position
+			var from: Vector3 = me.global_position - tp
+			from.y = 0.0
+			from = from.normalized() if from.length() > 0.2 else Vector3.BACK
+			me.teleport(_nav_point(tp + from * 1.1))
+			var eye: Vector3 = me.global_position + Vector3.UP * C.EYE_H
+			var d: Vector3 = tp + Vector3.UP * 0.4 - eye
+			me.bot_yaw = atan2(-d.x, -d.z)
+			me.bot_pitch = clampf(atan2(d.y, Vector2(d.x, d.z).length()), -1.2, 1.2)
+			me.bot_move = Vector2.ZERO
+			if _wall() < float(zap_at.t):
+				return
+			zap_at.t = _wall() + 0.5
+			me.bot_use += 1
+		if not await _do_until(zap, func(): return not body.downed and body.alive, 120.0, "client 2 to come up on client 1's machine"):
+			return
+		# The used mark is host-authoritative and rides the hand slots in the snapshot.
+		if not await _until(func(): return TrinketsScript.is_spent(me.selected_stack()), 30.0,
+				"the spent defibrillator to show as spent in my own hands"):
+			return
+		_say("clicked the defibrillator; client 2 is up on this machine and the paddles are spent")
+		await _finish_together("client 1 used a defibrillator on a teammate over the wire")
+		return
+	# Client 2: the one on the floor. It must go down and come back up here, where it lay -- measured
+	# on its own machine, which is the one that owns where it is.
+	if not await _until(func(): return me.downed, 60.0, "being knocked down on my own machine"):
+		return
+	var lay_here := {"p": me.global_position}
+	var lie := func():
+		if me.downed:
+			lay_here.p = me.global_position
+	if not await _do_until(lie, func(): return not me.downed and me.alive, 180.0, "being shocked back up on my own machine"):
+		return
+	var moved_here: float = me.global_position.distance_to(lay_here.p as Vector3)
+	if moved_here > 2.0:
+		return _end(false, "I came up %.2f m from where I went down" % moved_here)
+	_say("shocked awake %.2f m from where I went down, hp %d" % [moved_here, me.hp])
+	await _finish_together("client 2 was revived where it lay by another client's defibrillator")
 ## Downed (sweep 2 wave 3): client 1 goes down, client 2 carries them to the player table and
 ## stitches them up; the host and both clients see every stage.
 func _sc_downed():

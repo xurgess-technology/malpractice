@@ -11,6 +11,12 @@ out on an OR table, keeps it in a specimen vat, then straps a surgeon down and s
 eyes for it. The grafted surgeon has one normal eye and one orange Hive eye, and gets **Hive Eyes**
 from it. The surgeon's own eye goes into the vat and can be swapped back in or sold.
 
+**Grafting is the only way to earn an ability.** Brains and the break-room blender used to be the
+other source and are gone (`docs/backlog/ABILITIES_REMOVED.md`), so this graft is now the single
+source of Hive Eyes -- and the only source of any ability in the game. Echo has no source at all
+until the trachea graft lands (`docs/GRAFTING_TRACHEA.md`). Levels are set outright now (there are
+no fractional points any more): the graft grants level 1, and taking the part back out clears it.
+
 ## The loop
 
 1. **Catch a Hive** and strap it to an OR table (the existing shove, jab, drag and strap).
@@ -33,7 +39,7 @@ from it. The surgeon's own eye goes into the vat and can be swapped back in or s
 - **The grafted surgeon is awake.** They lie strapped down in first person, looking up, and watch
   the tools come at their own eye. This is the moment the feature exists for, so the patient's
   camera matters: face up, a little freedom to look around, the operator and tools in view.
-- **Eyes spoil outside a vat.** Reuse the brain spoil system: over a minute or two the eye clouds
+- **Eyes spoil outside a vat.** Over a minute or two the eye clouds
   over and dulls. A vat stops the clock. A spoiled eye can't be grafted.
 - **A graft is always a swap, never an empty socket.** You can only operate when the vat on the
   vat on the table holds the eye that goes in. The eye that comes out goes into that vat.
@@ -71,10 +77,10 @@ from it. The surgeon's own eye goes into the vat and can be swapped back in or s
   and eye spoon start in the lab storage in the OR, so the feature is never blocked by a search.
   Vats and their contents last the whole run (the entrance building never changes); a new run
   resets them.
-- **The graft lasts the run,** through death, like rocket boots, and is lost on a game over
-  like abilities from brains today.
-- **Hive Eyes comes only from the graft now.** Remove the Hive brain → blender → Hive Eyes path.
-  Echo moves to a graft too, in part two (docs/GRAFTING_TRACHEA.md), which also removes the blender.
+- **The graft lasts the run,** through death, like rocket boots, and is lost on a game over,
+  like the ability it gave you.
+- **Hive Eyes comes only from the graft.** There is no other route to it, and no other route to
+  any ability at all.
 
 ## Chunks
 
@@ -119,7 +125,7 @@ A and B can run at the same time. C starts after both are merged.
 - The glow: the Hive eye material's `Lock` value (0 = low pinpoint, 1 = the whole ball lit).
   Low normally, high while the surgeon is in Hive Eyes. Replicated.
 - Grafting puts Hive Eyes level 1 in the next free ability slot, with the new-ability card;
-  swapping back removes it. Remove the Hive brain route to Hive Eyes.
+  swapping back removes it.
 - The first-person orange tint on the left edge.
 - Update DESIGN.md (the Hive row, a Grafting section, the lab wall) and docs/CONTRACTS.md.
 - **Zach sees:** `GRAFT: as Botsworth, give yourself a Hive eye, then check the mirror`

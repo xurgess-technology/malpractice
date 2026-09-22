@@ -20,8 +20,12 @@ const Customization := preload("res://scripts/personnel/customization.gd")
 ## preloaded from here without a cycle.
 const MENU_AIM_ID := "mirror_customize"
 
-## Where we stand you while the menu is up: far enough back that the whole body is in the glass,
-## and far enough that the reflection is properly lit.
+## Where we stand you while the menu is up: far enough back that the whole body is in the glass.
+## It used to be far enough back to dodge a bug as well -- walking up to a mirror turned you into a
+## black silhouette, and 1.7 m was where the reflection came good -- so this number was doing two
+## jobs and only one of them was framing. The mirrors have their own bulbs now (mirrors.gd
+## _add_lamp) and the reflection is lit at any distance, so 1.7 is a framing choice and nothing
+## else: change it for how the body sits in the glass.
 const STAND_DIST := 1.7
 ## The rows, top to bottom, as a fraction of the reflection's height: skin by the head, scrubs by
 ## the torso, patterns below them. An axis with no entry here falls to the bottom of the list.

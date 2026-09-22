@@ -78,7 +78,7 @@ All items are physical 3D objects: on shelves, in containers, in hands, on the O
 | Tourniquet | AM | no | red trauma bags (corridors, nurse stations); sometimes dropped |
 | Bone saw | AM | no | pegboards (maintenance, storage); sometimes leaning on a gurney |
 
-- **Loot** is what you find to sell at the furnace: five plain kinds (pill bottle, X-ray film, heart monitor, gold watch, portable ultrasound) and six trinkets (desk phone, laptop, defibrillator, reflex hammer, EpiPen, pulse oximeter), which sell too but are rarer and are meant to do one thing each (their jobs come later; see docs/ITEMS_AND_ICONS.md). Loot is scarce: 15 to 20 stacks a shift, about $1,000 in all, so most rooms hold nothing and a harvested Hive eyeball is a real share of a shift's pay. Anything that isn't bulky can turn up in a container too.
+- **Loot** is what you find to sell at the furnace: five plain kinds (pill bottle, X-ray film, heart monitor, gold watch, portable ultrasound) and six trinkets (desk phone, laptop, defibrillator, reflex hammer, EpiPen, pulse oximeter), which sell too but are rarer and each also do one thing (see **Trinkets** below). Loot is scarce: 15 to 20 stacks a shift, about $1,000 in all, so most rooms hold nothing and a harvested Hive eyeball is a real share of a shift's pay. Anything that isn't bulky can turn up in a container too.
 - **Aim and press E** for everything: take items, open and close containers, put things on the OR's storage shelves, clock in, revive, operate.
 - **Two hands.** A batch fills one hand; picking up more of the same consumable merges into it. 1, 2 or the mouse wheel switch hands; G sets the selected stack down gently.
 - **Getting hit or shoved** drops both hands; fragile stacks lose about a third, never all of it.
@@ -88,14 +88,31 @@ All items are physical 3D objects: on shelves, in containers, in hands, on the O
 - **Charged throw**: hold the drop key to charge a throw, release to fire it (a quick tap still just drops). Used to sell loot into the crematorium furnace and to throw placebo pills.
 - **Placebo pills**: a $15 bottle of 10, sold only at the pharmacy, does nothing mechanically and burns for $0. Swallow one from the bottle, or throw one at a teammate (a warm, cozy screen effect and a line only they see) or at a patient/monster (the line floats above them in quotes for everyone nearby; an OR patient's monitor shows a hopeful green blip, vitals unchanged). A miss just leaves it on the floor as a pickup.
 - **Rocket boots**: $100 a pair, sold only at the pharmacy. Worn, not carried: taking a pair puts them on (hands stay free), one pair each, kept through death until a new run. Hold crouch through a sprint-dive and they light: you fly straight ahead, level and fast, on a second bar under stamina (fuel, about 1.5 s of burn, refilling on the ground). Let go and you drop into the normal dive landing. Fly head first into a wall and you faceplant: the burn stops, you bounce back and drop, and it costs a heart.
-- **TODO**: the shopping cart, more item types (defibrillator, sedative dart, batteries, keys).
+- **TODO**: the shopping cart, more item types (sedative dart, batteries, keys).
+
+### Trinkets
+
+Six pieces of loot that sell like any other, but each does one thing, so picking one up is always a
+question: use it or sell it? They are rarer than plain loot (three to five in a shift). Left mouse
+uses the one in your hand. **A one-use trinket, once spent, is greyed with a crack across its icon
+and sells for a few dollars of scrap** — never nothing.
+
+| Trinket | What it does | After |
+| --- | --- | --- |
+| **Desk phone** | Set it down and it rings loudly for about 10 s: a decoy that pulls anything with ears (and turns the deaf Hives nearby toward it). Pick it up and do it again. **Every time you pull it out there is about a 12% chance it goes off in your hands.** | Reusable |
+| **Laptop** | Open it for about six seconds of a plan of the 25 m around you, with a blip for every surgery item in range. Then the battery dies. | Scrap |
+| **Defibrillator** | Aim at a downed teammate and they come straight back up **where they lie** — no carrying them to a table. Bulky (two hand slots), and very loud: a real noise event. | Scrap |
+| **Pulse oximeter** | In the same window as the sedative jab (a monster stunned by a shove), clip it on **instead of** sedating. The monster gets up and carries on, and from then on **the whole team hears its heartbeat**, positional and through walls: slow while it wanders, faster when it is suspicious, racing when it hunts. You get the pulse oximeter back, on the floor, when that monster is caught or killed. The Night Nurse can't be tagged. | Reusable |
+| **Reflex hammer** | A quick swing of the arm, and whoever it lands on **is whipped 180°** in a fraction of a second. A teammate's camera comes right round. A Hive loses sight of you and starts searching the wrong way. The Night Nurse has no reflexes and ignores it. Short cooldown. | Reusable |
+| **EpiPen** | Jab yourself or a teammate: double sprint speed, and no getting out of breath, for 10 s — then a 3 s collapse where you stand. | Scrap |
 
 ## The database terminal
 
 A computer terminal in the break room, opened with E; full-screen, and you can't move while using it. It replaced the old guide binder entirely — no carryable version.
 
-- Three sections: Monsters, Abilities, Items & Procedures.
-- Monster entries unlock in tiers as you learn more about that species: **sighted** (name, silhouette), **scanned** (behaviour, senses, threat, sedative doses, an X-ray of where its brain sits), **harvested** (the brain's look, spoil time, the ability it grants, a level table). The Night Nurse has no brain, so her entry never reaches tier 3.
+- Two sections: Monsters, Items & Procedures.
+- Monster entries unlock in tiers as you learn more about that species: **sighted** (name, silhouette), **scanned** (behaviour, senses, threat, sedative doses, an X-ray of its insides), **harvested** (what comes out of it: the part's look, spoil time and value). Nothing can be harvested from the Night Nurse, so her entry never reaches tier 3.
+- A monster's entry also names the ability its parts give a surgeon, with a three-row level table that fills in a row at a time as your own level in that ability rises.
 - Items and procedures are unlocked from the start, same as the old guide.
 - The database belongs to the host, saved to disk, and survives a wipe; guests share the host's copy for the session but don't keep their own.
 
@@ -134,11 +151,10 @@ The core choice in every fight: **kill it to be safe, or catch it to get paid.**
 - **Kill:** the bone saw is a weapon (left mouse while holding it). Hits stagger, a few hits kill. Every hit has a chance to snap the saw, which is also the saw the surgery needs. Swinging is loud. A killed monster pays nothing: organs are only worth anything harvested alive.
 - **Catch:** shove it (stunned), then jab it with anesthetic (left mouse while holding a vial) inside the stun window. It drops, sedated, for a while. Hold E to drag it, E on a free patient table to strap it down. Strapped monsters cannot hurt anyone.
 - **On the table:** only a Hive can be strapped down (see Grafting: it is the only monster a surgeon operates on). Sedation wears off, faster with noise. Low sedation makes it stir (the operator's hand shakes); lower still it is awake and thrashing, which botches the work and damages the eye being taken. Anyone can re-dose it with anesthetic from their hands (E at the table), but every dose works for less time than the last.
-- **Brains spoil.** A harvested brain loses value quickly: run it to the crematorium (thrown into the furnace, the only sell point now) or to the break-room blender.
-- **The blender:** blend a brain and drink it to absorb that monster's knowledge. Per player, and lost on a game over along with the money. The ability it grants lands in the next empty slot of your 4-slot ability bar; its level still comes from these same points.
-  - (Hive brains teach nothing any more: **Hive Eyes** comes from the graft, below.)
-  - **Hive Eyes** (from a grafted Hive eyeball): fire from its slot to see through a nearby Hive's eyes for a few seconds. Your camera flies there along the navmesh first (about 1-1.5s), then settles into its eyes; your own body stands with glazed eyes teammates can see. A hit snaps you back instantly instead of flying back. More brains: longer range and time, and at level 2+ you can cycle between Hives in range instead of only the nearest. (Later: Puppet, steering it.)
-  - Sonographer brains, **Echo**: fire from its slot for a loud shriek, visibly coming from you (a pulse ring, a body lean) on every machine; for a few seconds everything nearby shows as outlines through walls. It is loud enough to bring every Sonographer in the wing. More brains: bigger radius and longer.
+- **Harvested parts spoil.** A part loses value quickly out in the open: keep it in a specimen vat (see Grafting) or run it to the crematorium, where throwing it into the furnace is the only way to sell anything now.
+- **Abilities come from grafts.** A grafted monster part is what teaches a surgeon an ability; it lands in the next empty slot of your 4-slot ability bar, and swapping the part back out takes it away again. There are two:
+  - **Hive Eyes** (from a grafted Hive eyeball): fire from its slot to see through a nearby Hive's eyes for a few seconds. Your camera flies there along the navmesh first (about 1-1.5s), then settles into its eyes; your own body stands with glazed eyes teammates can see. A hit snaps you back instantly instead of flying back. Higher levels: longer range and time, and at level 2+ you can cycle between Hives in range instead of only the nearest. (Later: Puppet, steering it.)
+  - **Echo**: fire from its slot for a loud shriek, visibly coming from you (a pulse ring, a body lean) on every machine; for a few seconds everything nearby shows as outlines through walls. It is loud enough to bring every Sonographer in the wing. Higher levels: bigger radius and longer. **No graft grants Echo yet** -- the trachea graft that would (docs/GRAFTING_TRACHEA.md) is not built, so today only the dev panel can hand it out.
 - Later sweeps: Puppet, Rise (get back up as a shambler when downed), visible side effects (pale skin, groans, bigger ears, loud noises hurt), rare strap breaks.
 
 Shift 1 has Hives and one Sonographer; the Night Nurse joins from shift 2; more of each on later shifts and with more players.
@@ -165,8 +181,8 @@ of: **Hive's eyeball**, **Zach's eyeball**.
   right up while you are using **Hive Eyes 1**, which the graft gives you in your next free ability
   slot. Your own view carries a faint orange tint down its left edge, stronger while the ability is
   running. Swap your own eye back in and the ability goes with it.
-- A graft lasts the whole run, through death, and is lost on a game over, like the abilities from
-  brains. Eyes sell at the crematorium furnace like any other loot.
+- A graft lasts the whole run, through death, and is lost on a game over, like the ability it gave
+  you. Eyes sell at the crematorium furnace like any other loot.
 
 ## Look and sound
 

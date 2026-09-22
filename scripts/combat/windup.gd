@@ -111,6 +111,18 @@ func is_busy(p: Node) -> bool:
 	return s != null and int(s.ph) != RECOVER
 
 
+## The bone saw is drawn as the throw-pose swing the reflex hammer uses (scripts/hands/throw_pose.gd),
+## not a pose of its own: this is the `throw_wind` the hands feed it for combat.action_of() `act`.
+## The arm charges up over the wind-up and is released SAW_RELEASE of the way through it, so the
+## snap forward (about 0.1 s) lands on the frame the host resolves the strike.
+const SAW_RELEASE := 0.65
+
+static func saw_wind(act: Dictionary) -> float:
+	if int(act.ph) == WINDUP:
+		return -1.0 if float(act.u) >= SAW_RELEASE else clampf(float(act.u) / SAW_RELEASE, 0.05, 1.0)
+	return -1.0
+
+
 static func phase_length(k: String, ph: int) -> float:
 	match ph:
 		WINDUP:
@@ -152,7 +164,7 @@ func _now() -> float:
 func can_act(p: Node) -> bool:
 	if p == null or not is_instance_valid(p) or not p.alive or p.downed or p.stun > 0.0:
 		return false
-	if p.carrying != 0 or p.carried_by != 0 or p.on_table or p.operating or p.hive_view:
+	if p.carrying != 0 or p.carried_by != 0 or p.on_table or p.operating:
 		return false
 	return combat.dragging(p) < 0
 

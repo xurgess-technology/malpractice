@@ -461,8 +461,8 @@ func _graft_checks() -> void:
 	if not await _graft_run(bw, ti, true):
 		return
 	_check(grafts.graft_of(me.peer_id) == "eye_hive", "the graft took: a Hive eyeball in the socket")
-	_check(game.brains.slot_of(me.peer_id, "hive_in") >= 0 and game.brains.level(me.peer_id, "hive") >= 1,
-		"it gave Hive Eyes 1 in an ability slot (slot %d, level %d)" % [game.brains.slot_of(me.peer_id, "hive_in"), game.brains.level(me.peer_id, "hive")])
+	_check(game.abilities.slot_of(me.peer_id, "hive_in") >= 0 and game.abilities.level(me.peer_id, "hive") >= 1,
+		"it gave Hive Eyes 1 in an ability slot (slot %d, level %d)" % [game.abilities.slot_of(me.peer_id, "hive_in"), game.abilities.level(me.peer_id, "hive")])
 	var swapped := Eyes.unpack(String(vat.x))
 	_check(String(swapped.get("kind", "")) == "eye_surgeon" and String(swapped.get("owner", "")) == me.player_name,
 		"your own eyeball is in the vat now (%s)" % str(swapped))
@@ -478,7 +478,7 @@ func _graft_checks() -> void:
 	if not await _graft_run(bw, ti, false):
 		return
 	_check(grafts.graft_of(me.peer_id) == "", "swapping back takes the Hive eyeball out")
-	_check(game.brains.slot_of(me.peer_id, "hive_in") < 0, "and Hive Eyes goes with it")
+	_check(game.abilities.slot_of(me.peer_id, "hive_in") < 0, "and Hive Eyes goes with it")
 	_check(String(Eyes.unpack(String(vat.x)).get("kind", "")) == "eye_hive", "the Hive eyeball is back in the vat")
 	dev.control_botsworth()
 	await _frames(4)

@@ -27,7 +27,11 @@ func active() -> bool:
 	return w > 0.002 or follow >= 0.0
 
 
-func update(delta: float, wind: float, two_handed: bool) -> void:
+## `speed` runs the whole pose faster (or slower) without changing its shape: 1.0 is an ordinary
+## throw, and TRINKETS chunk B's reflex-hammer swing (Player.SWING_SPEED) winds the same arm up and
+## snaps it through in a fraction of the time.
+func update(delta: float, wind: float, two_handed: bool, speed := 1.0) -> void:
+	delta *= maxf(speed, 0.01)
 	_t += delta
 	if not active():
 		two = two_handed

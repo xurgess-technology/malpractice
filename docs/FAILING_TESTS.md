@@ -161,11 +161,25 @@ How to run things is at the bottom of this file.
 
 ---
 
-## 5. nettest `brains`: the client never gets a hive view
+## 6. orscreentest: the OR monitor's case panel is wrong in several places
 
-- **Command:** `godot --headless --path . --fixed-fps 60 --script tools/nettest_run.gd -- --only=brains`
-- **Result:** `FAIL`, "timed out after 200 s waiting for the client's hive view and echo (hive false echo false)"; the client logs `Invalid access to property or key 'hive_view' on a base object of type 'Nil'` repeatedly (`tools/nettest.gd` around line 876).
-- **Noticed 2026-09-19** while merging `sono-brain`; it fails the same on `main` at `56d6b6f`, before that merge. Likely from the 0.7.1 eyeball changes, not confirmed. The other 21 scenarios pass.
+- **Command:** `godot --headless --path . --fixed-fps 60 tools/orscreentest.tscn`
+- **Result:** `[orscreen] FAIL`, with these problems:
+  - `an incoming case shows its supplies`
+  - `step 1 is todo, expected current`
+  - `supplies: 0 rows for 3 needed kinds`
+  - `saw every step of amputation become current ([0, 1])`
+  - `the screen read stable when the shift was won`
+- **Found 2026-09-22** while building the minimap, and confirmed on plain `main` at `c933607` by
+  checking the baseline out directly in the same slot. It was not in this file before.
+- **How many you see varies.** It is a playtest: a bot plays a real shift, so how far it gets
+  changes between runs and so does how many of the five a run reaches. The branch run saw 1 of them
+  (`shifts_won=1`, 438 s); the `c933607` baseline saw all 5 (`shifts_won=0`, 1500 s). Treat **any**
+  of those five names as this entry, and the count as meaningless.
+- **They look like one fault:** every one is the OR wall monitor's case panel disagreeing about a
+  case's steps or its supplies.
+- **Where to look:** `scripts/orscreen/or_screen_model.gd` (what the panel says a case needs and
+  which step is current) against `tools/orscreentest.gd`'s expectations. Nobody has looked yet.
 
 ---
 
@@ -177,8 +191,8 @@ The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\
 - Import first after pulling or adding assets: `godot --headless --path . --import`
 - **Always add `--fixed-fps 60`** to headless test scenes (about 12x faster).
 - **Run headless tests one at a time per checkout.** Parallel runs in the same directory segfault.
-- Test scenes, each prints `result=PASS` or `FAIL` at the end: `tools/*test.tscn` (braintest,
-  carrycamtest, combattest, controlstest, databasetest, devtest, doortest,
+- Test scenes, each prints `result=PASS` or `FAIL` at the end: `tools/*test.tscn` (carrycamtest,
+  combattest, controlstest, databasetest, devtest, doortest,
   downedtest, fogtest, inventorytest, looptest, orscreentest, pockettest, settingstest,
   straptest) and
   `tools/monster_lab.tscn`

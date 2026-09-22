@@ -279,8 +279,18 @@ func _build() -> void:
 	_hatch_pivot.add_child(hatch_body)
 	_solid(hatch_body, Vector3(HOLE_W, leaf_h, 0.08), Vector3(hole, leaf_y, 0))
 
-	# What you aim at to open or shut it: the opening itself, on the interact layer only (throws and
-	# players pass straight through it).
+	# What you aim at to open or shut it: the grate itself, so the target travels with the leaf
+	# instead of staying parked over the hole (2026-09-22). On the interact layer only, so throws
+	# and players still pass straight through it.
+	#
+	# Two things about where it sits:
+	#   the shape rides the leaf, a slab 0.44 m thick around the bars rather than a copy of them.
+	#     Shut, that reaches about as far into the room as the old box over the opening did; open,
+	#     the leaf stands edge-on to anyone in front of the window, and a slab is still a target you
+	#     can put a crosshair on from either face. A box matching the 7 cm bars would not be.
+	#   the Area3D's own origin stays on the hinge (local x 0 of the pivot), which does not move
+	#     when the hatch swings. `Game._within_reach` measures to `global_position`, so host and
+	#     client agree on reach even mid-swing, when a client's idea of the pivot's angle can lag.
 	var aim := HatchAim.new()
 	aim.furnace = self
 	aim.name = "HatchAim"
@@ -290,9 +300,9 @@ func _build() -> void:
 	aim.collision_mask = 0
 	aim.monitoring = false
 	aim.monitorable = true
-	aim.position = Vector3(0, leaf_y, 0.2)
-	_solid(aim, Vector3(HOLE_W, leaf_h, 0.2), Vector3.ZERO)
-	add_child(aim)
+	aim.position = Vector3(0, leaf_y, 0)
+	_solid(aim, Vector3(HOLE_W, leaf_h, 0.44), Vector3(hole, 0, 0))
+	_hatch_pivot.add_child(aim)
 
 	_amount_label = _label("", 40, Color(0.55, 1.0, 0.6))
 	_amount_label.position = Vector3(0, 1.8, 0.5)
@@ -373,7 +383,7 @@ func _on_body_entered(body: Node) -> void:
 		var out := Transform3D(it.global_basis, global_transform * Vector3(randf_range(-0.6, 0.6), HEAD - 0.3, 0.45))
 		it.toss(out, global_basis * Vector3(0, 1.2, 2.2))
 		return
-	# A hand-slot shaped stack ({kind, count, v, bt}): brains price by kind and their spoil clock.
+	# A hand-slot shaped stack ({kind, count, v, bt}): eyes price by kind and their spoil clock.
 	var s := {"kind": kind, "count": count, "v": int(it.value), "bt": float(it.bt)}
 	var value: int = int(g.furnace_value(kind, s))
 	g.world_items.erase(it.item_id)

@@ -11,6 +11,7 @@ extends Control
 ##   message   short messages / subtitles, the dead / spectating banner
 ##   money     the money readout (hides itself away from the economy spots)
 ##   hint      the controls line for the first seconds of a session
+##   minimap   the small fogged floor plan, top right (its own Control, scripts/minimap_panel.gd)
 ##   overlay   pause, flatline and shift-won overlays; the host's join address in the lobby
 ## The surgery step's title and one-line hint are drawn by scripts/surgery/surgery_hud.gd; the FPS
 ## counter (F3) by main.gd; settings and the dev panel are their own layers.
@@ -19,6 +20,8 @@ extends Control
 
 var game: Game = null
 var host_info: String = ""
+## MINIMAP: the top-right floor plan (scripts/minimap_panel.gd), its own Control child.
+var minimap_panel: MinimapPanel = null
 ## Element ids drawn in the last _draw(), for tests.
 var drawn: PackedStringArray = []
 
@@ -31,6 +34,9 @@ var _fuel_show: float = 0.0
 ## 0 = Alt not held (abilities small top-left, items at full size); 1 = Alt held (abilities fill
 ## the bar, items shrink to a small top-left row). ~0.12 s each way per docs/SWEEP4A.md.
 var _alt_t: float = 0.0
+## TAB SHEET: main.gd sets this while the character sheet is up, and the item and ability bars
+## stand down (the sheet is showing the same two rows, bigger).
+var sheet_open: bool = false
 ## Ability id -> world_time its first-ability card should stop showing itself, and which ids have
 ## already had their card (so it only shows once per id per session).
 var _card_until: Dictionary = {}
@@ -52,6 +58,12 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS   # the icons are imported with mipmaps
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# MINIMAP: the corner floor plan is its own Control, not part of this immediate-mode _draw, so
+	# it can redraw on its own (rare) schedule instead of at this HUD's every frame.
+	minimap_panel = MinimapPanel.new()
+	minimap_panel.name = "Minimap"
+	minimap_panel.game = game
+	add_child(minimap_panel)
 
 
 func _process(delta: float) -> void:
@@ -64,8 +76,8 @@ func _process(delta: float) -> void:
 	var alt_held: bool = Input.is_action_pressed("ability_alt")
 	_alt_t = move_toward(_alt_t, 1.0 if alt_held else 0.0, delta / 0.12)
 	# SWEEP 4A HOOK: the first time an ability lands in a slot, a short card for it.
-	if me != null and game.brains != null:
-		for id in (game.brains.slots_for(me.peer_id) as Array):
+	if me != null and game.abilities != null:
+		for id in (game.abilities.slots_for(me.peer_id) as Array):
 			if String(id) != "" and not _card_seen.has(id):
 				_card_seen[id] = true
 				_card_until[id] = _t + 5.0
@@ -87,17 +99,23 @@ func _draw() -> void:
 		_draw_crosshair(w, h)
 		_draw_prompt(w, h, me)
 	if me != null and me.alive and not in_surgery:
-		_draw_hands(w, h, me)
-		_draw_ability_bar(w, h, me)   # SWEEP 4A HOOK (controls)
+		# TAB SHEET: the character sheet shows these same two rows, bigger. Drawing both at once is
+		# the same information twice, so the bars stand down while it is up. Health and messages stay.
+		if not sheet_open:
+			_draw_hands(w, h, me)
+			_draw_ability_bar(w, h, me)   # SWEEP 4A HOOK (controls)
 		_draw_health(h, me)
 	if me != null and me.alive and not game.paused and not in_surgery:
 		_draw_scan_ring(w, h, me)   # SWEEP 4A HOOK (scanner)
 		_draw_scan_banner(w, h)
 		_draw_ability_card(w, h)
+		_draw_laptop_map(w, h, me)   # TRINKETS chunk B
 	if me != null and not in_surgery:
 		_draw_money(w, h, me)
 	if me != null and not me.alive:
 		_draw_dead_banner(w)
+	if minimap_panel != null and minimap_panel.visible:
+		drawn.append("minimap")   # MINIMAP: drawn by its own node, listed here for the tests
 	_draw_holds(w, h)
 	_draw_host_info(w)
 	_draw_message(w, h, in_surgery)
@@ -438,6 +456,112 @@ func _draw_slot(r: Rect2, kind: String, s: Dictionary, keys: String, sel: bool, 
 		_text(Vector2(pill.position.x + 4.5, pill.end.y - 3.5), label, 13, Color("ffffff"))
 
 
+## TRINKETS chunk B (docs/ITEMS_AND_ICONS.md): the laptop's one charge. You hold it up in front of your
+## face: the lid rises from the bottom of the screen and its display shows a plan of the
+## Trinkets.MAP_RANGE metres around you, north up, with the hospital's floor tiles in a dim green, you
+## as an arrow in the middle and a blip for every surgery item within range. For the last
+## Trinkets.MAP_LOW_SECONDS the battery is low (the screen stutters, a red battery blinks), then the
+## lid drops away. (fp_hands.gd stows the held model while this is up so there is one laptop, not two.)
+const MAP_PX := 268.0
+const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
+## mapgen.gd's walkable tile characters (its own WALKABLE_CHARS; repeated here so the HUD does not
+## preload the whole generator to draw a floor).
+const MAP_FLOOR_CHARS := ".+,PTM"
+
+
+func _draw_laptop_map(w: float, h: float, me) -> void:
+	if game == null or game.trinkets == null:
+		return
+	var left: float = game.trinkets.map_left(me)
+	if left <= 0.0:
+		return
+	drawn.append("laptop_map")
+	var range_m: float = TrinketsScript.MAP_RANGE
+	var total: float = TrinketsScript.MAP_SECONDS
+	var low_s: float = TrinketsScript.MAP_LOW_SECONDS
+	var low: bool = left < low_s
+	# Held up, then lowered: the lid slides in over 0.4 s and drops out over the last 0.35 s.
+	var up: float = clampf((total - left) / 0.4, 0.0, 1.0) * clampf(left / 0.35, 0.0, 1.0)
+	up = up * up * (3.0 - 2.0 * up)
+	if up <= 0.01:
+		return
+	# A dying screen: steady, then it stutters (and blanks now and then) while the battery is low.
+	var blink: bool = low and sin(_t * 13.0) > 0.35
+	var a: float = 1.0
+	if low:
+		a = 0.45 if blink else 0.85
+	var lid := Rect2((w - (MAP_PX + 44.0)) * 0.5, h - 30.0 - (MAP_PX + 74.0) + (1.0 - up) * (MAP_PX + 120.0),
+		MAP_PX + 44.0, MAP_PX + 74.0)
+	# The base under it, then the lid.
+	var base := Rect2(lid.position.x - 26.0, lid.end.y - 2.0, lid.size.x + 52.0, 22.0)
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.16, 0.17, 0.19)
+	bsb.set_corner_radius_all(5)
+	draw_style_box(bsb, base)
+	var lsb := StyleBoxFlat.new()
+	lsb.bg_color = Color(0.20, 0.21, 0.23)
+	lsb.border_color = Color(0.36, 0.37, 0.40)
+	lsb.set_border_width_all(2)
+	lsb.set_corner_radius_all(9)
+	draw_style_box(lsb, lid)
+	var r := Rect2(lid.position + Vector2(22.0, 20.0), Vector2(MAP_PX, MAP_PX))
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.07, 0.05, 0.96 * a)
+	sb.border_color = Color("7de0a0", 0.75 * a)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(3)
+	draw_style_box(sb, r)
+	var c := r.get_center()
+	var ppm := (MAP_PX * 0.5) / range_m          # pixels per metre
+	var here: Vector3 = me.global_position
+	# The floor plan, from the level's tile rows (mapgen.gd's legend; "#" and "=" are solid).
+	var rows: Array = game.level_info.get("rows", [])
+	if not rows.is_empty():
+		var t0 := C.world_to_tile(here - Vector3(range_m, 0, range_m))
+		var t1 := C.world_to_tile(here + Vector3(range_m, 0, range_m))
+		var cell := C.TILE * ppm
+		for ty in range(maxi(0, t0.y), mini(rows.size(), t1.y + 1)):
+			var row: String = rows[ty]
+			for tx in range(maxi(0, t0.x), mini(row.length(), t1.x + 1)):
+				if not MAP_FLOOR_CHARS.contains(row[tx]):
+					continue
+				var wp := C.tile_to_world(tx, ty)
+				var d := Vector2(wp.x - here.x, wp.z - here.z)
+				if d.length() > range_m:
+					continue
+				draw_rect(Rect2(c + d * ppm - Vector2(cell, cell) * 0.5, Vector2(cell, cell)),
+					Color(0.35, 0.85, 0.5, 0.20 * a))
+	# The range ring and the sweep.
+	draw_arc(c, MAP_PX * 0.5 - 4.0, 0.0, TAU, 48, Color("7de0a0", 0.35 * a), 1.0)
+	var sweep := fmod(_t * 1.6, TAU)
+	draw_line(c, c + Vector2(sin(sweep), -cos(sweep)) * (MAP_PX * 0.5 - 5.0), Color("7de0a0", 0.28 * a), 1.0)
+	# Surgery items within range.
+	for pos in (game.trinkets.map_blips(me) as Array):
+		var d2 := Vector2(pos.x - here.x, pos.z - here.z) * ppm
+		if d2.length() > MAP_PX * 0.5 - 6.0:
+			continue
+		var pulse := 0.65 + 0.35 * sin(_t * 5.0 + d2.length() * 0.1)
+		draw_circle(c + d2, 5.0, Color("6fd0ff", 0.22 * a))
+		draw_circle(c + d2, 2.4, Color("cfeeff", pulse * a))
+	# You, in the middle, pointing where you look.
+	var yaw: float = me.rotation.y
+	var f := Vector2(-sin(yaw), -cos(yaw))
+	var s2 := Vector2(-f.y, f.x)
+	draw_colored_polygon(PackedVector2Array([c + f * 8.0, c - f * 5.0 + s2 * 5.0, c - f * 5.0 - s2 * 5.0]),
+		Color("ffffff", 0.9 * a))
+	# Below the screen: the range and time, or the low-battery warning.
+	var y := lid.end.y - 20.0
+	if low:
+		var red := Color("ff4a3d", 1.0 if not blink else 0.35)
+		var bx := lid.position.x + 24.0
+		draw_rect(Rect2(bx, y - 12.0, 30.0, 14.0), red, false, 2.0)
+		draw_rect(Rect2(bx + 30.0, y - 8.0, 3.0, 6.0), red)
+		draw_rect(Rect2(bx + 3.0, y - 9.0, 5.0, 8.0), red)
+		_text(Vector2(bx + 42.0, y), "LOW BATTERY", 13, red)
+	else:
+		_text(Vector2(lid.position.x + 24.0, y), "%.0f m  ·  %.1f s" % [range_m, left], 12, Color("7de0a0", 0.85))
+
+
 ## A small four-point sparkle.
 func _glint(c: Vector2, k: float) -> void:
 	var col := Color(1.0, 0.96, 0.75, 0.9)
@@ -480,7 +604,7 @@ func _draw_ring(r: Rect2, f: float, col: Color) -> void:
 
 
 ## How fresh a body part in `s` is: {frac: 1 fresh .. 0 gone, spoiled: bool}, or {} for anything that
-## does not spoil. Eyes and brains come from their own systems; any other kind can carry the numbers in
+## does not spoil. Eyes come from their own system; any other kind can carry the numbers in
 ## its stack as `fresh` (0..1) and `spoiled` (the seam grafting's other parts use).
 func _spoil_of(kind: String, s: Dictionary) -> Dictionary:
 	if game == null:
@@ -488,9 +612,6 @@ func _spoil_of(kind: String, s: Dictionary) -> Dictionary:
 	if Eyes.is_eye(kind) and game.get("vats") != null:
 		var f: float = game.vats.eye_factor(s)
 		return {"frac": 1.0 - Eyes.rot_of(f), "spoiled": Eyes.is_spoiled_factor(f)}
-	if game.brains != null and game.brains.is_brain(kind):
-		var f2: float = game.brains.factor_of(s)
-		return {"frac": clampf((f2 - game.brains.MIN_FACTOR) / (1.0 - game.brains.MIN_FACTOR), 0.0, 1.0), "spoiled": f2 < game.brains.ROTTEN_FACTOR}
 	if s.has("fresh"):
 		return {"frac": float(s.fresh), "spoiled": bool(s.get("spoiled", float(s.fresh) <= 0.0))}
 	return {}
@@ -585,7 +706,7 @@ func _draw_pops(w: float, h: float) -> void:
 ## cooldown sweep (now a radial arc instead of a bottom bar), level pips, a cost tag, the key hint,
 ## and (Alt held) the ability's name and, when it cannot fire, why.
 func _draw_ability_bar(w: float, h: float, me) -> void:
-	var b := game.brains
+	var b := game.abilities
 	if b == null:
 		return
 	drawn.append("abilities")
@@ -714,7 +835,7 @@ func _slot_reason(me, id: String, cd: float) -> String:
 	if id == "hive_in" and (me.carrying != 0 or me.operating):
 		return "Hands busy"
 	if id == "hive_in" and not me.get("hive_view"):
-		var b = game.brains
+		var b = game.abilities
 		var lvl: int = b.level(me.peer_id, "hive")
 		if b.nearest_hive(me, b.hive_range(lvl)) == null:
 			return "No Hive in range"
@@ -850,9 +971,6 @@ func _draw_holds(w: float, h: float) -> void:
 		var full: float = Game.TABLE_UP_HOLD if me.on_table else (Game.TABLE_STRAP_HOLD if strapping else Game.CARRY_HOLD)
 		progress = clampf(me.carry_hold / full, 0.0, 1.0)
 		label = "GETTING UP" if me.on_table else ("STRAPPING IN" if strapping else "LIFTING")
-	elif me != null and game.brains != null and game.brains.blend_progress(me.peer_id) > 0.0:   # SWEEP 3 HOOK (brains)
-		progress = game.brains.blend_progress(me.peer_id)
-		label = "BLENDING"
 	if progress <= 0.0:
 		return
 	drawn.append("hold")

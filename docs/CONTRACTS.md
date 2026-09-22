@@ -97,7 +97,7 @@ prompt already uses for its own styling. Technique: a copy of each of the target
 unlit, one material per highlight faded in by a tween.
 
 This replaced a handful of always-on `Label3D` room/prop labels that duplicated this cue (the OR
-supply shelf's "SUPPLY - SURGICAL" tag, the break-room blender's "BLENDER" tag): removed outright,
+supply shelf's "SUPPLY - SURGICAL" tag): removed outright,
 since the aim highlight plus the crosshair prompt already say the same thing without covering the
 screen the whole time you are in the room. Navigational signage (the hospital's own room-name
 signs over doorways, `hospital_builder.gd`'s `_sign_node`, "OR" / "EMERGENCY" / wing names) is
@@ -528,7 +528,7 @@ func eye_transform() -> Transform3D                         # every machine: eye
     routed in `game._event` by its `sn_` prefix to `game.sono_echo`. `Monster._sono_visual` works
     the clip, the aim and the headroom out locally, so nothing else needs replicating.
   - `MonsterModel.set_ears(listen, yaw, delta)` swivels its ears toward `listen_yaw`. Its kind id is
-    `sonographer` (`brain_sonographer`, Brains path `sonographer`, database key `sonographer`); old
+    `sonographer` (path `sonographer`, database key `sonographer`); old
     saves' `discharged` database page loads as it (`database_store.gd`).
 - **Placement** (`hive_spots`, host): hallway tiles (`.`/`M`, outside every room rect grown by a
   tile, not in a doorway's mouth) of each wing (`zone_of` == the wing id), at least 5 m from the
@@ -748,7 +748,7 @@ static func entries(section, view) -> Array   # [{key, title, known}]
 static func page(section, key, view) -> Dictionary
 # wall_session.gd (game.wall): who is signed in, the shared page, clicks and lasers
 var user: int                          # signed-in peer, 0 for nobody
-func view() -> Dictionary              # {db: {kind: bits 1 sighted 2 scanned 4 harvested}, peer, brains}
+func view() -> Dictionary              # {db: {kind: bits 1 sighted 2 scanned 4 harvested}, peer, abilities}
 func click(px) / func sign_in() / func sign_out() / func own_db_changed()
 func laser_of(player) -> Dictionary    # {from, to, landed, terminal, px}
 ```
@@ -769,7 +769,7 @@ func laser_of(player) -> Dictionary    # {from, to, landed, terminal, px}
   (`_rpc_wall("sign_in", {db})`), and every change to it while signed in (`game.mark_own_db` ->
   `own_db_changed`). Only one player at a time. Signed out by SIGN OUT (a click), walking
   `WALK_AWAY_M` (9 m) from the screen, leaving, or `IDLE_SECONDS` (60) with nobody's laser on the
-  screen; signing out goes HOME. Ability levels read `game.brains.level(user, path)` (replicated).
+  screen; signing out goes HOME. Ability levels read `game.abilities.level(user, path)` (replicated).
 - **Net:** global snapshot fields "wt" {p: page, h: history}, "wu" user, "wd" the user's database
   bits, "pj" the projector; a player's `scan_holding` travels in `report_full` ("sh") so every
   machine draws everyone's laser (from their flashlight, along their view) and their dot on the
@@ -794,12 +794,12 @@ game.mark_db(kind, field)             # host: sets a field true (once), saves to
     # ("db_full" event) -- there is no continuous replication of the database.
 ```
 
-- `mark_db` is what `game._tick_scan` (sighted/scanned) and `brains.drink` (an absorbed brain:
-  harvested) call. It is not cleared by `reset_money()` (a wipe): species knowledge is meant to
+- `mark_db` is what `game._tick_scan` (sighted/scanned) and the harvest hook call. It is not
+  cleared by `reset_money()` (a wipe): species knowledge is meant to
   survive a wipe, and `DatabaseStore.save`/`load_into` make it survive a full reload too.
 - A guest's scan or harvest is recorded exactly like the host's own: `_tick_scan` and the
-  brains hook are already host-only and iterate every player (`alive_players()`), so whichever
-  peer is aiming or holding the brain, the record it changes is `game.database` on the host.
+  harvest hook are already host-only and iterate every player (`alive_players()`), so whichever
+  peer is aiming or harvesting, the record it changes is `game.database` on the host.
   Guests never keep their own copy; their terminal only ever shows a fetched mirror.
 
 ## Hospital (hospital worker, sweep 2 wave 1)
@@ -1163,9 +1163,10 @@ Loot (`scripts/economy/`):
 
 - `loot_table.gd`: `LOOT[kind]` `{name, short, value [min,max], tier 0..3, bulky, fragile, stack,
   batch, rooms {room_kind: weight, "*": any}, surfaces [...], containers {type: weight}, trinket}`, 11 kinds (plain: `pill_bottle`, `xray_film`,
-  `heart_monitor`, `gold_watch`, `ultrasound`; trinkets, which sell and get a job in a later chunk:
+  `heart_monitor`, `gold_watch`, `ultrasound`; trinkets, which sell and each also do one thing, see
+  "Trinkets" below:
   `desk_phone`, `laptop`, `defibrillator`, `reflex_hammer`, `epipen`, `pulse_oximeter`) plus the
-  brains and eyes. Room keys are the real generated room kinds (`patient_room`, `supply_closet`,
+  eyes. Room keys are the real generated room kinds (`patient_room`, `supply_closet`,
   `janitor_closet`, `lab`, ...); trinkets are kept rarer than plain loot;
   `weight(kind, room_kind, depth)`, `roll_value(kind, depth, roll)` (+20% per depth).
 - `loot_spawner.gd`: `plan(seed, shift, level_info, occupied) -> [{kind, count, value, container_id,
@@ -1203,6 +1204,99 @@ game.economy.request_order({kind: sets})      # this machine's player orders (ho
 game.economy.open_fax_ui() / .fax_ui          # the order form (scripts/economy/fax_order_ui.gd)
 ```
 
+### Trinkets (docs/ITEMS_AND_ICONS.md chunk B, 2026-09-18)
+
+`scripts/trinkets/trinkets.gd` (`Trinkets`), a child **"Trinkets"** of Game on every machine
+(`game.trinkets`), created in `_ready` beside Combat, Brains, Vats and Grafts. It owns what the six
+trinket loot kinds do. DESIGN.md "Trinkets" is the design; this is the surface.
+
+**The use path.** Left mouse with a trinket selected goes through `Player._local_step` exactly where
+the saw and the needle do: `combat.is_usable(kind)` is tried first, then
+`trinkets.local_try_use(p)`, and only if both refuse does the click become a shove. `local_try_use`
+acts on the host and RPCs `_rpc_use` to the host from a client. There is no wind-up and no charge:
+a trinket resolves the moment the host accepts the click, at most one use per `USE_GAP` (0.25 s) per
+player. `game.player_used` routes the same way for the old `use_count` path.
+
+```gdscript
+trinkets.is_usable(kind) -> bool                 # one of Trinkets.KINDS
+trinkets.local_try_use(p) -> bool                # the clicking machine; false lets the click shove
+trinkets.use(p)                                  # host: do it now
+trinkets.use_prompt(p) -> String                 # every machine, ~10 Hz: the crosshair line
+Trinkets.is_spent(slot_or_item) -> bool          # static: a used-up one-use trinket
+Trinkets.scrap_value(kind) -> int                # what a spent one sells for
+trinkets.last_result                             # host, for tests: {what, kind?, id?}
+```
+
+**Used up.** A spent one-use trinket (`ONE_USE`: `laptop`, `defibrillator`, `epipen`) gets `used: true`
+on its hand slot and its `v` drops to `SCRAP[kind]`. The HUD greys it and draws a crack
+(`hud.gd _draw_crack`). The mark travels through a drop as `WorldItem.x == Trinkets.USED_MARK`
+(`"used"`), and `game.pickup_item` turns that back into `used` on the slot, so a spent trinket stays
+spent for everyone. The furnace needs no change: it pays `s.v`.
+
+**Replicated state** (snapshot `g.tk`, host authoritative, `net_state` / `apply_net_state`):
+`ri` ringing world item ids, `rh` peers with a phone ringing in hand, `mp` peers with a live laptop
+map, `tg` `{monster id: the peer whose pulse oximeter is on it}`, `ep` peers with an EpiPen boost —
+each mapping to the `world_time` it ends — plus two counters, `sp` `{peer: forced turns}` and
+`sw` `{peer: reflex-hammer swings}`, both mod 64. Every machine plays the rings and the heartbeats
+itself from that plus the monster's replicated `md` (mode), so no sound crosses the wire, and it
+runs the swings and the turns off the counters, so no animation does either. A counter rather than
+an event because it cannot be lost or repeated by a dropped packet; a machine seeing one for the
+first time just remembers where it is, so a late joiner neither swings nor spins on arrival.
+
+**Per trinket** (the constants are the tuning; the brief's numbers are their defaults):
+
+- **Desk phone.** `_use_phone` drops a world item at your feet and rings it for `RING_SECONDS`.
+  Every `RING_PERIOD` the host calls `game.emit_noise(pos, RING_LOUDNESS, "phone")` and, because the
+  Hive is deaf, `alert_to(pos)` on every Hive within `RING_HIVE_RANGE`. Picking the phone up ends
+  the ring; nothing is used up. The host also watches every player's selected slot and rolls
+  `PULL_RING_CHANCE` each time a desk phone becomes the selected stack (`ring_in_hand(p)`).
+- **Laptop.** `map_left(p)` (seconds) and `map_blips(p)` (world positions of `Items.is_surgical`
+  world items within `MAP_RANGE`) are what `hud.gd _draw_laptop_map` draws: a north-up plan built
+  from `game.level_info.rows`, an arrow for you, a blip per item, for `MAP_SECONDS`.
+- **Defibrillator.** `revive_in_place(q)` is `game.revive_player` without the scatter: the downed
+  teammate gets up on the spot with `game.REVIVE_HP`, and the same `"revive"` event goes out, so the
+  other machines agree. `DEFIB_NOISE` is emitted as noise kind `"defib"`.
+- **Pulse oximeter.** Uses `combat.find_target` and `combat.can_sedate(m)` — the same window the
+  sedative jab wants — so the Night Nurse (not `Monster.is_capturable`) is refused. On success the
+  stack leaves your hands and `_tagged[monster_id] = peer`. `Trinkets.heart_mode(m)` maps the
+  monster's mode to `"wandering"` / `"suspicious"` / `"hunting"` / `"down"` and
+  `Trinkets.heartbeat_period(m)` to `BEAT_*`; every machine plays `trinkets_heartbeat` at the
+  monster's position at that rate. `trinkets.on_monster_removed(m)`, called from
+  `combat.on_monster_removed` (so both `game.kill_monster` and strapping it to a table come through
+  it), drops the pulse oximeter on the floor where the monster was, worth what it was worth.
+  `on_monsters_cleared` forgets the tags with the level.
+- **Reflex hammer.** A click starts a **swing**, and the bonk lands on the swing's contact frame
+  (`Player.SWING_CONTACT`), not the click frame. The swing is the charged-throw pose
+  (`scripts/hands/throw_pose.gd`) run at `Player.SWING_SPEED`: `Player.start_swing()` scripts
+  `throw_wind` the way holding and releasing the drop key would, only faster, and hands
+  `swing_speed` to `ThrowPose.update()` so the pose plays at the same rate. Nothing new is
+  animated. The swing travels as a counter in `tk.sw` (`{peer: swings}`), and every machine runs
+  its own timer from it, for every player, so the swinger sees it in their own hands and everyone
+  else sees it on their body. The clicking machine starts its own swing on the click for
+  responsiveness and `_tick_swings` leaves an already-running one alone. While a swing plays here,
+  the local timer owns `throw_wind` and the 20 Hz report of it is ignored.
+  The turn itself is quick but not instant (`Player.SPIN_TIME` / `Monster.SPIN_TIME`, both 0.18 s,
+  out-cubic). `spin_player(q)` calls `Player.spin_view()`, which starts that turn on the machine
+  that owns the camera (`tk.sp`, the counter) and on the host's own copy; while it runs it owns
+  `_yaw`, so the mouse cannot fight it, and ordinary look resumes the moment it ends.
+  `spin_monster(m)` calls **`Monster.spin_around()`** (host): the brain is told with the monster
+  already facing the new way (so `HiveBrain._start_search`'s `_look_base` is the *new* heading and
+  it really does search the wrong way), then the body turns over `SPIN_TIME` while `_tick_spin`
+  has the last word on the yaw over whatever `face_dir` asked for. `HiveBrain.spun_around` forgets
+  its target, stops seeing, starts searching, and holds its next sight check until the turn is
+  finished. The Night Nurse is refused before either. A brain without `spun_around` just gets the turn, so the
+  Sonographer (not in the game yet, docs/SONOGRAPHER.md chunk B) will work the moment it lands and
+  can add its own reaction there.
+- **EpiPen.** `jab_epipen(q)` sets the boost; every machine pushes `trinkets.sprint_mult(p)` onto the
+  new **`Player.sprint_mult`** each physics frame, and `player.gd` multiplies `C.SPRINT_SPEED` by it
+  and holds `stamina` at 1 while it is above 1. When `EPI_SECONDS` run out the host sets
+  `p.stun = EPI_COLLAPSE` and broadcasts the existing `"stun"` event.
+
+**Sounds:** `tools/gen_audio_trinkets.mjs` writes `audio/sfx/trinkets_*.wav`
+(`phone_ring`, `phone_pick`, `laptop_open`, `defib_zap`, `heartbeat`, `hammer_bonk`, `clip_on`,
+`epipen`). **Tests:** `tools/trinkettest.tscn` (headless, all six) and the nettest scenario
+`trinkets`.
+
 ### The pharmacy and the crematorium furnace (pharmacy worker, sweep 4A chunk 3; HUB REDESIGN, 2026-09-15)
 
 Gold bars, the sell bin and the shop van are gone. Buying is a fax order from the lobby's fax terminal
@@ -1222,8 +1316,8 @@ game.buy_pills(p) -> bool           # host; one set of pills, order_pharmacy(p, 
 game.PHARMACY_CATALOG               # [{kind, name, count, price}] per set; PHARMACY_MAX_QTY sets a line
 game.eat_pill(p)                    # host; take one from the held bottle, same hit reaction as a throw
 game.furnace_sell(kind, count, value, at)   # host; the furnace calls this once a sale resolves
-game.furnace_can_sell(kind) -> bool  # loot (incl. brains) and placebo_pills; nothing else
-game.furnace_value(kind, slot) -> int  # brains: spoiled value; placebo_pills: 0; else slot.v
+game.furnace_can_sell(kind) -> bool  # loot and placebo_pills; nothing else
+game.furnace_value(kind, slot) -> int  # eyes: spoiled value; placebo_pills: 0; else slot.v
 game.PILL_PRICE / game.PILL_COUNT    # $15, 10 pills a bottle
 game.ROCKET_BOOTS_PRICE              # $100 a pair (catalog line "rocket_boots", count 1)
 game.player_faceplanted(p)           # host; a rocket dive hit a wall head on: damage_player(p, 1, "faceplant")
@@ -1541,9 +1635,9 @@ OrScreenModel.build(game) -> Dictionary # scripts/orscreen/or_screen_model.gd, p
   "slot" / "wide" per unit drawn. The held item's name shows above the bar for 2 s when what you hold
   changes (`item_name` in `hud.drawn`). Pickup pop: a new item or a bigger count in a slot flies its icon
   from the crosshair into that slot in 0.3 s (`pickup_pop`). Alt shrinks the row to small squares and the
-  ability bar grows into the bar as before (the ability circles now sit just under that small row).
+  ability bar grows into the bar (the ability circles sit just under that small row).
   Body parts spoil visibly: a ring drains round the slot and the icon greys (a spoiled part stays grey).
-  Eyes read `game.vats.eye_factor`, brains `game.brains.factor_of`, any other kind the numbers in its
+  Eyes read `game.vats.eye_factor`, any other kind the numbers in its
   stack: `fresh` (0..1) and `spoiled` (bool). A used-up trinket is a stack with `used: true`: greyed with
   a crack (nothing sets it yet; the trinkets chunk does). A kind with no icon draws a plain slot with its
   first letters in its category colour.
@@ -2077,128 +2171,137 @@ Tests: `godot --headless --path . --script tools/nettest_run.gd` runs every mult
 scenario (`-- --only=a,b`, `--lag=MS --jitter=MS --loss=P`, `--only=bandwidth`). Add a scenario
 for anything that changes what crosses the wire.
 
-## Brains (brains worker, sweep 3)
+## Abilities (sweep 3; grafting is the only source since 2026-09-22)
 
-`game.brains` (`scripts/brains/brains.gd`, child "Brains" of Game on every machine; parts in
-`scripts/brains/`: `brain_model.gd`, `blender.gd`, `echo_view.gd`, `hive_view.gd`).
+`game.abilities` (`scripts/abilities/abilities.gd`, child "Abilities" of Game on every machine;
+the two views beside it: `echo_view.gd`, `hive_view.gd`).
+
+Two surgeon abilities -- **Echo** (id `echo`, path `sonographer`: a shriek that outlines everything
+nearby through walls) and **Hive Eyes** (id `hive_in`, path `hive`: see through a nearby Hive for a
+few seconds) -- each at a level 0..3, sitting in one of four per-player ability slots.
+
+**Where a level comes from: grafting, and nothing else.** `Grafts.PART_ABILITY` maps `eye_hive` ->
+`hive_in`: finishing the graft calls `abilities.set_level(peer, "hive_in", 1)` and swapping the part
+back out calls `abilities.clear_ability(peer, "hive_in")`. Brains and the break-room blender used to
+be the other source and are gone (docs/backlog/ABILITIES_REMOVED.md), which is why a level is now
+simply **set** rather than accumulated: there are no fractional points any more. **Echo therefore has
+no source in the game today** -- only dev, tests and review setups can hand it out. See KNOWN_ISSUES.md.
+
+Authority: the host decides everything (levels, slots, cooldowns, who is looking through which Hive).
+Clients get it through `net_state()` (global snapshot field `ab`), the Player field `hive_view`
+(report key `hv`) and the reliable events `ab_echo` / `ab_hive`. The views run on every machine from
+that state.
 
 ```gdscript
-game.brains.spawn_brain(kind: String, quality: float, pos: Vector3) -> Node   # host: a WorldItem on
-    # whatever is under pos; value = base * quality (min $1); spoil clock starts now; squelch sound
-Brains.is_brain(kind) -> bool              # "brain_hive", "brain_sonographer" (static)
-Brains.spoil_factor(age_seconds) -> float  # 1.0 for 45 s, linear to 0.15 at 225 s, then 0.15 (static)
-Brains.condition(factor) -> String         # "fresh" (>= 0.6), "spoiling" (>= 0.3), "rotten" (static)
-Brains.base_value(kind) -> int             # 150 / 350 (loot_table.gd "value")
-game.brains.current_value(stack_or_item) -> int   # a hand slot {kind, v, bt} or a WorldItem: v * factor
-    # for brains (min $1), the plain value for any other kind
-game.brains.factor_of(stack_or_item) / age_of(stack_or_item)
-game.brains.points(peer_id, path) -> float # path "hive" | "sonographer"; 0..3, steps of 0.25
-game.brains.level(peer_id, path) -> int    # floor(points), 0..3
-game.brains.add_points(peer_id, path, amount)   # host (the blender, dev, tests); the moment a path
-    # first reaches level 1 it also grants that ability's slot (add_ability, below)
-game.brains.on_reset()                     # host, from game.reset_money (game over, new session)
-
-# SWEEP 4A (docs/SWEEP4A.md "Ability slots"): 4 ability slots per player, independent of how a
-# level is earned (today: points/level above; grafting will source levels later, docs/backlog/
-# SWEEP4B.md), so nothing here reads `_points` except through level()/points().
-Brains.ABILITY_ID := {"sonographer": "echo", "hive": "hive_in"}   # path -> ability id (static)
-game.brains.slots_for(peer_id) -> Array    # this player's 4 slots, ability id or "" (host authoritative,
-    # replicated: net_state()["ab"]; the ability bar is local-only, so a client only really needs its own)
-game.brains.add_ability(peer_id, id) -> bool    # host: id into the first empty slot; true if it was
+Abilities.ABILITY_ID := {"sonographer": "echo", "hive": "hive_in"}   # path -> ability id
+Abilities.ABILITY_ID_TO_PATH := {"echo": "sonographer", "hive_in": "hive"}
+Abilities.ABILITY_NAME := {"hive": "Hive Eyes", "sonographer": "Echo"}
+Abilities.MAX_SLOTS 4 / MAX_LEVEL 3
+game.abilities.level(peer_id, path) -> int        # 0..3; path "hive" | "sonographer"
+game.abilities.set_level(peer_id, id, lvl)        # host (grafting, dev, tests): sets the level
+    # directly; `id` is an ability id, and a level of 1 or more also grants the slot. This is the
+    # whole earning path.
+game.abilities.add_ability(peer_id, id) -> bool   # host: id into the first empty slot; true if it was
     # already in a slot (no-op); false and unchanged once all 4 slots are full (refused, not swapped)
-game.brains.slot_of(peer_id, id) -> int    # this player's slot index for id, or -1
-game.brains.set_level(peer_id, id, lvl)    # host (tests, dev, later grafting): sets the level directly
-    # (id must be "echo" / "hive_in") and grants the slot the same as reaching it through points
-game.brains.ability_slot(p, slot_idx)      # host, from game.player_ability_slot (Alt+1..4): per-slot
-    # dispatch, replacing the old best_path()/ability(p) (removed). Each slot's ability still cools
-    # down on its own path's cooldown key (echo:<peer> / hive:<peer>), unaffected by which slot it
-    # sits in. Pressing the slot again while its ability is active (Hive Eyes) ends it.
-game.brains.blender                        # the placed blender node (interact_id "blender") or null
-game.brains.blend_progress(peer_id) -> float    # 0..1 while that player holds E on the blender
-game.brains.camera() -> Camera3D           # every machine: the Hive Eyes camera while the LOCAL
+game.abilities.slots_for(peer_id) -> Array        # this player's 4 slots, ability id or ""
+game.abilities.slot_of(peer_id, id) -> int        # slot index, or -1
+game.abilities.clear_ability(peer_id, id)         # host: empties the slot, zeroes the level and ends
+    # any Hive Eyes view in progress (a grafted Hive eye coming back out)
+game.abilities.ability_slot(p, slot_idx)          # host, from game.player_ability_slot (Alt+1..4):
+    # per-slot dispatch. Each slot's ability cools down on its own path's key (echo:<peer> /
+    # hive:<peer>), unaffected by which slot it sits in. Pressing the slot again while Hive Eyes is
+    # active ends it.
+game.abilities.echo_radius(lvl) / echo_seconds(lvl) / hive_range(lvl) / hive_seconds(lvl)
+game.abilities.cooldown_left(peer_id, path) -> float
+game.abilities.nearest_hive(p, range_m) -> Node
+game.abilities.camera() -> Camera3D        # every machine: the Hive Eyes camera while the LOCAL
                                            # player looks through a Hive (main.gd renders it), else null
-game.brains.local_hive_active() / local_exit()  # main.gd: Esc during Hive Eyes
-game.brains.spawn_hive(pos) -> Node     # host (dev, tests): a Hive; a stand-in Sonographer body
-                                           # with kind "hive" while Monster.HIVE does not exist
-game.brains.dev_request(sender, action, args)   # "br_spawn_brain" {kind, quality, age}, "br_levels"
-                                           # {amount, id}, "br_reset", "br_spawn_hive" (dev_room forwards br_*)
+game.abilities.local_hive_active() / local_exit()   # main.gd: Esc during Hive Eyes
+game.abilities.on_reset()                  # host, from game.reset_money (game over, new session)
+game.abilities.dev_request(sender, action, args)    # "ab_levels" {id, level}, "ab_reset"
+                                           # (dev_room forwards ab_*)
+game.spawn_hive(pos) -> Node               # host (dev, tests): a Hive. It lives on game.gd, not here.
 ```
 
-- **Brain items.** Loot kinds `brain_hive` ($150) and `brain_sonographer` ($350) in
-  `loot_table.gd` with `brain: true`, fragile, not stackable, not bulky, no rooms / surfaces /
-  containers (the loot spawner never picks them). The model is one merged mesh with the gold rim.
-- **Spoil time `bt`** (world_time of the harvest): `WorldItem.bt` (default -1e6 = none; any value
-  above -1e5 is a real clock, it may be negative early in a run), reported as `bt` (snapped 0.5);
-  in a hand slot as `slots[i].bt`. Carried by `game.pickup_item`, `drop_selected`, `_drop_hands`
-  (a violent drop cracks the brain like other fragile loot, the clock stays), `_drop_hands_in_place`
-  and the dev room's `hand_over`. **Anything else that moves a stack between hands and the world
-  must carry `bt` too.** The host stamps `bt = world_time` on any brain found without one (4 Hz).
-- **The dumpster** is the existing sell bin (interact_id `sell_bin`, unchanged): its sign says
-  DUMPSTER, its prompt `Sell X for $N at the dumpster` with the current value, `game.sell_selected`
-  pays `current_value`. The HUD slot and the world item prompt show the current value (and the
-  condition for brains).
-- **Blender:** on a break-room counter top found with downward rays over `level_info.rooms` kind
-  `break_room` (the free end nearest the time clock, backed toward the wall), else on a steel stand
-  on free floor beside `level_info.economy.shop` (dev room), else near the clock. Placed two physics
-  frames after a new `game.level`, same spot on every machine. Holding a brain selected: hold E
-  (`interact_hold` 1.5 s; the host simulates it from `wants_interact` + `aim_id`, like the clock).
-  Drinking: +1.0 fresh, +0.75 spoiling, +0.5 rotten to that path, capped at 3.0.
-- **Alt+1..4 (sweep 4a):** fires that slot's ability through `ability_slot`; an empty slot (or the
-  slot pressed again while its ability is active, other than ending Hive Eyes): "Nothing happens."
-  (at most once a second). Cooldowns: Echo 20 s from the shriek, Hive Eyes 12 s from when the view
-  ends (presses in the 0.5 s after a view ends are ignored). Not while downed; Hive Eyes not while
+- **Alt+1..4:** fires that slot's ability through `ability_slot`; an empty slot (or the slot pressed
+  again while its ability is active, other than ending Hive Eyes): "Nothing happens." (at most once a
+  second). Cooldowns: Echo 20 s from the shriek, Hive Eyes 12 s from when the view ends (presses in
+  the `HIVE_PRESS_GRACE` 0.5 s after a view ends are ignored). Not while downed; Hive Eyes not while
   carrying or operating. Scaling is literal: `12 + 6 * level` m and `2.5 + 0.75 * level` s for Echo,
-  `20 + 10 * level` m and `5 + 2 * level` s for Hive Eyes, so a half point (level 0) already works
-  at the base. R itself no longer fires an ability (docs/SWEEP4A.md "Controls"): it holds the
-  built-in scanner instead (below), and the guide opens on E.
-- **Echo** (host): `game.emit_noise(pos + 1.5 up, 1.2, "echo")`, event `br_echo {id, pos, r, s}`:
-  everyone hears `brains_shriek` at pos (the shrieker hears it 2D); the shrieker's machine runs
+  `20 + 10 * level` m and `5 + 2 * level` s for Hive Eyes. R itself does not fire an ability
+  (docs/SWEEP4A.md "Controls"): it holds the built-in scanner instead, and the guide opens on E.
+- **Echo** (host): `game.emit_noise(pos + 1.5 up, 1.2, "echo")`, event `ab_echo {id, pos, r, s}`:
+  everyone hears `ability_shriek` at pos (the shrieker hears it 2D); the shrieker's machine runs
   `echo_view.start`: a dark veil quad on the camera and at most 40 things / 150 mesh outlines
   (monsters red, other players white, surgical items teal, loot gold, containers dim) through walls
   (`depth_test_disabled`, `ignore_occlusion_culling`), lit as a 26 m/s wave passes. Freed when it ends.
-  **Echo polish (sweep 4a chunk 4):** every machine that gets the `br_echo` event (not just the
-  shrieker's) spawns a quick expanding ring (`Brains._spawn_echo_pulse`, a self-freeing tween on a
-  torus, no state kept) at `pos` and starts a local one-shot pose timer
-  (`Brains._echo_pose_until[shrieker peer] = world_time + 0.5`, not replicated -- every machine
-  sets it the same way from the same reliable event) that leans the shrieker's `body_visual` back
-  briefly (`Player._update_down_pose`'s tilt calc), so the shriek visibly comes from them too.
+  Every machine that gets the `ab_echo` event (not just the shrieker's) spawns a quick expanding ring
+  (`Abilities._spawn_echo_pulse`, a self-freeing tween on a torus, no state kept) at `pos` and starts a
+  local one-shot pose timer (`Abilities._echo_pose_until[shrieker peer] = world_time + 0.5`, not
+  replicated -- every machine sets it the same way from the same reliable event) that leans the
+  shrieker's `body_visual` back briefly, so the shriek visibly comes from them too.
 - **Hive Eyes** (host): the nearest `kind == "hive"` monster within range (through walls, not
-  `is_sedated()`); `Player.hive_view = true` (report key `hv`), `br.hv[peer] = [monster id, end
-  world_time]`, event `br_hive {id, on}`. Ends on time, its slot / E / Esc, the monster leaving
-  `game.monsters` (killed, strapped) or `is_sedated()`, and the player's hp dropping, being downed,
-  stunned or carried. While `hive_view` the Player ignores movement, mouse look, aim, use, shove,
-  drop and interact (E bumps the Hive Eyes slot's `ability_slot_press`); remote copies droop the
-  head and lean, and show a glazed-eyes glow (`Player._hive_glaze`, an emissive quad on the head,
-  sweep 4a chunk 4 -- teammates only, toggled in `_remote_step`).
-  **Fly-through (sweep 4a chunk 4, `scripts/brains/hive_view.gd`, local/cosmetic only):** `end_at`
-  now carries `HiveView.FLIGHT_IN` (1.2 s) on top of `hive_seconds(lvl)`, so the duration timer
-  only really starts once the flight lands. The local camera leaves the player's own camera
-  transform and glides along `NavigationServer3D.map_get_path` (the default map; a straight line
-  when none is found) to the Hive's eyes over `FLIGHT_IN`, looking ahead along the path;
-  `hive_view._phase` is `"in"` (flying), `"settled"` (riding the eyes, the original sweep 3
-  behaviour) or `"out"` (a `FLIGHT_OUT`, 0.3 s, glide back to wherever the body currently is).
-  Ending is instant (no `"out"` phase) when the monster is gone, or when the local player's hp
-  dropped since the flight started, or they are downed/carried (`hive_view._begin_end`'s own
-  comparison against `_start_hp`, captured client-side -- nothing new was added to the wire for
-  this). A quiet end (the slot again, or time running out) gets the `"out"` glide instead.
+  `is_sedated()`); `Player.hive_view = true` (report key `hv`), the abilities node's `hv[peer] =
+  [monster id, end world_time]`, event `ab_hive {id, on}`. Ends on time, its slot / E / Esc, the
+  monster leaving `game.monsters` (killed, strapped) or `is_sedated()`, and the player's hp dropping,
+  being downed, stunned or carried. While `hive_view` the Player ignores movement, mouse look, aim,
+  use, shove, drop and interact (E bumps the Hive Eyes slot's `ability_slot_press`); remote copies
+  droop the head and lean, and show a glazed-eyes glow (`Player._hive_glaze`, an emissive quad on the
+  head -- teammates only, toggled in `_remote_step`).
+  **Fly-through (`scripts/abilities/hive_view.gd`, local/cosmetic only):** `end_at` carries
+  `HiveView.FLIGHT_IN` (1.2 s) on top of `hive_seconds(lvl)`, so the duration timer only really starts
+  once the flight lands. The local camera leaves the player's own camera transform and glides along
+  `NavigationServer3D.map_get_path` (the default map; a straight line when none is found) to the
+  Hive's eyes over `FLIGHT_IN`, looking ahead along the path; `hive_view._phase` is `"in"` (flying),
+  `"settled"` (riding the eyes) or `"out"` (a `FLIGHT_OUT`, 0.3 s, glide back to wherever the body
+  currently is). Ending is instant (no `"out"` phase) when the monster is gone, or when the local
+  player's hp dropped since the flight started, or they are downed/carried (`hive_view._begin_end`'s
+  own comparison against `_start_hp`, captured client-side -- nothing extra on the wire for this).
+  A quiet end (the slot again, or time running out) gets the `"out"` glide instead.
   **Known gap:** cycling between Hives at level 2+ and the hold-to-exit key are not wired up
-  this pass (`hive_view._begin_cycle` exists but nothing calls it) -- see KNOWN_ISSUES.md.
-- **Replication:** `net_state()` = `{"p": {peer: [hive, sonographer]}, "hv": {peer: [id, end]},
-  "bh": {peer: progress}, "ab": {peer: [4 ability ids]}}` (copies, quantized; empty dictionaries
-  when idle).
-- Sounds `brains_squelch`, `brains_blend`, `brains_gulp`, `brains_shriek`, `brains_hive_in`,
-  `brains_hive_out` (`tools/gen_audio_brains.mjs`).
-- Tests: `tools/braintest.tscn` (headless; sweep 4a chunk 4 added the fly-through/fly-back timing
-  cases), nettest scenario `brains`, `tools/brainshot.tscn` (windowed shots to `tools/brain_shots/`),
-  `tools/perfprobe.tscn -- --brains`, `tools/controlstest.tscn` (sweep 4a chunk 1: crouch/jump,
-  Alt+1..4 slot dispatch, the scanner), `tools/databasetest.tscn` (sweep 4a chunk 4: scan/harvest
-  unlocking tiers, persistence across a wipe and a reload, a second peer's scan landing in the
-  host's database, the guide binder and `read` action being gone).
+  (`hive_view._begin_cycle` exists but nothing calls it) -- see KNOWN_ISSUES.md.
+- **The grafted Hive eye's glow** follows `hive_view`: see "Eyeball Grafting" below.
+- **Replication:** `net_state()` = `{"lv": {peer: [hive level, sonographer level]}, "hv": {peer: [id,
+  end]}, "sl": {peer: [4 ability ids]}}` (copies, quantized; empty dictionaries when idle).
+- Sounds `ability_shriek`, `ability_hive_in`, `ability_hive_out` (`tools/gen_audio_abilities.mjs`).
+- Tests: `tools/controlstest.tscn` (Alt+1..4 slot dispatch), `tools/grafttest.tscn` (Hive Eyes 1 in
+  and out off the graft), nettest scenario `graft`.
+
+## The character sheet (Tab)
+
+`main.char_sheet` (`scripts/character_sheet.gd`, a CanvasLayer on layer 3, local UI on every
+machine). Tab opens three rows of four: **HANDS** (`Player.slots`), **ABILITIES**
+(`abilities.slots_for`) and **WORN**. Esc closes it too (`main._unhandled_input` owns both keys, so
+one press never flips it twice); it shuts itself when you die, pause, go under for an operation or
+ride a Hive's eyes.
+
+- **It does not pause and it does not blind you.** The world is dimmed, not hidden, and the shift
+  keeps running behind it. The mouse is freed so you can hover (`main._update_mouse`), which roots
+  you where you stand (`Player` gates movement and look on a captured mouse): open is a *worse*
+  place to be than walking, on purpose. While it is up the HUD's item and ability bars stand down
+  (`Hud.sheet_open`), since the sheet is those same two rows, bigger.
+- **Hover** opens a card in a fixed column to the right, with a leader line to the slot.
+  `CharacterSheet.hover_lines(row, i, player, game)` is static and pure, so a test can read a card
+  without a screen. The ability cards take their numbers from `abilities.echo_radius` /
+  `echo_seconds` / `hive_range` / `hive_seconds` at the current level, plus what the next level
+  would give: nothing about an ability's reach is typed into the sheet.
+- **WORN is boots plus three empty places** (helm, belt, gloves). Those three items do not exist.
+- **Unequipping** (`Game.player_unequip`, host): the boots come off and land at your feet as a loose
+  `rocket_boots` world item, which anyone can pick up and put on again (`Game._put_on`). Never into
+  a hand -- `Items.is_worn` / `Player.can_take` already say worn things never occupy a hand, and the
+  floor has no hands-full case. **Refused in mid-air** (`boots` gates the rocket dive), while
+  carrying, and while operating; the sheet greys the button with the reason and the host checks the
+  same rules again, because the client's copy is a courtesy. The client only bumps
+  `Player.unequip_count`, index 18 of the input report, alongside the other intent counters.
+- Review setup `--setup=sheet`; the smoke look is `tools\sheetshot.ps1` (minimized, shots in
+  `tools/game_shots/sheet_*.png`).
+
+## Grafting and the scanner
 
 ### Grafting part one: eyes, vats and Eyeball Extraction (docs/GRAFTING.md, chunk A, 2026-09-18)
 
 `scripts/grafting/eyes.gd` (`Eyes`, statics) and `vats.gd` (`Vats`, `game.vats`, child "Vats" of Game).
-No graft, graft stand or Hive Eyes change yet (chunks B and C).
+No graft or graft stand yet (chunks B and C).
 
 ```gdscript
 # Items: "scalpel", "eye_spoon" (ITEMS, surgical, reusable), "specimen_vat" (ITEMS, bulky: two hands),
@@ -2214,7 +2317,7 @@ game.vats: item_used(p, item) / hand_put(p) / take_out(p, aim_id) / set_down(p, 
 
 - **`x`** is a new small string on `WorldItem` and on a hand slot (like `bt`, it rides pickup, drop,
   throw, storage and the snapshot): a part's owner ("Zach"; "" means the Hive), or what a vat holds.
-  An eye's spoil clock is `bt`, like a brain's. Going into a vat freezes the age in the vat's `x`;
+  An eye's spoil clock is `bt`. Going into a vat freezes the age in the vat's `x`;
   coming out rebuilds `bt`, so a vat stops the clock. `game.furnace_value` prices eyes by spoilage.
 - **Inputs.** E on a vat (bench or dropped) with an eye selected puts it in; E aimed at nothing with a
   vat and an eye in hand does the same (aim id `vat_hand`). **V** (`vat_take`, its own input action,
@@ -2338,13 +2441,12 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
   the camera 0.3 m off the site, which is right on a Hive's dark head and bleaches a surgeon's pale
   face to white, so `eye_ops.lamp_scale()` returns 0.3 when the patient is a player.
 - **The ability.** `Grafts.PART_ABILITY` maps `eye_hive` -> `hive_in`: finishing the graft calls
-  `brains.set_level(peer, "hive_in", 1)` (the next free slot and the new-ability card), and swapping
-  back calls the new `brains.clear_ability(peer, id)`, which empties the slot, zeroes the points and
-  ends any Hive Eyes view in progress. A graft lasts the run, through death, and `grafts.on_reset()`
-  clears it on a game over with the money and the brains.
-- **Hive brains teach nothing now.** `Brains.blendable(kind)` is false for `brain_hive`; the blender
-  refuses it ("!Blender: a Hive brain teaches nothing. Sell it.") and `drink` ignores it. Echo, the
-  Sonographer brains and the blender are unchanged.
+  `abilities.set_level(peer, "hive_in", 1)` (the next free slot and the new-ability card), and swapping
+  back out calls `abilities.clear_ability(peer, id)`, which empties the slot, zeroes the level and ends
+  any Hive Eyes view in progress. **Grafting is now the only way to earn an ability** -- brains, which
+  used to be the other source, are gone (docs/backlog/ABILITIES_REMOVED.md), so Echo has no source in
+  the game at all today. A graft lasts the run, through death, and `grafts.on_reset()` clears it on a
+  game over with the money.
 - **The first-person tell**: `scripts/grafting/graft_view.gd` (`main.graft_view`), a faint orange
   wash down the LEFT edge, stronger as `grafts.local_lock()` rises. It is its own CanvasLayer at 52,
   **above** the look pass's grain, vignette and teal grade (layer 50) that the HUD sits under -- a
@@ -2360,8 +2462,9 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
 to a small row where the abilities were. Each icon: `Alt+N`, a cooldown sweep, level pips, a cost
 tag (`Hud.ABILITY_COST`, e.g. Echo's "LOUD"), and while Alt is held, the ability's name and (greyed
 out) why it cannot fire right now (`Hud._slot_reason`: cooling down, hands busy, no Hive in
-range, downed). The first time an ability lands in a slot, a short card names it, what it does, its
-key and its cost, and closes itself after 5 s or on any key (`Hud._card_until` / `_card_seen`).
+range, downed). The first time an ability lands in a slot -- today, when an `eye_hive` graft grants
+Hive Eyes -- a short card names it, what it does, its key and its cost, and closes itself after 5 s
+or on any key (`Hud._card_until` / `_card_seen`).
 
 ### Scanner (docs/SWEEP4A.md "Scanner", sweep 4a)
 
@@ -2580,4 +2683,4 @@ shift 2), nettest scenario `doors`, devtest door checks, `tools/perfprobe.tscn -
 (`{"seed": 4242, "stage": "_name"}`) and one static function that stages things with the helpers
 `place`, `clear_hands`, `give` (a stack, with extra stack keys like `bt`, `used`, `x`), `give_abilities`
 and `floor_item`. An unknown name is logged with the known ones and the menu opens as usual. Setups so
-far: `icons`.
+far: `icons`, `items`, `graft`, `graft_back`, `trinkets`.

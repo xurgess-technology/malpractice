@@ -7,7 +7,7 @@ extends RefCounted
 ## -> "shoulder" -> "front" -> first person): "shoulder" runs this rig all the time at PLAY_ARM;
 ## "front" swings the same arm round to the front of the body (ORBIT: the camera travels round the
 ## player rather than cutting) and turns it to look back at them, centred. Either way the game takes
-## the head back while operating, in Hive Eyes, downed, carried, on the table or dead, and carrying or
+## the head back while operating, downed, carried, on the table or dead, and carrying or
 ## dragging swings round behind to their own arms. Facing you, the aim is the head's (the crosshair
 ## would point at yourself), and the HUD hides the crosshair (front_view()). Framed the way the big third-person games do it (The Last of Us Part II,
 ## the RE4 remake, God of War): the camera sits close behind and over the RIGHT shoulder, so the
@@ -116,7 +116,7 @@ func _blend_e() -> float:
 
 func wants() -> bool:
 	var p = player
-	if p == null or not p.alive or p.downed or p.operating or p.hive_view or p.carried_by != 0 or p.on_table:
+	if p == null or not p.alive or p.downed or p.operating or p.carried_by != 0 or p.on_table:
 		return false
 	if p.game == null or p.game.phase == p.game.Phase.MENU:
 		return false

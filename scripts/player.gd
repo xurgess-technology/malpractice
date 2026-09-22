@@ -53,6 +53,10 @@ var drop_count: int = 0
 ## GRAFTING part one: presses of the vat key (take the eye out of a vat), client-owned like drop_count.
 var vat_count: int = 0
 var _vat_seen: int = 0
+## TAB SHEET: presses of Unequip on the character sheet, client-owned like the rest. The host
+## decides what actually comes off and where it lands (Game.player_unequip).
+var unequip_count: int = 0
+var _unequip_seen: int = 0
 ## SWEEP 4A HOOK (pharmacy, chunk 3): 0..1 charge the drop key had when it last fired
 ## (client-owned, sent alongside drop_count so the host reads them together). A quick tap
 ## reports ~0 (the old gentle toss); holding the key ramps it up to 1 by DROP_CHARGE_FULL.
@@ -67,12 +71,37 @@ const DROP_CHARGE_FULL := 1.1
 var throw_wind: float = 0.0
 var _throw_follow_t: float = 0.0
 const THROW_FOLLOW_TIME := 0.25
+
+## TRINKETS chunk B (the reflex hammer): a bonk is the charged-throw pose above, run at SWING_SPEED
+## as a melee swing -- a short wind-up, then the strike snapping through. Nothing new is animated:
+## start_swing() scripts `throw_wind` the way holding and releasing the drop key would, only faster,
+## and `swing_speed` goes to throw_pose.gd so the pose plays at the same rate. Every machine runs
+## its own timer off the counter in Trinkets' `sw`, so the swing looks the same in the swinger's own
+## hands and on everyone else's copy of their body.
+const ThrowPoseScript := preload("res://scripts/hands/throw_pose.gd")
+const SWING_SPEED := 1.7
+## Seconds of wind-up before the strike fires. At SWING_SPEED the arm is nearly all the way up.
+const SWING_WINDUP := 0.10
+## The whole thing, wind-up plus the strike and its ease back to rest.
+const SWING_TIME := SWING_WINDUP + ThrowPoseScript.FOLLOW_TIME / SWING_SPEED
+## Seconds from the click to the frame the swing reads as contact: the wind-up plus the strike's
+## snap forward (throw_pose.gd's SNAP share of FOLLOW_TIME, sped up). Trinkets lands the bonk there.
+const SWING_CONTACT := SWING_WINDUP + ThrowPoseScript.FOLLOW_TIME * ThrowPoseScript.SNAP / SWING_SPEED
+var swing_speed: float = 1.0
+var _swing_t: float = -1.0
+
+## TRINKETS chunk B (the reflex hammer): seconds the forced 180 takes. Short enough to read as
+## being spun round rather than swivelling, long enough to see which way you went. It must stay
+## under HiveBrain's SIGHT_INTERVAL headroom (see Monster.SPIN_TIME, the same number for monsters).
+const SPIN_TIME := 0.18
+var _spin_t: float = -1.0
+var _spin_from: float = 0.0
 var interact_count: int = 0
 var wants_interact: bool = false
 ## SWEEP 3 HOOK: left mouse with a usable item in hand (bone saw swing, anesthetic jab; see
-## scripts/combat/combat.gd), and R for the absorbed-brain ability (scripts/brains/brains.gd).
+## scripts/combat/combat.gd), and Alt+1..4 for the abilities (scripts/abilities/abilities.gd).
 var use_count: int = 0
-## SWEEP 4A HOOK (controls): four ability slots (scripts/brains/brains.gd), each with its own
+## SWEEP 4A HOOK (controls): four ability slots (scripts/abilities/abilities.gd), each with its own
 ## bump counter (Alt+1..4), analogous to ability_count before it. Report keys "a1".."a4".
 var ability_slot_press: Array = [0, 0, 0, 0]
 ## SWEEP 4A HOOK (controls): crouch (client-owned, replicated: report bit 16 / report_full "cr")
@@ -167,7 +196,7 @@ const ROCKET_EYE_H := 0.55
 ## Not replicated: every machine computes its own from its own aim, same as aim_id/aim_prompt.
 var scan_progress: float = 0.0
 var scan_target_id: int = -1
-## SWEEP 3 HOOK (brains): looking through a Hive's eyes (Hive Eyes). Host authoritative, report
+## looking through a Hive's eyes (Hive Eyes). Host authoritative, report
 ## key `hv`. The body stands still and helpless: no moving, looking, using or picking up; E or R
 ## (or Esc, main.gd) ends it; others see the head droop.
 var hive_view: bool = false
@@ -237,6 +266,10 @@ func view_local() -> bool:
 	return is_local or possessed_local
 ## DEV HOOK: seconds left knocked down (no moving). Wave 3's downed state replaces this.
 var stun: float = 0.0
+## TRINKETS chunk B: how much faster this player sprints (the EpiPen's 2x for ten seconds).
+## scripts/trinkets/trinkets.gd pushes it onto every player every physics frame from replicated
+## state, so this is never written anywhere else.
+var sprint_mult: float = 1.0
 ## DEV HOOK: flying through walls (dev panel).
 var noclip: bool = false
 
@@ -331,6 +364,9 @@ var _bot_charging := false
 var _charging_with := ""      # "shove" (Q) or "use" (left mouse): the button charging a shove here
 var _jab_prompt := ""
 var _jab_prompt_t := 0.0
+## TRINKETS chunk B: the same throttled crosshair line for a held trinket.
+var _trinket_prompt := ""
+var _trinket_prompt_t := 0.0
 
 var _shove_seen: int = 0
 var _drop_seen: int = 0
@@ -719,7 +755,7 @@ func _input(event: InputEvent) -> void:
 	if not view_local() or not alive:
 		return
 	if hive_view or dev_input_held:
-		return   # SWEEP 3 HOOK (brains): the mouse is not yours while you look through a Hive
+		return   # the mouse is not yours while you look through a Hive
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		# Settings hook: "sensitivity" multiplies the base look speed.
 		var sens: float = MOUSE_SENS * float(Settings.get_value("sensitivity"))
@@ -738,6 +774,11 @@ func _physics_process(delta: float) -> void:
 		_local_step(delta)
 	else:
 		_remote_step(delta)
+	# TRINKETS chunk B (the reflex hammer): both run on every copy of every player, after whichever
+	# step above, so the swing shows on remote bodies too and the forced turn has the last word on
+	# the heading for as long as it lasts.
+	_tick_swing(delta)
+	_tick_spin(delta)
 	stun = maxf(0.0, stun - delta)
 	invuln = maxf(0.0, invuln - delta)
 	if game != null and game.is_host():
@@ -780,6 +821,8 @@ func _local_step(delta: float) -> void:
 			_bot_use_seen = bot_use
 			if not diving and g != null and g.combat != null and g.combat.is_usable(selected_stack().kind):
 				g.combat.local_try_use(self)
+			elif not diving and g != null and g.trinkets != null:
+				g.trinkets.local_try_use(self)   # TRINKETS chunk B: bots and tests use trinkets too
 		# HANDS HOOK: bot_charge true holds the shove, false lets it go.
 		if bot_charge != _bot_charging and g != null and g.combat != null:
 			_bot_charging = bot_charge
@@ -842,7 +885,7 @@ func _local_step(delta: float) -> void:
 	else:
 		wants_interact = false
 		scan_holding = false
-	# SWEEP 3 HOOK (brains): Hive Eyes freezes the body; E or R asks to come back.
+	# Hive Eyes freezes the body; E or R asks to come back.
 	if hive_view != _was_hive:
 		_was_hive = hive_view
 		if hive_view:
@@ -854,8 +897,8 @@ func _local_step(delta: float) -> void:
 		want_sprint = false
 		wants_interact = false
 		_pitch = move_toward(_pitch, -0.95, delta * 2.5)
-		if can_move and not bot_active and Input.is_action_just_pressed("interact") and game != null and game.brains != null:
-			var hi: int = game.brains.slot_of(peer_id, "hive_in")
+		if can_move and not bot_active and Input.is_action_just_pressed("interact") and game != null and game.abilities != null:
+			var hi: int = game.abilities.slot_of(peer_id, "hive_in")
 			if hi >= 0:
 				ability_slot_press[hi] = int(ability_slot_press[hi]) + 1
 
@@ -985,8 +1028,12 @@ func _local_step(delta: float) -> void:
 	_apply_crouch(delta)
 	sprinting = moving and can_move and want_sprint and stamina > 0.0 and not downed and not crouching and carrying == 0 and dragging_monster < 0 and not winding and not diving
 	stamina = clampf(stamina + (-delta / 4.5 if sprinting else (0.0 if diving else delta / 5.0)), 0.0, 1.0)
+	# TRINKETS chunk B: the EpiPen doubles the sprint, and holds stamina up for its ten seconds --
+	# without that the boost would run out of breath after four.
+	if sprint_mult > 1.0:
+		stamina = 1.0
 
-	var speed: float = 0.0 if operating else (C.SPRINT_SPEED if sprinting else C.WALK_SPEED)
+	var speed: float = 0.0 if operating else ((C.SPRINT_SPEED * sprint_mult) if sprinting else C.WALK_SPEED)
 	# Downed hook: crawling is slow; a teammate over your shoulder slows you down.
 	if downed:
 		speed = CRAWL_SPEED
@@ -1058,7 +1105,7 @@ func _local_step(delta: float) -> void:
 	elif was_air and is_on_floor() and fall_speed < -4.0 and fx.has_method("land"):
 		fx.land(clampf(-fall_speed / 14.0, 0.0, 1.0))
 
-	if can_move and not bot_active and not hive_view:   # SWEEP 3 HOOK (brains): helpless in Hive Eyes
+	if can_move and not bot_active and not hive_view:   # helpless in Hive Eyes
 		if Input.is_action_just_pressed("flashlight"):
 			set_flashlight(not flashlight_on)
 			Audio.play("click")
@@ -1082,6 +1129,8 @@ func _local_step(delta: float) -> void:
 			if Input.is_action_just_pressed("use") and not gun_out and not downed and carrying == 0 and dragging_monster < 0 and not diving and not scan_holding:
 				if g.combat.is_usable(selected_stack().kind):
 					g.combat.local_try_use(self)
+				elif g.trinkets != null and g.trinkets.local_try_use(self):
+					pass   # TRINKETS chunk B: a trinket does its own job instead of shoving
 				elif _charging_with == "" and g.combat.local_shove_begin(self):
 					_charging_with = "use"
 			if _charging_with != "" and not Input.is_action_pressed(_charging_with):
@@ -1138,8 +1187,8 @@ func _local_step(delta: float) -> void:
 		_throw_follow_t -= delta
 		if _throw_follow_t <= 0.0 and throw_wind < 0.0:
 			throw_wind = 0.0
-	elif not _drop_holding and throw_wind > 0.0:
-		throw_wind = 0.0
+	elif not _drop_holding and not swinging() and throw_wind > 0.0:
+		throw_wind = 0.0   # TRINKETS chunk B: a hammer swing owns throw_wind while it plays
 
 	# HANDS HOOK: the mouse was freed (a menu, the terminal) mid-charge: the shove goes off.
 	if _charging_with != "" and not (can_move and not hive_view) and g != null and g.combat != null:
@@ -1210,12 +1259,12 @@ func _headroom(from_h: float, to_h: float) -> bool:
 
 
 ## SWEEP 4A HOOK (Echo polish, chunk 4): 0..1 while this player's shriek pose should show, driven
-## by game.brains._echo_pose_until (peer -> world_time), a local one-shot timer every machine sets
-## the same way from the reliable br_echo event (not a replicated Player field).
+## by game.abilities._echo_pose_until (peer -> world_time), a local one-shot timer every machine sets
+## the same way from the reliable ab_echo event (not a replicated Player field).
 func _echo_pose_weight() -> float:
-	if game == null or game.brains == null:
+	if game == null or game.abilities == null:
 		return 0.0
-	var until := float(game.brains._echo_pose_until.get(peer_id, -1.0))
+	var until := float(game.abilities._echo_pose_until.get(peer_id, -1.0))
 	return clampf((until - float(game.world_time)) / 0.5, 0.0, 1.0) if until > 0.0 else 0.0
 
 
@@ -1227,7 +1276,7 @@ func _remote_step(delta: float) -> void:
 		k = 1.0
 	global_position = global_position.lerp(_target_pos, k)
 	rotation.y = lerp_angle(rotation.y, _target_yaw, k)
-	head.rotation.x = lerpf(head.rotation.x, -0.95 if hive_view else _pitch, k)   # SWEEP 3 HOOK (brains): head droops
+	head.rotation.x = lerpf(head.rotation.x, -0.95 if hive_view else _pitch, k)   # head droops
 	if _hive_glaze != null:
 		_hive_glaze.visible = hive_view   # SWEEP 4A HOOK (Hive Eyes, chunk 4): glazed eyes for teammates
 	if moving and not downed and not crouching:
@@ -1339,7 +1388,7 @@ func _consume_actions() -> void:
 	if game == null:
 		return
 	# Downed hook: a downed player only calls for help; a carrier only puts down or places.
-	var busy := downed or carrying != 0 or dragging_monster >= 0 or hive_view or held_by >= 0   # SWEEP 3 HOOK (combat: dragging; brains: helpless in Hive Eyes); the Nurse's grab
+	var busy := downed or carrying != 0 or dragging_monster >= 0 or hive_view or held_by >= 0   # SWEEP 3 HOOK (combat: dragging; helpless in Hive Eyes); the Nurse's grab
 	# SWEEP 3 HOOK: item use and the brain ability (the systems decide what a busy player may do).
 	if use_count != _use_seen:
 		_use_seen = use_count
@@ -1362,6 +1411,10 @@ func _consume_actions() -> void:
 		_vat_seen = vat_count
 		if alive and not busy and game.get("vats") != null:
 			game.vats.take_out(self, aim_id)   # GRAFTING part one
+	if unequip_count != _unequip_seen:
+		_unequip_seen = unequip_count
+		if alive and not busy:
+			game.player_unequip(self)   # TAB SHEET
 	if drop_count != _drop_seen:
 		_drop_seen = drop_count
 		# PLAYTEST 2026-09-22: the deliberate floor drop while carrying a teammate (or a body).
@@ -1372,7 +1425,7 @@ func _consume_actions() -> void:
 	if interact_count != _interact_seen:
 		_interact_seen = interact_count
 		if hive_view or held_by >= 0:
-			pass   # SWEEP 3 HOOK (brains); held by the Nurse, nobody is coming in time
+			pass   # held by the Nurse, nobody is coming in time
 		elif alive and downed:
 			game.downed_call_out(self)
 		elif alive and carrying != 0:
@@ -1419,6 +1472,18 @@ func _update_aim() -> void:
 	else:
 		_jab_prompt = ""
 		_jab_prompt_t = 0.0
+	# TRINKETS chunk B: holding a trinket, the crosshair says what left mouse would do with it
+	# (clip the pulse oximeter on, bonk, shock someone awake). Same few-Hz throttle as the jab.
+	if aim_prompt == "" and alive and not downed and game != null and game.trinkets != null \
+			and game.trinkets.is_usable(String(selected_stack().kind)):
+		_trinket_prompt_t -= get_physics_process_delta_time()
+		if _trinket_prompt_t <= 0.0:
+			_trinket_prompt_t = 0.1
+			_trinket_prompt = game.trinkets.use_prompt(self)
+		aim_prompt = _trinket_prompt
+	else:
+		_trinket_prompt = ""
+		_trinket_prompt_t = 0.0
 	# AFFORDANCE HOOK: only the local player ever sees their own highlight (a bot's aim is a host
 	# decision, not something drawn to anyone's screen -- unless a human is driving that bot).
 	if view_local():
@@ -1449,7 +1514,7 @@ func _update_aim_core() -> void:
 	aim_id = ""
 	aim_prompt = ""
 	aim_hold = 0.0
-	if not alive or hive_view:   # SWEEP 3 HOOK (brains): nothing in reach while you are elsewhere
+	if not alive or hive_view:   # nothing in reach while you are elsewhere
 		return
 	# Downed hook: on the floor or the table there is nothing to use, only a call for help.
 	if downed:
@@ -2071,7 +2136,7 @@ func revive_full() -> void:
 	selected = 0
 	operating = false
 	dragging_monster = -1   # SWEEP 3 HOOK (combat)
-	hive_view = false   # SWEEP 3 HOOK (brains)
+	hive_view = false
 	crouching = false   # SWEEP 4A HOOK (controls)
 	prone = false
 	_stance_want = STAND
@@ -2172,6 +2237,84 @@ func take_hit(dmg: int, knock: Vector3) -> void:
 func apply_knock(knock: Vector3) -> void:
 	_knock = knock
 	velocity += knock * 0.5
+
+
+## TRINKETS chunk B: the reflex hammer. This view is whipped 180 degrees where it stands -- quick,
+## but a turn you can see rather than a teleport of the heading. Called on the machine that owns
+## this player's camera (the `sp` counter in Trinkets), and on the host for its copy.
+func spin_view() -> void:
+	if _view_pinned():
+		return   # strapped to a table or in the Nurse's hands: the view is not theirs to turn
+	_spin_from = _yaw
+	_spin_t = 0.0
+	if view_local() and fx != null and fx.has_method("add_shake"):
+		fx.add_shake(0.5, 0.2)
+
+
+## Somebody else is aiming this view: the table's clamp (_strapped_look) or the Nurse's grab. A
+## forced turn would only be dragged back the next frame, so it never starts, and one already
+## running gives up if this happens part way through.
+func _view_pinned() -> bool:
+	return on_table or held_by >= 0 or carried_by != 0 or not alive
+
+
+## True while the forced turn is still running (the mouse cannot fight it until it is).
+func spinning() -> bool:
+	return _spin_t >= 0.0
+
+
+## The forced turn, a physics frame at a time. It owns `_yaw` while it runs, so whatever the mouse
+## (or a bot's bot_yaw) asked for in the meantime is dropped; when it ends, look is normal again
+## from wherever it left off.
+func _tick_spin(delta: float) -> void:
+	if _spin_t < 0.0:
+		return
+	if _view_pinned():
+		_spin_t = -1.0
+		return
+	_spin_t += delta
+	var u: float = clampf(_spin_t / SPIN_TIME, 0.0, 1.0)
+	# Out-cubic: most of the half-turn is over in the first third of it, then it settles.
+	_yaw = wrapf(_spin_from + PI * (1.0 - pow(1.0 - u, 3.0)), -PI, PI)
+	bot_yaw = _yaw
+	# The host's own copy of a remote player turns here too, rather than waiting a beat for their
+	# reported heading; _local_step would otherwise be the only thing writing rotation.y.
+	rotation.y = _yaw
+	if u >= 1.0:
+		_spin_t = -1.0
+
+
+## TRINKETS chunk B: play the charged-throw pose as a sped-up melee swing (see SWING_SPEED). Every
+## machine calls this for the swinging player, so the animation is local everywhere.
+func start_swing() -> void:
+	_swing_t = 0.0
+	swing_speed = SWING_SPEED
+
+
+## True while a hammer swing is playing here.
+func swinging() -> bool:
+	return _swing_t >= 0.0
+
+
+## The swing, a physics frame at a time: `throw_wind` is scripted the way holding the drop key and
+## letting go would drive it, only over SWING_WINDUP instead of a second.
+func _tick_swing(delta: float) -> void:
+	if _swing_t < 0.0:
+		return
+	var was := _swing_t
+	_swing_t += delta
+	if was < SWING_WINDUP:
+		# Winding up: the same 0..1 charge the drop key feeds in.
+		throw_wind = clampf(_swing_t / SWING_WINDUP, 0.0, 1.0)
+		if _swing_t >= SWING_WINDUP:
+			throw_wind = -1.0   # release: the strike snaps through
+			_throw_follow_t = SWING_TIME - SWING_WINDUP
+	elif _swing_t >= SWING_TIME:
+		_swing_t = -1.0
+		swing_speed = 1.0
+		if throw_wind < 0.0:
+			throw_wind = 0.0
+			_throw_follow_t = 0.0
 
 
 func flinch() -> void:
@@ -2300,7 +2443,7 @@ func _update_down_pose(delta: float) -> void:
 	# SWEEP 4A HOOK (Echo polish, chunk 4): a brief lean-back as the shriek goes out, so it visibly
 	# comes from whoever used it (docs/SWEEP4A.md "Echo"), on every machine's copy of that player.
 	var echo_tilt := -0.4 * _echo_pose_weight()
-	var tilt := -PI * 0.47 if down else (-0.2 if hive_view else echo_tilt)   # SWEEP 3 HOOK (brains): slumped in Hive Eyes
+	var tilt := -PI * 0.47 if down else (-0.2 if hive_view else echo_tilt)   # slumped in Hive Eyes
 	if not is_equal_approx(body_visual.rotation.x, tilt):
 		body_visual.rotation.x = move_toward(body_visual.rotation.x, tilt, delta * 6.0)
 		body_visual.position.y = 0.3 * (body_visual.rotation.x / (-PI * 0.47))
@@ -2314,7 +2457,8 @@ func _update_down_pose(delta: float) -> void:
 ## dictionary: no key strings on the wire, about a third of the size.
 ##   [position, yaw, pitch, flag bits (1 light, 2 sprint, 4 moving, 8 holding E, 16 crouching,
 ##    32 scan-holding, 64 prone, 128 in the air in a dive, 256 rocket boots burning), shove count, drop count, aim id,
-##    interact count, selected hand, use count, ability slot 1..4 press counts, drop charge, throw wind-up, faceplant count]
+##    interact count, selected hand, use count, ability slot 1..4 press counts, drop charge, throw wind-up, faceplant count,
+##    vat count, unequip count]
 func report_state() -> Array:
 	var bits := (1 if flashlight_on else 0) | (2 if sprinting else 0) | (4 if moving else 0) | (8 if wants_interact else 0) \
 		| (16 if crouching else 0) | (32 if scan_holding else 0) | (64 if prone else 0) | (128 if dive_in_air() else 0) \
@@ -2324,7 +2468,8 @@ func report_state() -> Array:
 		snappedf(drop_charge, 0.02),   # SWEEP 4A HOOK (pharmacy, chunk 3)
 		snappedf(throw_wind, 0.02),   # THROW HOOK
 		faceplant_count,   # ROCKET BOOTS
-		vat_count]   # GRAFTING part one
+		vat_count,   # GRAFTING part one
+		unequip_count]   # TAB SHEET
 
 
 func apply_remote_state(s: Array) -> void:
@@ -2360,12 +2505,16 @@ func apply_remote_state(s: Array) -> void:
 			ability_slot_press[i] = int(s[10 + i])
 	if s.size() >= 15:   # SWEEP 4A HOOK (pharmacy, chunk 3): charged throw
 		drop_charge = float(s[14])
-	if s.size() >= 16:   # THROW HOOK: the live wind-up
+	# TRINKETS chunk B: while a hammer swing plays here, its own timer owns throw_wind -- every
+	# machine runs the same swing off the `sw` counter, so a 20 Hz report would only stutter it.
+	if s.size() >= 16 and not swinging():   # THROW HOOK: the live wind-up
 		throw_wind = float(s[15])
 	if s.size() >= 17:   # ROCKET BOOTS
 		faceplant_count = int(s[16])
 	if s.size() >= 18:   # GRAFTING part one: the vat key
 		vat_count = int(s[17])
+	if s.size() >= 19:   # TAB SHEET: Unequip on the character sheet
+		unequip_count = int(s[18])
 	_consume_actions()
 
 
@@ -2383,7 +2532,7 @@ func report_full() -> Dictionary:
 		"nh": held_by,   # the Night Nurse's grab
 		"ch": snappedf(carry_hold, 0.1),
 		"dm": dragging_monster,   # SWEEP 3 HOOK (combat)
-		"hv": hive_view,   # SWEEP 3 HOOK (brains)
+		"hv": hive_view,
 		"cr": crouching,   # SWEEP 4A HOOK (controls)
 		"pr": prone,
 		"da": dive_in_air(),   # SPRINT-DIVE HOOK
@@ -2428,7 +2577,7 @@ func apply_remote_full(s: Dictionary) -> void:
 		teleport(held_from)   # she let go: I own my position, so I drop back onto that spot myself
 	held_by = nh
 	dragging_monster = int(s.get("dm", -1))   # SWEEP 3 HOOK (combat)
-	hive_view = bool(s.get("hv", false))   # SWEEP 3 HOOK (brains)
+	hive_view = bool(s.get("hv", false))
 	var host_bleed := float(s.get("bl", 0.0))
 	if not downed or absf(host_bleed - bleed) > 1.5:
 		bleed = host_bleed
@@ -2451,5 +2600,6 @@ func apply_remote_full(s: Dictionary) -> void:
 	prone = bool(s.get("pr", false))
 	_remote_dive_air = bool(s.get("da", false))   # SPRINT-DIVE HOOK
 	_remote_rocket = bool(s.get("rk", false))   # ROCKET BOOTS
-	throw_wind = float(s.get("tw", 0.0))   # THROW HOOK
+	if not swinging():   # THROW HOOK (TRINKETS chunk B: a local swing timer owns it while it plays)
+		throw_wind = float(s.get("tw", 0.0))
 	moving = s.mv

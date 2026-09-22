@@ -34,7 +34,7 @@ Smoke tools: `tools/iconshot.tscn` (bar/abilities/database/OR shots), `tools/set
 Pass: hudtest (new), inventorytest, controlstest, databasetest (this session); orscreentest and pockettest passed before the last layout/setup edits and were not rerun. Nothing skipped.
 
 ## Known risks
-- Nothing sets `used: true` on trinkets or `fresh`/`spoiled` on non-eye/brain parts yet (eyes and brains use their own systems).
+- Nothing sets `used: true` on trinkets or `fresh`/`spoiled` on parts other than eyes yet (eyes use their own system).
 - Table prompt icon is found by parsing "Hold [N] Name to do this." text.
 - A bulky pair whose slots wrap round the bar (not adjacent) stays two squares with a bracket, not one wide slot.
 - Database "other items" grid is empty until items are picked up (existing behaviour).

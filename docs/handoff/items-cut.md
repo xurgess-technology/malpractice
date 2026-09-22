@@ -3,7 +3,7 @@
 ## Done and working
 - **The cut.** Loot table is 11 kinds: pill bottle, X-ray film, heart monitor, gold watch, ultrasound
   (plain) and desk phone, laptop, defibrillator, reflex hammer, EpiPen, pulse oximeter (trinkets,
-  `trinket: true`), plus the brains and eyes. The 11 cut kinds and the old pulse oximeter are gone from
+  `trinket: true`), plus the eyes. The 11 cut kinds and the old pulse oximeter are gone from
   `loot_table.gd`, `loot_models.gd`, `assets.gd`, `grips.gd`, `wall_pages.gd`, tests, docs, and the unused
   model files (`git rm`).
 - **New kinds** `epipen` and the new `pulse_oximeter`: primitive models, grips, database blurbs, no behaviour (chunk B).
@@ -44,7 +44,7 @@ Nothing new. Chunk B (trinket behaviour) is next and uses `trinket_weight` / `ma
 - `godot --headless --path . --fixed-fps 60 -s tools/loottest.gd -- --seeds=1,2,3,4,5,6,7,8,9`: PASS (84 checks;
   adds `--report`). New: no cut kind anywhere, every kept kind has a model, every room kind that had loot still
   gets some, 3 to 5 trinkets in every shift, defibrillator at most 1, radiology gets X-ray film or ultrasound.
-- inventorytest, braintest, databasetest, dissectiontest: PASS.
+- inventorytest, databasetest, dissectiontest: PASS.
 - devtest: FAIL 1, "unticking it puts you back behind your eyes" (already in docs/FAILING_TESTS.md, #4).
 - mapcheck (run earlier, before the trinket rework; no furnishing changes since): only morgue trays out of
   reach on seeds 1, 38, 112 (known issue #2; seed 1 not previously listed).

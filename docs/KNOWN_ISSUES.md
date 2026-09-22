@@ -373,43 +373,29 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 - **`tools/mapcheck.gd` reports seed 112** (a morgue tray anchor 3.3 m off the navmesh); the same
   on `main` before the pod removal.
 
-## Brains (sweep 3, brains worker)
+## Abilities (sweep 3)
 
-- **Hive Eyes was built against a stand-in Hive.** On the brains branch `Monster.HIVE` does
-  not exist, so `brains.spawn_hive` makes a Sonographer body with `kind = "hive"` (it still
-  hunts by sound). The camera sits at `m.height * 0.93` and 0.34 m in front of the monster's origin
-  along its facing; the real Hive model may need a different eye point (its head can block the
-  view, or the camera can poke through a wall the Hive faces). The sedation end is only reached
-  through `has_method("is_sedated")` and was not exercised (no `sedate` on this branch).
+- **Echo has no source in the game.** Brains were the only way to earn it and they are gone
+  (`docs/backlog/ABILITIES_REMOVED.md`); grafting is the only source of an ability now, and the
+  only graft that exists grants Hive Eyes (`scripts/grafting/grafts.gd` `PART_ABILITY`). Echo
+  itself is built, tested and replicated, but nothing in a normal shift hands it out -- only the
+  dev panel, `ReviewSetups.give_abilities` and the headless tests. The trachea graft
+  (`docs/GRAFTING_TRACHEA.md`) is what would fix this.
+- **Hive Eyes was built against a stand-in Hive.** When it was written `Monster.HIVE` did not
+  exist, so `game.spawn_hive` made a Sonographer body with `kind = "hive"` (it still hunts by
+  sound). The camera sits at `m.height * 0.93` and 0.34 m in front of the monster's origin along
+  its facing; the real Hive model may need a different eye point (its head can block the view, or
+  the camera can poke through a wall the Hive faces). The sedation end is only reached through
+  `has_method("is_sedated")` and was not exercised.
 - **The HUD stays up during Hive Eyes** (crosshair, slots, messages): the view is the Hive's
   but the HUD is yours. No HUD hook was added.
 - **Echo's veil does not fully hide a lit flashlight cone** (volumetric fog and the post layer draw
   after it), so the spot on the nearest wall stays faintly visible under the outlines. Outlines of
   skinned meshes follow their skeleton; only the dev dummy surgeon was checked in a screenshot.
-- **Brains keep spoiling through the paycheck screen and the next lobby** (world_time keeps
-  running), so a brain carried over a shift change is rotten by the next shift. Intended as "brains
-  spoil fast", but worth a look once the loop is tuned.
-- **Absorbed brains are keyed by peer id.** A player who leaves and joins again (a new ENet peer id)
-  starts from nothing; the old entry stays until game over.
-- **A client's shown value can be $1-2 off the host's** while the spoil clock runs: `bt` is snapped
-  to 0.5 s in the item report and a client's world_time is only corrected when more than 1 s off.
-  The host's `current_value` is what the dumpster pays.
-- **Blender placement is a heuristic:** the counter-height cell nearest the time clock with a
-  0.2 m margin, backed toward the nearest wall. On the hospital's entrance building (the same break
-  room every seed) it lands on the free end of the sink counter by the fridge; nothing checks for the
-  models that stand on counters without colliders (the coffee machine, the microwave), so a changed
-  break-room layout could put it inside one. Levels without a break room get a steel stand.
-- **The brain is procedural** (merged ellipsoids, folds in the shader). It reads as a brain from
-  above and behind at hand and table distance (`tools/brain_shots/01..04`); from low side angles the
-  hemispheres still look like two smooth eggs, and the rot mostly changes colour (no geometry
-  change, so the gold rim overlay keeps fitting).
-- **Perf** (`perfprobe -- --brains`, 1600x900 medium, two passes): pharmacy baseline 188-201 fps
+- **Perf** (1600x900 medium, two passes, measured in sweep 3): pharmacy baseline 188-201 fps
   (1% low 134-150), Echo at level 3 with 66 outlines 180-192 (132-150); corridor baseline 88-94
-  (75-82), Echo 93-96 (81-86); Hive Eyes depends on what the Hive looks at (131-236); five brains
-  in view 102-108 (89-96). Starting Echo takes 1.8-2.8 ms (it walks every container once).
-- **One lagged `nettest --only=brains` run never connected** (port 7941; the client timed out
-  before joining); the same run passed on another port, lagged and unlagged. Probably a port clash
-  with another worktree's nettest.
+  (75-82), Echo 93-96 (81-86); Hive Eyes depends on what the Hive looks at (131-236). Starting
+  Echo takes 1.8-2.8 ms (it walks every container once).
 
 ## Monsters (sweep 3, monsters worker)
 
@@ -592,7 +578,8 @@ left below is what still applies to the shared strapped-monster infrastructure.
   regions join the map a few frames apart. `tools/mapcheck.gd` waits for both; code that paths the frame
   after a build may get a hospital-only path.
 - **Things the mirrors do not carry across a seam**: a player's head glow, held-item models' own lights,
-  monster sounds (a Sonographer's rattle is heard where it really is), the Echo outlines and Hive Eyes. A
+  monster sounds (a Sonographer's rattle is heard where it really is), the Echo outlines and Hive
+  Eyes. A
   Hive does not see a player on the other side of a seam (its sight rays go to the real position), and
   the danger heartbeat counts only monsters in the same space. Hearing does cross: a noise within 26 m of
   a seam is mirrored into the other copy, pulled into the stub (the Sonographer comes through and then
@@ -646,74 +633,60 @@ left below is what still applies to the shared strapped-monster infrastructure.
   wood read dark from a distance.
 ## Mirrors (2026-09-22 playtest)
 
-- **PLAYTEST 2026-09-22: standing too close to a mirror turns your character completely black.**
-  Reported by Zach after a session with real players. Not yet reproduced or root-caused; it is a
-  lighting problem, not a geometry one (the body is there, it is just unlit).
-  Where to look, in `scripts/personnel/mirrors.gd`: the local player's own body is shown to mirror
-  cameras only, on the `LightRooms.SELF` layer which the first-person camera leaves out (lines
-  15-16, and `Player.set_mirror_self` ~line 196). The mirror camera builds its cull mask as
-  `(main.cull_mask & ~HIDE_FROM_MIRRORS) | LightRooms.SELF` (~line 136, applied ~line 191) -- so the
-  first question is whether the room's **lights** actually illuminate the `SELF` layer, and whether
-  that changes with proximity. `scripts/level/light_rooms.gd` owns which lights light which layers
-  and line 35 there is specifically about this body; note `set_meta("light_dynamic", true)` at
-  mirrors.gd:60 ("light_rooms.gd: leave its layers alone").
-  Two other candidates worth ruling out: the mirror camera's **near plane is pinned to the glass**
-  (line 6, "so the wall behind never shows") -- walking close puts the reflected body right up
-  against that plane; and the render budget, where "of the sink mirrors you can see, the nearest
-  renders every frame and the rest take turns" (line 11), so proximity changes which mirror is on
-  the every-frame path. Check both the full-length entrance mirror and the sink mirrors, since they
-  are different sizes and may not fail alike.
-- **LEADING HYPOTHESIS: it is the cloth material, not the lighting.** In the mirror, the **cloth goes
-  black while the skin on the same body, in the same frame, still renders** (face and hands stay lit
-  and correct; see `tools/mirror_shots/v_no_torch_050.png`). Two materials on one skinned body
-  behaving differently inside one SubViewport is a material / per-instance render-flag problem, and
-  it is a much better lead than lights, layers or cull masks, all of which were measured and ruled
-  out (below). **Chronology matters here: this split was seen in the unmodified build, before
-  `skin_tint` or the per-player skin material existed** -- `human_model.gd` has always given the
-  humans two materials (`Human_Cloth`, `Human_Skin`), with cloth made per spawn and skin shared. So
-  the 0.10.12 customization work did not cause it and is not the place to look. The sharpest
-  untested step is **`gi_mode` on the imported meshes** (Godot imports at `GI_MODE_STATIC`), then the
-  cloth shader itself (`human_cloth.gdshader`: `ALBEDO` collapses to black if its `albedo_tex`
-  sample comes back black, e.g. a mip or sampler problem that the skin shader's own textures dodge).
+- **FIXED 2026-09-22 (mirror-black): standing close to a mirror no longer turns you black.** The
+  cause was not the renderer and not the body: **nothing in this hospital ever lit the side of you
+  that a mirror looks at.** `piece_factory.gd` draws bulbs round both mirrors -- the dressing-room
+  bulbs down both sides and across the top of `full_mirror`, the light bar over `vanity`'s basin --
+  but they were emissive geometry only, with no `Light3D` behind them. Every real fixture hangs
+  overhead and out in the room, so standing at a mirror, facing a wall, left your front lit by the
+  0.13 ambient alone; dark green scrubs under ambient alone are black. The mirror was rendering
+  correctly the whole time, faithfully showing an unlit surface.
+  The measurement that settled it is in `tools/mirrorshot.gd` (`_dump_incident`): light landing on
+  the chest facing the glass was **0.000 at 0.5 m** from the big mirror, 0.133 at 0.8 m and 0.221 at
+  1.2 m -- exactly the reported black / dark-below-the-waist / correct -- while light on the same
+  point facing up was 0.83-1.5 and facing into the room 1.9-2.9 at every distance. The sink mirrors
+  read **0.000 at 0.5, 0.8, 1.2 and 2.0 m**, which is why they looked worse: they have nothing in
+  front of them at all.
+  The fix is `mirrors.gd` `_add_lamp`: one shadowless `OmniLight3D` per mirror, a little proud of
+  the glass, cull-masked by `light_rooms.gd`'s area bits so it cannot light through the wall it
+  hangs on, plus `DYNAMIC` and `SELF`. Front-facing light is now 0.36-0.73 at the big mirror and
+  0.26-0.52 at the sinks, at every distance tested.
+- **What this bug cost, for next time.** Two investigations chased the renderer because the symptom
+  looked like one, and every renderer theory was tested and disproved without the obvious question
+  ("is there any light on that side of him?") ever being asked. For the record, all of these were
+  measured and are *not* involved: light cull masks and the `SELF` layer; `gi_mode` on the imported
+  meshes; the body's AABB and `extra_cull_margin`; the cloth and skin shaders (a plain
+  `StandardMaterial3D` over the whole body is just as black); every screen-space effect in
+  `look.gd` (SSAO, SSIL, both fogs and glow, all off together, no change); the off-axis frustum's
+  offset; and the extreme field of view (a symmetric 70-degree camera from the same eye point is
+  just as dark). A plain white box standing beside the body goes black in the glass in exactly the
+  same way and comes back at 1.2 m, which is the single test that would have pointed the right way
+  from the start -- it takes the body, its materials and its layers out of the picture entirely.
+  Two traps worth knowing: a node added to the tree during `_apply_variant`, just before
+  `force_draw()`, is **not registered with the rendering server yet and draws nothing**, so the
+  earlier "a bright omni 0.9 m from the chest leaves the cloth black" result was not testing what it
+  said it was; and the mirror camera sits *behind* the wall the glass hangs on, so any diagnostic
+  that pulls the near plane in just renders the inside of that wall (a black frame that is easy to
+  misread as "the mirror is broken"). `tools/mirrorshot.gd` now holds camera variants across real
+  frames (`_hold_camera`) and dumps each mirror's SubViewport texture on its own, so neither trap
+  can bite again.
+- **The mirror menu is never built under `mapcheck` (pre-existing, found 2026-09-22).** Every seed
+  `mapcheck` builds prints `SCRIPT ERROR: Invalid call. Nonexistent function 'new' in base
+  'GDScript'` from `mirrors.gd` `setup`, at
+  `add_child(preload("res://scripts/personnel/mirror_menu.gd").new())`. The preload resolves to a
+  `GDScript` that has not compiled, so the menu node is simply missing; the rest of the level builds
+  and `mapcheck`'s own checks are unaffected, which is why nobody noticed. **Confirmed on plain
+  `main`** (checked at `99a33bd`, where the same statement is line 74) as well as on this branch, so
+  it is not the mirror-lamp work. It does not happen in the real game: a booted shift builds the
+  menu fine, and `mirrors.gd` loaded on its own in `-s` mode instantiates it fine too, so it is a
+  load-order/cycle problem specific to the order `mapcheck` pulls these scripts in
+  (`mirrors.gd` -> `mirror_menu.gd` -> `customization.gd` -> `human_model.gd`). Nobody has chased it
+  further.
 - **Pinstripes follow the model's UV layout, not the body.** The pattern shader steps the UV's x
   coordinate, as specified, but `surgeon_st`'s islands are not laid out consistently: the stripes
   run across the torso and down the legs. It reads as deliberate more than as a bug, and
   `stripe_angle` (a uniform) rotates them, but a truly vertical pinstripe everywhere would want the
   cloth UVs re-laid or a body-space coordinate instead of UV.
-- **The mirror menu does not fix this and must not be read as evidence that it is fixed.** Opening
-  the customization menu stands you 1.7 m back, where the reflection is lit, so that screen looks
-  correct while **walking up to a mirror in normal play is still broken**.
-- **REPRODUCED 2026-09-22 (mirror-customize), not yet root-caused.** `tools/mirrorshot.ps1` boots the
-  entrance, stands you at a list of distances from the big mirror and from a sink mirror, dumps what
-  the mirror camera and every nearby light are doing, and saves a shot at each
-  (`tools/mirror_shots/`). What it shows, seed 4242:
-    - **Big mirror**: black body at 0.5 m, dark from the waist down at 0.8 m, correct from 1.2 m out.
-      **Sink mirrors**: dark at every distance tested, 0.5 m to 3.5 m, so they are worse, not
-      different.
-    - The **room around the body stays correctly lit in the same frame**; only the body goes dark,
-      and within the body only the cloth (the split above). That is why it reads as "completely
-      black": the scrubs are dark green, so with only the 0.13 ambient on them they are black, while
-      bright skin still shows.
-  **Ruled out, each by a one-frame A/B in that tool** (`--variants`):
-    - *The light cull masks / the `SELF` layer.* The mirror camera's mask has `SELF` in it at every
-      distance, the body's meshes are all on `SELF`, and 13 of the 13 lights within 14 m already
-      light that layer. Forcing every light in the level to `light_cull_mask = 0xFFFFFFFF` changes
-      nothing.
-    - *Your own torch.* Black with the flashlight off too (it is already excluded from `SELF` at
-      player.gd:627, so the note in graftsurgeryshot.gd about the torch bleaching your face in the
-      glass is stale).
-    - *The body's AABB / light pairing.* The body's transformed AABB is correct (1.41 x 1.79 x 0.38 m,
-      centred on the player), four omnis reach the chest inside their range, and
-      `extra_cull_margin = 4` on every body mesh changes nothing.
-    - *"No light is near enough."* A bright `OmniLight3D` (energy 8, range 6, all layers) placed 0.9 m
-      in front of the chest visibly brightens the **floor** under the body in the reflection and
-      leaves the **cloth black**.
-  So in the mirror's SubViewport the body rejects light **per instance**, while the geometry beside it
-  in the same frame takes it. Untested and still open: `gi_mode` on the imported meshes (Godot
-  imports at `GI_MODE_STATIC`), and the off-axis frustum itself -- `near` is pinned to the glass, so
-  at 0.5 m it is 0.45 with a ~138 degree field of view, and the distance where the body comes right
-  is the distance where that frustum stops being extreme. Nothing here is fixed yet; the mirror menu
-  works around it by standing you 1.7 m back, where the reflection is lit.
 
 ## Doors and the per-shift wings (doors worker, 2026-09-14)
 
@@ -998,10 +971,10 @@ left below is what still applies to the shared strapped-monster infrastructure.
   item, carry or wind-up pose, rather than a rig-aware crouched stance blended with those poses.
   Reads correctly (a stooped lean) in the common cases; not verified against every hold pose.
 - **`game.database` (the scanner's sighted/scanned records) has no reset hook.** It is host-only,
-  in-memory, and intentionally not cleared on `reset_money()` / game over the way `brains.on_reset()`
-  clears absorbed brains — species knowledge is meant to persist across a wipe with money — but
-  nothing has exercised that assumption yet (chunk 4 is expected to formalize it when the database
-  is saved to disk).
+  in-memory, and intentionally not cleared on `reset_money()` / game over the way
+  `abilities.on_reset()` clears ability levels and slots — species knowledge is meant to persist
+  across a wipe with money — but nothing has exercised that assumption yet (chunk 4 is expected to
+  formalize it when the database is saved to disk).
 - **Screenshots were not taken.** `tools/gameshot.tscn` needs a windowed run; this chunk was built
   and tested entirely headless, and grabbing 1-3 screenshots was judged not worth the added run in
   this pass (the spec allows skipping them when they prove awkward in a headless environment).
@@ -1086,12 +1059,12 @@ left below is what still applies to the shared strapped-monster infrastructure.
   or how many players are around**, and if two purchases queue back to back the second capsule
   waits invisibly (no visible queue) until the first clears. Fine for one bottle at a time; would
   need a visible queue or multiple delivery slots if the pharmacy ever sells more than one item.
-- **`tools/inventoryshot.gd`, `tools/braintest.gd`, `tools/brainshot.gd`, `tools/looptest.gd`,
-  `tools/nettest.gd`, `tools/mapcheck.gd` and `tools/perfprobe.gd` were updated to compile and stay
+- **`tools/inventoryshot.gd`, `tools/looptest.gd`, `tools/nettest.gd`, `tools/mapcheck.gd` and
+  `tools/perfprobe.gd` were updated to compile and stay
   gold-free** (the old sell bin/shop/gold pile flows they drove no longer exist), but only
   `inventorytest.gd`, `mapcheck.gd`, `devtest.gd`, `looptest.gd` and one `playtest --god` were
-  actually run this pass per the sweep's token budget; `nettest`'s `economy` scenario, `braintest`,
-  `brainshot` and `inventoryshot` were updated by inspection only and not executed.
+  actually run this pass per the sweep's token budget; `nettest`'s `economy` scenario and
+  `inventoryshot` were updated by inspection only and not executed.
 - **Follow-up (still chunk 3): the crematorium was unreachable on some seeds.**
   `economy.gd`'s `_rect_spot()` finds the furnace/pharmacy's floor height by casting a ray down
   from `probe.y + 1.5`; with `probe.y = 2.0` that ray started at world y=3.5, which is *above* a
@@ -1113,7 +1086,7 @@ left below is what still applies to the shared strapped-monster infrastructure.
 - **Hive Eyes cycling and the hold-to-exit key (level 2+) were not built.** `docs/SWEEP4A.md`
   asks for: at level 1 tapping the slot ends it (built, unchanged from sweep 3); at level 2+
   tapping cycles to another Hive in range and holding the slot ~0.4 s ends it. Cycling needs
-  `brains.ability_slot()` to pick a different Hive and retarget the same hive session instead
+  `abilities.ability_slot()` to pick a different Hive and retarget the same hive session instead
   of ending it, and holding-vs-tapping needs real key-hold timing, not just the existing discrete
   press counter (`Player.ability_slot_press`, incremented once per press with no duration). Both
   would mean widening the replicated ability-press protocol; judged out of proportion to this
@@ -1122,12 +1095,12 @@ left below is what still applies to the shared strapped-monster infrastructure.
   ending Hive Eyes still works today exactly as it did in sweep 3 (the slot again, or Esc, both via
   `ability_slot_press`). At any level, only the nearest Hive in range is ever picked.
 - **The fly-through's "no path" straight-line glide was exercised, but only informally**: the test
-  hospital's break room to a nearby Hive always has a navmesh path in practice, so
-  `databasetest`/`braintest` never hit the `NavigationServer3D.map_get_path` returning empty case
-  in a real level. `hive_view._path_from` falls back to a straight line correctly by inspection
-  (and the fallback branch is exercised by construction whenever the map iteration id is 0, e.g.
-  the very first physics frame after a level loads), but nobody has watched it happen on a level
-  where the Hive truly has no path to the player (e.g. across a locked door).
+  hospital's break room to a nearby Hive always has a navmesh path in practice, so the headless
+  tests never hit the `NavigationServer3D.map_get_path` returning empty case in a real level.
+  `hive_view._path_from` falls back to a straight line correctly by inspection (and the fallback
+  branch is exercised by construction whenever the map iteration id is 0, e.g. the very first
+  physics frame after a level loads), but nobody has watched it happen on a level where the Hive
+  truly has no path to the player (e.g. across a locked door).
 - **The database terminal's Monsters section is a fixed, hand-written list**
   (`scripts/database/monster_pages.gd`), not derived from any shared "monster kind" registry --
   there isn't one yet. Adding a new monster kind means adding an entry there by hand; nothing
@@ -1155,14 +1128,13 @@ left below is what still applies to the shared strapped-monster infrastructure.
 
 ## Sweep 4A final integration (docs/SWEEP4A.md, 2026-09-15)
 
-- **`tools/nettest.gd` had three real breaks against the merged sweep**, none caught by any
+- **`tools/nettest.gd` had real breaks against the merged sweep**, none caught by any
   individual chunk (each was told not to run `nettest_run.gd` to keep its own token budget down):
-  the `brains` scenario called the removed `best_path()` API and asserted on the Hive Eyes camera
-  before its new fly-through (chunk 4) had time to land; the `economy` scenario asserted on money
+  the `economy` scenario asserted on money
   before a furnace sale could register, aimed throws with a fixed world-space offset instead of
   the furnace's actual (rotated) facing, and had no recovery from a throw physically missing the
-  grate. All three fixed; `brains` and `economy` now pass under `--lag=120 --jitter=40 --loss=0.03`
-  (economy correctly reaches $505 after selling a laptop and a gold watch and buying 3 pill
+  grate. All fixed; `economy` now passes under `--lag=120 --jitter=40 --loss=0.03`
+  (it correctly reaches $505 after selling a laptop and a gold watch and buying 3 pill
   bottles).
 - **`combat`'s nettest scenario fails under injected lag** (`--lag=120 --jitter=40 --loss=0.03`):
   the host times out waiting to see a client's over-long melee-charge claim get capped. Confirmed
@@ -1262,10 +1234,9 @@ left below is what still applies to the shared strapped-monster infrastructure.
 
 ## Interactable affordance: aim highlight replacing floating labels (2026-09-15)
 
-- **Only two always-on `Label3D` props were actually found and replaced**: the OR supply shelf's
-  "SUPPLY - SURGICAL" tag (`scripts/supply_shelf.gd`) and the break-room blender's "BLENDER" tag
-  (`scripts/brains/blender.gd`). Both are gone outright; `AimHighlight` (`scripts/aim_highlight.gd`)
-  plus the existing crosshair prompt now carry the "you can interact with this" signal instead.
+- **One always-on `Label3D` prop was actually found and replaced**: the OR supply shelf's
+  "SUPPLY - SURGICAL" tag (`scripts/supply_shelf.gd`). It is gone outright; `AimHighlight`
+  (`scripts/aim_highlight.gd`) plus the existing crosshair prompt now carry the "you can interact with this" signal instead.
   `scripts/economy/economy_props.gd` and `scripts/economy/furnace.gd` (the pharmacy window and the
   furnace, which also carry price/amount `Label3D`s) were deliberately left untouched -- a sibling
   worker owns those files for the entrance/lobby rebuild, and this sweep was scoped to the generic
@@ -1276,13 +1247,6 @@ left below is what still applies to the shared strapped-monster infrastructure.
   label (which table is which, similar in spirit to the hospital's own room-name signs) than a
   "you can interact with this" cue, and the table's own aim highlight now covers the latter. Worth
   a second look if it turns out players read "STAFF" as redundant once they get used to the rim.
-- **The blender's highlight is hard to see in a screenshot taken close up and level with its own
-  overhead lamp** (`tools/affordanceshot.tscn` shot `d_blender_aimed_highlight_on.png`): the lamp's
-  own bright bloom washes out the thin rim on the jar and motor housing at that framing. Confirmed
-  by instrumentation that the rim shells are actually created (6, `AimHighlight.MAX_MESHES`), so
-  this is a lighting/screenshot-framing issue, not a mechanism bug -- the same rim reads clearly on
-  the supply shelf's steel frame in the same run. Worth a look with a wider shot or the lamp dimmed
-  if the blender specifically still feels unclear in a real playtest.
 - **No other floating always-on interactable labels were found** in a full `Label3D` grep of
   `scripts/`: the rest are either transient (the pharmacy's `_spawn_pill_line` flavor quotes in
   `game.gd`, which rise and fade on their own), dev-only (`scripts/dev/dev_level.gd`,
@@ -1364,14 +1328,14 @@ failure was the already-documented furnace-throw flake below, not this death cas
 
 Rebuilt the Alt+1..4 ability bar (`scripts/hud.gd` `_draw_ability_bar`) from flat rectangles to
 circular icon slots, matching the vector/procedural style the rest of the HUD already uses
-(`_draw_scan_ring`'s `draw_arc`, the hearts' `draw_circle`/`draw_colored_polygon`, etc. -- there
-are still no raster HUD icons anywhere). Each slot is a filled circle with a per-ability glyph
-drawn in a new `_draw_ability_icon()`: Echo is three concentric partial arcs plus a centre dot (a
-sound pulse), Hive Eyes is an almond eye outline with a pupil. The old bottom cooldown bar is now
-a radial arc that drains clockwise from the top; level pips sit in a row just under the circle;
-the Hive Eyes "Hive in range" border pulse is now a ring drawn with `draw_arc` instead of
-`draw_rect`; empty/unusable slots dim the same way as before, just on a circle. `_draw_ability_card`
-(the unlock popup) doesn't reference the bar's shape and was left alone.
+(`_draw_scan_ring`'s `draw_arc`, the hearts' `draw_circle`/`draw_colored_polygon`, etc.). Each
+slot is a filled circle with a per-ability glyph drawn in a new `_draw_ability_icon()`: Echo is
+three concentric partial arcs plus a centre dot (a sound pulse), Hive Eyes is an almond eye
+outline with a pupil. The old bottom cooldown bar is now a radial arc that drains clockwise from
+the top; level pips sit in a row just under the circle; the Hive Eyes "Hive in range" border pulse
+is now a ring drawn with `draw_arc` instead of `draw_rect`; empty/unusable slots dim the same way
+as before, just on a circle. `_draw_ability_card` (the unlock popup) doesn't reference the bar's
+shape and was left alone.
 
 While rebuilding this I found and fixed a real, pre-existing bug in the big/small Alt-hold blend
 (`_alt_t`): the ability bar was lerping its rect with the *same* `t` direction as the hands bar
@@ -1391,7 +1355,7 @@ Verified:
   different HUD layer, not this one).
 - Added two poses to `tools/gameshot.gd` (`_pose_ability_bar_idle`, `_pose_ability_bar_alt`,
   shots `40_ability_bar_idle` / `41_ability_bar_alt`) that give the bot Echo/Hive Eyes via
-  `game.brains.set_level()`, force one ability onto a cooldown, and toggle the `ability_alt`
+  `game.abilities.set_level()`, force one ability onto a cooldown, and toggle the `ability_alt`
   input action to capture both the idle-small and Alt-held-big states. Ran windowed (not
   `--headless`, which returns a null viewport texture) with `-- --only=ability_bar --tag=t3` and
   actually looked at the resulting screenshots
@@ -1412,7 +1376,8 @@ version had the exact same call shape) and not hit in the two abilities that exi
 they're rarely both blocked at once, but worth widening to per-slot placement if a third ability
 ever ships. The new icon shapes (concentric arcs / almond eye) are a first pass at "read clearly
 at 26-52px" -- fine at both the idle and Alt-held sizes in the screenshots above, but not tested
-against colourblind palettes or at ultra-low resolutions.
+against colourblind palettes or at ultra-low resolutions. (Note, 2026-09-22: the bar itself is
+unchanged, but only Hive Eyes has an in-game source now -- see "Abilities (sweep 3)" above.)
 
 ## Default over-the-shoulder camera (2026-09-16)
 
@@ -1828,7 +1793,7 @@ Rebuilt around that:
   1.4 m chamber, hatch left open), its face 1.8 m off the south wall.
 - Tests that throw into the furnace open the hatch first and aim at the window's middle (1.5 m):
   looptest (the bot presses E on it), nettest (client 1 presses E, checking the replication),
-  inventorytest and braintest (set_hatch directly). inventorytest's "held laptop wears the gold rim"
+  inventorytest (set_hatch directly). inventorytest's "held laptop wears the gold rim"
   waited 3 physics frames, which after the bigger hub's loot spawn can all run before Player._process
   rebuilds the held model; it waits process frames now (92/92).
 
@@ -1869,9 +1834,8 @@ Rebuilt around that:
   morgue tray anchors (seeds 1, 38, 112). **Failing identically on 1df95f4 (chunk 1), so not from
   chunks 2/3, not fixed yet:** downedtest's 16 dev-room checks (carrying doesn't slow, the dev room's
   player table offers no "Place" prompt so the stitches flow never starts, "the next lobby has
-  everyone back up"), carrycamtest's wall pull-in (3), controlstest's air/touchdown speed (2), and
-  braintest's spoiled brain selling for full price in the furnace (1). nettest (via
-  tools/nettest_run.gd) and looptest are run separately after the commit.
+  everyone back up"), carrycamtest's wall pull-in (3) and controlstest's air/touchdown speed (2).
+  nettest (via tools/nettest_run.gd) and looptest are run separately after the commit.
 
 ## Hub rebuild, chunks 4 and 5: the break room, the hallway (2026-09-16)
 
@@ -1884,18 +1848,15 @@ Rebuilt around that:
   `case_sheet_ui.gd`: one fax page per case from `OrScreenModel.build` (patient, condition, procedure
   steps, supplies short on the shelf), refreshing twice a second; A/D pages, Esc/E closes.
 - The printer's own body is only an aim target (`C.L_INTERACT`); its stand is the solid part, kept
-  below 0.8 m, because the brains blender's counter search (`brains.gd` `_counter_spot`) takes any flat
-  0.8-1.1 m top near the time clock and had put the blender on the printer.
+  below 0.8 m so counter-height prop searches do not mistake it for a free counter top.
 - **Hallway (chunk 5):** set dressing in rows 1 and 4 only (rows 2-3 stay a clear lane): body bags on
   gurneys (`gurney_bag`) and on the floor (`body_bag`), a sheeted body, a toppled gurney
   (`gurney_toppled`, frame on its side with legs and wheels), a wheelchair in the lane, a drag mark
   (`blood_trail`) and pools (`blood_pool`, glass surface so it reads wet). The five hallway fixtures
   are fixed modes (two flicker, two dead, the spine's lit) instead of rolled.
 
-- **Fixed after the chunks 2+3 merge (2026-09-16):** the crematorium furnace priced a sale from a
-  stack without its kind or spoil clock, so a spoiled brain sold for full value (`furnace.gd` now
-  passes `{kind, count, v, bt}`). The other pre-existing failures were tests left behind by the
-  rebuilt rooms, not game bugs: downedtest walked into the dev room furnace's open hatch (the carry
+- **Fixed after the chunks 2+3 merge (2026-09-16):** the pre-existing failures were tests left
+  behind by the rebuilt rooms, not game bugs: downedtest walked into the dev room furnace's open hatch (the carry
   slowdown and player table checks, now a clear lane at z 12.5) and gave the new run's bigger hub
   too little time to build; carrycamtest backed the player onto the pen's waist-high barrier
   instead of a wall; controlstest's dive started in the lobby facing a wall (now the hub's spine).
@@ -1904,7 +1865,7 @@ Rebuilt around that:
 
 - **Terminal 3D viewer** (`scripts/database/model_preview.gd`): a SubViewportContainer with its own
   world beside each page's text: monsters (black silhouette unscanned, the rig once scanned, plus its
-  brain enlarged once harvested), ability brains, items, a procedure's tools in a small grid. Rebuilt
+  brain enlarged once harvested), items, a procedure's tools in a small grid. Rebuilt
   only when the page key changes (the terminal redraws its text every frame). Skinned rigs report
   their rest-pose bounds, so monsters pass `preview_bounds` from MonsterPages' height.
 - **Scanner feedback** (`scripts/scan_fx.gd`, local only): holding R turns the flashlight blue and
@@ -1985,8 +1946,7 @@ Rebuilt around that:
   shows at once). Test: `databasetest` (sign in/out paths, solo), `nettest --only=wall` (two guests).
 - Failing on main before this work too (checked on e1c63e4 in a separate worktree, 2026-09-17):
   doortest "the crew pushed the OR's doors open to bring the gurney through" (every run), looptest
-  "the bot threw the loot into the furnace and sold it for $52" (every run), braintest "nobody is
-  left looking through a Hive" after a game over (flaky, about 1 in 2), mapcheck seed 1's morgue
+  "the bot threw the loot into the furnace and sold it for $52" (every run), mapcheck seed 1's morgue
   tray (known).
 
 ## Right-shoulder carry camera, load on the left shoulder (2026-09-17)
