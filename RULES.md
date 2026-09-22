@@ -60,6 +60,14 @@ Nothing gets tested hard until Zach has played it.
   clicks, it isn't ready to be a review. To add one: an entry in `SETUPS` and a static function that
   stages things with the helpers there (`place`, `give`, `give_abilities`, `floor_item`); then
   `tools\review.bat 4 "ICONS: pick things up" --setup=icons`.
+- **A setup plus `-Count 2` is a connected pair, not two solo shifts.** Window 1 hosts and stages
+  the setup, window 2 joins it over localhost and stands beside window 1 looking the same way:
+  one world, still no menu and no lobby. That is how anything co-op gets reviewed -- does my
+  teammate see this, does it read from where an onlooker stands, does a hit land on the other
+  screen. `tools\review.bat 3 "PANEL: readable from the side?" --setup=pack_wrap -Count 2`. Only
+  the host stages (staging is host-authoritative world state), and the host holds the shift until
+  the joiners are in, so nobody ends up spectating. `-Count 2` with no `--setup` is unchanged: two
+  loose windows that still need clicking through the menu.
 - **Review windows never take focus.** They open minimized and flash in the taskbar. Nothing
   opens a game window any other way while Zach might be using the machine. The one exception is
   `-Front`, for when he is sitting there waiting for it: the window comes up focused and ready for

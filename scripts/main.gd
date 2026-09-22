@@ -199,16 +199,115 @@ func _launch() -> void:
 		_boot_setup(setup)
 
 
-## Review window: solo host on the setup's seed, the shift begun, the world settled, then the setup stages
-## its things (ReviewSetups.stage).
+## How long a co-op review window waits for the other windows before giving up. A cold slot warms
+## up for a while (ten-plus seconds) before it even gets here, so this is generous.
+##
+## Wall milliseconds, deliberately: these waits are for another *process* to catch up, which has
+## nothing to do with this one's frame rate. Counting process_frame deltas instead makes the wait
+## meaningless under --fixed-fps, where a headless window burns three game-minutes in a few real
+## seconds and gives up before the other window has finished warming up.
+const SETUP_COOP_WAIT_MS := 180000
+
+
+## Review window: the setup's seed, the shift begun, the world settled, then the setup stages its
+## things (ReviewSetups.stage).
+##
+## One window (no --setup-role) is a solo session, exactly as before. In a co-op set
+## (tools\review.ps1 -Count 2 with a --setup) window 1 is the host and the rest join it, so they
+## share one world: see scripts/review_setups.gd's header. Only the host stages.
 func _boot_setup(setup: String) -> void:
-	await _start_solo("Reviewer", ReviewSetups.seed_of(setup))
+	var role := ReviewSetups.role()
+	if role == "join":
+		await _boot_setup_join(ReviewSetups.port())
+		return
+	if role == "host":
+		if not await _start_setup_host("Reviewer", ReviewSetups.seed_of(setup), ReviewSetups.port()):
+			return
+	else:
+		await _start_solo("Reviewer", ReviewSetups.seed_of(setup))
 	while game.get_parent().has_node("WarmupCover") or game.local_player() == null:
 		await get_tree().process_frame
+	# Everyone has to be in the lobby before the shift starts: a client that joins after begin_shift
+	# spectates until the next shift instead of spawning.
+	if role == "host":
+		await _wait_for_setup_peers(ReviewSetups.peers())
 	game.begin_shift()
 	for i in 45:
 		await get_tree().process_frame
 	await ReviewSetups.stage(setup, game)
+	if role == "host":
+		print("[review] staged '%s'; host player at %v, %d player(s) in the world" % [
+			setup, game.local_player().global_position, game.players.size()])
+
+
+## Co-op review window 1: like _start_host, but on the setup's seed and the review set's port, and
+## it leaves the lock file the joining windows are waiting on. False if the port was taken.
+func _start_setup_host(player_name: String, forced_seed: int, port: int) -> bool:
+	if not await _loading_screen_up("host", player_name):
+		return false
+	await game.prebuild_level(forced_seed, 1)
+	var err := Net.host(player_name, port)
+	if not err.is_empty():
+		game._discard_prebuilt()
+		_show_menu(err)
+		return false
+	game.start_session(forced_seed)
+	hud.host_info = "Review co-op: hosting on 127.0.0.1:%d" % port
+	_enter_game()
+	shift_fax.end("session")
+	ReviewSetups.mark_hosting(port)
+	print("[review] hosting on port %d for %d joiner(s)" % [port, ReviewSetups.peers()])
+	return true
+
+
+## Host: hold the shift until `n` joining windows are in the lobby (or we give up waiting).
+func _wait_for_setup_peers(n: int) -> void:
+	if n <= 0:
+		return
+	print("[review] holding the shift for %d review window(s) to join..." % n)
+	var until := Time.get_ticks_msec() + SETUP_COOP_WAIT_MS
+	while Net.peer_ids().size() < n + 1 and Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+	var joined := Net.peer_ids().size() - 1
+	if joined < n:
+		push_warning("[review] only %d of %d review windows joined; starting anyway" % [joined, n])
+	else:
+		print("[review] %d review window(s) joined; starting the shift" % joined)
+
+
+## Co-op review window 2+: wait for the host window's server, join it, then stand beside the host's
+## player once the shift is under way. It never stages anything -- that is the host's world.
+func _boot_setup_join(port: int) -> void:
+	print("[review] waiting for the review host on port %d..." % port)
+	var until := Time.get_ticks_msec() + SETUP_COOP_WAIT_MS
+	while not ReviewSetups.host_listening(port) and Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+	if not ReviewSetups.host_listening(port):
+		push_warning("[review] no review host appeared on port %d" % port)
+		_show_menu("No review host appeared on port %d." % port)
+		return
+	print("[review] joining the review host on 127.0.0.1:%d" % port)
+	await _start_join("Onlooker", "127.0.0.1:%d" % port)
+	# Our own player, the host's player, and the shift actually begun: only then is the staged thing
+	# there to look at.
+	until = Time.get_ticks_msec() + SETUP_COOP_WAIT_MS
+	while Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+		if game.phase == Game.Phase.SHIFT and game.local_player() != null \
+				and game.players.get(Net.HOST_ID) != null:
+			break
+	var host_player = game.players.get(Net.HOST_ID)
+	if game.local_player() == null or host_player == null:
+		push_warning("[review] joined, but no player to stand beside on port %d" % port)
+		return
+	# Let the host finish staging (it places its own player last thing) before we copy where it stands.
+	for i in 90:
+		await get_tree().process_frame
+	ReviewSetups.place_beside(game, host_player)
+	# Proof, in the log, that this is the host's world and not a lookalike of it: the host's player
+	# is a node here, at the spot the host's own log says the setup put it.
+	print("[review] joined: host player %s at %v; standing beside it at %v" % [
+		Net.name_for(Net.HOST_ID), host_player.global_position, game.local_player().global_position])
 
 
 func _after_launch() -> void:
