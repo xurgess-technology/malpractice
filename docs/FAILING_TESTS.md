@@ -36,30 +36,163 @@ camera puts that camera 1.4 m behind and 0.5 m right of the head, looking along 
 first aim target (a whole door) survived that; a thin open leaf at arm's length did not, and the
 three checks after it only failed because that first press never happened. Slots seed their settings
 from Zach's, which say "shoulder", so the test read his view preference. `tools/doortest.gd` now pins
-first person for its run, exactly as `devtest` did for the same reason. That leaves `doortest` failing
-the one gurney check in section 1 and nothing else.
+first person for its run, exactly as `devtest` did for the same reason.
+
+**Section 1, `doortest`'s gurney check, went the same way on 2026-09-23 and has been removed.**
+`doortest` now passes **all 91 checks**. It was half test bug and half product bug, and neither half
+was visible until the door's `amount` was logged frame by frame against the crew's position through
+an arrival.
+
+- **The product half — late, not clipping.** The OR doors did open, all the way to 1.00, and the
+  crew's *centre* never crossed a shut leaf. But they only began to move 0.67 m before that centre
+  reached the door plane, and the paramedic pulling at the front stands **1.55 m ahead** of `cr.p`
+  (`scripts/loop/crew.gd`). He and the gurney's nose were through a dead-shut door — he was 0.9 m
+  past the plane before a leaf twitched. `Doors._agents` was sensing a three-metre convoy as the
+  single point in its middle, and the lateral bound in `_push_check` is what held it off: the crew
+  swings in off the hallway at a slant and its centre is outside the doorway's width until the last
+  moment. Fixed by giving the crew agent a `push_pos` at `CREW_LEAD` (1.55 m) ahead of its middle,
+  used for manual-door pushes only; the automatic sensor still uses the middle, since
+  `CREW_SENSOR_RANGE` already allows for the convoy. The doors now stand fully open before anything
+  reaches them.
+- **The test half — the check was watching nothing.** The crew crosses about **0.96 m** off the
+  doorway's centre, and the doorway is **3 m** wide, so a flat `|lp.x| < 0.8` side bound never once
+  contained it: closest approach **0.81 m**, missed by a centimetre. *Both* gurney checks in that
+  loop were vacuous, which is why "the crew never passed the doorway with the door mostly shut" had
+  been quietly "passing" — it was never evaluated, not satisfied. The bound is now the door's own
+  `width * 0.5`, which is what "in the doorway" actually means.
+- **Not the same bug as the playtest's monsters walking through doors** (docs/KNOWN_ISSUES.md,
+  "PLAYTEST 2026-09-22"), whose reproduced half was the open leaf's collider and is already fixed.
+  This one is crew-only: nothing else in the game is sensed at a point set back from its leading
+  edge. `4b7a431` ("Operator rooted at the table") was **not** involved — the lead named in the old
+  section was a dead end.
+
+**Sections 3 and 1l went the same way on 2026-09-23 and have both been removed.** They were one bug
+written up twice by two tasks who never met: `tools\perfprobe.ps1 -Extra "--pockets"` printed a burst
+of `ERROR: BUG, indexing did not unpair geometries from light` from `renderer_scene_cull.cpp`, then
+`CrashHandlerException: Program crashed with signal 11`, straight after `[warmup] built and drew
+everything once`, and not one scenario row was ever measured. Reproduced here on `fix-perfprobe` at
+`f82a3bb` before anything was touched: the same twelve errors, the same place.
+
+- **It was never any one pocket space, and never ours.** Three independent confirmations, kept
+  because they rule out three different things: POCKET_SPACES_2 phase 3 got the identical crash (the
+  same twelve errors, the same 67-line log) with the Chapel taken back out of `PocketSpaces.LAYOUTS`
+  and the kind loop pinned to the old `["none", "factory", "restaurant"]`; phase 2 got it with the
+  Natatorium out of `PocketPlan.KINDS`; phase 4 got it on a **detached checkout of plain `main`
+  (`3b30969`)** with only `tools/perfprobe.ps1` brought over, no Laundromat in the tree at all.
+- **It was the restart.** `_run_pockets` called `game.start_session()` once per kind, tearing a whole
+  level and all its lights down and building another, and the first of those landed immediately after
+  the one-time warmup. docs/KNOWN_ISSUES.md already had that renderer error down as a Godot bug seen
+  in windowed runs ("Seen during this work and not ours"); doing it once per kind turned an error
+  into a crash.
+- **It is not a race, which is the one new measurement.** The obvious fix -- let the renderer settle
+  before tearing down -- does nothing. `RenderingServer.force_sync()`, sixty frames, then
+  `force_sync()` again, between the measuring and the `start_session`, crashes in exactly the same
+  place with exactly the same twelve errors. So there was never a window to wait for, and any fix
+  that timed the teardown would have been luck.
+- **Our teardown was not at fault.** `game._clear_level` tears a pocket down and `queue_free()`s the
+  level node; nothing frees a light by hand or keeps a `RID` past the node, and `WingLoader` does not
+  touch lights. The engine's own light/geometry pairing index is what does not survive it.
+- **The fix routes around it instead of racing it.** `--pockets` is now **`tools\perfprobe.ps1`'s**
+  loop, not the probe's: one Godot process per kind, each running the `--pocket=<kind>` path that
+  already worked (plus `--pocket=none` for the bare-hospital baseline), and the wrapper stitches their
+  tables into one. Nothing restarts a session, so the engine bug is never reached. The kinds are read
+  out of `PocketPlan.KINDS` in `scripts/level/pockets/pocket_plan.gd`, so a new space joins the sweep
+  by itself. `_run_pockets` is gone; `_pocket_views` is now the one views list, with the four views
+  only `_run_pockets` had (the factory catwalk, the restaurant kitchen, the seam from the pocket side,
+  and the two mirrored teammates) folded back into it, so nothing stopped being measured.
+- **What the next person should know.** `perfprobe.tscn -- --pockets` on its own now prints a line
+  telling you to use the wrapper and quits 2 -- the loop cannot live in one process. Per-kind logs are
+  `.godot\perfprobe-<kind>.log` and the whole sweep is concatenated into `.godot\perfprobe.log` as
+  before. **The at-exit crash is still there** (the same engine bug, on the teardown at `quit()`), and
+  is still harmless: it now happens strictly *after* the table has printed, and the wrapper judges a
+  kind by the rows it parsed, never by an exit code, so a crashing exit cannot fail a good run. Fixing
+  that one is Godot's job, not ours.
+
+**Section 1g, nettest `pockets`, went the same way on 2026-09-23 and has been removed.** The scenario
+now passes: 44 s, 46 s and 46 s on three runs, with the host reporting "client 1 carried client 2 into
+the pocket" and client 2 confirming from inside its own body that it stayed there. It was neither the
+seam nor the carry, and the old entry's headline was wrong: **the carry started fine every time.**
+
+- **Which side dropped it: client 1, and not for a gameplay reason.** The old note said "carried 0,
+  client 2's body in pocket false" and concluded the carry never started. It does start. What client
+  1 actually reports most runs is `timed out after 60 s waiting for walking into the stub` — the
+  *second* walk in, the one with a teammate on its shoulder. Logging its position, velocity, slide
+  collisions and physics-frame count once a second through the whole scenario is what separated the
+  two: the player was at a healthy 2.04 m/s (walk speed x `CARRY_SPEED_K`), on the floor, with no
+  collision but the ground, and still covering **0.17 m per second of wall clock**. It was not being
+  blocked or snapped back. It was running at **5 physics frames a second**, against 130-160 fps for
+  the identical walk a few seconds earlier without the body.
+- **The cause is one display-server call per frame.** `Player._key_label` (scripts/player.gd) turns a
+  bound action into a prompt label through `DisplayServer.keyboard_get_keycode_from_physical`.
+  Headless has no keyboard layout, so that call fails and Godot prints an eight-line error **with a
+  GDScript backtrace** -- and `_update_aim_core` asks for the drop key on every frame you are
+  carrying someone ("Put them down  (Q)"), and only then. So picking a teammate up turns on a
+  per-frame error flood, the process spends its frame writing to a pipe, and the client collapses.
+  Nothing else in the game calls `_key_label`, which is why only the carrying half of this scenario
+  was ever slow.
+- **Fixed by remembering the label.** `_key_label` now caches physical keycode -> label in a static
+  dictionary, and in headless skips the layout translation entirely (the physical key *is* the
+  label). One lookup per distinct binding instead of one per frame; rebinding lands on a different
+  keycode and so a different entry. A run's `tools/nettest_logs/pockets_c1.log` now has **zero**
+  `Not supported by this display server` lines, against thousands.
+- **What the next person should know.** *Any* per-frame error on a headless nettest process is a
+  25-30x slowdown, not a cosmetic nuisance: `nettest_run.gd` only echoes `[net...]`, `[stats]` and
+  `SCRIPT ERROR` lines, so a flood like this is **invisible in the console** and only shows up in
+  `tools/nettest_logs/<scenario>_<role>.log`. Read that file before believing a nettest timeout is
+  about gameplay. The same flood was happening in the `downed` scenario, which carries too; it passed
+  only because its carry walk is 1.2 s long. And be careful profiling these: adding `print`s to find
+  the hot spot slowed every process to 7 fps and hid the difference between carrying and not.
+- **In the shipped game this was a slow prompt, not a stall.** With a real display server the call
+  succeeds and merely costs a layout lookup every frame while you carry; nobody would have seen it.
+
+**Section 1k, spawncheck's 600 `suture_kit` failures, went the same way on 2026-09-23 and has been
+removed.** `spawncheck` is now green: **300 seeds x 2 ailments, "OK - every rule held"**, against
+600 failures on `main` at `fca51db` (reproduced here first, same count, all of them `gunshot`).
+**It was a test-scope bug, and the product was fine** -- but the comment that sent everyone the
+wrong way was not.
+
+- **The old lead was right about the mechanism and wrong about the conclusion.** `suture_kit` is
+  indeed missing from `Items.SURGICAL`, which is the list `ItemSpawner.plan`'s needed/herring split
+  iterates, so the case plan never plans one. But `spawncheck` only ever looked at `plan()`, and a
+  shift's supply is **two plans**: `game._populate_shift_world` scatters three stacks of kits
+  (and of syringes) through what is now `ItemSpawner.loose_supply_plan`, before any case arrives.
+  spawncheck could not see the path that actually supplies the item it was failing on.
+- **Measured before changing anything, because the interesting question was whether a gunshot shift
+  can be uncompletable.** A probe replayed the real scatter against real levels for 300 seeds: all
+  three kits land in a legal container on **every** seed (never the floor fallback), in three
+  distinct building units, **never** in a `SAFE_ROOMS` room, never in a type `Items.found`
+  disallows, and at least one is past `FAR_M` on every seed (worst seed 29 at 26.4 m against a bar
+  of 24). Total kits per seed 3 to 6 against a need of 1, so `CONSUMABLE_MULT` is met on the worst
+  seed. The scarcest seed still had **86** legal spots to choose from. **No shift is uncompletable,
+  and no kit lands anywhere unreasonable.** `tools/playtest.tscn -- --god --seed=2` (a gunshot
+  shift) confirms it end to end: the bot found a kit in the wings, carried it in and closed the
+  wound, clocking out stable.
+- **The one guarantee the scatter does not meet is spread: 3 places, not `CONSUMABLE_STACKS[0]`
+  (6).** That is now written down rather than discovered, and spawncheck asserts the weaker bar for
+  a `LOOSE_SUPPLY` kind and the full one for a `SURGICAL` kind.
+- **Adding `suture_kit` to `SURGICAL` was the other candidate and would have cost more.** It is
+  read in six places -- `game.gd`'s `_level_info_usable` sizes `tool_spawns` against its length,
+  `database_pages.gd` orders the whole database by it, `dev_room.gd` already appends `suture_kit` by
+  hand and would have doubled it, and spawncheck's own slot-width check widens with it -- and it
+  would have left two supply paths for one item unless `spawn_suture_kits` were deleted, which is
+  the downed-teammate table's supply and must exist on amputation shifts too. The measurement said
+  the product was fine, so the test was the thing to fix.
+- **Two real bugs fell out of the measurement anyway**, both caught by the new checks rather than by
+  reasoning. The scatter hard-coded stacks of 1-2 instead of the kind's own `batch`, so syringes
+  spawned in packs of 1 while `Items` and the database page both promised 2 to 3. And `plan()` was
+  called with an empty `used` set, so on about a fifth of seeds the case plan put a stack into a
+  slot a kit or syringe already occupied -- two items inside each other in one drawer. `plan()` now
+  takes the spots already taken, and spawncheck fails on a double-booking (max 2 per seed before,
+  0 now).
+- **What the next person should know.** A supply kind can live outside `Items.SURGICAL` on purpose;
+  `ItemSpawner.LOOSE_SUPPLY` is the list of those, it is the single source for how many stacks each
+  gets, and anything checking "what a shift holds" must read both it and `SURGICAL`. One more place
+  was reading only `SURGICAL` and is fixed here: `shift_loop.missing_supplies()`, so the objective
+  line now actually says `BRING TO THE OR SHELF: Suture kit x1` instead of going quiet.
 
 How to run things is at the bottom of this file.
 
 ---
-
-## 1. doortest: the paramedics don't push the OR doors open for the gurney
-
-- **Command:** `godot --headless --path . --fixed-fps 60 tools/doortest.tscn`
-- **Result:** `FAIL (1 of 91 checks)`, the check `the crew pushed the OR's doors open to bring the gurney through`
-  — the only check `doortest` still fails, as of 2026-09-22 (the four in the old section 1b were the
-  test's own camera setting and are fixed).
-- **The check:** `tools/doortest.gd`, around line 361. While the paramedic crew is right in the OR
-  doorway (`|lp.z| < 0.9`, `|lp.x| < 0.8` in the door's frame), the OR door's `amount` must go past
-  0.7 at some point before the patient is on the table. It never does.
-- **The patient still arrives.** The crew gets through, so a shift isn't broken; the doors just
-  don't visibly swing for them. Whether the crew clips through a closed door or the door opens too
-  late for the check to see it hasn't been established.
-- **Where to look:** how the crew pushes manual doors (the loop's crew movement and the door scripts
-  in `scripts/doors/`), and `scripts/player.gd` from commit `4b7a431` ("Operator rooted at the
-  table"), which changed how the crew and the operating player push each other. That commit is the
-  most recent change near this behaviour, but it hasn't been confirmed as the cause.
-
 
 ## 1f was two bugs, both fixed 2026-09-23 (`fix-1f`)
 
@@ -93,17 +226,6 @@ failed every time it was tried (4 of 670 at `0756682`), and the cut-down reprodu
 `--only=factory,natatorium` failed about half its runs -- which is all "it moves between runs" ever
 was, and why one green run proves nothing here.
 
-## 1g. nettest `pockets`: client 1 never carries client 2 into the pocket
-
-- **Command:** `-- --only=pockets`
-- **Result:** `FAIL` after 140 s: client 1 says `carried 0, client 2's body in pocket false`, and the
-  host and client 2 both time out after 120 s `waiting for client 1 to carry client 2 into the
-  pocket`. The carry never starts, so nothing about the seam itself is exercised.
-- **Found 2026-09-22** during the strapping fix, **confirmed on plain `main`** at `c933607` with the
-  identical message, and it reproduces every run (not a load flake). Never written down before.
-- Not to be confused with the headless `pockettest` scene, whose own failures (the old section 1f,
-  above) were something else entirely and are fixed.
-
 ## 1i. nettest `full_shift_lag` is a load flake
 
 - Failed once on 2026-09-22 during a full suite run (`timed out after 90 s waiting for start` on
@@ -124,74 +246,6 @@ was, and why one green run proves nothing here.
 - **The stalls themselves were never explained**, and they are no longer anyone's known bug. Anything
   that depends on a short-lived state being sampled at 20 Hz is vulnerable to them, so this is worth
   its own look before the next netcode feature leans on snapshot timing.
-
-## 1k. spawncheck: 600 suture_kit failures
-
-- **Found 2026-09-22** by the `syringe-draw` task, which generalised the loose-supply spawner and
-  wanted a clean baseline. **Confirmed identical on clean `main`**, so it is pre-existing and not
-  that branch's doing. It had never been written down.
-- **Confirmed a second time, independently**, by the POCKET_SPACES_2 phase 3 task, which checked
-  out `main`'s `scripts/items.gd` and `scripts/item_spawner.gd` over its own branch and got the
-  same failure on every one of six seeds: `seed N gunshot: suture_kit totals 0, needs at least
-  3x 1` and `suture_kit is in only 0 places`.
-- Nobody has looked at the cause. Worth knowing that `suture_kit` is the newest of the loose
-  supplies -- SUTURE! (0.10.4) added the closing step that needs it, and 0.10.33 generalised the
-  spawner that places it -- so if this turns out to date from either, it is young.
-- **One lead worth trying first:** `suture_kit` is in `Items.ITEMS` with `"surgical": true` but is
-  **not** in `Items.SURGICAL`, and `Items.SURGICAL` is the list `ItemSpawner.plan`'s needed/herring
-  split actually iterates. It also declares `"found": {"trauma_bag": 0.4, "station_drawers": 0.35,
-  "drawer_unit": 0.25}` and no `"loose"`, so it can only ever appear inside a container.
-
-
-## 3. perfprobe --pockets crashes after the warmup, before it measures anything
-
-- **Command:** `tools\perfprobe.ps1 -Extra "--pockets"` (a real window that renders but never
-  takes focus — SW_SHOWNOACTIVATE, not minimized: a minimized window does not render and its frame
-  times mean nothing)
-- **Result:** twelve `BUG, indexing did not unpair geometries from light` errors from
-  `renderer_scene_cull.cpp`, then `CrashHandlerException: Program crashed with signal 11`. The log
-  stops at the warmup line and **not one scenario is measured**.
-- **Found independently by two tasks on 2026-09-22** (POCKET_SPACES_2 phases 2 and 3) and
-  **confirmed pre-existing by both**: phase 3 reproduced it exactly -- the same crash, the same
-  twelve errors, the same 67-line log -- with the Chapel taken back out of `PocketSpaces.LAYOUTS`
-  and perfprobe's kind loop pinned to the old `["none", "factory", "restaurant"]`. It is the
-  restart, not any one space.
-- **Where the fault is.** `perfprobe._run_pockets()` calls `game.start_session()` again, once per
-  kind, and the first of those restarts lands immediately after the one-time warmup. Tearing that
-  down while the renderer still holds the warmup shelf's light-geometry pairings is what trips the
-  engine bug. Plain `perfprobe` (one session, no restart) completes all 27 scenarios on the same
-  machine and only crashes **at exit**, after the summary table has printed, which is harmless and
-  has presumably been happening for a while.
-- **The way round it, which works today:** `-- --pocket=<kind>` forces the kind *before* the one
-  and only `start_session` and measures that space in the session already built. Both tasks landed
-  on this independently; it is what the Natatorium's and the Chapel's numbers were taken with
-  (`tools\perfprobe.ps1 -Extra "--pocket=chapel"`, which uses SW_SHOWNOACTIVATE -- a minimized
-  window does not render and its frame times mean nothing).
-- **Where to look:** whether `_run_pockets` can wait out the renderer (a few frames, or
-  `RenderingServer.force_sync()`) before restarting, or whether it should simply be rebuilt on top
-  of `--pocket` and run one process per kind.
-
-
-## 1l. perfprobe --pockets crashes before it measures anything (signal 11)
-
-- **Command:** `tools\perfprobe.ps1 -Extra "--pockets"` (or the same flags on `perfprobe.tscn` in
-  any windowed run).
-- **Result:** a burst of `ERROR: BUG, indexing did not unpair geometries from light` from
-  `renderer_scene_cull.cpp`, then `CrashHandlerException: Program crashed with signal 11`, straight
-  after `[warmup] built and drew everything once`. Not one scenario row is printed.
-- **Not ours, and not any one pocket space.** Found independently by POCKET_SPACES_2 phase 2 and
-  phase 4. Phase 4 verified it on 2026-09-22 on a detached checkout of **`main` (3b30969)** with
-  only `tools/perfprobe.ps1` brought over: identical crash, identical place, with no Laundromat in
-  the tree at all. Phase 2 saw the same with the Natatorium taken back out of `PocketPlan.KINDS`.
-- **Why:** `_run_pockets` calls `game.start_session()` once per kind, tearing down and rebuilding a
-  whole level with all its lights. docs/KNOWN_ISSUES.md already records that renderer error as a
-  Godot bug seen in windowed runs ("Seen during this work and not ours"); doing it once per kind
-  turns it from an error into a crash.
-- **The way round, for measuring one space:** `--pocket=<kind>` forces the kind before the first
-  session is built and never restarts it, so nothing is torn down. Both phases arrived at it; it is
-  how every pocket space's numbers in docs/POCKET_SPACES_2.md were taken.
-- **Where to look:** `tools/perfprobe.gd` `_run_pockets`, and whatever frees lights in
-  `game._clear_level` / `WingLoader` ahead of a `start_session`.
 
 ---
 

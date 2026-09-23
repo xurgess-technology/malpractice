@@ -793,10 +793,18 @@ func _any_incoming() -> bool:
 ## hand, game.shelf_count), as "Anesthetic x1" labels.
 func missing_supplies() -> Array:
 	var need: Dictionary = game._live_requirements()
-	var out := []
+	# Items.SURGICAL first, for a stable order, then anything else the case needs -- a step may ask
+	# for a kind that is not in that list (gunshot's closing step wants a suture kit), and before
+	# 2026-09-23 those were silently left off this line.
+	var kinds := []
 	for kind in Items.SURGICAL:
-		if not need.has(kind):
-			continue
+		if need.has(kind):
+			kinds.append(kind)
+	for kind in need.keys():
+		if not kinds.has(kind):
+			kinds.append(kind)
+	var out := []
+	for kind in kinds:
 		var short: int = int(need[kind]) - int(game.shelf_count(kind))
 		if short <= 0:
 			continue

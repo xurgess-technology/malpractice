@@ -365,9 +365,14 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
   fallback ward): the first clear 2.3 x 1.1 m spot 2.7-3.4 m from the OR table. On the hospital
   and the dev room the level's own entry is used; a level table is detected by a downward ray
   (a top between 0.5 and 1.4 m) and no model is added.
-- **Suture kits skip `ItemSpawner.plan`**: `game.spawn_suture_kits()` places three stacks of 1-2 in
-  random legal containers (trauma bags, nurse station drawers, drawer units), not spread by wing
-  depth, and not topped up by the softlock guard.
+- **Suture kits skip `ItemSpawner.plan`** -- by design, and now measured. `game.spawn_suture_kits()`
+  goes through `ItemSpawner.loose_supply_plan` (`LOOSE_SUPPLY`): three stacks of 1-2 in legal
+  containers (trauma bags, nurse station drawers, drawer units), one per building unit, never in a
+  safe room, not spread by wing depth. Over 300 seeds that is always at least 3 kits in 3 places
+  against a gunshot case's need of 1, and always at least one of them past `FAR_M`, so it clears
+  the case plan's own supply bar on everything but the number of places (3, not
+  `CONSUMABLE_STACKS[0]` = 6). The softlock guard **does** top them up: `_live_requirements` counts
+  the closing step and `shortfall_plan` restores any kind. `tools/spawncheck.gd` checks this path.
 - **`tools/mapcheck.gd` reports seed 112** (a morgue tray anchor 3.3 m off the navmesh); the same
   on `main` before the pod removal.
 
@@ -732,6 +737,16 @@ left below is what still applies to the shared strapped-monster infrastructure.
   second behind, and its own leaves collide the same way. What Zach saw was most likely the open
   leaf; if it turns up again against a door that is visibly shut on the host, start with the
   monster's own mover rather than the door.
+- **The crew used to walk its lead medic through a shut OR door** -- *found and fixed 2026-09-23.*
+  `Doors` sensed the paramedic crew at `cr.p`, the middle of the gurney, but the medic pulling at
+  the front is 1.55 m ahead of it and the crew comes off the hallway at a slant, so the lateral
+  bound in `_push_check` held the push off until the middle was 0.67 m from the door plane: logged
+  frame by frame, the front medic was already 0.9 m *through* a door still at `amount` 0.00.
+  `Doors.CREW_LEAD` now puts the crew's push point at the front of the convoy (`push_pos`, manual
+  doors only -- the automatic sensor keeps the middle and its own `CREW_SENSOR_RANGE`), and the
+  doors stand fully open before anyone reaches them. Unrelated to the playtest entry above: nothing
+  else in the game is sensed at a point set back from its leading edge. `doortest`'s own check had
+  been vacuous all along (docs/FAILING_TESTS.md preamble).
 - **About 3% of room doors have under 80 degrees of room on the hallway side** (furniture or a
   container near the doorway): they always fold into their tunnel, even toward someone coming out
   of the room, who has to step back while it swings (a bot gets shoved back a little). `DoorPlan.check` guarantees every door still opens wide enough to pass.

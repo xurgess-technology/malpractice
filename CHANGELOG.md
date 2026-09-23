@@ -5,6 +5,20 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.45**: Two items stop sharing a drawer, and syringes come in the packs they promise 💉
+    - Fixed: Roughly one shift in five had two items planned into the same spot -- one inside the other in a drawer. The supply planner didn't know about the items scattered before it ran.
+    - Fixed: Syringes were spawning in packs of 1 when everything that describes them, the database page included, says 2 to 3. **This raises syringes from 3-6 a shift to 6-9 -- worth a look, Zach, in case the old number was the intent.**
+    - Fixed: The objective line never told you a suture kit was missing, so the one supply the closing step needs was the one supply it wouldn't name.
+- **0.10.44**: Carrying a teammate stopped costing a key lookup every frame 🤝
+    - Fixed: While you were carrying someone, the game re-asked the keyboard what the drop key was called on every single frame. Harmless in the real game, but it crawled in testing -- which meant the one automated test of carrying a downed teammate through a pocket seam had never actually run. It does now, and it passes.
+- **0.10.43**: The performance sweep can measure the pocket spaces again 📊
+    - Fixed: `perfprobe --pockets` crashed before measuring a single thing, and had done for as long as there were pocket spaces to measure. It now runs one process per space and prints one table for all six. Nothing you can see in game -- this is the tool that tells us whether the new rooms run well.
+- **0.10.42**: The paramedics open the doors before they walk through them 🚪
+    - Fixed: The OR doors used to still be shut when the front of the gurney was already through them. They opened -- just late, about a second after the medic pulling the gurney had walked through a solid door. They now stand open before anyone reaches them.
+- **0.10.41**: Something in the pocket spaces is watching you 👁
+    - Added: The Onlooker. It picks one of you and stands at the far end of the room, facing them. It makes no sound and it never takes a step -- look away, look back, and it's somewhere else. Everyone can see it and anyone can drive it off by running at it, but it only ever wants the one it picked. If they leave through the seam, it picks someone else who stayed.
+    - Note: Your heart goes faster the longer it has you, and it speeds up each time it moves. Nothing else in the game tells you where it is, so a teammate saying "behind you" is the whole of your warning.
+    - Fixed: On everyone's screen but the host's, a short hop made it *walk* -- the one monster whose entire point is that it doesn't. Now it jumps for everybody.
 - **0.10.40**: The hospital knows what's behind the door 🩸
     - Added: Things from a pocket space now turn up in the hospital rooms near its entrance, as if they'd been carried out and dropped. Find a grease bucket in a ward and there's a factory somewhere close.
     - Note: It reaches about three rooms out from each seam, which is six to nine rooms of a hospital.

@@ -151,7 +151,9 @@ and at least one trauma bag on a hallway wall.
 
 ```gdscript
 # scripts/item_spawner.gd
-static func plan(seed: int, shift: int, ailment_id: String, info: Dictionary) -> Array
+static func plan(seed: int, shift: int, ailment_id: String, info: Dictionary, occupied := {}) -> Array
+static func loose_supply_plan(seed: int, shift: int, kind: String, info: Dictionary,
+		used: Dictionary) -> Array
 static func shortfall_plan(seed: int, need: Dictionary, have: Dictionary, info: Dictionary,
 		occupied: Dictionary, avoid: Array) -> Array
 # Each entry: {kind: String, count: int, container_id: String ("" when loose), slot: int, anchor: int}
@@ -166,7 +168,17 @@ spawns in `ItemSpawner.SAFE_ROOMS` (the entrance building's rooms and halls, the
 at least one needed item is far from the table; items the current ailment does not need also
 spawn as red herrings; spawn counts respect `Items` batch sizes; deterministic from the seed.
 Levels without `wing` on their containers and anchors count as one wing. The game instantiates
-`WorldItem`s from the plan. `tools/spawncheck.gd` checks all of it.
+`WorldItem`s from the plan.
+
+**A shift's supply is two plans, not one.** Before any case arrives, `game._populate_shift_world`
+scatters every `ItemSpawner.LOOSE_SUPPLY` kind through `loose_supply_plan`: `suture_kit` and
+`syringe`, three stacks each, one per building unit, in the containers the kind's `found` table
+allows, never in a `SAFE_ROOMS` room, stack sizes inside the `Items` batch. Those kinds are not in
+`Items.SURGICAL`, so the case plan never plans them -- but a case can still **need** one
+(`gunshot`'s closing step wants a suture kit), and then this scatter is its whole supply, with the
+weaker guarantee of three places rather than `CONSUMABLE_STACKS[0]`. The case plan is handed the
+scatter's spots as `occupied`, so the two never double-book a slot. `tools/spawncheck.gd` checks
+both plans and their totals together.
 
 ## World items (main session)
 
@@ -456,7 +468,7 @@ stitches, should too):
 `enum State { WANDER, CHASE, STUNNED }`, fields `monster_id`, `kind`, `state`, `damage`,
 `knockback`, `calm`, `moving`, and methods `alert_to(pos)`, `shoved(dir)`,
 `recoil_after_hit()`, `report() -> Dictionary`, `apply_remote(d)`.
-Kinds: `"sonographer"` and `"night_nurse"`.
+Kinds: `"sonographer"`, `"night_nurse"`, `"hive"` and `"onlooker"` (`Monster.KINDS`).
 
 Game-side API for monsters:
 
@@ -479,6 +491,72 @@ Game-side API for monsters:
 Noise the game already emits on the host: footsteps (walk 0.25, sprint 0.8), containers 0.5,
 pickups 0.15, drops 0.4, breaking glass 0.9, shoves 0.6, surgery monitors 0.6 while someone
 operates.
+
+### The Onlooker (POCKET_SPACES_2 phase 6)
+
+`Monster.ONLOOKER` `"onlooker"`, a fourth kind in `Monster.KINDS`. The fourth sense rule is
+ATTENTION, and it is the inverse of the Night Nurse: you get rid of it by going toward it.
+
+**It is never in `roster()`.** The shift does not hand it out. `scripts/monsters/onlooker_watch.gd`
+(`game.onlooker_watch`, a child of Game on every machine, host-only behaviour) rolls `SPAWN_CHANCE`
+**once per pocket space** and, if it wins, adds exactly one through
+`game.spawn_pocket_monster(kind, pos)`. One per pocket ever: nothing re-rolls, whatever else frees
+the monster. `OnlookerWatch.force` (`""` / `"on"` / `"off"`) overrides the roll, for tools, tests
+and the dev panel.
+
+**Replication is the ordinary entity path and nothing else.** It lives in `game.monsters`, reports
+through `report()` and arrives through `apply_remote()` like every other monster. Two added fields:
+`"pr"` -> `Monster.present` (is it standing there this second) and `"tp"` -> `Monster.teleports`
+(how many times the host has put it somewhere, mirrored from the brain's `placements`).
+`Monster.presence` (0 gone, 1 there) is the pop-in ease and is the only part a client works out for
+itself.
+
+**`tp` is what makes a hop arrive as a jump, and the 6 m displacement heuristic is not enough on
+its own.** That heuristic measures how far the body moved from where the *client* has it, while
+placement only constrains distance to the *mark*, so two placements within 6 m of each other get
+lerped -- the host teleports and every client watches it walk. A client snaps to the reported
+position whenever `tp` differs from the last value it acted on. A counter and not a flag, because a
+one-frame bool is missed by a 20 Hz snapshot and a longer-lived one is applied twice (same reasoning
+as the rocket-boot ignition count). The snap happens inside `apply_remote` so it uses the position
+from the same snapshot as the counter, and `_teleports_seen` starts at -1 so a client joining
+mid-encounter snaps on its first snapshot. Other kinds report 0 for ever and are untouched. **The same node and the same entity id live for the whole
+encounter** -- it toggles `present` rather than being freed and re-added per hop, because an id
+handed out twice is the 0.10.26 bug where a client keeps driving a stale node.
+
+`scripts/monsters/onlooker_brain.gd`, host side:
+
+- **Whose view.** It **marks one player** for the encounter: the one inside the pocket with the
+  longest clear ray out of their own eyes (`_sightline`), ties broken on peer id. Placement, hops,
+  the stare and the hearts are all that one player's view and nobody else's.
+- Other players **see** it (it is an ordinary monster) and **can banish** it -- anyone closing to
+  `BANISH_RANGE` sends it away, not just the mark -- but it never hurts anybody but the mark.
+- A mark who leaves the space hands the stare to a teammate still inside; with nobody left, the
+  encounter ends after `LEAVE_GRACE`. That test lives in `think()` rather than in the standing
+  branch, so a banished Onlooker in its cooldown still notices everyone leaving.
+- **It never wanders.** It calls neither `nav_move` nor `random_nav_point`, so it never reaches
+  `game.monster_may_wander_to`. It is not exempt by accident: placement runs the same predicate the
+  fence does (`pockets.space_of(point)` must be this pocket, `phantom_at` must be empty).
+- **Placement samples down the mark's heading**, not uniformly over the pocket's rect: a frustum is
+  a thin wedge of a big room, and uniform sampling could miss it repeatedly in the Natatorium. A
+  quarter of the candidates stay uniform as a fallback. Visibility is frustum plus a raycast and
+  **deliberately not `Perception.observed_any`**, because that requires the point to be *lit* and
+  this monster's eyes are their own light.
+- Immune to everything: `can_be_hurt()` is false, it is not capturable, `shoved` and
+  `recoil_after_hit` are no-ops.
+- **Silent.** `Monster._update_sound` returns immediately for this kind. That early return is the
+  mechanic, not an omission -- the tell is purely visual.
+
+Knobs (all on the brain unless noted): `SPAWN_CHANCE` (watch, 0.5), `GRACE` 9.0 s before the first
+heart, `TICK_FIRST` 7.0 / `TICK_RAMP` 0.7 / `TICK_MIN` 2.0 for the ramp, `BANISH_RANGE` 6.0 m,
+`HOP_INTERVAL` 9.0 +/- `HOP_JITTER` 2.0, `VANISH_COOLDOWN` 75 s, `MIN_DIST` 14 m /
+`PREFER_DIST` 26 m, `LEAVE_GRACE` 2.0 s.
+
+`scripts/monsters/onlooker_rig.gd` is the body: primitives, no skeleton, no AnimationPlayer and no
+clip, because it never takes a step. Unshaded near-black so it is the same silhouette under every
+light in the game, with two emissive eyes and a dim emissive ball around them that **fades in with
+distance** (nothing inside 6 m, full by 22 m) so it stays legible at the range it is always met at
+without swallowing the head up close. The database entry caps at tier 2 with no special case: tier
+3 is `harvested`, and there is nothing here to harvest.
 
 ### Monsters, sweep 3 (monsters worker): the Hive, fighting and capturing
 
@@ -1152,7 +1230,9 @@ the one place footstep loudness was already chosen.
   containers and anchors in reach), `tools/pockettest.tscn` (also the next shift's rebuild; `-- --frames` windowed
   frame times), `tools/looptest.tscn -- --pocket=factory`, nettest `pockets` (also the next shift's rebuild on every
   machine), `tools/gameshot.tscn --
-  --pocket=factory|restaurant`, `tools/perfprobe.tscn -- --pockets`, devtest's pocket panel checks.
+  --pocket=factory|restaurant`, `tools\perfprobe.ps1 -Extra "--pockets"` (one windowed process per
+  kind; a single process measures one kind with `perfprobe.tscn -- --pocket=<kind>`), devtest's
+  pocket panel checks.
 
 ## Settings (settings worker, sweep 2)
 

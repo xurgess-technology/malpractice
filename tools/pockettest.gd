@@ -12,6 +12,9 @@ extends Node
 ##     offset from the seam, its speed and heading; the carried body stays on the shoulder; the
 ##     supplies stay in hand; everyone ends up on the far side
 ##   - a Night Nurse follows a player from the hospital into the pocket through a seam
+##   - the Onlooker (POCKET_SPACES_2 phase 6): the watcher puts one in the pocket, it finds
+##     somewhere in this space at least MIN_DIST off and inside the bot's own view, it hops to
+##     another such place, it makes no noise at all, and walking out through a seam ends it
 ##   - a Sonographer in the pocket hears a player on the hospital side of a seam and comes through
 ##   - a loose item dropped past a seam lands in the other copy
 ##   - noise near a seam is heard on the other side; nothing past a seam is reachable
@@ -30,6 +33,8 @@ const LootTableScript := preload("res://scripts/economy/loot_table.gd")
 const ItemsScript := preload("res://scripts/items.gd")
 const PlayerScript := preload("res://scripts/player.gd")
 const PocketBleedScript := preload("res://scripts/economy/pocket_bleed.gd")
+const OnlookerBrain := preload("res://scripts/monsters/onlooker_brain.gd")
+const OnlookerWatch := preload("res://scripts/monsters/onlooker_watch.gd")
 
 var main: Node3D
 var game: Game
@@ -239,6 +244,7 @@ func _run_space(kind: String) -> void:
 	_remove_bot(follower)
 	await _frames(2)
 	await _nurse_follows(kind, pk)
+	await _onlooker(kind, pk)
 	await _sonographer_hears(kind, pk)
 	await _item_crosses(kind, pk)
 	game._clear_monsters()
@@ -640,6 +646,106 @@ func _nurse_follows(kind: String, pk) -> void:
 		await _frames(1)
 	_check(pk.in_pocket(nurse.global_position), "%s: the Night Nurse followed the player through the seam (%.1f s, %.1f m away)" % [kind, game.world_time - t0, nurse.global_position.distance_to(bot.global_position)])
 	_check(_count_crossings("monster", int(nurse.monster_id)) - before == 1, "%s: she crossed exactly once" % kind)
+	bot.set_flashlight(true)
+	game._clear_monsters()
+	await _frames(2)
+
+
+## POCKET_SPACES_2 phase 6: the Onlooker, in a real one of each space, through the real spawn path.
+##
+## This is the "bot-walk each pocket with it enabled" half of the spec's tests. The monster_lab
+## scenarios prove the *rule* in a corridor built for the purpose; what only a real space can prove
+## is that these five rooms are actually big enough for it -- that somewhere in the Factory, the
+## Restaurant, the Natatorium, the Laundromat and the Chapel there is a spot MIN_DIST away, on the
+## navigation mesh, inside this space rather than a stub's dead half, and visible from where a
+## surgeon stands. The Laundromat is the one to watch: at 38 x 15 m it is much the smallest, and its
+## washer islands break the long lines.
+##
+## The bot turns on the spot rather than being pointed down a known axis, because the five layouts
+## have nothing in common and a hard-coded heading would be a different test in each. Finding NO
+## heading that works would be the real failure: it would mean a space where the monster can be
+## rolled and never appear.
+func _onlooker(kind: String, pk) -> void:
+	var watch = game.onlooker_watch
+	var force_was: String = OnlookerWatch.force
+	OnlookerWatch.force = "on"
+	watch.rearm()   # this pocket already rolled at clock-in; roll it again, forced
+	bot.set_flashlight(false)   # its eyes are its own tell: it needs nobody's torch
+	bot.bot_move = Vector2.ZERO
+	bot.teleport(pk.pocket.spawn)
+	await _frames(int((OnlookerWatch.SETTLE + 0.4) * 60.0))
+	var o: Node = watch.current()
+	_check(o != null, "%s: the watcher puts an Onlooker in the pocket" % kind)
+	if o == null:
+		OnlookerWatch.force = force_was
+		return
+	_check(String(o.kind) == "onlooker" and game.monsters.values().has(o),
+		"%s: it is an ordinary replicated monster" % kind)
+	# Hold the brain, not just the node. The watcher frees the monster the moment the encounter
+	# ends, which is the last thing this test does on purpose -- reading `o.brain` afterwards is
+	# reading a freed node. The brain is a RefCounted and outlives it for as long as this holds it.
+	var br = o.brain
+
+	# Turn on the spot until it finds a heading with room in it.
+	var found := false
+	var dist := 0.0
+	for i in 16:
+		bot.bot_yaw = float(i) * TAU / 16.0
+		await _frames(12)
+		if bool(o.present):
+			found = true
+			dist = o.global_position.distance_to(bot.global_position)
+			break
+	_check(found, "%s: it finds somewhere to stand in this space" % kind)
+	if not found:
+		OnlookerWatch.force = force_was
+		game._clear_monsters()
+		return
+	_check(dist >= OnlookerBrain.MIN_DIST, "%s: it stands %.1f m off (min %.0f)" % [kind, dist, OnlookerBrain.MIN_DIST])
+	_check(int(br.mark_peer) == int(bot.peer_id), "%s: it marked the bot" % kind)
+	var noises_before: int = game.recent_noises(999.0).size()
+
+	# **Let the head stop moving before measuring anything.** A bot eases toward `bot_yaw` rather
+	# than snapping to it, so the loop above breaks with the view still swinging: the brain places
+	# into the frustum of the frame it ran in, and a tenth of a second later that frustum has moved
+	# off it. Three runs of this test read as real failures ("not in the bot's own view", "it hops
+	# 0.0 m") and every one of them was this. Measure a still camera or measure nothing.
+	await _frames(45)
+
+	# The hop, forced so this does not wait out the jitter, and this is where placement is really
+	# judged: from a settled view it has to land somewhere NEW, in this space, far off and visible.
+	# Three attempts, because each one is an independent sample of 40 candidate points -- one miss
+	# in the Laundromat's washer aisles is the design working, three in a row would not be.
+	var before: Vector3 = o.global_position
+	var moved := 0.0
+	var seen := false
+	for _attempt in 3:
+		br.hop_left = 0.0
+		await _frames(30)
+		moved = o.global_position.distance_to(before)
+		seen = bool(o.present) and Perception.in_view(bot, o.global_position + Vector3.UP * 1.4)
+		if moved > 1.0 and seen:
+			break
+	_check(moved > 1.0 and int(br.hops) >= 1, "%s: it hops (%.1f m)" % [kind, moved])
+	_check(seen, "%s: the hop lands in the bot's own view" % kind)
+	var hop_d: float = o.global_position.distance_to(bot.global_position)
+	_check(hop_d >= OnlookerBrain.MIN_DIST, "%s: and still far off (%.1f m)" % [kind, hop_d])
+	_check(String(pk.space_of(o.global_position)) == kind, "%s: it stands inside the pocket, never the hospital" % kind)
+	_check(pk.phantom_at(o.global_position).is_empty(), "%s: and never in a stub's dead half" % kind)
+	_check(game.recent_noises(999.0).size() == noises_before, "%s: it makes no noise at all" % kind)
+
+	# Walk it out through a seam: the bot goes to the hospital side of one and stays there.
+	var s: Dictionary = pk.seams[0]
+	var map := get_viewport().world_3d.navigation_map
+	bot.teleport(NavigationServer3D.map_get_closest_point(map, Stub.local_point(s.xh, 1.0, -5.0)))
+	await _frames(4)
+	_check(String(pk.space_of(bot.global_position)) != kind, "%s: the bot is out through the seam" % kind)
+	await _frames(int((OnlookerBrain.LEAVE_GRACE + 0.6) * 60.0))
+	_check(bool(br.finished), "%s: leaving through a seam ends the encounter" % kind)
+	await _frames(20)
+	_check(watch.current() == null, "%s: the watcher cleared it away" % kind)
+
+	OnlookerWatch.force = force_was
 	bot.set_flashlight(true)
 	game._clear_monsters()
 	await _frames(2)

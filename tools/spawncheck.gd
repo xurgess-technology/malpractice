@@ -6,6 +6,12 @@ extends SceneTree
 ## For each seed: builds the level info headless, runs ItemSpawner.plan() for both ailments
 ## and asserts every rule in docs/CONTRACTS.md, then deletes the needed supply and checks
 ## shortfall_plan() puts it back legally and far away. Exits non-zero on any failure.
+##
+## A shift's supply is TWO plans, not one: the case's `plan()` plus `loose_supply_plan()` for every
+## ItemSpawner.LOOSE_SUPPLY kind, which game.gd scatters at the start of every shift before the case
+## arrives. A case can need a kind that only the second plan supplies -- `gunshot`'s closing step
+## wants a suture kit -- so both go into the totals here. Checking only `plan()` is what made this
+## tool report 600 phantom `suture_kit` failures (docs/FAILING_TESTS.md section 1k, now removed).
 
 const MG := preload("res://scripts/mapgen.gd")
 const HB := preload("res://scripts/hospital_builder.gd")
@@ -32,13 +38,27 @@ func _initialize() -> void:
 		_count("containers", info.containers.size())
 		_count("anchors", info.loose_anchors.size())
 		_check_slots(seed, info)
+		var shift := 1 + seed % 4
+		# The shift's own scatter, which game.gd lays down before any case arrives.
+		var scatter: Array = []
+		for kind in Spawner.LOOSE_SUPPLY.keys():
+			var l: Array = Spawner.loose_supply_plan(seed, shift, kind, info, {})
+			if str(l) != str(Spawner.loose_supply_plan(seed, shift, kind, info, {})):
+				_fail("seed %d: the %s scatter is not deterministic" % [seed, kind])
+			_check_loose(seed, kind, info, l)
+			scatter.append_array(l)
+		# The case plan starts with the scatter's spots already taken, exactly as game.gd calls it.
+		var taken := {}
+		for e in scatter:
+			var l2 := _loc_of(e, info, _containers_by_id(info))
+			if not l2.is_empty():
+				taken[l2.key] = true
 		for ailment in ["gunshot", "amputation"]:
-			var shift := 1 + seed % 4
-			var p: Array = Spawner.plan(seed, shift, ailment, info)
-			var again: Array = Spawner.plan(seed, shift, ailment, info)
+			var p: Array = Spawner.plan(seed, shift, ailment, info, taken)
+			var again: Array = Spawner.plan(seed, shift, ailment, info, taken)
 			if str(p) != str(again):
 				_fail("seed %d %s: plan is not deterministic" % [seed, ailment])
-			_check_plan(seed, ailment, info, p, gen)
+			_check_plan(seed, ailment, info, p, gen, scatter)
 			_check_shortfall(seed, ailment, info, p)
 		level.free()
 	var ms := Time.get_ticks_msec() - t0
@@ -135,7 +155,45 @@ func _check_slots(seed: int, info: Dictionary) -> void:
 			_fail("seed %d: missing storage shelves or lectern" % seed)
 
 
-func _check_plan(seed: int, ailment: String, info: Dictionary, p: Array, gen: Dictionary) -> void:
+## Every shift's scatter of one LOOSE_SUPPLY kind: a real spot each (never the floor fallback),
+## legal for the kind, out of the safe rooms, one per building unit, stack sizes inside the batch.
+func _check_loose(seed: int, kind: String, info: Dictionary, l: Array) -> void:
+	var tag := "seed %d %s scatter" % [seed, kind]
+	var by_id := _containers_by_id(info)
+	var want := int(Spawner.LOOSE_SUPPLY[kind])
+	if l.size() != want:
+		_fail("%s: %d stacks, wanted %d" % [tag, l.size(), want])
+	var units := {}
+	var keys := {}
+	var total := 0
+	for e in l:
+		if e.container_id == "" and e.anchor < 0:
+			_fail("%s: a stack fell back to the floor -- nowhere legal was left" % tag)
+			continue
+		var loc := _loc_of(e, info, by_id)
+		if loc.is_empty():
+			_fail("%s: entry %s points nowhere" % [tag, str(e)])
+			continue
+		if keys.has(loc.key):
+			_fail("%s: two stacks share %s" % [tag, loc.key])
+		keys[loc.key] = true
+		if not _legal_for(kind, loc):
+			_fail("%s: placed in %s, which Items.found does not allow" % [tag, loc.type])
+		if Spawner.SAFE_ROOMS.has(loc.room_kind):
+			_fail("%s: spawns in the %s" % [tag, loc.room_kind])
+		if units.has(loc.unit):
+			_fail("%s: two stacks in the same unit %s" % [tag, loc.unit])
+		units[loc.unit] = true
+		var b: Array = ItemsData.def(kind).batch
+		if e.count < int(b[0]) or e.count > int(b[1]):
+			_fail("%s: stack of %d is outside batch %s" % [tag, e.count, str(b)])
+		total += int(e.count)
+	_count("scattered " + kind, total)
+	_count("scattered " + kind + " places", units.size())
+
+
+func _check_plan(seed: int, ailment: String, info: Dictionary, p: Array, gen: Dictionary,
+		scatter: Array) -> void:
 	var tag := "seed %d %s" % [seed, ailment]
 	var by_id := _containers_by_id(info)
 	var need := ProceduresData.requirements(ailment)
@@ -182,13 +240,39 @@ func _check_plan(seed: int, ailment: String, info: Dictionary, p: Array, gen: Di
 			far_best = maxf(far_best, d)
 			if d >= Spawner.FAR_M:
 				far_needed = true
+	# The shift's scatter counts toward everything the case needs: the kit that closes a gunshot
+	# wound is supplied this way and never by `plan()`. Its own placement rules are _check_loose's.
+	var overlap := 0
+	for e in scatter:
+		var loc := _loc_of(e, info, by_id)
+		if loc.is_empty():
+			continue
+		if keys.has(loc.key):
+			overlap += 1
+			_fail("%s: the case plan put a stack on the scatter's %s" % [tag, loc.key])
+		if not need.has(e.kind):
+			continue
+		totals[e.kind] = int(totals.get(e.kind, 0)) + int(e.count)
+		if not units.has(e.kind):
+			units[e.kind] = {}
+		units[e.kind][loc.unit] = true
+		needed_wings[String(loc.wing)] = int(needed_wings.get(String(loc.wing), 0)) + 1
+		var dl := _flat(loc.position, table)
+		far_best = maxf(far_best, dl)
+		if dl >= Spawner.FAR_M:
+			far_needed = true
+	_count("scatter spots the case plan also took", overlap)
 	for kind in need.keys():
 		var have: int = int(totals.get(kind, 0))
 		if ItemsData.is_consumable(kind):
 			if have < int(need[kind]) * Spawner.CONSUMABLE_MULT:
 				_fail("%s: %s totals %d, needs at least %dx %d" % [tag, kind, have, Spawner.CONSUMABLE_MULT, need[kind]])
-			if units.get(kind, {}).size() < Spawner.CONSUMABLE_STACKS[0]:
-				_fail("%s: %s is in only %d places" % [tag, kind, units.get(kind, {}).size()])
+			# A kind the case plan supplies must be in CONSUMABLE_STACKS[0] places. One the shift
+			# only scatters (a suture kit) gets as many places as it has stacks, and no fewer.
+			var places := Spawner.CONSUMABLE_STACKS[0] if ItemsData.SURGICAL.has(kind) \
+					else int(Spawner.LOOSE_SUPPLY.get(kind, Spawner.CONSUMABLE_STACKS[0]))
+			if units.get(kind, {}).size() < places:
+				_fail("%s: %s is in only %d places, wanted %d" % [tag, kind, units.get(kind, {}).size(), places])
 			_count("surplus " + kind + " (" + ailment + ")", have - int(need[kind]))
 		elif have < Spawner.TOOL_COPIES:
 			_fail("%s: needed tool %s exists only %d times" % [tag, kind, have])

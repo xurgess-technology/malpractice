@@ -37,14 +37,27 @@ const CONSUMABLE_MULT := 3
 const HERRING_TOOL_COPIES := 2
 const HERRING_STACKS := [2, 3]
 
+## Supplies that are scattered every shift regardless of the case, and how many stacks each gets
+## (`loose_supply_plan`). These are the kinds that are *not* in `Items.SURGICAL` but that the
+## hospital always holds: the suture kits a downed teammate needs, and the syringes a crew may want
+## to pre-load. A patient case can still need one -- `gunshot`'s closing step asks for a suture kit
+## -- and when it does, this is the whole of its supply, so `tools/spawncheck.gd` checks these
+## stacks against the case's requirements too. `game.gd` reads the counts from here.
+const LOOSE_SUPPLY := {"suture_kit": 3, "syringe": 3}
+## How many times `loose_supply_plan` will re-roll looking for an unused building unit.
+const LOOSE_UNIT_TRIES := 12
 
-static func plan(seed_value: int, shift: int, ailment_id: String, info: Dictionary) -> Array:
+
+## `occupied` is the spots already taken when the case arrives -- the shift's own
+## `loose_supply_plan` scatter is laid down first -- so the case plan never double-books a slot.
+static func plan(seed_value: int, shift: int, ailment_id: String, info: Dictionary,
+		occupied := {}) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("%d|items|%d|%s" % [seed_value, shift, ailment_id])
 	var locs := _locations(info)
 	var table: Vector3 = info.get("table", Vector3.ZERO)
 	var need := ProceduresData.requirements(ailment_id)
-	var used := {}
+	var used := occupied.duplicate()
 	var out: Array = []
 
 	var needed: Array = []
@@ -116,6 +129,45 @@ static func plan(seed_value: int, shift: int, ailment_id: String, info: Dictiona
 				continue
 			_take(loc, used, un, pl)
 			out.append(_entry(kind, _batch(kind, rng), loc))
+	return out
+
+
+## Every shift's scatter of one `LOOSE_SUPPLY` kind, as plan entries. One stack per building unit
+## where it can manage it, in the containers the kind's `found` table allows and never in a
+## `SAFE_ROOMS` room; an entry with no container and no anchor means "nowhere legal was left, drop
+## it on the floor". `used` is the spots already taken ({"ct_id:slot": true, "anchor:<i>": true}).
+## Deterministic from the seed, the shift and the kind.
+static func loose_supply_plan(seed_value: int, shift: int, kind: String, info: Dictionary,
+		used: Dictionary) -> Array:
+	var per_shift := int(LOOSE_SUPPLY.get(kind, 0))
+	if per_shift <= 0:
+		return []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("%d|%s|%d" % [seed_value, kind, shift])
+	var locs: Array = []
+	for loc in _locations(info):
+		if _legal(kind, loc, used):
+			locs.append(loc)
+	var units := {}
+	var out: Array = []
+	for i in per_shift:
+		# The kind's own batch range, not a hard-coded 1-2: until 2026-09-23 this scattered stacks
+		# of 1 syringe while Items said (and the database page promised) packs of 2 to 3.
+		var count := _batch(kind, rng)
+		var pick := {}
+		for tries in LOOSE_UNIT_TRIES:
+			if locs.is_empty():
+				break
+			var loc: Dictionary = locs[rng.randi_range(0, locs.size() - 1)]
+			if not units.has(loc.unit):
+				pick = loc
+				break
+		if pick.is_empty():
+			out.append({"kind": kind, "count": count, "container_id": "", "slot": 0, "anchor": -1})
+			continue
+		units[pick.unit] = true
+		locs.erase(pick)
+		out.append(_entry(kind, count, pick))
 	return out
 
 

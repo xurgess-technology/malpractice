@@ -134,15 +134,27 @@ A computer terminal in the break room, opened with E; full-screen, and you can't
 
 ## Monsters
 
-Each monster runs on one sense, so players learn them in order: eyes, then ears, then being watched.
+Each monster runs on one sense, so players learn them in order: eyes, then ears, then being watched,
+then attention. The fourth lives only in pocket spaces, so the hospital proper still teaches the
+first three on its own.
 
 | Monster | Sense | Rule |
 | --- | --- | --- |
 | **The Hive** | Eyes | A shambling patient, common near the start of every wing. Sees you and lumbers slowly after you; break line of sight and it loses interest within a few seconds. Deaf. Weak: the easy fight that teaches the saw and the capture loop. Hives share a hive mind (that is why they forget you so fast). **Look (2026-09-18):** charcoal-grey skin; the skull is broken open and the brain is gone, replaced by a pale shelf fungus that bulges out of the break and roots into the scalp; orange eyes, a soft pinpoint while it wanders and the whole eyeball lit up once it locks on to someone. With no brain, what you harvest from a Hive is an **eyeball** -- taken out on the table, kept in a specimen vat, and grafted into a surgeon (see Grafting). |
 | **The Sonographer** | Ears | A blind doctor in old tattered whites, with blank smooth skin where the eyes were, a glowing windpipe behind a thin pane of throat skin, ordinary ears that swivel toward sounds, and an ultrasound wand fitted to its cut-off right wrist. Looks almost normal until it gets suspicious, then its neck grows and grows. Clicks as it walks. Hunts by sound: the clicking stops, the ears turn and the neck rises, then it rushes the noise. A shove stuns it. Has a brain. (It replaced the Discharged, 2026-09-18.) |
 | **The Night Nurse** | Being watched | Moves only while nobody is looking at it with light on it. A shove does nothing, and neither do the saw or the needle: she is the one you run from. No brain. If she gets a hand on you she takes no hearts: in a snap she has you by the throat with both hands and straightens to her full height, holding you up to her face. Your view is locked on it, straight on, until her head snaps over to one side, cocked, considering you; then she drops you, downed, and is gone, somewhere far off in the dark. About two seconds, and nothing anyone can do. |
+| **The Onlooker** | Attention | **Pocket spaces only** -- it needs long sightlines, which is exactly what those rooms have and the hospital does not. A tall shadow with two bright eyes that pops in a long way off, always already inside somebody's view, and stares. It never approaches. Every few seconds it vanishes and reappears at another far point in your view, so turning round does not lose it: it relocates into wherever you now look. Ignore it long enough and it starts taking hearts, faster the longer it goes. **It is the inverse of the Night Nurse: you get rid of it by going TOWARD it** -- close to within a few metres and it is gone for over a minute. The saw, the needle and a shove do nothing. Escaping the space through a seam ends it. **Silent**, deliberately: the tell is purely visual, so the fear is checking your own sightlines. No brain, nothing to harvest. |
 
 Surgery is the worst case: the monitors and the bone saw call the Sonographer, and every surgeon's eyes are on the table instead of the door.
+
+**IDEA -- a sanity / fear meter.** The Onlooker wants one and does not have one, so it spends hearts
+instead: a stare it is allowed to go on with eats your health exactly as a monster's claw would.
+That is the right call for now (hearts are a system that exists and that players already read) but
+it is the wrong *shape* -- being frightened is not being injured, and a full-health surgeon who has
+been stared at for half a minute should be in trouble in a way gauze does not fix. If a sanity or
+fear meter ever lands, **the Onlooker is its first and most obvious user**, and its stare should
+move onto that meter rather than onto hearts. This is a proposal waiting for a yes, not work in
+flight: nothing should be built toward it until the meter itself is agreed.
 
 ## Fighting and capturing monsters (sweep 3)
 

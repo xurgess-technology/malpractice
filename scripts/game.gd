@@ -201,11 +201,9 @@ const STRAP_IN_PROMPT := "Hold E: lie down and strap in"
 ## What a stitched-up player gets back.
 const REVIVE_HP := 2
 const CALL_COOLDOWN := 4.0
-const SUTURE_KITS_PER_SHIFT := 3
-## SYRINGE DRAW: syringes scattered per shift. Three stacks of 1-2, so a crew that wants to pre-load
-## a dose can usually find one, and a crew that ignores them has lost nothing (the OR table still
-## draws its own).
-const SYRINGES_PER_SHIFT := 3
+## How many stacks of suture kits and of syringes a shift scatters lives in one place,
+## ItemSpawner.LOOSE_SUPPLY: three stacks of 1-2 each, so a crew that wants to pre-load a dose or
+## stitch a teammate up can usually find one.
 ## scripts/downed/player_surgery.gd, child "PlayerSurgery": the stitches operation.
 var player_surgery: Node = null
 ## SYRINGE DRAW: scripts/syringe/syringe_stations.gd, child "SyringeStations": the handheld draws
@@ -235,7 +233,11 @@ var trinkets: Node = null     # TRINKETS chunk B: what the six trinkets do (scri
 # POCKETS HOOK: pocket spaces (the Factory, the Restaurant), their seams and crossings.
 const PocketSpacesScript := preload("res://scripts/level/pockets/pocket_spaces.gd")
 const PocketPlanScript := preload("res://scripts/level/pockets/pocket_plan.gd")
+const OnlookerWatchScript := preload("res://scripts/monsters/onlooker_watch.gd")
 var pockets: Node = null
+## POCKETS 2 phase 6: rolls and owns the Onlooker, one per pocket space. Host decides; every
+## machine has the node.
+var onlooker_watch: Node = null
 ## POCKETS 2 phase 1, no repeats: the pocket kind this run has already seen. The host sets it when
 ## a shift ends, so the next shift's roll leaves that kind out, and sends it to clients with the
 ## globals ("px") — a client that rolled from a different pool would build a different hospital.
@@ -346,6 +348,12 @@ func _ready() -> void:
 	pockets.name = "Pockets"
 	add_child(pockets)
 	pockets.setup(self)
+	# POCKETS 2 phase 6: rolls the Onlooker once per pocket space and owns its lifetime. After
+	# Pockets, so the pocket it asks about is this frame's.
+	onlooker_watch = OnlookerWatchScript.new()
+	onlooker_watch.name = "OnlookerWatch"
+	add_child(onlooker_watch)
+	onlooker_watch.setup(self)
 	# DOORS HOOK: same path on every machine.
 	doors = DoorsScript.new()
 	doors.name = "Doors"
@@ -1427,7 +1435,7 @@ func spawn_supplies_for(c: Dictionary) -> void:
 		if int(o.id) != int(c.get("id", -1)) and String(o.get("patient_id", "")) != "player":
 			others += 1
 	if others == 0:
-		for e in SpawnerScript.plan(seed_value, shift, String(c.ailment_id), level_info):
+		for e in SpawnerScript.plan(seed_value, shift, String(c.ailment_id), level_info, _occupied_spots()):
 			_spawn_from_plan(e)
 		return
 	var need := _live_requirements()
@@ -2503,6 +2511,17 @@ func _add_monster(kind: String, pos: Vector3) -> Node:
 	return m
 
 
+## POCKETS 2 phase 6. Host: a monster the shift's roster never hands out, added by whoever owns that
+## kind's own rule -- today only the Onlooker, added once per pocket space by
+## scripts/monsters/onlooker_watch.gd. It goes into the same `monsters` dictionary as everything
+## else, so it replicates, is cleared with the shift and is counted by the danger meter with no
+## special case anywhere, and its entity id is handed out by the same counter (never reused).
+func spawn_pocket_monster(kind: String, pos: Vector3) -> Node:
+	if not is_host():
+		return null
+	return _add_monster(kind, pos)
+
+
 ## Host (dev and tests): a Hive at `pos`. Lived on the brains node until brains were removed.
 func spawn_hive(pos: Vector3) -> Node:
 	if not is_host():
@@ -2866,6 +2885,9 @@ func _update_danger() -> void:
 		for m in monsters.values():
 			if m.has_method("is_sedated") and m.is_sedated():
 				continue   # sweep 3: an out-cold monster is no danger
+			if m.kind == MonsterScript.ONLOOKER and not bool(m.present):
+				continue   # POCKETS 2 phase 6: an Onlooker that has popped out is not in the room
+
 			nearest = minf(nearest, m.global_position.distance_to(view.global_position))
 		danger = clampf(1.0 - nearest / 14.0, 0.0, 1.0)
 	Audio.heartbeat(danger)
@@ -3333,51 +3355,23 @@ func stock_first_aid_cabinets() -> void:
 
 
 func spawn_suture_kits() -> void:
-	_spawn_loose_supply("suture_kit", SUTURE_KITS_PER_SHIFT, "suture")
+	_spawn_loose_supply("suture_kit")
 
 
-## SYRINGE DRAW: and a few syringes, the same way. Neither kind is in Items.SURGICAL -- that list is
-## what a patient case can *need*, and a case never needs either of these -- so they get their own
-## scatter instead of riding the case's supply plan.
+## SYRINGE DRAW: and a few syringes, the same way. Neither kind is in Items.SURGICAL, so they get
+## their own scatter instead of riding the case's supply plan.
 func spawn_syringes() -> void:
-	_spawn_loose_supply("syringe", SYRINGES_PER_SHIFT, "syringe")
+	_spawn_loose_supply("syringe")
 
 
-## Host: scatter `per_shift` stacks of `kind` around the hospital, in the containers its `found`
-## table allows and on the floor when there is nowhere legal left. One stack per building unit where
-## it can manage it, so they are not all in one wing. `salt` keeps each kind's rng its own.
-func _spawn_loose_supply(kind: String, per_shift: int, salt: String) -> void:
+## Host: scatter this shift's stacks of a ItemSpawner.LOOSE_SUPPLY kind around the hospital. The
+## planning lives in ItemSpawner.loose_supply_plan so tools/spawncheck.gd can check the same
+## placements the shift gets.
+func _spawn_loose_supply(kind: String) -> void:
 	if not is_host():
 		return
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash("%d|%s|%d" % [seed_value, salt, shift])
-	var used := {}
-	for it in world_items.values():
-		if it.state == WorldItem.State.IN_CONTAINER:
-			used["%s:%d" % [it.container_id, it.slot]] = true
-		elif it.anchor >= 0:
-			used["anchor:%d" % it.anchor] = true
-	var locs: Array = []
-	for loc in SpawnerScript._locations(level_info):
-		if SpawnerScript._legal(kind, loc, used):
-			locs.append(loc)
-	var units := {}
-	for i in per_shift:
-		var count := rng.randi_range(1, 2)
-		var pick := {}
-		for tries in 12:
-			if locs.is_empty():
-				break
-			var loc: Dictionary = locs[rng.randi_range(0, locs.size() - 1)]
-			if not units.has(loc.unit):
-				pick = loc
-				break
-		if pick.is_empty():
-			_spawn_from_plan({"kind": kind, "count": count, "container_id": "", "slot": 0, "anchor": -1})
-			continue
-		units[pick.unit] = true
-		locs.erase(pick)
-		_spawn_from_plan(SpawnerScript._entry(kind, count, pick))
+	for e in SpawnerScript.loose_supply_plan(seed_value, shift, kind, level_info, _occupied_spots()):
+		_spawn_from_plan(e)
 
 
 # ---- the player table ----

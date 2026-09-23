@@ -157,8 +157,11 @@ const ITEMS := {
 		"where": "Hung on pegboards in janitor closets, supply closets and the morgue. Sometimes left leaning against a gurney somewhere it has no business being.",
 		"handling": "Reusable. Heavy. Stays in the OR once delivered.",
 	},
-	# downed (sweep 2 wave 3): closes a downed teammate's wound on the OR's player table. Not in
-	# SURGICAL (that list is what a patient case can need); game.gd spawns a few every shift.
+	# downed (sweep 2 wave 3): closes a downed teammate's wound on the OR's player table, and since
+	# SUTURE! (0.10.4) it closes a gunshot case's wound too. Deliberately NOT in SURGICAL even so:
+	# it is supplied every shift by ItemSpawner.LOOSE_SUPPLY (game.gd spawn_suture_kits) whether or
+	# not the case wants one, instead of riding the case's own plan. tools/spawncheck.gd checks that
+	# scatter against the case's requirements, so the guarantee is still measured.
 	"suture_kit": {
 		"name": "Suture kit",
 		"short": "Suture kits",
