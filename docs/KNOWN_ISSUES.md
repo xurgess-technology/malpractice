@@ -732,6 +732,16 @@ left below is what still applies to the shared strapped-monster infrastructure.
   second behind, and its own leaves collide the same way. What Zach saw was most likely the open
   leaf; if it turns up again against a door that is visibly shut on the host, start with the
   monster's own mover rather than the door.
+- **The crew used to walk its lead medic through a shut OR door** -- *found and fixed 2026-09-23.*
+  `Doors` sensed the paramedic crew at `cr.p`, the middle of the gurney, but the medic pulling at
+  the front is 1.55 m ahead of it and the crew comes off the hallway at a slant, so the lateral
+  bound in `_push_check` held the push off until the middle was 0.67 m from the door plane: logged
+  frame by frame, the front medic was already 0.9 m *through* a door still at `amount` 0.00.
+  `Doors.CREW_LEAD` now puts the crew's push point at the front of the convoy (`push_pos`, manual
+  doors only -- the automatic sensor keeps the middle and its own `CREW_SENSOR_RANGE`), and the
+  doors stand fully open before anyone reaches them. Unrelated to the playtest entry above: nothing
+  else in the game is sensed at a point set back from its leading edge. `doortest`'s own check had
+  been vacuous all along (docs/FAILING_TESTS.md preamble).
 - **About 3% of room doors have under 80 degrees of room on the hallway side** (furniture or a
   container near the doorway): they always fold into their tunnel, even toward someone coming out
   of the room, who has to step back while it swings (a bot gets shoved back a little). `DoorPlan.check` guarantees every door still opens wide enough to pass.

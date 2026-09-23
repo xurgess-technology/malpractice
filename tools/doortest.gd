@@ -360,8 +360,12 @@ func _or_doors_and_crew() -> void:
 			var lp: Vector3 = ord.global_transform.affine_inverse() * p
 			# Right in the doorway itself (not just somewhere in the wide hallway approaching it): a
 			# manual door only starts opening once the crew is close and heading square at it (unlike
-			# the old automatic sensor, which saw them coming from much further out).
-			if absf(lp.z) < 0.9 and absf(lp.x) < 0.8:
+			# the old automatic sensor, which saw them coming from much further out). "In the doorway"
+			# is the door's own opening, so the side bound is its half width: the crew comes in at a
+			# slant off the hallway and crosses about a metre off centre, which a flat 0.8 excluded by
+			# a hair (measured: 0.81 at its closest), so this loop used to watch nothing at all and
+			# both checks below were vacuous.
+			if absf(lp.z) < 0.9 and absf(lp.x) < ord.width * 0.5:
 				saw_or = saw_or or absf(ord.amount) > 0.7
 				crew_blocked = crew_blocked or absf(ord.amount) < 0.5
 		var c: Dictionary = game.case_by_id(game.cases[0].id) if not game.cases.is_empty() else {}
