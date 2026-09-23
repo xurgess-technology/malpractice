@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.41**: Something in the pocket spaces is watching you 👁
+    - Added: The Onlooker. It picks one of you and stands at the far end of the room, facing them. It makes no sound and it never takes a step -- look away, look back, and it's somewhere else. Everyone can see it and anyone can drive it off by running at it, but it only ever wants the one it picked. If they leave through the seam, it picks someone else who stayed.
+    - Note: Your heart goes faster the longer it has you, and it speeds up each time it moves. Nothing else in the game tells you where it is, so a teammate saying "behind you" is the whole of your warning.
+    - Fixed: On everyone's screen but the host's, a short hop made it *walk* -- the one monster whose entire point is that it doesn't. Now it jumps for everybody.
 - **0.10.40**: The hospital knows what's behind the door 🩸
     - Added: Things from a pocket space now turn up in the hospital rooms near its entrance, as if they'd been carried out and dropped. Find a grease bucket in a ward and there's a factory somewhere close.
     - Note: It reaches about three rooms out from each seam, which is six to nine rooms of a hospital.
