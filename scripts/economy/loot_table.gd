@@ -19,6 +19,10 @@ extends RefCounted
 ##   rooms          room kind -> weight; "*" is any other kind. Unlisted kinds without "*" never.
 ##   surfaces       loose anchor surfaces it may sit on ("counter", "tray", "gurney", "floor")
 ##   containers     container type -> weight, when it may also turn up inside one
+##   pocket         the pocket space this kind belongs to (POCKETS 2), matching the layout script's
+##                  POCKET_ITEMS; a kind with one is never found in the hospital by a normal roll
+##   may_bleed      with `pocket`: this kind may turn up in the hospital rooms around one of that
+##                  space's entrances (scripts/economy/pocket_bleed.gd). Off unless it is set
 
 const LOOT := {
 	# ---- plain loot: it exists to be sold -----------------------------------------------------
@@ -54,6 +58,7 @@ const LOOT := {
 	# than that, and the task that bleeds pocket items out near an entrance is the right way in.
 	"collection_plate": {
 		"name": "Collection plate", "short": "Collection plates", "value": [45, 115], "tier": 3,
+		"pocket": "chapel", "may_bleed": true,
 		"rooms": {"chapel_sanctuary": 3.5, "chapel_sacristy": 2.2, "chapel_nave": 1.4, "chapel_aisle": 1.0},
 		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.3},
 	},
@@ -94,11 +99,13 @@ const LOOT := {
 	# declared where anything that wants to know what a space contributes can read it.
 	"pool_chemical_drum": {
 		"name": "Pool chemical drum", "short": "Pool chemical drums", "value": [45, 80], "tier": 1, "bulky": true,
+		"pocket": "natatorium", "may_bleed": true,
 		"rooms": {"natatorium_deck": 2.4, "natatorium_lockers": 0.9},
 		"surfaces": ["floor", "counter"], "containers": {},
 	},
 	"lifeguard_whistle": {
 		"name": "Lifeguard whistle", "short": "Lifeguard whistles", "value": [10, 20], "tier": 0, "trinket": true, "trinket_weight": 2.0,
+		"pocket": "natatorium", "may_bleed": true,
 		"rooms": {"natatorium_deck": 2.0, "natatorium_lockers": 1.2},
 		"surfaces": ["counter", "tray"], "containers": {"drawer_unit": 0.5, "trauma_bag": 0.4, "first_aid_cabinet": 0.5},
 	},
@@ -107,18 +114,21 @@ const LOOT := {
 	# same set, declared where the space is).
 	"quarter_bucket": {
 		"name": "Bucket of quarters", "short": "Buckets of quarters", "value": [10, 18], "tier": 1,
-		"stack": true, "batch": [3, 5],
+		"stack": true, "batch": [3, 5], "pocket": "laundromat", "may_bleed": true,
 		"rooms": {"laundromat": 3.2, "laundromat_back": 1.1},
 		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.4, "station_drawers": 0.4},
 	},
 	"warm_scrubs": {
 		"name": "Warm scrubs", "short": "Warm scrubs", "value": [20, 38], "tier": 1,
+		# No bleed: warm scrubs are a permanent cosmetics unlock, and finding a permanent unlock in a
+		# corridor devalues the space it belongs to. It is only ever found in the Laundromat.
+		"pocket": "laundromat", "may_bleed": false,
 		"rooms": {"laundromat": 2.6, "laundromat_back": 2.2},
 		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.5, "station_drawers": 0.3},
 	},
 	"fabric_softener": {
 		"name": "Fabric softener", "short": "Fabric softener jugs", "value": [14, 26], "tier": 0,
-		"trinket": true, "trinket_weight": 1.8,
+		"trinket": true, "trinket_weight": 1.8, "pocket": "laundromat", "may_bleed": true,
 		"rooms": {"laundromat": 2.4, "laundromat_back": 1.6},
 		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.35},
 	},
@@ -129,6 +139,7 @@ const LOOT := {
 	# it is the use (scripts/trinkets/trinkets.gd).
 	"votive_candle": {
 		"name": "Votive candle", "short": "Votive candles", "value": [9, 18], "tier": 0, "trinket": true, "trinket_weight": 2.4,
+		"pocket": "chapel", "may_bleed": true,
 		"rooms": {"chapel_aisle": 6.0, "chapel_nave": 3.0, "chapel_sanctuary": 3.0, "chapel_sacristy": 2.0},
 		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.2},
 	},
@@ -202,3 +213,26 @@ static func roll_value(kind: String, depth: int, roll: float) -> int:
 
 static func is_trinket(kind: String) -> bool:
 	return bool(LOOT.get(kind, {}).get("trinket", false))
+
+
+## POCKETS 2: the kinds that belong to pocket space `space`, sorted. The same set as the layout
+## script's POCKET_ITEMS (tools/pockettest.gd checks the two agree); declared here as well because
+## the loot planner must not load the pocket runtime.
+static func pocket_kinds(space: String) -> Array:
+	var out: Array = []
+	if space == "":
+		return out
+	for kind in kinds():
+		if String(LOOT[kind].get("pocket", "")) == space:
+			out.append(kind)
+	return out
+
+
+## Of those, the ones allowed to bleed into the hospital rooms around one of that space's entrances
+## (scripts/economy/pocket_bleed.gd). "" -- a shift with no pocket -- bleeds nothing.
+static func bleeding_kinds(space: String) -> Array:
+	var out: Array = []
+	for kind in pocket_kinds(space):
+		if bool(LOOT[kind].get("may_bleed", false)):
+			out.append(kind)
+	return out
