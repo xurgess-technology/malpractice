@@ -396,38 +396,43 @@ all before, and a headless run renders nothing so its numbers are
 worthless).
 
 **Read the room against the hospital corridor measured in the same run,
-not against the absolute 60/50.** Three runs — A before the room was
-brightened, B after, C after the machines were widened into banks — with
-the other two phases building on the same machine throughout. By run C
-there were **nine Godot processes** on it. That is why the absolute
-numbers fall through the floor between runs, and why the same-run
-comparison is the only thing here worth trusting:
+not against the absolute 60/50.** Runs A (before the room was brightened),
+B (after), C (after the machines were widened into banks) and D (after
+the merge, on main's launcher). The other two phases were building on the
+same machine throughout — nine Godot processes by the end — which is why
+the absolute numbers fall through the floor and why only the same-run
+comparison means anything:
 
-| view | A avg / low | B avg / low | C avg / low |
-| --- | --- | --- | --- |
-| **that map's hospital corridor** (the control) | **49 / 36** | **31 / 17** | **17 / 10** |
-| laundromat: the length of the room | 51 / 39 | 32 / 16 | 20 / 11 |
-| laundromat: corner to corner | 47 / 37 | 40 / 25 | 19 / 10 |
-| laundromat: down an aisle | 45 / 35 | 39 / 29 | 23 / 11 |
-| laundromat: an entrance from inside | 47 / 38 | 42 / 31 | 19 / 9 |
-| laundromat: seam, hospital side | 41 / 30 | 40 / 30 | 18 / 9 |
-| laundromat: seam, pocket side | 41 / 30 | 40 / 32 | 17 / 9 |
+| view | A | B | C | D |
+| --- | --- | --- | --- | --- |
+| **that map's hospital corridor** (the control) | **49 / 36** | **31 / 17** | **17 / 10** | **9 / 7** |
+| laundromat: the length of the room | 51 / 39 | 32 / 16 | 20 / 11 | 9 / 7 |
+| laundromat: corner to corner | 47 / 37 | 40 / 25 | 19 / 10 | 9 / 7 |
+| laundromat: down an aisle | 45 / 35 | 39 / 29 | 23 / 11 | 9 / 7 |
+| laundromat: an entrance from inside | 47 / 38 | 42 / 31 | 19 / 9 | 9 / 7 |
+| laundromat: seam, hospital side | 41 / 30 | 40 / 30 | 18 / 9 | 9 / 7 |
+| laundromat: seam, pocket side | 41 / 30 | 40 / 32 | 17 / 9 | — |
 
-The control corridor is the same hospital corridor in all three, and the
-Laundromat cannot affect it — 49 to 31 to 17 is purely what else was
-running. In **all three runs** every view of the room sits at or above
-the hospital corridor of the map it is in, and draw calls inside the room
-(125-397) stay under the corridor's (432-435). That is the claim a new
-space has to be able to make: **it costs no more to look at than the
-hospital beside it does.**
+**Run D is not data and should not be quoted.** Every view came back at
+exactly 9 / 7, the control included, with 113-131 ms of *script* time a
+frame: that is the CPU contending with eight other Godot processes, not
+the scene. It is in the table only as the evidence that the machine was
+unusable, and because it was taken with main's launcher
+(`SW_SHOWNOACTIVATE`) rather than the minimized one runs A-C used — main
+found that a minimized window does not render honestly, so **A-C want
+re-taking on an idle machine with that launcher before anyone trusts
+their absolute values either.**
 
-**The absolute numbers in this table should not be quoted.** They want
-re-taking on an idle machine, and the bar (60 fps, 1% lows above 50) is
-not met there by the hospital either: the plain baseline sweep on this
-branch, taken when the machine was quieter, gives "corridor, long
-sightline" 48 / 27 and "lobby clock-in room" 31 / 17. That is a
-pre-existing condition of the project at this resolution in a windowed
-run, not something this space introduced, and it wants its own look.
+What does survive all four runs is the shape: in A, B and C every view of
+the room sits at or above the hospital corridor of the map it is in, on
+fewer draw calls (125-397 inside against 432-437 for the corridor), and
+in D everything including the control is equally pinned. Nothing in any
+run suggests the room costs more to look at than the hospital beside it,
+which is the claim a new space has to be able to make. The absolute bar
+(60 fps, 1% lows above 50) is not met on this machine in a windowed run
+by the hospital either — the plain baseline sweep, taken when it was
+quieter, gives "corridor, long sightline" 48 / 27 and "lobby clock-in
+room" 31 / 17. That is pre-existing and wants its own look.
 
 For scale, the same probe on the **Factory**, which has shipped since the
 first sweep: 27-39 fps avg and **14-30** 1% lows, with its map's own
