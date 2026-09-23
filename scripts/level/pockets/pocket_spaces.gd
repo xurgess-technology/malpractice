@@ -26,17 +26,20 @@ const Factory := preload("res://scripts/level/pockets/factory.gd")
 const Restaurant := preload("res://scripts/level/pockets/restaurant.gd")
 const Natatorium := preload("res://scripts/level/pockets/natatorium.gd")
 const Chapel := preload("res://scripts/level/pockets/chapel.gd")
+const Laundromat := preload("res://scripts/level/pockets/laundromat.gd")
 const Common := preload("res://scripts/level/pockets/pocket_common.gd")
 
 ## World tile of each pocket's local tile (0, 0): far outside any hospital (maps are ~110 m).
-## The Chapel sits at 1500 because the Natatorium took 1000: two spaces at one origin would build
-## on top of each other, and only one of them can ever exist at a time to notice.
-const ORIGINS := {"factory": Vector2i(800, 0), "restaurant": Vector2i(800, 500), "natatorium": Vector2i(800, 1000),
-		"chapel": Vector2i(800, 1500)}
+## One 500-tile band per space, in the order the phases added them, so a new kind takes the next
+## band and never has to be checked against the others.
+const ORIGINS := {"factory": Vector2i(800, 0), "restaurant": Vector2i(800, 500),
+		"natatorium": Vector2i(800, 1000), "chapel": Vector2i(800, 1500),
+		"laundromat": Vector2i(800, 2000)}
 
 ## The layout script of a kind. One place, so adding a space is a line here and a line in
 ## PocketPlan.KINDS rather than an `if` in every builder.
-const LAYOUTS := {"factory": Factory, "restaurant": Restaurant, "natatorium": Natatorium, "chapel": Chapel}
+const LAYOUTS := {"factory": Factory, "restaurant": Restaurant, "natatorium": Natatorium,
+		"chapel": Chapel, "laundromat": Laundromat}
 
 
 static func script_of(kind: String) -> GDScript:
@@ -74,6 +77,15 @@ var _steps: Array = []
 var _step_i := 0
 ## Detached nodes of the last pocket, freed a few at a time (post-order: leaves first).
 var _trash: Array = []
+
+
+## The layout script of a kind. One `match` arm per space, so adding a kind is one line here, one in
+## PocketPlan.KINDS, one in ORIGINS and one in ambient_noise_of.
+static func layout_script(kind: String) -> GDScript:
+	match kind:
+		"restaurant": return Restaurant
+		"laundromat": return Laundromat
+	return Factory
 
 
 func setup(g: Node) -> void:
@@ -451,7 +463,7 @@ static func build_steps(prep: Dictionary, stubs: Array, map_seed: int, hospital_
 	return steps
 
 
-## Warmup (scripts/warmup.gd): both spaces' meshes and materials, shrunk in front of the camera for
+## Warmup (scripts/warmup.gd): every space's meshes and materials, shrunk in front of the camera for
 ## a few frames so nothing compiles the first time a pocket comes into view. No lights, colliders,
 ## occluders or containers (they would act in the world while kept alive).
 static func warm(parent: Node3D) -> void:
@@ -459,7 +471,7 @@ static func warm(parent: Node3D) -> void:
 		{"id": 0, "wing": "", "depth": 1, "o": Vector2i(0, 0), "eu": Vector2i(1, 0), "ev": Vector2i(0, 1), "w": 10, "d": 6, "lights": []},
 		{"id": 1, "wing": "", "depth": 1, "o": Vector2i(0, 20), "eu": Vector2i(-1, 0), "ev": Vector2i(0, 1), "w": 12, "d": 5, "lights": []},
 	]
-	var x := -1.2
+	var x := -1.6
 	for script: GDScript in LAYOUTS.values():
 		var lay: Dictionary = script.layout(fake, 1)
 		var out := {"lights": [], "containers": [], "loose_anchors": [], "monster_spawns": [], "nav_faces": PackedVector3Array(), "wing": "", "depth": 1}
@@ -476,7 +488,7 @@ static func warm(parent: Node3D) -> void:
 		root.scale = Vector3.ONE * 0.012
 		root.position = Vector3(x, -0.4, -0.6)
 		parent.add_child(root)
-		x += 1.1
+		x += 0.85
 	var copy := Stub.build_copy(fake[0], 1, [])
 	for n in copy.node.find_children("*", "CollisionObject3D", true, false) + copy.node.find_children("*", "OccluderInstance3D", true, false) \
 			+ copy.node.find_children("*", "Light3D", true, false):
@@ -547,10 +559,11 @@ func ambient_noise_at(p: Vector3) -> float:
 	return ambient_noise_of(space_of(p))
 
 
-## The optional `AMBIENT_NOISE_LEVEL` a pocket's layout script declares, or 0.0. Declaring it is how
-## a new space (docs/POCKET_SPACES_2.md phase 4, the Laundromat) gets a noise floor; the Factory,
-## the Restaurant and the Chapel all declare 0.0, which is the same as not declaring it at all.
-## A kind with no layout script (and "", the hospital) is 0.0 too.
+## The optional `AMBIENT_NOISE_LEVEL` a pocket's layout script declares, or 0.0. The Laundromat
+## (docs/POCKET_SPACES_2.md phase 4) declares 0.30, enough to swallow a walking footstep whole; the
+## Factory, the Restaurant and the Chapel all declare 0.0, which is the same as not declaring it
+## at all -- the Chapel on purpose, because silence is the point of it. A kind with no layout
+## script (and "", the hospital) is 0.0 too.
 ## Cached: `get_script_constant_map()` builds a dictionary every call, and `_hear` asks once per
 ## sound-hunting monster per tick.
 static var _ambient_cache := {}
@@ -785,17 +798,20 @@ const AIR := {
 	"restaurant": {"fog_depth_begin": 16.0, "fog_depth_end": 60.0, "fog_density": 0.35, "volumetric_fog_density": 0.016,
 			"ambient_light_energy": 0.3, "ambient_light_color": Color(0.62, 0.46, 0.34)},
 	# The Natatorium: humid chlorine haze, and the underwater lights throwing a blue-green bounce up
-	# into it. The volumetric density is the highest of these because the beams are the room.
+	# into it. The volumetric density is the highest of the five because the beams are the room.
 	"natatorium": {"fog_depth_begin": 20.0, "fog_depth_end": 72.0, "fog_density": 0.30, "volumetric_fog_density": 0.034,
 			"ambient_light_energy": 0.22, "ambient_light_color": Color(0.32, 0.60, 0.68)},
 	# The Chapel's ambient is almost nothing on purpose: what you can see, a candle is showing you.
-	# Its volumetric density is deliberately the LOWEST here, lower even than the Factory's. The
-	# nave is 24 m to its ceiling and the candles sit at waist height, so a dense volumetric filled
-	# that whole upper volume with lit haze and turned the vault -- the one thing the space is
-	# supposed to lose in the dark -- into a bright olive wall. Thin fog keeps the glow down where
-	# the candles actually are.
+	# Its volumetric density is deliberately the LOWEST of the five. The nave is 24 m to its
+	# ceiling and the candles sit at waist height, so a dense volumetric filled that whole upper
+	# volume with lit haze and turned the vault -- the one thing the space is supposed to lose in
+	# the dark -- into a bright olive wall. Thin fog keeps the glow down where the candles are.
 	"chapel": {"fog_depth_begin": 14.0, "fog_depth_end": 72.0, "fog_density": 0.22, "volumetric_fog_density": 0.012,
 			"ambient_light_energy": 0.08, "ambient_light_color": Color(0.40, 0.24, 0.13)},
+	# The Laundromat hides nothing: flat fluorescent light to the far wall, almost no fog, and the
+	# faint blue-white bounce of a room lit entirely by tubes.
+	"laundromat": {"fog_depth_begin": 30.0, "fog_depth_end": 95.0, "fog_density": 0.08, "volumetric_fog_density": 0.006,
+			"ambient_light_energy": 0.95, "ambient_light_color": Color(0.80, 0.85, 0.88)},
 }
 var _air_base := {}
 var _air_env: Environment = null

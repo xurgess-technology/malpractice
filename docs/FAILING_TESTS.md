@@ -95,6 +95,11 @@ How to run things is at the bottom of this file.
   layout and the distance, and points squarely at **state left behind by the previous space's run** —
   `_run_space` tears a shift down and starts another, and something the Night Nurse depends on does
   not survive that. Start at what `_nurse_follows` assumes about a freshly rebuilt shift.
+- **2026-09-22, `pockets-chapel`, with FIVE spaces (factory, restaurant, natatorium, chapel,
+  laundromat): FAILED 2 of 547, and the one that fails is the `chapel`** -- a different space
+  again, and not the last in the list. Run alone it is green. Across the runs recorded here the
+  identity of the failing space keeps moving while the failure itself never does, which is the
+  strongest argument yet that this is per-run leftover state and nothing to do with any space.
 - **2026-09-22, `pockets-chapel`, with four spaces: the order story does not fully hold.** A merged
   run of factory, restaurant, natatorium, chapel gives **FAILED 4 of 430**: `restaurant` (second)
   and `natatorium` (third) fail, while `factory` (first) **and `chapel` (fourth)** both pass. So it
@@ -162,8 +167,9 @@ How to run things is at the bottom of this file.
 
 ## 3. perfprobe --pockets crashes after the warmup, before it measures anything
 
-- **Command:** `godot --path . tools/perfprobe.tscn -- --pockets` (a real window;
-  `tools/pocketperf.ps1` runs it minimized and never activated)
+- **Command:** `tools\perfprobe.ps1 -Extra "--pockets"` (a real window that renders but never
+  takes focus — SW_SHOWNOACTIVATE, not minimized: a minimized window does not render and its frame
+  times mean nothing)
 - **Result:** twelve `BUG, indexing did not unpair geometries from light` errors from
   `renderer_scene_cull.cpp`, then `CrashHandlerException: Program crashed with signal 11`. The log
   stops at the warmup line and **not one scenario is measured**.
@@ -185,6 +191,29 @@ How to run things is at the bottom of this file.
   `RenderingServer.force_sync()`) before restarting, or whether it should simply be rebuilt on top
   of `--pocket` and run one process per kind.
 
+
+## 1l. perfprobe --pockets crashes before it measures anything (signal 11)
+
+- **Command:** `tools\perfprobe.ps1 -Extra "--pockets"` (or the same flags on `perfprobe.tscn` in
+  any windowed run).
+- **Result:** a burst of `ERROR: BUG, indexing did not unpair geometries from light` from
+  `renderer_scene_cull.cpp`, then `CrashHandlerException: Program crashed with signal 11`, straight
+  after `[warmup] built and drew everything once`. Not one scenario row is printed.
+- **Not ours, and not any one pocket space.** Found independently by POCKET_SPACES_2 phase 2 and
+  phase 4. Phase 4 verified it on 2026-09-22 on a detached checkout of **`main` (3b30969)** with
+  only `tools/perfprobe.ps1` brought over: identical crash, identical place, with no Laundromat in
+  the tree at all. Phase 2 saw the same with the Natatorium taken back out of `PocketPlan.KINDS`.
+- **Why:** `_run_pockets` calls `game.start_session()` once per kind, tearing down and rebuilding a
+  whole level with all its lights. docs/KNOWN_ISSUES.md already records that renderer error as a
+  Godot bug seen in windowed runs ("Seen during this work and not ours"); doing it once per kind
+  turns it from an error into a crash.
+- **The way round, for measuring one space:** `--pocket=<kind>` forces the kind before the first
+  session is built and never restarts it, so nothing is torn down. Both phases arrived at it; it is
+  how every pocket space's numbers in docs/POCKET_SPACES_2.md were taken.
+- **Where to look:** `tools/perfprobe.gd` `_run_pockets`, and whatever frees lights in
+  `game._clear_level` / `WingLoader` ahead of a `start_session`.
+
+---
 
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
 

@@ -351,6 +351,12 @@ func _pocket_views(kind: String, pk) -> Array:
 		views.append({"name": "natatorium: across the water, lights on", "setup": func(): _look(w.call(Vector2(34, 14)), w.call(Vector2(34, 39), 0.4))})
 		views.append({"name": "natatorium: standing in the pool, looking up", "setup": func(): _look(w.call(Vector2(34, 26)), w.call(Vector2(30, 26), 9.0))})
 		views.append({"name": "natatorium: corner to corner over the bleachers", "setup": func(): _look(w.call(Vector2(56, 39)), w.call(Vector2(12, 13), 2.0))})
+	elif kind == "laundromat":
+		# POCKETS 2 phase 4. The worst of it is the long axis, where every washer island and
+		# both dryer banks are in shot at once, under a ceiling full of fluorescent tubes.
+		views.append({"name": "laundromat: the length of the room", "setup": func(): _look(w.call(Vector2(12.5, 18.5)), w.call(Vector2(48, 18), C.EYE_H))})
+		views.append({"name": "laundromat: corner to corner", "setup": func(): _look(w.call(Vector2(12, 12)), w.call(Vector2(48, 25), C.EYE_H))})
+		views.append({"name": "laundromat: down an aisle", "setup": func(): _look(w.call(Vector2(13, 18.5)), w.call(Vector2(48, 20.5), 1.2))})
 	elif kind == "chapel":
 		# The worst frame the Chapel has: the whole nave from the narthex, which is every votive
 		# rack, every candle stand, all the pew rows, both arcades and the reredos drawn at once.
@@ -411,6 +417,12 @@ func _run_pockets() -> void:
 			views.append({"name": "natatorium: across the water, lights on", "setup": func(): _look(w.call(Vector2(34, 14)), w.call(Vector2(34, 39), 0.4))})
 			views.append({"name": "natatorium: standing in the pool, looking up", "setup": func(): _look(w.call(Vector2(34, 26)), w.call(Vector2(30, 26), 9.0))})
 			views.append({"name": "natatorium: the bleachers and the far corner", "setup": func(): _look(w.call(Vector2(56, 39)), w.call(Vector2(12, 13), 2.0))})
+		elif kind == "laundromat":
+			# POCKETS 2 phase 4. The worst of it is the long axis, where every washer island and
+			# both dryer banks are in shot at once, under a ceiling full of fluorescent tubes.
+			views.append({"name": "laundromat: the length of the room", "setup": func(): _look(w.call(Vector2(12.5, 18.5)), w.call(Vector2(48, 18), C.EYE_H))})
+			views.append({"name": "laundromat: corner to corner", "setup": func(): _look(w.call(Vector2(12, 12)), w.call(Vector2(48, 25), C.EYE_H))})
+			views.append({"name": "laundromat: down an aisle", "setup": func(): _look(w.call(Vector2(13, 18.5)), w.call(Vector2(48, 20.5), 1.2))})
 		elif kind == "factory":
 			views.append({"name": "factory: hall, corner to corner", "setup": func(): _look(w.call(Vector2(13, 13)), w.call(Vector2(70, 52), C.EYE_H))})
 			views.append({"name": "factory: down a production line", "setup": func(): _look(w.call(Vector2(14, 27)), w.call(Vector2(70, 23), C.EYE_H))})

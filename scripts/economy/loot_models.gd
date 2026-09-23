@@ -24,6 +24,10 @@ static func build(root: Node3D, kind: String, count: int) -> void:
 		"ultrasound": _ultrasound(root)
 		"pool_chemical_drum": _pool_drum(root)
 		"lifeguard_whistle": _whistle(root)
+		# POCKETS 2 phase 4: the Laundromat's three.
+		"quarter_bucket": _quarter_bucket(root, clampi(count, 1, 5))
+		"warm_scrubs": _warm_scrubs(root)
+		"fabric_softener": _fabric_softener(root)
 		"collection_plate": _collection_plate(root)
 		"votive_candle": _votive_candle(root)
 		_: _add(root, _box(Vector3(0.15, 0.1, 0.15), _m("magenta", Color.MAGENTA)), Vector3(0, 0.05, 0))
@@ -73,6 +77,11 @@ static func footprint(kind: String) -> Vector3:
 		"ultrasound": return Vector3(0.42, 0.34, 0.32)
 		"pool_chemical_drum": return Vector3(0.42, 0.62, 0.42)
 		"lifeguard_whistle": return Vector3(0.1, 0.04, 0.05)
+		"quarter_bucket": return Vector3(0.22, 0.2, 0.22)
+		"warm_scrubs": return Vector3(0.28, 0.13, 0.22)
+		"fabric_softener": return Vector3(0.17, 0.26, 0.12)
+		"votive_candle": return Vector3(0.07, 0.09, 0.07)
+		"collection_plate": return Vector3(0.28, 0.04, 0.28)
 	return Vector3(0.15, 0.1, 0.15)
 
 
@@ -403,3 +412,61 @@ static func _whistle(root: Node3D) -> void:
 	# The lanyard, coiled beside it.
 	for i in 3:
 		_add(root, _cyl(0.018, 0.004, cord, 10, 0.018), Vector3(0.036 + i * 0.002, 0.004 + i * 0.004, 0.0))
+# ---------------------------------------------------------------------------
+# POCKETS 2 phase 4: the Laundromat (docs/POCKET_SPACES_2.md)
+
+## A yellow mop bucket of quarters. A stack is how many handfuls are left, so the pile drops as it
+## is thrown: five is heaped over the rim, one is a rattle in the bottom.
+static func _quarter_bucket(root: Node3D, count: int) -> void:
+	var pail := _m("laun_pail", Color(0.88, 0.70, 0.12), 0.55)
+	var silver := _m("laun_coin", Color(0.76, 0.77, 0.80), 0.3, 0.85)
+	var handle := _m("laun_bail", Color(0.55, 0.56, 0.58), 0.4, 0.7)
+	_add(root, _cyl(0.095, 0.19, pail, 14, 0.11), Vector3(0, 0.095, 0))
+	_add(root, _torus(0.100, 0.118, pail, 14, 6), Vector3(0, 0.188, 0))
+	# The wire bail, as two uprights and a bar.
+	for sx in [-1.0, 1.0]:
+		_add(root, _cyl(0.005, 0.10, handle, 6), Vector3(sx * 0.105, 0.20, 0), Vector3(0, 0, sx * 18.0))
+	_add(root, _cyl(0.005, 0.20, handle, 6), Vector3(0, 0.245, 0), Vector3(0, 0, 90))
+	# Coins: a disc of them level with the rim, sinking as the bucket empties.
+	var full := clampi(count, 1, 5)
+	var y := 0.06 + 0.026 * float(full)
+	_add(root, _cyl(0.088, 0.012, silver, 14), Vector3(0, y, 0))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5150
+	for i in full * 3:
+		var a := rng.randf() * TAU
+		var r := sqrt(rng.randf()) * 0.072
+		_add(root, _cyl(0.012, 0.002, silver, 8), Vector3(cos(a) * r, y + 0.007 + rng.randf() * 0.012, sin(a) * r),
+				Vector3(rng.randf_range(-22.0, 22.0), rng.randf() * 180.0, rng.randf_range(-22.0, 22.0)))
+
+
+## A folded stack of scrubs straight out of the dryer, with the drawstring tucked in.
+static func _warm_scrubs(root: Node3D) -> void:
+	var teal := _m("laun_scrub_teal", Color(0.24, 0.51, 0.50), 0.95)
+	var teal_dark := _m("laun_scrub_dark", Color(0.19, 0.42, 0.42), 0.95)
+	var cord := _m("laun_cord", Color(0.86, 0.86, 0.80), 0.95)
+	# Three folded layers, each a touch smaller and turned a degree or two off square.
+	_add(root, _box(Vector3(0.27, 0.042, 0.21), teal), Vector3(0, 0.021, 0), Vector3(0, 2.0, 0))
+	_add(root, _box(Vector3(0.255, 0.038, 0.198), teal_dark), Vector3(0.004, 0.061, -0.003), Vector3(0, -3.5, 0))
+	_add(root, _box(Vector3(0.24, 0.034, 0.185), teal), Vector3(-0.005, 0.097, 0.004), Vector3(0, 1.5, 0))
+	# The V of the neckline pressed into the top fold, and the drawstring.
+	for sx in [-1.0, 1.0]:
+		_add(root, _box(Vector3(0.09, 0.003, 0.014), teal_dark), Vector3(sx * 0.032, 0.115, 0.03), Vector3(0, sx * 34.0, 0))
+	_add(root, _cyl(0.005, 0.10, cord, 6), Vector3(0.06, 0.117, -0.05), Vector3(0, 24.0, 90))
+
+
+## A jug of fabric softener: soft blue plastic, a moulded handle, a screw cap and a paper label.
+static func _fabric_softener(root: Node3D) -> void:
+	var jug := _m("laun_jug", Color(0.42, 0.62, 0.86), 0.35)
+	var cap := _m("laun_cap", Color(0.93, 0.93, 0.90), 0.45)
+	var label := _m("laun_label", Color(0.95, 0.94, 0.88), 0.85)
+	_add(root, _box(Vector3(0.155, 0.185, 0.105), jug), Vector3(0, 0.0925, 0))
+	# Shoulders up to the neck.
+	_add(root, _box(Vector3(0.115, 0.035, 0.08), jug), Vector3(0, 0.2, 0))
+	_add(root, _cyl(0.028, 0.03, jug, 10), Vector3(0, 0.228, 0))
+	_add(root, _cyl(0.034, 0.03, cap, 10), Vector3(0, 0.25, 0))
+	# The moulded grip: a bar standing off the back face.
+	_add(root, _box(Vector3(0.022, 0.095, 0.022), jug), Vector3(0, 0.155, -0.068))
+	for yy in [0.112, 0.198]:
+		_add(root, _box(Vector3(0.022, 0.022, 0.05), jug), Vector3(0, yy, -0.05))
+	_add(root, _box(Vector3(0.13, 0.095, 0.002), label), Vector3(0, 0.095, 0.0535))

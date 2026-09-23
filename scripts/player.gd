@@ -287,6 +287,11 @@ var stun: float = 0.0
 ## scripts/trinkets/trinkets.gd pushes it onto every player every physics frame from replicated
 ## state, so this is never written anywhere else.
 var sprint_mult: float = 1.0
+## POCKETS 2 phase 4: the fabric softener jug's quiet, pushed on every physics frame by
+## scripts/trinkets/trinkets.gd the same way `sprint_mult` is, and never written anywhere else.
+## While it is true this player's footsteps emit no noise event at all, exactly as a crouching
+## player's do not (game.gd `_tick_noise`), but at full walking and sprinting speed.
+var silent_steps: bool = false
 ## DEV HOOK: flying through walls (dev panel).
 var noclip: bool = false
 
@@ -1231,7 +1236,14 @@ func _local_step(delta: float) -> void:
 		_step_accum += delta * (3.0 if sprinting else 1.9)
 		if _step_accum >= 1.0:
 			_step_accum = 0.0
-			Audio.play("step_water" if wading else "step", global_position, -1.0 if wading else -4.0, 0.12)
+			# POCKETS 2 phase 4: a fabric-softener drinker still hears their own steps, faintly, so
+			# they can tell it is still working. Nobody else hears a thing: the noise event is gone.
+			# Wading is exempt, the same way it is exempt from crouching (game.gd `_tick_noise`).
+			var step_db: float = -1.0 if wading else (-4.0 + (-12.0 if silent_steps else 0.0))
+			Audio.play("step_water" if wading else "step", global_position, step_db, 0.12)
+
+	if is_local:
+		_check_cosmetic_unlock()
 
 	if fx.has_method("set_motion"):
 		fx.set_motion(clampf(Vector2(velocity.x, velocity.z).length() / C.SPRINT_SPEED, 0.0, 1.0), sprinting, is_on_floor())
@@ -1995,6 +2007,28 @@ func set_dev_body(on: bool) -> void:
 			(n as VisualInstance3D).layers = LightRoomsSelf.DYNAMIC
 	_refresh_self_body()
 	refresh_downed_visuals()
+
+
+## POCKETS 2 phase 4: some loot unlocks something at the personnel mirror just by being held. The
+## unlock is per machine (it lives in this player's own settings, like the look itself), so the
+## check runs on the owning machine for its own hands and nowhere else — no RPC, and a client earns
+## its own patterns rather than the host's. Four string compares a frame.
+func _check_cosmetic_unlock() -> void:
+	for sl in slots:
+		var kind := String(sl.kind)
+		if kind == "" or String(_unlock_seen.get(kind, "")) != "":
+			continue
+		_unlock_seen[kind] = kind
+		if Customization.unlock_name(kind) == "":
+			continue
+		if Customization.grant_unlock(kind):
+			if game != null and game.has_method("tell"):
+				game.tell(self, "%s: a new scrub pattern at the personnel mirror." % Customization.unlock_name(kind), 4.0)
+
+
+## Kinds this player has already been checked for a cosmetic unlock, so the check above is a
+## dictionary hit after the first frame a kind is in hand.
+var _unlock_seen: Dictionary = {}
 
 
 ## CUSTOMIZATION: dress this surgeon. `packed` is a Customization look (Net.looks holds one per

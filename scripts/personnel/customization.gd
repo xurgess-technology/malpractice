@@ -60,7 +60,62 @@ const PATTERNS := [
 		"knobs": {"dot_count": 20.0, "dot_radius": 0.19, "dot_stagger": 0.5}},
 	{"name": "Splatter", "id": 3,
 		"knobs": {"splat_scale": 26.0, "splat_threshold": 0.62}},
+	# POCKETS 2 phase 4: locked until somebody brings a set of WARM SCRUBS back from the Laundromat.
+	# It goes on the END of this list and nowhere else: an index here is what a saved look and a
+	# packed look over the wire both carry, so inserting one anywhere else redresses everybody.
+	{"name": "Gingham", "id": 4, "unlock": "warm_scrubs",
+		"knobs": {"check_count": 16.0, "check_width": 0.5, "check_span": 2.0, "check_pale": 0.45}},
 ]
+
+## POCKETS 2 phase 4: which patterns this machine has earned, as a bitmask over PATTERNS indices,
+## kept in the player's own settings file (Settings "patterns_unlocked"). Everything that shipped
+## before the Laundromat is unlocked for everyone, so nobody loses a pattern they were already
+## wearing; only entries carrying an "unlock" key start locked.
+const UNLOCK_KEY := "patterns_unlocked"
+
+
+## The mask a fresh save starts with: every pattern that does not name an unlock.
+static func default_unlocks() -> int:
+	var m := 0
+	for i in PATTERNS.size():
+		if not (PATTERNS[i] as Dictionary).has("unlock"):
+			m |= 1 << i
+	return m
+
+
+## This machine's unlock mask, defaults folded in so a pattern added later is not locked by an old
+## save that predates it.
+static func unlocked_mask() -> int:
+	return int(Settings.get_value(UNLOCK_KEY)) | default_unlocks()
+
+
+## Whether pattern `i` may be chosen at the mirror on this machine. Never consulted for anybody
+## else's look: a teammate's unlocks are theirs, and stripping their pattern because this machine
+## has not earned it would be a bug, not a rule (see sanitize's note).
+static func pattern_unlocked(i: int) -> bool:
+	return (unlocked_mask() >> i) & 1 == 1
+
+
+## Grant every pattern whose "unlock" is `token` (an item kind). True when this actually unlocked
+## something new, so the caller can say so once and not every frame.
+static func grant_unlock(token: String) -> bool:
+	var mask := unlocked_mask()
+	var got := mask
+	for i in PATTERNS.size():
+		if String((PATTERNS[i] as Dictionary).get("unlock", "")) == token:
+			got |= 1 << i
+	if got == mask:
+		return false
+	Settings.set_value(UNLOCK_KEY, got)
+	return true
+
+
+## The name of the pattern `token` unlocks, for the message that says so ("" if it unlocks none).
+static func unlock_name(token: String) -> String:
+	for pat in PATTERNS:
+		if String((pat as Dictionary).get("unlock", "")) == token:
+			return String(pat.name)
+	return ""
 
 ## What the pattern is printed in. Only offered once a pattern is.
 const PATTERN_COLOURS := [
@@ -116,6 +171,10 @@ static func default_look_for(peer_id: int) -> Dictionary:
 
 ## Every key present, every index in range, and any axis whose `needs` is unmet forced back to its
 ## default (so a look never carries a pattern colour for a pattern that is switched off).
+##
+## POCKETS 2 phase 4: this deliberately does NOT check unlocks. Every machine unpacks every other
+## player's look through here, and a teammate who has earned a pattern this machine has not must
+## still be seen wearing it. The gate is `cycle`, which is the only way a look is ever chosen.
 static func sanitize(look: Dictionary) -> Dictionary:
 	var out := default_look()
 	for a in AXES:
@@ -153,8 +212,19 @@ static func cycle(look: Dictionary, key: String, by: int) -> Dictionary:
 	var n: int = (a.options as Array).size()
 	if n <= 0:
 		return look
+	if by == 0:
+		return sanitize(look)
 	var next := look.duplicate()
-	next[key] = posmod(int(look.get(key, int(a.default))) + by, n)
+	var at := int(look.get(key, int(a.default)))
+	# POCKETS 2 phase 4: step over anything this machine has not unlocked, so a locked pattern is
+	# not a dead stop in the middle of the list. `n` tries is always enough to come back round.
+	var step := 1 if by >= 0 else -1
+	for _k in maxi(1, absi(by)):
+		for _t in n:
+			at = posmod(at + step, n)
+			if key != "pattern" or pattern_unlocked(at):
+				break
+	next[key] = at
 	return sanitize(next)
 
 

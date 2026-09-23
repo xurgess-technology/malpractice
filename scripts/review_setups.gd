@@ -37,6 +37,9 @@ const SETUPS := {
 	# edge, a lifeguard whistle and a pool chemical drum to hand, the stocked first-aid cabinet on the
 	# lifeguard stand behind you. Walk the pool and walk the deck and listen to the difference.
 	"natatorium": {"seed": 4242, "pocket": "natatorium", "stage": "_natatorium"},
+	# POCKETS 2 phase 4 (docs/POCKET_SPACES_2.md): inside the Laundromat with its three items in
+	# hand and a Sonographer already hunting you, in a room where it cannot hear you walk.
+	"laundromat": {"seed": 4242, "pocket": "laundromat", "stage": "_laundromat"},
 	"chapel": {"seed": 4242, "pocket": "chapel", "stage": "_chapel"},
 	"items": {"seed": 1, "stage": "_items"},
 	# GRAFTING chunk C (docs/GRAFTING.md): strapped to a table with a loaded vat on its stand, as
@@ -1225,3 +1228,46 @@ static func _chapel(game: Game) -> void:
 	game._clear_monsters()
 	await game.get_tree().physics_frame
 	game._add_monster("night_nurse", game._floor_at(w.call(Vector2(mid, float(Ch.SANCTUARY_Y) - 6.0))))
+
+
+## POCKETS 2 phase 4 (docs/POCKET_SPACES_2.md): the Laundromat. You start well inside the room with
+## the three items in hand, and a Sonographer is already hunting a few metres away. The whole space
+## is one mechanic -- its ambient noise floor is above a walking footstep -- so the review is: walk
+## about in here and watch it fail to find you, sprint and watch it get interested, throw a handful
+## of quarters across the room and watch it go there instead, then walk out through a seam into the
+## hospital and hear it pick you straight up.
+static func _laundromat(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("monsters_off", {"on": true})   # only the one staged below
+	game.dev.request("clear_patient")
+	var pk = game.pockets
+	if pk != null and pk.busy:
+		pk.finish_now()
+	if pk == null or not pk.active():
+		push_warning("[review] the laundromat setup got no pocket; showing the hospital instead")
+		return
+	# Well inside the room, looking down its length.
+	var spawn: Vector3 = pk.pocket.spawn
+	var rect: Rect2 = pk.pocket.rect
+	var along := Vector3(1.0, 0.0, 0.0) if rect.size.x >= rect.size.y else Vector3(0.0, 0.0, 1.0)
+	place(game, game._floor_at(spawn - along * 6.0), spawn + along * 6.0 + Vector3(0, 0.05, 0))
+	clear_hands(game)
+	give(game, "quarter_bucket", 4, 52)
+	give(game, "fabric_softener", 1, 22)
+	give(game, "warm_scrubs", 1, 30)
+	p.selected = 0
+	p.flashlight_on = true
+	await tree.physics_frame
+	# A Sonographer down the room, calm for long enough that the first thing you do is look at it
+	# rather than run from it. After that it hunts normally -- and in here it hunts by a sense that
+	# does not work.
+	var m = game._add_monster("sonographer", game._floor_at(spawn + along * 9.0))
+	if m != null:
+		m.calm = 20.0
+	await tree.physics_frame

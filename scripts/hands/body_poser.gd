@@ -94,6 +94,8 @@ func _generic(sk: Skeleton3D) -> void:
 		var cq := Quaternion(Vector3.RIGHT, 0.3 * ck)
 		for bi in chain:
 			_turn(sk, int(bi), cq)
+	if crouch > 0.001:   # CROUCH POSE: the legs, which is where the height actually comes off
+		_crouch_legs(sk, clampf(crouch, 0.0, 1.0))
 	for side in [["arm_r", arm_r, arm_r_w], ["arm_l", arm_l, arm_l_w]]:
 		var w: float = side[2]
 		var upper := int(_gidx.get(side[0], -1))
@@ -111,6 +113,53 @@ func _generic(sk: Skeleton3D) -> void:
 			_aim(sk, fore, d, w)
 	if dangle > 0.001:
 		_dangle(sk, clampf(dangle, 0.0, 1.0))
+
+
+## CROUCH POSE: how far the knee bends at a full crouch, radians. The torso lean above is only a
+## lean -- on its own a crouching player stands at full height, which is why crouch read as standing.
+const CROUCH_KNEE := 0.9
+
+
+## CROUCH POSE (2026-09-22): bend the knees and sink the hips by exactly what the bent leg lost, so
+## the feet stay on the floor and the whole body gets shorter.
+##
+## Every turn here is a *delta* in skeleton space on top of whatever clip is playing, not an `_aim`
+## that would pin the legs where they are: that is what lets one piece of code be both the crouch
+## pose (over Idle) and the crouch walk (over Walk), with the clip's own stepping still showing
+## through. Aiming the legs absolutely would freeze them and the feet would skate.
+##
+## Geometry: thigh forward by `a` puts the knee out front, shin back by `a` brings the ankle home
+## under the hip again, so the leg keeps its footprint and only loses height -- (thigh + shin) *
+## (1 - cos a) of it. The shin's delta is 2a because it has already inherited the thigh's -a, and
+## the foot's -a undoes the shin's so the sole stays flat.
+func _crouch_legs(sk: Skeleton3D, k: float) -> void:
+	var a := CROUCH_KNEE * k
+	var drop := 0.0
+	for sd in [".L", ".R"]:
+		var thigh := sk.find_bone("thigh" + sd)
+		var shin := sk.find_bone("shin" + sd)
+		var foot := sk.find_bone("foot" + sd)
+		if thigh < 0 or shin < 0:
+			continue
+		_turn(sk, thigh, Quaternion(Vector3.RIGHT, -a))
+		_turn(sk, shin, Quaternion(Vector3.RIGHT, 2.0 * a))
+		if foot >= 0:
+			_turn(sk, foot, Quaternion(Vector3.RIGHT, -a))
+		# A bone's rest origin is its offset from its parent, so the shin's is the thigh's length.
+		var legs := sk.get_bone_rest(shin).origin.length()
+		if foot >= 0:
+			legs += sk.get_bone_rest(foot).origin.length()
+		drop = maxf(drop, legs * (1.0 - cos(a)))
+	var hips := sk.find_bone("hips")
+	if hips >= 0 and drop > 0.0:
+		var parent := sk.get_bone_parent(hips)
+		var pb := _global(sk, parent).basis if parent >= 0 else Basis.IDENTITY
+		sk.set_bone_pose_position(hips, sk.get_bone_pose_position(hips) + pb.inverse() * Vector3(0.0, -drop, 0.0))
+	# The chest lean above tips the head down with it: look back up, so a crouching player is still
+	# watching where they are going rather than studying the floor.
+	var head := sk.find_bone(String(rig.bones.get("head", "head")))
+	if head >= 0:
+		_turn(sk, head, Quaternion(Vector3.RIGHT, -0.22 * k))
 
 
 func _dangle(sk: Skeleton3D, k: float) -> void:

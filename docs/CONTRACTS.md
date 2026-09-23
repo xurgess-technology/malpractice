@@ -949,22 +949,42 @@ zones: {grid, width, height, names}   # HospitalBuilder.zone_of(info, pos) -> wi
 
 ### Pocket spaces (pockets worker, docs/POCKET_SPACES.md)
 
-A map (each shift's wings) rolls 0-1 pocket space: **the Factory**, **the Restaurant** or
-**the Natatorium** or **the Chapel**, built far from the hospital (world tile origin
-`PocketSpaces.ORIGINS`: factory (800, 0), restaurant (800, 500), natatorium (800, 1000), chapel
-(800, 1500)) with 2-3 entrances into at least two different wings, deeper wings more likely. Code in
+A map (each shift's wings) rolls 0-1 pocket space: **the Factory**, **the Restaurant**,
+**the Natatorium**, **the Chapel** or **the Laundromat**, built far from the hospital (world tile
+origin `PocketSpaces.ORIGINS`: factory (800, 0), restaurant (800, 500), natatorium (800, 1000),
+chapel (800, 1500), laundromat (800, 2000) — one 500-tile band per space, in the order the phases
+added them) with 2-3 entrances into at least two different wings, deeper wings more likely. Code in
 `scripts/level/pockets/`: `pocket_plan.gd` (generation), `stub.gd` (an entrance, its frame and its
 pocket-side copy), `pocket_spaces.gd` (runtime, `game.pockets`), `pocket_common.gd`, `factory.gd`,
-`restaurant.gd`, `natatorium.gd`, `chapel.gd`.
+`restaurant.gd`, `natatorium.gd`, `chapel.gd`, `laundromat.gd`.
 
 **Adding a kind** is two lines: its name in `PocketPlan.KINDS` and its layout script in
 `PocketSpaces.LAYOUTS`, which every builder, the warmup and the ambient-noise lookup read (there is no
-`if kind == ...` chain left). A layout script must expose `layout(stubs, seed)`, `prepare(lay, origin)`,
+`if kind == ...` chain left) — plus an entry in `PocketSpaces.ORIGINS` and one in `AIR` if the space
+wants its own air. A layout script must expose `layout(stubs, seed)`, `prepare(lay, origin)`,
 `build_steps(...)`, `build(...)`, `doorways(lay)` and `door_entries(lay, origin)`, may declare
 `AMBIENT_NOISE_LEVEL`, and declares `POCKET_ITEMS`, the item kinds it contributes, as a set anything
-else can read without digging through the layout. `tools/mapcheck.gd`, `tools/pockettest.gd`,
-`tools/pocketrate.gd` and `tools/perfprobe.gd` all sweep `KINDS` rather than a hardcoded list, so a
-new space is covered by all four for free.
+else can read without digging through the layout. Re-run `tools/pocketrate.gd` after any of it.
+
+**The Laundromat** (`laundromat.gd`, POCKET_SPACES_2 phase 4) is one mechanic:
+`AMBIENT_NOISE_LEVEL = 0.30`, above `Game.FOOTSTEP_LOUDNESS` (0.25), so a walking player makes no
+audible noise in there at all and a sprinting one (0.8) carries 11 m instead of 17.6. Its
+`POCKET_ITEMS` are `["quarter_bucket", "warm_scrubs", "fabric_softener"]`, each weighted for the
+`laundromat` / `laundromat_back` room kinds with **no `"*"` weight**, which is what keeps them in the
+space. Coin-op machines all running, back-to-back washer islands, dryer banks on the long walls, a
+utility room and an attendant's office off the back wall.
+
+**The Chapel** (`chapel.gd`, POCKET_SPACES_2 phase 3) is a hospital chapel that is somehow a
+cathedral, and its one mechanic is light. It declares `AMBIENT_NOISE_LEVEL = 0.0` on purpose —
+silence is the point of it. Every flame in it is emissive geometry in a MultiMesh and costs no
+light; illumination is `LIGHT_BUDGET` (28) real unshadowed `OmniLight3D`s **pooled one per votive
+rack or candle stand**, of which `SHADOW_BUDGET` (2) cast shadows, and the sanctuary claims them
+first so the altar can never go dark. Its `POCKET_ITEMS` are `["votive_candle", "communion_wine",
+"collection_plate"]`, weighted for the `chapel_nave` / `chapel_aisle` / `chapel_sanctuary` /
+`chapel_sacristy` room kinds with **no `"*"` weight**, the same rule the other spaces follow.
+
+`tools/mapcheck.gd`, `tools/pockettest.gd`, `tools/pocketrate.gd` and `tools/perfprobe.gd` all
+sweep `KINDS` rather than a hardcoded list, so a new space is covered by all four for free.
 
 **The roll** (POCKET_SPACES_2 phase 1) is not a flat chance. Every wing rolls
 `BASE_CHANCE + DEPTH_STEP * (depth - 1)` — 4%, 9%, 14% for the usual depths 1-3 — and the map takes the
@@ -1352,6 +1372,13 @@ is how the wine is only ever found in the Chapel; an item without one is found a
 (`game.trinkets`), created in `_ready` beside Combat, Brains, Vats and Grafts. It owns what the six
 trinket loot kinds do. DESIGN.md "Trinkets" is the design; this is the surface.
 
+**The seventh** (POCKET_SPACES_2 phase 4) is the Laundromat's **fabric softener jug**: one use, drink it,
+and for `QUIET_SECONDS` (60) that player's footsteps emit no noise event at all while they keep full speed.
+It is the crouch suppression reused, not a second quiet mode: `game._tick_noise` already skips a crouching
+player, and `Player.silent_steps` (pushed every physics frame by `_apply_boosts`, like `sprint_mult`) makes
+it skip a drinker too. Replicated as `"qt"` (peer id -> the `world_time` it runs out), host authoritative.
+`trinkets.quiet_steps(p) -> bool`; `trinkets.drink_softener(q)` starts it (tests call it directly).
+
 **The use path.** Left mouse with a trinket selected goes through `Player._local_step` exactly where
 the saw and the needle do: `combat.is_usable(kind)` is tried first, then
 `trinkets.local_try_use(p)`, and only if both refuse does the click become a shove. `local_try_use`
@@ -1367,6 +1394,8 @@ trinkets.use_prompt(p) -> String                 # every machine, ~10 Hz: the cr
 Trinkets.is_spent(slot_or_item) -> bool          # static: a used-up one-use trinket
 Trinkets.scrap_value(kind) -> int                # what a spent one sells for
 trinkets.last_result                             # host, for tests: {what, kind?, id?}
+trinkets.quiet_steps(p) -> bool                  # POCKETS 2 phase 4: their footsteps make no noise right now
+trinkets.drink_softener(q)                       # host: start it (Player.silent_steps follows every frame)
 
 # POCKETS 2 phase 3, the votive candle. Lighting it IS the use: it is set down already spent, so
 # one candle is one safe zone in one place. Replicated as "cd" (item id -> world_time it goes out).

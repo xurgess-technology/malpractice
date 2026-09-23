@@ -396,6 +396,14 @@ func _physics_process(delta: float) -> void:
 				return
 			_settle -= delta
 			if sleeping or _settle <= 0.0 or (linear_velocity.length() < 0.03 and _settle < SETTLE_MAX - 0.4):
+				# POCKETS 2 phase 4: a scattered handful of quarters never settles as a pickup. It
+				# bursts where it lands, which is the whole point of throwing it: the noise happens
+				# over there and not where you are standing.
+				if get_meta("quarters_thrown", false) and g.has_method("quarters_scatter"):
+					g.quarters_scatter(global_position)
+					g.world_items.erase(item_id)
+					queue_free()
+					return
 				freeze = true
 				linear_velocity = Vector3.ZERO
 				angular_velocity = Vector3.ZERO

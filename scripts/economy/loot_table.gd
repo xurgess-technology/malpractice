@@ -102,6 +102,26 @@ const LOOT := {
 		"rooms": {"natatorium_deck": 2.0, "natatorium_lockers": 1.2},
 		"surfaces": ["counter", "tray"], "containers": {"drawer_unit": 0.5, "trauma_bag": 0.4, "first_aid_cabinet": 0.5},
 	},
+	# ---- POCKETS 2 phase 4: the Laundromat's own three. None of them lists a "*" weight, so they are
+	# found in that space and nowhere else (docs/POCKET_SPACES_2.md; Laundromat.POCKET_ITEMS is the
+	# same set, declared where the space is).
+	"quarter_bucket": {
+		"name": "Bucket of quarters", "short": "Buckets of quarters", "value": [10, 18], "tier": 1,
+		"stack": true, "batch": [3, 5],
+		"rooms": {"laundromat": 3.2, "laundromat_back": 1.1},
+		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.4, "station_drawers": 0.4},
+	},
+	"warm_scrubs": {
+		"name": "Warm scrubs", "short": "Warm scrubs", "value": [20, 38], "tier": 1,
+		"rooms": {"laundromat": 2.6, "laundromat_back": 2.2},
+		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.5, "station_drawers": 0.3},
+	},
+	"fabric_softener": {
+		"name": "Fabric softener", "short": "Fabric softener jugs", "value": [14, 26], "tier": 0,
+		"trinket": true, "trinket_weight": 1.8,
+		"rooms": {"laundromat": 2.4, "laundromat_back": 1.6},
+		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.35},
+	},
 	# POCKETS 2 phase 3, the Chapel. Same rule as the Natatorium's two: Chapel room kinds only and
 	# no "*", so neither leaks into a hospital that has no Chapel in it. The votive candle is a
 	# placeable light -- set it down and the Night Nurse counts as watched inside its radius with
