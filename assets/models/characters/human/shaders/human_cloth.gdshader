@@ -28,7 +28,7 @@ uniform vec2 expose_r = vec2(0.1);
 // because the knobs are the point -- the same three shaders cover thin pro pinstripes through to
 // fat circus stripes, neat machine dots through to big hand-printed bubbles, and a few camo spots
 // through to scrubs this surgeon has clearly never washed.
-//   0 none   1 pinstripes   2 polka dots   3 splatter
+//   0 none   1 pinstripes   2 polka dots   3 splatter   4 gingham
 uniform int pattern = 0;
 uniform vec3 pattern_colour : source_color = vec3(0.08, 0.09, 0.11);
 // Pinstripes: bands running down the BODY, not across the UV. The cloth's UV islands aren't laid
@@ -53,6 +53,15 @@ uniform float dot_stagger = 0.5;
 // threshold goes from a few spots to mostly covered.
 uniform float splat_scale = 26.0;
 uniform float splat_threshold = 0.62;
+// POCKETS 2 phase 4 (the Laundromat's warm scrubs): gingham. Two crossed bands of the same pitch,
+// one banked round the body like the pinstripes and one straight across it, so the check stays
+// square on the torso and the legs alike. Where the two bands cross the ink is full strength and
+// where only one runs it is `check_pale` of it, which is what makes a check read as woven rather
+// than as a grid drawn on top. `width` is the inked fraction of a band, `span` its pitch in metres.
+uniform float check_count = 16.0;
+uniform float check_width = 0.5;
+uniform float check_span = 2.0;
+uniform float check_pale = 0.45;
 // How hard every pattern's edges are.
 uniform float pattern_softness = 0.02;
 
@@ -80,7 +89,7 @@ float p_noise(vec2 p) {
 // even the whole way round. The seam that leaves is at the body's corners, where the two agree
 // least -- there the stripes bend slightly rather than break, which on scrubs reads as drape.
 // Then rotate against body-up (y), so angle 0 is straight down the garment and PI / 4 is diagonal.
-float stripe_coord(vec3 p, vec3 n) {
+float band_coord(vec3 p, vec3 n, float span, float angle) {
 	float fx = abs(n.x);
 	float fz = abs(n.z);
 	// 0 = band along x, 1 = band along z. The 0.15 both biases the blend towards x (the honest
@@ -89,7 +98,12 @@ float stripe_coord(vec3 p, vec3 n) {
 	// (fx + fz) alone fanned the stripes out into chevrons.
 	float side = fx / (fx + fz + 0.15);
 	float h = mix(p.x, p.z, side);
-	return (h * cos(stripe_angle) - p.y * sin(stripe_angle)) / max(stripe_span, 0.001);
+	return (h * cos(angle) - p.y * sin(angle)) / max(span, 0.001);
+}
+
+
+float stripe_coord(vec3 p, vec3 n) {
+	return band_coord(p, n, stripe_span, stripe_angle);
 }
 
 // How much ink is on this point, 0 to 1.
@@ -108,6 +122,13 @@ float pattern_at(vec2 uv, vec3 p, vec3 n) {
 		float n = p_noise(uv * splat_scale) * 0.65 + p_noise(uv * splat_scale * 2.7 + 5.1) * 0.35;
 		float soft = pattern_softness * 2.0;
 		return smoothstep(splat_threshold - soft, splat_threshold + soft, n);
+	}
+	if (pattern == 4) {
+		float a = fract(band_coord(p, n, check_span, 0.0) * check_count);
+		float b = fract((p.y / max(check_span, 0.001)) * check_count);
+		float ia = 1.0 - smoothstep(check_width - pattern_softness, check_width + pattern_softness, a);
+		float ib = 1.0 - smoothstep(check_width - pattern_softness, check_width + pattern_softness, b);
+		return max(ia, ib) * check_pale + ia * ib * (1.0 - check_pale);
 	}
 	return 0.0;
 }

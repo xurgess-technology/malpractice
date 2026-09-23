@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.36**: A laundromat, running with nothing in it
+    - Added: The Laundromat. Coin-op, fluorescent, every machine going, nothing inside any of them. The drone is loud enough to genuinely swallow your footsteps -- walk around in there and the Sonographer hears nothing at all. Sprint and it still hears you, just not well enough to come straight for you.
+    - Added: A bucket of quarters worth throwing for the noise, a jug of fabric softener you can drink to walk quietly for a minute, and a set of warm scrubs that unlocks a new pattern at the mirror.
+    - Fixed: The lifeguard's whistle was leaking out of the pool and turning up in ordinary hospital rooms on shifts that had no pool.
 - **0.10.35**: There is a swimming pool in the hospital 🏊
     - Added: The Natatorium. An Olympic pool under a nine-metre ceiling, lane ropes, starting blocks, bleachers, the lot -- behind a door in a building with one storey. The underwater lights are on. Nobody is swimming.
     - Added: Wading across is the short way and it is *loud* -- louder than sprinting on tile, loud enough that anything listening knows exactly where you are. The dry deck is the long way round. Crouching through the water is the only crossing that isn't a certainty, and it's the one place in the hospital where crouching doesn't make you quiet.
