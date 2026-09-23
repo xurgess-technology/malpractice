@@ -326,16 +326,17 @@ func _dev_room() -> void:
 	_check(bot.body_hands != null and bot.body_hands.skeleton != null, "the bot's body has a skeleton to measure")
 	bot.bot_move = Vector2.ZERO
 	await _seconds(0.5)
-	var stand_top := _body_top(bot)
+	var stand_top: float = await _body_top(bot)
 	_check(stand_top > 1.2, "standing, the bot's rig reaches full height (%.2f m)" % stand_top)
 	game.knock_down_player(bot, "test")
 	await _seconds(0.5)   # down on the spot: never a step of crawling
-	var down_top := _body_top(bot)
+	var down_top: float = await _body_top(bot)
 	_check(not bot.moving, "the bot went down standing still and never crawled")
 	_check(down_top < stand_top * 0.6, "downed on the spot, the body lies down instead of standing (%.2f m, standing %.2f m)" % [down_top, stand_top])
 	dev.request("revive_all")
 	await _seconds(0.5)
-	_check(_body_top(bot) > stand_top * 0.9, "back up, the rig stands to full height again (%.2f m)" % _body_top(bot))
+	var up_top: float = await _body_top(bot)
+	_check(up_top > stand_top * 0.9, "back up, the rig stands to full height again (%.2f m)" % up_top)
 
 	# ---- going prone of your own accord lies the body down too (Zach, 2026-09-22)
 	# The same branch as the downed case above (`down` in body_hands._human_clip is
@@ -345,7 +346,7 @@ func _dev_room() -> void:
 	bot.bot_move = Vector2.ZERO
 	bot.bot_prone = true
 	await _seconds(0.5)   # prone on the spot: never a step of crawling
-	var prone_top := _body_top(bot)
+	var prone_top: float = await _body_top(bot)
 	_check(bot.prone and not bot.downed and bot.alive, "the bot went prone on its own feet, not downed")
 	_check(not bot.moving, "it went prone standing still and never crawled")
 	_check(prone_top < stand_top * 0.6, "prone on the spot, the body lies down instead of standing (%.2f m, standing %.2f m)" % [prone_top, stand_top])
@@ -355,7 +356,52 @@ func _dev_room() -> void:
 	_check(bot.crouching, "prone also reads as crouching (so the prone branch must win)")
 	bot.bot_prone = false
 	await _seconds(0.6)
-	_check(not bot.prone and _body_top(bot) > stand_top * 0.9, "standing back up from prone reaches full height again (%.2f m)" % _body_top(bot))
+	var reup_top: float = await _body_top(bot)
+	_check(not bot.prone and reup_top > stand_top * 0.9, "standing back up from prone reaches full height again (%.2f m)" % reup_top)
+
+	# ---- crouching shows as a crouch, not as standing (Zach, 2026-09-22)
+	# `crouching` has gated sprint, jump and silent steps since SWEEP 4A, but the only thing the
+	# body did about it was body_poser.gd's 0.3 rad torso lean -- the legs stayed straight and the
+	# rig stayed at full standing height, so a crouching teammate read as standing. The clip name is
+	# no use here either (a crouching player is on Idle or Walk like anyone else), so this measures
+	# the skeleton, the same way as prone above.
+	bot.bot_crouch = true
+	await _seconds(0.8)   # the crouch weight eases in at 6/s
+	var crouch_top: float = await _body_top(bot)
+	_check(bot.crouching and not bot.prone and not bot.downed, "the bot crouches without going prone or down")
+	_check(crouch_top < stand_top * 0.88, "crouched, the body is visibly lower than standing (%.2f m, standing %.2f m)" % [crouch_top, stand_top])
+	_check(crouch_top > prone_top * 1.8, "a crouch is nowhere near lying down (%.2f m, prone %.2f m)" % [crouch_top, prone_top])
+	# The feet stay on the floor: the hips sink by what the bent leg lost, so the body does not
+	# hover or sink into it. body_visual rides the player's own feet, so its origin is the floor.
+	var crouch_low: float = float((await _body_span(bot)).low)
+	_check(crouch_low > -0.12 and crouch_low < 0.12, "crouched, the feet stay on the floor (lowest bone %.2f m)" % crouch_low)
+	# A crouch walk is the Walk clip slowed, not the Jog clip skating. Setting bot_move by hand is no
+	# use here: this bot is under dev orders and "stay" halts it (bot_move back to zero) every tick,
+	# so put it on "follow" and walk away from it instead.
+	dev.order_bot(bid, "follow")
+	_stand(o + Vector3(14.0, 0, 21.0), 0.0)
+	await _seconds(1.5)
+	_check(bot.crouching and bot.moving, "the bot is walking while crouched")
+	_check(not bot.sprinting, "a crouching body never sprints, so the crouch walk is the only gait")
+	_check(_clip_of(bot) == String(bot.body_hands.rig.clips.get("slow", "")), "crouch-walking plays the Walk clip, not the Jog ('%s')" % _clip_of(bot))
+	var cwalk_top: float = await _body_top(bot)
+	_check(cwalk_top < stand_top * 0.88, "still crouched while moving (%.2f m)" % cwalk_top)
+	dev.order_bot(bid, "stay")
+	await _frames(2)
+
+	# THE ORDERING TRAP, measured: `crouching` stays true when you go prone, so a crouch branch that
+	# won over the prone one would put a crouching body where a crawling one belongs -- exactly the
+	# bug the prone check above proves is fixed. Go prone straight out of a crouch and check it lies.
+	bot.bot_prone = true
+	await _seconds(0.6)
+	_check(bot.prone and bot.crouching, "prone out of a crouch: both flags are set")
+	var pwins_top: float = await _body_top(bot)
+	_check(pwins_top < stand_top * 0.6, "prone still wins over the crouch pose (%.2f m, crouched %.2f m)" % [pwins_top, crouch_top])
+	bot.bot_prone = false
+	bot.bot_crouch = false
+	await _seconds(0.8)
+	var cup_top: float = await _body_top(bot)
+	_check(not bot.crouching and cup_top > stand_top * 0.9, "standing back up from a crouch reaches full height again (%.2f m)" % cup_top)
 
 	# ---- the carry pose lets go once they are stitched up (playtest 2026-09-22)
 	# A dev dummy is a target dummy with no rig, so this leg uses the bot: it wears the rigged human
@@ -439,18 +485,42 @@ func _clip_of(p: Player) -> String:
 	return String(p.body_hands.anim.current_animation)
 
 
-## How high the highest bone of that body's rig sits over the body's own feet, in metres (-1.0 for a
-## body with no rig). A standing surgeon is about 1.7; anything lying down is well under a metre.
-## This is the pose as every other machine draws it, which is the only place the down pose shows.
-func _body_top(p: Player) -> float:
+## The highest and lowest bone of that body's rig, in metres over the body's own feet, as the rig is
+## actually DRAWN: `{"top": float, "low": float}`, or top -1.0 for a body with no rig. A standing
+## surgeon tops out about 1.6, a crouching one about 1.2, anything lying down well under a metre;
+## `low` is about 0 on any body whose feet are on the floor. This is the pose every machine but the
+## player's own draws, which is the only place a down or crouch pose shows.
+##
+## **It has to be sampled inside `skeleton_updated`, and that is why this is async.** Two different
+## things pose these bodies. Clips (Crawl, Walk) are written by the AnimationPlayer and stay in the
+## bone poses, so any old read sees them. body_poser.gd is a `SkeletonModifier3D`, and Godot reverts
+## what a modifier wrote once the modification pass is over -- so the crouch squat exists only
+## inside that signal, and a plain physics-frame read shows a crouching body at full standing
+## height. That is indistinguishable from having no crouch pose at all, which is exactly the
+## wrong verdict this file is here to avoid.
+func _body_span(p: Player) -> Dictionary:
 	if p.body_hands == null or p.body_hands.skeleton == null:
-		return -1.0
+		return {"top": -1.0, "low": 1e9}
 	var sk: Skeleton3D = p.body_hands.skeleton
-	var to_body := p.body_visual.global_transform.affine_inverse() * sk.global_transform
-	var top := -1e9
-	for i in sk.get_bone_count():
-		top = maxf(top, (to_body * sk.get_bone_global_pose(i).origin).y)
-	return top
+	var out := {"top": -1e9, "low": 1e9}
+	var grab := func() -> void:
+		var to_body := p.body_visual.global_transform.affine_inverse() * sk.global_transform
+		for i in sk.get_bone_count():
+			var y: float = (to_body * sk.get_bone_global_pose(i).origin).y
+			out.top = maxf(float(out.top), y)
+			out.low = minf(float(out.low), y)
+	sk.skeleton_updated.connect(grab)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if sk.skeleton_updated.is_connected(grab):
+		sk.skeleton_updated.disconnect(grab)
+	return out
+
+
+## Just the height, for the checks that only care how tall the drawn body is.
+func _body_top(p: Player) -> float:
+	var span: Dictionary = await _body_span(p)
+	return float(span.top)
 
 
 ## True while that body's rig is still animating (a stopped one keeps the pose it froze in).
