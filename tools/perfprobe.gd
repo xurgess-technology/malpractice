@@ -9,8 +9,6 @@ extends Node
 ## frame time), the worst frame, script time for physics and process, draw calls, and node count.
 
 const WARMUP := 50
-const PlanScript := preload("res://scripts/level/pockets/pocket_plan.gd")
-const StubScript := preload("res://scripts/level/pockets/stub.gd")
 
 var main: Node3D
 var game: Game
@@ -26,11 +24,13 @@ var _hitch := false
 var _orscreen := false
 var _models := false
 var _abilities := false   # the two abilities (--abilities)
-var _pockets := false  # POCKETS: --pockets, every pocket space against the corridor baseline
-## POCKETS: --pocketkind=<kind>, one space measured in the session that is already running.
-## --pockets restarts the session once per kind, and a restart straight after the warmup trips a
-## renderer bug that kills the process before it measures anything (docs/FAILING_TESTS.md). This
-## mode forces the kind BEFORE the one and only start_session, so there is nothing to restart.
+var _pockets := false  # POCKETS: --pockets, every space against the corridor baseline (see _run_pockets)
+## POCKETS 2 phase 2: --pocket=<kind>, one space measured in the session the probe already built.
+## `--pockets` restarts the session once per kind, and that restart trips a renderer bug on this
+## machine ("BUG, indexing did not unpair geometries from light", then a crash) before it prints a
+## single row. It does that on `main` too, and with the natatorium taken back out of PocketPlan.KINDS
+## entirely, so it is the restart and not any one space. This flag forces the kind BEFORE the first
+## and only start_session, so there is no restart and the numbers come out.
 var _pocket_kind := ""
 var _doors := false    # DOORS HOOK
 var _hands := false    # HANDS HOOK
@@ -55,7 +55,7 @@ func _ready() -> void:
 			"models": _models = true
 			"abilities": _abilities = true
 			"pockets": _pockets = true   # POCKETS
-			"pocketkind": _pocket_kind = kv[1]   # POCKETS
+			"pocket": _pocket_kind = v   # POCKETS 2 phase 2
 			"doors": _doors = true
 			"hands": _hands = true
 			"humans": _humans = true
@@ -76,7 +76,7 @@ func _ready() -> void:
 	main.menu.hide_menu()
 	Net.start_solo("Probe")
 	if _pocket_kind != "":
-		PlanScript.force_kind = _pocket_kind   # POCKETS: before the session, so it is built with one
+		preload("res://scripts/level/pockets/pocket_plan.gd").force_kind = _pocket_kind
 	game.start_session(_seed)
 	if _shift > 1:
 		game.start_lobby(_seed, _shift)
@@ -117,9 +117,7 @@ func _ready() -> void:
 		await _run_abilities()
 		return
 	if _pocket_kind != "":
-		await _run_pocket_kind()   # POCKETS
-		_report()
-		return
+		await _run_one_pocket(_pocket_kind)   # POCKETS 2 phase 2
 	if _pockets:
 		await _run_pockets()   # POCKETS
 	if _doors:
@@ -318,6 +316,58 @@ func _measure(label: String, q: int) -> void:
 	print("[perf] q%d %-30s avg %.0f fps, 1%% low %.0f fps, worst %.1f ms, draws %d" % [q, label, row.fps, row.low_fps, row.worst, draws])
 
 
+## POCKETS 2 phase 2: one space, in the session start_session already built with it (--pocket=<kind>).
+## Same views as _run_pockets, no teardown and no rebuild, so it survives to print.
+func _run_one_pocket(kind: String) -> void:
+	var pk = game.pockets
+	if pk == null or not pk.active():
+		print("[perf] --pocket=%s: no pocket was built" % kind)
+		return
+	for v in _pocket_views(kind, pk):
+		for q in _qualities:
+			main.set_quality(q, false)
+			pk.crossing_enabled = false
+			(v.setup as Callable).call()
+			await _measure(String(v.name), q)
+	print("[perf] ============================================================================")
+	print("[perf] %-42s q  avg fps  1%%low fps  worst ms  phys ms  proc ms  draws  nodes" % "scenario")
+	for r in _rows:
+		print("[perf] %-42s %d  %7.0f  %9.0f  %8.1f  %7.2f  %7.2f  %5d  %5d" % [r.name, r.q, r.fps, r.low_fps, r.worst, r.phys, r.proc, r.draws, r.nodes])
+	get_tree().quit(0)
+
+
+## The views that show a space off, shared by --pocket and --pockets.
+func _pocket_views(kind: String, pk) -> Array:
+	var Stub := preload("res://scripts/level/pockets/stub.gd")
+	var o := Vector3(Vector2i(pk.pocket.origin).x * C.TILE, 0.0, Vector2i(pk.pocket.origin).y * C.TILE)
+	var w := func(t: Vector2, y := 0.0) -> Vector3:
+		return o + Vector3(t.x * C.TILE, y, t.y * C.TILE)
+	var s: Dictionary = pk.seams[0]
+	var views: Array = [{"name": "%s map: hospital corridor" % kind, "setup": _corridor}]
+	if kind == "natatorium":
+		# The room is the water and the beams over it, so the views are the ones that draw both:
+		# the long axis of the pool, the underwater lights head on, and the roof from in the water.
+		views.append({"name": "natatorium: down the length of the pool", "setup": func(): _look(w.call(Vector2(14, 26)), w.call(Vector2(57, 26), C.EYE_H))})
+		views.append({"name": "natatorium: across the water, lights on", "setup": func(): _look(w.call(Vector2(34, 14)), w.call(Vector2(34, 39), 0.4))})
+		views.append({"name": "natatorium: standing in the pool, looking up", "setup": func(): _look(w.call(Vector2(34, 26)), w.call(Vector2(30, 26), 9.0))})
+		views.append({"name": "natatorium: corner to corner over the bleachers", "setup": func(): _look(w.call(Vector2(56, 39)), w.call(Vector2(12, 13), 2.0))})
+	elif kind == "chapel":
+		# The worst frame the Chapel has: the whole nave from the narthex, which is every votive
+		# rack, every candle stand, all the pew rows, both arcades and the reredos drawn at once.
+		views.append({"name": "chapel: the whole nave", "setup": func(): _look(w.call(Vector2(21.5, 13.0)), w.call(Vector2(21.5, 53.0), C.EYE_H))})
+		views.append({"name": "chapel: the reredos close up", "setup": func(): _look(w.call(Vector2(21.5, 48.0)), w.call(Vector2(21.5, 54.0), C.EYE_H))})
+		views.append({"name": "chapel: down a side aisle", "setup": func(): _look(w.call(Vector2(13.0, 14.0)), w.call(Vector2(13.0, 50.0), C.EYE_H))})
+	elif kind == "factory":
+		views.append({"name": "factory: hall, corner to corner", "setup": func(): _look(w.call(Vector2(13, 13)), w.call(Vector2(70, 52), C.EYE_H))})
+		views.append({"name": "factory: down a production line", "setup": func(): _look(w.call(Vector2(14, 27)), w.call(Vector2(70, 23), C.EYE_H))})
+	else:
+		views.append({"name": "restaurant: dining room", "setup": func(): _look(w.call(Vector2(12.5, 25.5)), w.call(Vector2(38, 12), C.EYE_H))})
+		views.append({"name": "restaurant: bar", "setup": func(): _look(w.call(Vector2(33, 23)), w.call(Vector2(41, 13), C.EYE_H))})
+	views.append({"name": "%s: an entrance from inside" % kind, "setup": func(): _look(Stub.local_point(s.xp, float(s.w) - 1.0, -8.0), Stub.local_point(s.xp, float(s.w) - 1.0, 0.0, C.EYE_H))})
+	views.append({"name": "%s: seam, hospital side" % kind, "setup": func(): _look(Stub.local_point(s.xh, 1.0, float(s.d) - 1.0), Stub.local_point(s.xh, float(s.w), float(s.d) - 1.0, C.EYE_H))})
+	return views
+
+
 ## POCKETS: each space forced onto the run's hospital, measured from a few views, with the
 ## hospital's long corridor on the same map as the baseline.
 ## The summary table.
@@ -328,52 +378,10 @@ func _report() -> void:
 		print("[perf] %-30s %d  %7.0f  %9.0f  %8.1f  %7.2f  %7.2f  %5d  %5d" % [r.name, r.q, r.fps, r.low_fps, r.worst, r.phys, r.proc, r.draws, r.nodes])
 
 
-## POCKETS: --pocketkind=<kind>. One space, in the session that is already up, against the same
-## corridor the other scenarios use as a baseline. No start_session, so nothing to crash on.
-func _run_pocket_kind() -> void:
-	var pk = game.pockets
-	if pk == null or not pk.active():
-		print("[perf] no %s was built: nothing to measure" % _pocket_kind)
-		return
-	var views: Array = [{"name": "%s map: hospital corridor" % _pocket_kind, "setup": _corridor}] + _pocket_views(_pocket_kind, pk)
-	for q in _qualities:
-		main.set_quality(q, false)
-		for v in views:
-			await v.setup.call()
-			await _measure(v.name, q)
-
-
-## The camera set-ups for one space, shared by --pockets and --pocketkind.
-func _pocket_views(kind: String, pk) -> Array:
-	var o := Vector3(Vector2i(pk.pocket.origin).x * C.TILE, 0.0, Vector2i(pk.pocket.origin).y * C.TILE)
-	var w := func(t: Vector2, y := 0.0) -> Vector3:
-		return o + Vector3(t.x * C.TILE, y, t.y * C.TILE)
-	var s: Dictionary = pk.seams[0]
-	var views: Array = []
-	if kind == "factory":
-		views.append({"name": "factory: hall, corner to corner", "setup": func(): _look(w.call(Vector2(13, 13)), w.call(Vector2(70, 52), C.EYE_H))})
-		views.append({"name": "factory: down a production line", "setup": func(): _look(w.call(Vector2(14, 27)), w.call(Vector2(70, 23), C.EYE_H))})
-		views.append({"name": "factory: from the catwalk", "setup": func(): _look(w.call(Vector2(40, 12), 6.0), w.call(Vector2(40, 45), 1.0))})
-	elif kind == "chapel":
-		# The worst frame the Chapel has: the whole nave from the narthex, which is every votive
-		# rack, every candle stand, all the pew rows, both arcades and the reredos at once.
-		views.append({"name": "chapel: the whole nave", "setup": func(): _look(w.call(Vector2(21.5, 13.0)), w.call(Vector2(21.5, 53.0), C.EYE_H))})
-		views.append({"name": "chapel: the reredos close up", "setup": func(): _look(w.call(Vector2(21.5, 48.0)), w.call(Vector2(21.5, 54.0), C.EYE_H))})
-		views.append({"name": "chapel: down a side aisle", "setup": func(): _look(w.call(Vector2(13.0, 14.0)), w.call(Vector2(13.0, 50.0), C.EYE_H))})
-	else:
-		views.append({"name": "restaurant: dining room", "setup": func(): _look(w.call(Vector2(12.5, 25.5)), w.call(Vector2(38, 12), C.EYE_H))})
-		views.append({"name": "restaurant: bar", "setup": func(): _look(w.call(Vector2(33, 23)), w.call(Vector2(41, 13), C.EYE_H))})
-		views.append({"name": "restaurant: kitchen", "setup": func(): _look(w.call(Vector2(26, 29.5)), w.call(Vector2(44, 33), C.EYE_H))})
-	views.append({"name": "%s: an entrance from inside" % kind, "setup": func(): _look(StubScript.local_point(s.xp, float(s.w) - 1.0, -8.0), StubScript.local_point(s.xp, float(s.w) - 1.0, 0.0, C.EYE_H))})
-	views.append({"name": "%s: seam, hospital side" % kind, "setup": func(): _look(StubScript.local_point(s.xh, 1.0, float(s.d) - 1.0), StubScript.local_point(s.xh, float(s.w), float(s.d) - 1.0, C.EYE_H))})
-	views.append({"name": "%s: seam, pocket side" % kind, "setup": func(): _look(StubScript.local_point(s.xp, float(s.w) - 1.0, float(s.d) - 1.0), StubScript.local_point(s.xp, 0.0, float(s.d) - 1.0, C.EYE_H))})
-	return views
-
-
 func _run_pockets() -> void:
 	var Plan := preload("res://scripts/level/pockets/pocket_plan.gd")
 	var Stub := preload("res://scripts/level/pockets/stub.gd")
-	for kind in ["none"] + PlanScript.KINDS:
+	for kind in ["none"] + Plan.KINDS:
 		Plan.force_kind = kind
 		game.start_session(_seed)
 		await get_tree().process_frame
@@ -396,7 +404,14 @@ func _run_pockets() -> void:
 			return o + Vector3(t.x * C.TILE, y, t.y * C.TILE)
 		var s: Dictionary = pk.seams[0]
 		var views: Array = [{"name": "%s map: hospital corridor" % kind, "setup": _corridor}]
-		if kind == "factory":
+		if kind == "natatorium":
+			# The room is the water and the beams over it, so the views are the ones that draw both:
+			# the long axis of the pool, the underwater lights head on, and the roof from the deck.
+			views.append({"name": "natatorium: down the length of the pool", "setup": func(): _look(w.call(Vector2(14, 26)), w.call(Vector2(57, 26), C.EYE_H))})
+			views.append({"name": "natatorium: across the water, lights on", "setup": func(): _look(w.call(Vector2(34, 14)), w.call(Vector2(34, 39), 0.4))})
+			views.append({"name": "natatorium: standing in the pool, looking up", "setup": func(): _look(w.call(Vector2(34, 26)), w.call(Vector2(30, 26), 9.0))})
+			views.append({"name": "natatorium: the bleachers and the far corner", "setup": func(): _look(w.call(Vector2(56, 39)), w.call(Vector2(12, 13), 2.0))})
+		elif kind == "factory":
 			views.append({"name": "factory: hall, corner to corner", "setup": func(): _look(w.call(Vector2(13, 13)), w.call(Vector2(70, 52), C.EYE_H))})
 			views.append({"name": "factory: down a production line", "setup": func(): _look(w.call(Vector2(14, 27)), w.call(Vector2(70, 23), C.EYE_H))})
 			views.append({"name": "factory: from the catwalk", "setup": func(): _look(w.call(Vector2(40, 12), 6.0), w.call(Vector2(40, 45), 1.0))})

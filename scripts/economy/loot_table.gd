@@ -48,12 +48,13 @@ const LOOT := {
 		"surfaces": ["counter", "gurney", "floor"], "containers": {},
 	},
 	# POCKETS 2 phase 3, the Chapel. Gold-watch tier: a heavy silver-gilt alms dish, and whatever the
-	# congregation that never came put in it. The room weights are the Chapel's own kinds, so it is
-	# a thing you find in there rather than a thing that turns up in a supply closet.
+	# congregation that never came put in it. Chapel room kinds only and no "*", the same rule the
+	# Natatorium's two follow, so it cannot turn up in a hospital that has no Chapel in it. It had
+	# a small office/waiting-room weight before the merge; matching the other spaces is worth more
+	# than that, and the task that bleeds pocket items out near an entrance is the right way in.
 	"collection_plate": {
 		"name": "Collection plate", "short": "Collection plates", "value": [45, 115], "tier": 3,
-		"rooms": {"chapel_sanctuary": 3.5, "chapel_sacristy": 2.2, "chapel_nave": 1.4, "chapel_aisle": 1.0,
-				"office": 0.2, "waiting_room": 0.25, "*": 0.05},
+		"rooms": {"chapel_sanctuary": 3.5, "chapel_sacristy": 2.2, "chapel_nave": 1.4, "chapel_aisle": 1.0},
 		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.3},
 	},
 	# ---- trinkets: they sell, but each also does one thing (a later chunk). Rarer than plain loot.
@@ -87,12 +88,28 @@ const LOOT := {
 		"rooms": {"patient_room": 0.072, "nurse_station": 0.096, "supply_closet": 0.036, "lab": 0.048, "morgue": 0.036, "*": 0.006},
 		"surfaces": ["counter", "tray"], "containers": {"station_drawers": 0.5, "trauma_bag": 0.3},
 	},
-	# POCKETS 2 phase 3, the Chapel. A placeable light: set it down and the Night Nurse counts as
-	# watched inside its radius with nobody looking at her, until it burns out about two minutes
-	# later. One use, because lighting it is the use (scripts/trinkets/trinkets.gd).
+	# POCKETS 2 phase 2 (docs/POCKET_SPACES_2.md, the Natatorium). Both kinds live only in the pocket:
+	# their room weights name the Natatorium's own room kinds and nothing else, and neither lists "*",
+	# so they never turn up in the hospital proper. The layout script's POCKET_ITEMS is the same set,
+	# declared where anything that wants to know what a space contributes can read it.
+	"pool_chemical_drum": {
+		"name": "Pool chemical drum", "short": "Pool chemical drums", "value": [45, 80], "tier": 1, "bulky": true,
+		"rooms": {"natatorium_deck": 2.4, "natatorium_lockers": 0.9},
+		"surfaces": ["floor", "counter"], "containers": {},
+	},
+	"lifeguard_whistle": {
+		"name": "Lifeguard whistle", "short": "Lifeguard whistles", "value": [10, 20], "tier": 0, "trinket": true, "trinket_weight": 2.0,
+		"rooms": {"natatorium_deck": 2.0, "natatorium_lockers": 1.2},
+		"surfaces": ["counter", "tray"], "containers": {"drawer_unit": 0.5, "trauma_bag": 0.4, "first_aid_cabinet": 0.5},
+	},
+	# POCKETS 2 phase 3, the Chapel. Same rule as the Natatorium's two: Chapel room kinds only and
+	# no "*", so neither leaks into a hospital that has no Chapel in it. The votive candle is a
+	# placeable light -- set it down and the Night Nurse counts as watched inside its radius with
+	# nobody looking at her, until it burns out about two minutes later. One use, because lighting
+	# it is the use (scripts/trinkets/trinkets.gd).
 	"votive_candle": {
 		"name": "Votive candle", "short": "Votive candles", "value": [9, 18], "tier": 0, "trinket": true, "trinket_weight": 2.4,
-		"rooms": {"chapel_aisle": 6.0, "chapel_nave": 3.0, "chapel_sanctuary": 3.0, "chapel_sacristy": 2.0, "*": 0.08},
+		"rooms": {"chapel_aisle": 6.0, "chapel_nave": 3.0, "chapel_sanctuary": 3.0, "chapel_sacristy": 2.0},
 		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.2},
 	},
 	# GRAFTING part one (scripts/grafting/eyes.gd): taken out of a strapped Hive, or a surgeon's own

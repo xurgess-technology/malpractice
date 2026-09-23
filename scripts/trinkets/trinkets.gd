@@ -1,6 +1,6 @@
 class_name Trinkets
 extends Node
-## TRINKETS (docs/ITEMS_AND_ICONS.md, chunk B). The six loot items that sell but also do one thing,
+## TRINKETS (docs/ITEMS_AND_ICONS.md, chunk B). The loot items that sell but also do one thing,
 ## so it is always use it or sell it. A child "Trinkets" of Game on every machine.
 ##
 ##   Desk phone      left mouse sets it down and it rings for RING_SECONDS: a decoy. Pick it up and
@@ -34,12 +34,13 @@ extends Node
 const MonsterScript := preload("res://scripts/monster.gd")
 const LootTable := preload("res://scripts/economy/loot_table.gd")
 
-## The six. Anything else falls through to combat.use (the saw and the needle).
-const KINDS := ["desk_phone", "laptop", "defibrillator", "pulse_oximeter", "reflex_hammer", "epipen", "votive_candle"]
+## The eight. Anything else falls through to combat.use (the saw and the needle).
+const KINDS := ["desk_phone", "laptop", "defibrillator", "pulse_oximeter", "reflex_hammer", "epipen",
+		"lifeguard_whistle", "votive_candle"]
 ## Spent once and never again. The phone, the hammer and the pulse oximeter keep working.
-const ONE_USE := ["laptop", "defibrillator", "epipen", "votive_candle"]
+const ONE_USE := ["laptop", "defibrillator", "epipen", "lifeguard_whistle", "votive_candle"]
 ## What a spent one-use trinket sells for: scrap, not nothing.
-const SCRAP := {"laptop": 8, "defibrillator": 15, "epipen": 3, "votive_candle": 3}
+const SCRAP := {"laptop": 8, "defibrillator": 15, "epipen": 3, "lifeguard_whistle": 3, "votive_candle": 3}
 ## The mark a spent trinket carries through a drop (WorldItem.x).
 const USED_MARK := "used"
 ## The shortest gap the host accepts between one player's trinket uses.
@@ -102,6 +103,18 @@ const EPI_CONE_DEG := 45.0
 const EPI_SECONDS := 10.0
 const EPI_SPRINT_MULT := 2.0
 const EPI_COLLAPSE := 3.0
+
+# --- the lifeguard whistle (POCKETS 2 phase 2, the Natatorium)
+## One blast, and it is the loudest thing a surgeon can make on purpose: louder than the Echo
+## shriek (1.2), which is the yardstick, because a whistle is one use and the Echo is not. Reach is
+## loudness * SonographerBrain.HEAR_PER_LOUDNESS, so 1.4 carries about 30 m and is well past LOUD
+## (0.8) -- whatever hears it does not get suspicious, it comes.
+const WHISTLE_NOISE := 1.4
+## ... and the same distance is walked over to the deaf ones by hand. The Hive never hears a noise
+## event at all, and "drawing wing monsters to the spot" is the whole item, so the noise and the
+## nudge cover the same ground. This is Echo's attraction and nothing else: no ab_echo event is
+## emitted, so there is no wall-vision (see scripts/abilities/abilities.gd `_echo`).
+const WHISTLE_RANGE := 30.0
 
 var game: Node = null
 ## Host: the break roll for the pull-out ring. Tests seed it.
@@ -232,6 +245,7 @@ func use(p) -> void:
 		"pulse_oximeter": _use_pulse_ox(p, head)
 		"reflex_hammer": _use_hammer(p, head)
 		"epipen": _use_epipen(p, head)
+		"lifeguard_whistle": _use_whistle(p, head)
 		"votive_candle": _use_candle(p, head)
 
 
@@ -254,6 +268,8 @@ func use_prompt(p) -> String:
 		"epipen":
 			var q := _downed_or_standing_mate(p, EPI_REACH, EPI_CONE_DEG, false)
 			return "[Click] Jab %s" % (q.player_name if q != null else "yourself")
+		"lifeguard_whistle":
+			return "[Click] Blow it. Everything nearby will come."
 		"defibrillator":
 			var d := _downed_mate(p)
 			if d == null:
@@ -666,6 +682,25 @@ func _use_epipen(p, head: int) -> void:
 		game.tell(p, "Ten seconds. Then you are going to fall over.", 3.5)
 	else:
 		game.say("%s jabbed %s with an EpiPen." % [p.player_name, q.player_name], 3.0)
+
+
+## Host: one blast, from where the blower stands. Everything within earshot comes to that spot --
+## including the Hive, which is deaf to noise events and gets told by hand. It is Echo's draw with
+## none of Echo's sight: nothing is revealed through a wall, and the only thing anyone learns is
+## where the noise was, which is exactly where you are standing. Spent afterwards; sells as scrap.
+func _use_whistle(p, head: int) -> void:
+	var at: Vector3 = p.global_position + Vector3.UP * 1.5
+	spend(p, head)
+	game.emit_noise(at, WHISTLE_NOISE, "whistle")
+	for m in game.monsters.values():
+		if m == null or not is_instance_valid(m) or not m.has_method("alert_to"):
+			continue
+		if m.global_position.distance_to(at) <= WHISTLE_RANGE:
+			m.alert_to(at)
+	game._sound("trinkets_whistle", at)
+	game.say("%s blew a lifeguard whistle." % p.player_name, 3.0)
+	game.tell(p, "They heard that. All of them.", 3.0)
+	last_result = {"what": "whistle", "pos": at}
 
 
 ## Host: the boost starts on `q` (tests call it directly).

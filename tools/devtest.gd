@@ -482,14 +482,10 @@ func _free_cam() -> void:
 	var fc = main.dev_panel.free_cam
 	var box: CheckBox = main.dev_panel._c["free_cam"]
 	# "Behind your eyes" below only means anything in first person: in "shoulder" or "front" the
-	# carry camera is active and your own body is *meant* to show, so the check read the machine's
-	# saved camera mode rather than the free camera. Each slot seeds its settings from Zach's, so
-	# whichever mode he last played in decided whether this passed. Pin it, and put it back after.
-	# The carry camera stands down over a few frames, not instantly, so give the switch time to
-	# settle before anything here reads the body.
-	var was_camera = Settings.get_value("camera")
-	Settings.set_value("camera", "first_person")
-	await _seconds(0.5)
+	# carry camera is active and your own body is *meant* to show. This used to pin the camera
+	# setting by hand, because each slot's settings were seeded from Zach's and say "shoulder".
+	# A headless run now boots on Settings.DEFAULTS, where camera is "first_person" -- see
+	# `_machine_run` in scripts/settings.gd -- so there is nothing to pin.
 	var eye: Vector3 = me.camera.global_position
 	box.button_pressed = true
 	await _frames(3)
@@ -505,7 +501,6 @@ func _free_cam() -> void:
 	_check(not fc.is_on() and me.camera.current and not me.dev_input_held and not me.body_visual.visible,
 		"unticking it puts you back behind your eyes (on=%s eye_cam=%s held=%s body=%s)"
 		% [str(fc.is_on()), str(me.camera.current), str(me.dev_input_held), str(me.body_visual.visible)])
-	Settings.set_value("camera", was_camera)
 	await _frames(2)
 
 

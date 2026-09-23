@@ -1,5 +1,5 @@
 extends RefCounted
-## POCKETS: gameshot's pocket space shots (tools/gameshot.gd --pocket=<a PocketPlan.KINDS name>).
+## POCKETS: gameshot's pocket space shots (tools/gameshot.gd --pocket=<a kind in PocketPlan.KINDS>).
 ##
 ##   godot --path . tools/gameshot.tscn --resolution 1280x720 -- --pocket=factory [--seed=N]
 ##
@@ -50,6 +50,31 @@ func run(gs: Node, pocket_kind: String) -> void:
 		await _shot("p_factory_4_up", w.call(Vector2(36, 32)), w.call(Vector2(40, 30), 20.0))
 		await _shot("p_factory_5_offices", w.call(Vector2(24, 42)), w.call(Vector2(26, 49), 1.5))
 		await _shot("p_factory_7_office_door", w.call(Vector2(27.5, 45.0)), w.call(Vector2(25.5, 48.5), 1.2))
+	elif kind == "natatorium":
+		# POCKETS 2 phase 2. The water is the room, so most of these are of it: along the lanes, across
+		# it with the underwater lights on, standing in it looking up at the roof, and the deck.
+		await _shot("p_natatorium_1_length", w.call(Vector2(14, 26), 1.6), w.call(Vector2(57, 26), 1.4))
+		await _shot("p_natatorium_2_across", w.call(Vector2(34, 13), 1.6), w.call(Vector2(34, 39), 0.3))
+		await _shot("p_natatorium_3_in_the_water", w.call(Vector2(30, 26), 1.6), w.call(Vector2(52, 26), 1.2))
+		await _shot("p_natatorium_4_up", w.call(Vector2(34, 26), 1.6), w.call(Vector2(38, 26), 9.0))
+		await _shot("p_natatorium_5_blocks", w.call(Vector2(55, 22), 1.6), w.call(Vector2(50, 27), 0.8))
+		await _shot("p_natatorium_6_stand", w.call(Vector2(26, 22), 1.6), w.call(Vector2(28, 17), 2.1))
+		await _shot("p_natatorium_8_bleachers", w.call(Vector2(20, 35), 1.6), w.call(Vector2(12, 20), 1.2))
+		await _shot("p_natatorium_9_lockers", w.call(Vector2(15.5, 39), 1.6), w.call(Vector2(16, 46), 1.2))
+		# The two new items in the hand, on the deck (the smoke look RULES.md asks for).
+		bot.slots = Player.empty_slots()
+		bot.slots[0] = {"kind": "lifeguard_whistle", "count": 1, "v": 15}
+		bot.selected = 0
+		await _settle(6)
+		await _shot("p_natatorium_a_whistle", w.call(Vector2(30, 21), 1.6), w.call(Vector2(30, 26), 1.2))
+		bot.slots = Player.empty_slots()
+		bot.slots[0] = {"kind": "pool_chemical_drum", "count": 1, "v": 60}
+		bot.slots[1] = {"kind": "pool_chemical_drum", "count": 1, "v": 60}
+		bot.selected = 0
+		await _settle(6)
+		await _shot("p_natatorium_b_drum", w.call(Vector2(30, 21), 1.6), w.call(Vector2(30, 26), 1.2))
+		bot.slots = Player.empty_slots()
+		await _settle(4)
 	elif kind == "chapel":
 		# Candlelight is the room's light, so the flashlight stays off for the wide shots: with it
 		# on you are looking at a torch beam, not at a chapel.
@@ -62,6 +87,15 @@ func run(gs: Node, pocket_kind: String) -> void:
 		bot.set_flashlight(true)
 		await _shot("p_chapel_6_pews", w.call(Vector2(21.5, 26.0)), w.call(Vector2(18.0, 24.0), 1.0))
 		await _shot("p_chapel_7_sacristy_door", w.call(Vector2(19.0, 46.0)), w.call(Vector2(14.5, 49.0), 1.2))
+		# The three new items in the hand, at the crossing (the smoke look RULES.md asks for).
+		for item in [["votive_candle", 14], ["communion_wine", 0], ["collection_plate", 80]]:
+			bot.slots = Player.empty_slots()
+			bot.slots[0] = {"kind": String(item[0]), "count": 1, "v": int(item[1])}
+			bot.selected = 0
+			await _settle(6)
+			await _shot("p_chapel_a_" + String(item[0]), w.call(Vector2(21.5, 30.0)), w.call(Vector2(21.5, 36.0), 1.4))
+		bot.slots = Player.empty_slots()
+		await _settle(4)
 	else:
 		await _shot("p_restaurant_1_dining", w.call(Vector2(12.5, 25.5)), w.call(Vector2(34, 12), 1.0))
 		await _shot("p_restaurant_2_host", w.call(Vector2(28, 22)), w.call(Vector2(28, 11), 1.6))

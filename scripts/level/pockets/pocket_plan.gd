@@ -12,7 +12,7 @@ extends RefCounted
 ## mesh leaves them out: nobody should path into the half of the stub that only exists to be seen).
 ##
 ## The plan lands in `gen.spots.pocket`:
-##   {kind: "factory" | "restaurant", seed: int, stubs: [{id, wing, depth, zone, o: Vector2i,
+##   {kind: one of KINDS, seed: int, stubs: [{id, wing, depth, zone, o: Vector2i,
 ##    eu: Vector2i, ev: Vector2i, w: int, d: int, lights: [Vector2i]}]}
 ## `o` is the hospital tile of stub-local tile (0, 0): the slot tile beside the front wall at leg 1's
 ## end; `eu` runs along the slot toward leg 3, `ev` away from the hallway.
@@ -21,7 +21,7 @@ const S := preload("res://scripts/level/level_state.gd")
 const Rng := preload("res://scripts/level/rng.gd")
 const StubScript := preload("res://scripts/level/pockets/stub.gd")
 
-const KINDS := ["factory", "restaurant", "chapel"]
+const KINDS := ["factory", "restaurant", "natatorium", "chapel"]
 ## Zone id of stub tiles (wings are 2..5, outdoor 9).
 const ZONE_STUB := 10
 

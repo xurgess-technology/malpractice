@@ -11,6 +11,9 @@ const CONTAINER_TYPES := {
 	"station_drawers": {"name": "nurse station drawers", "rooms": ["nurse_station"]},
 	"trauma_bag": {"name": "trauma bag", "rooms": ["corridor", "nurse_station", "patient_room"]},
 	"pegboard": {"name": "pegboard", "rooms": ["janitor_closet", "supply_closet", "morgue"]},
+	# POCKETS 2 phase 2: the Natatorium's lifeguard stand, and nowhere in the hospital proper -- no
+	# rooms, so RoomFurnish never places one. The pocket builds it directly.
+	"first_aid_cabinet": {"name": "first-aid cabinet", "rooms": []},
 }
 
 const SURGICAL := ["anesthetic", "gauze", "forceps", "tourniquet", "bone_saw", "communion_wine"]
@@ -210,6 +213,23 @@ const ITEMS := {
 		"real_use": "A small shallow spoon on a long handle, made to slide behind an eyeball and lift it out of its socket, or to seat one back in.",
 		"where": "Starts on the OR's storage shelves.",
 		"handling": "Reusable. Scoops the eye out of the socket.",
+	},
+	## SYRINGE DRAW (docs/ANESTHETIC_INJECTION_SPEC.md 9): the barrel you load anywhere and stick at
+	## the table. A batch consumable like the vials: one slot is several syringes, and a syringe is
+	## spent the moment its dose goes into a patient. What a LOADED one holds rides the slot's `x`
+	## string (scripts/syringe/syringes.gd), so only the top syringe of a batch is ever loaded.
+	"syringe": {
+		"name": "Syringe",
+		"short": "Syringes",
+		"surgical": true,
+		"consumable": true,
+		"batch": [2, 3],
+		"fragile": false,
+		"found": {"med_fridge": 0.35, "drawer_unit": 0.4, "station_drawers": 0.15, "loose": 0.1},
+		"loose_surfaces": ["counter", "tray"],
+		"real_use": "A barrel, a plunger and a hollow needle. Drawn from a vial ahead of time so the drug is ready the moment it is needed; the plunger is marked so the dose can be read off the barrel.",
+		"where": "Medicine fridges and steel drawer units, some in nurse station drawers, now and then a loose one on a counter or tray.",
+		"handling": "Consumable. Found in batches of 2 to 3. E while holding one loads it from a fluid you are carrying; it is spent once its dose is in a patient.",
 	},
 	"specimen_vat": {
 		"name": "Specimen vat",

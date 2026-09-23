@@ -253,6 +253,56 @@ add("gold_watch", "Gold watch", "loot", { body: `
 <rect x="184" y="120" width="14" height="16" rx="4" fill="${GOLD}" stroke="${O}" stroke-width="5"/>
 <path d="M92 104 Q100 90 114 86" fill="none" stroke="#fff" stroke-width="5" opacity="0.8"/>` });
 
+// POCKETS 2 phase 2: the Natatorium (docs/POCKET_SPACES_2.md).
+add("pool_chemical_drum", "Pool chemical drum", "loot", { body: `
+<path d="M74 70 L182 70 L182 216 Q128 228 74 216 Z" fill="#2a5fa8" stroke="${O}" stroke-width="9"/>
+<ellipse cx="128" cy="70" rx="54" ry="16" fill="#e8ece8" stroke="${O}" stroke-width="9"/>
+<ellipse cx="150" cy="66" rx="14" ry="6" fill="#b8352a" stroke="${O}" stroke-width="5"/>
+<path d="M74 112 L182 112 M74 168 L182 168" stroke="${O}" stroke-width="7" opacity="0.55"/>
+<path d="M128 116 L160 146 L128 176 L96 146 Z" fill="${GOLD}" stroke="${O}" stroke-width="7"/>
+<path d="M128 130 L128 152" stroke="${O}" stroke-width="8"/>
+<circle cx="128" cy="163" r="5" fill="${O}"/>
+<path d="M88 84 Q84 140 90 200" fill="none" stroke="#7fa8dd" stroke-width="6" opacity="0.7"/>` });
+
+add("lifeguard_whistle", "Lifeguard whistle", "trinket", { body: `
+<path d="M40 122 Q70 96 118 100 L178 104 Q206 106 206 130 Q206 154 178 156 L118 160 Q70 164 40 138 Z" fill="${STEEL}" stroke="${O}" stroke-width="9"/>
+<path d="M118 100 L118 160" stroke="${O}" stroke-width="7" opacity="0.6"/>
+<path d="M60 112 Q82 104 110 106" fill="none" stroke="${STEEL_HI}" stroke-width="7"/>
+<rect x="128" y="86" width="26" height="22" rx="6" fill="#8d9aa0" stroke="${O}" stroke-width="7"/>
+<circle cx="196" cy="130" r="9" fill="${O}"/>
+<path d="M40 130 Q22 130 16 118" fill="none" stroke="${O}" stroke-width="8"/>
+<path d="M62 186 Q100 214 146 206 Q190 198 206 172" fill="none" stroke="${RED}" stroke-width="12" stroke-linecap="round"/>
+<path d="M214 92 Q236 110 236 130 M214 62 Q252 98 252 130" fill="none" stroke="${GOLD}" stroke-width="9" stroke-linecap="round"/>` });
+
+// POCKETS 2 phase 3, the Chapel. The candle's cup and flame sit on the centre line, the wax pool
+// spreading around the base rather than pushing the object off centre.
+add("votive_candle", "Votive candle", "trinket", { body: `
+<ellipse cx="128" cy="206" rx="62" ry="14" fill="#5b1a14" stroke="${O}" stroke-width="7"/>
+<path d="M92 112 L164 112 L156 198 Q128 208 100 198 Z" fill="${RED_DK}" stroke="${O}" stroke-width="9"/>
+<path d="M104 122 L118 122 L113 190 Q106 188 101 184 Z" fill="${RED}" opacity="0.85"/>
+<rect x="96" y="104" width="64" height="16" rx="6" fill="#e8ddc2" stroke="${O}" stroke-width="8"/>
+<path d="M128 100 L128 84" stroke="${O}" stroke-width="8" stroke-linecap="round"/>
+<path d="M128 34 Q150 62 144 82 Q138 98 128 98 Q118 98 112 82 Q106 62 128 34 Z" fill="${GOLD}" stroke="${O}" stroke-width="8"/>
+<path d="M128 56 Q138 72 134 82 Q131 90 128 90 Q125 90 122 82 Q118 72 128 56 Z" fill="#fff0b8"/>` });
+
+// A bottle, upright and centred; the label band is what makes it read as wine and not a chemical.
+add("communion_wine", "Communion wine", "surgery", { body: `
+<path d="M112 34 L144 34 L144 92 Q176 110 176 146 L176 202 Q176 218 158 218 L98 218 Q80 218 80 202 L80 146 Q80 110 112 92 Z" fill="#1d4a2a" stroke="${O}" stroke-width="9"/>
+<path d="M96 150 Q96 122 116 108 L116 202 Q96 202 96 186 Z" fill="#2f7040" opacity="0.9"/>
+<rect x="104" y="22" width="48" height="26" rx="7" fill="${RED_DK}" stroke="${O}" stroke-width="8"/>
+<rect x="84" y="150" width="88" height="44" rx="5" fill="#e9e0c6" stroke="${O}" stroke-width="8"/>
+<path d="M128 158 L128 186 M116 168 L140 168" stroke="${RED_DK}" stroke-width="8" stroke-linecap="round"/>` });
+
+// The dish fills the slot; the coins sit inside it rather than hanging off an edge.
+add("collection_plate", "Collection plate", "loot", { body: `
+<ellipse cx="128" cy="140" rx="104" ry="58" fill="#9a8f6e" stroke="${O}" stroke-width="9"/>
+<ellipse cx="128" cy="130" rx="104" ry="58" fill="#cbbe93" stroke="${O}" stroke-width="9"/>
+<ellipse cx="128" cy="130" rx="74" ry="40" fill="#6b1f1c" stroke="${O}" stroke-width="7"/>
+<path d="M70 112 Q100 94 146 98" fill="none" stroke="#efe6c2" stroke-width="8" stroke-linecap="round"/>
+<ellipse cx="106" cy="132" rx="20" ry="12" fill="${GOLD}" stroke="${O}" stroke-width="6"/>
+<ellipse cx="146" cy="140" rx="20" ry="12" fill="${GOLD}" stroke="${O}" stroke-width="6"/>
+<ellipse cx="128" cy="120" rx="20" ry="12" fill="${GOLD_DK}" stroke="${O}" stroke-width="6"/>` });
+
 add("ultrasound", "Portable ultrasound", "loot", { body: `
 <rect x="30" y="38" width="196" height="180" rx="16" fill="#dfe4e6" stroke="${O}" stroke-width="9"/>
 <rect x="44" y="52" width="168" height="132" rx="6" fill="#0d1216" stroke="${O}" stroke-width="5"/>

@@ -24,6 +24,9 @@ const DEFAULT := {"pos": Vector3.ZERO, "fwd": Vector3(0, 0, -1), "up": Vector3(0
 const GRIPS := {
 	# Surgical supplies (primitive models in item_models.gd).
 	"anesthetic": {"pos": Vector3(0.0, 0.004, 0.012), "fwd": Vector3(0, 0, -1), "up": Vector3(0, 1, 0), "style": "palm", "bundle": 3},
+	# SYRINGE DRAW: held like the epipen -- thumb rest at -X, needle out at +X, so a syringe in the
+	# hand points where you are looking and reads as ready to stick something.
+	"syringe": {"pos": Vector3(-0.03, 0.013, 0.0), "fwd": Vector3(1, 0, 0), "up": Vector3(0, -1, 0), "style": "fist", "bundle": 3},
 	# Rolls lie across the palm (their axis along the model X).
 	"gauze": {"pos": Vector3(0.0, 0.0, 0.0), "fwd": Vector3(0, 0, -1), "up": Vector3(0, 1, 0), "style": "palm", "bundle": 2},
 	# Blade along +X from the handle, teeth toward +Z, flat face +Y: the teeth point down in a fist.
@@ -39,6 +42,9 @@ const GRIPS := {
 	"reflex_hammer": {"pos": Vector3(-0.06, 0.02, 0.0), "fwd": Vector3(1, 0, 0), "up": Vector3(0, -1, 0), "style": "fist"},
 	# EpiPen: cap at -X, needle end +X, held like the reflex hammer.
 	"epipen": {"pos": Vector3(-0.03, 0.016, 0.0), "fwd": Vector3(1, 0, 0), "up": Vector3(0, -1, 0), "style": "fist"},
+	# POCKETS 2 phase 2: the whistle's mouthpiece is at -X and its barrel runs along +X, so it is held
+	# like the reflex hammer -- mouthpiece out of the fist, which is what you need to blow it.
+	"lifeguard_whistle": {"pos": Vector3(-0.03, 0.017, 0.0), "fwd": Vector3(1, 0, 0), "up": Vector3(0, -1, 0), "style": "fist"},
 	"pill_bottle": {"bundle": 3},
 }
 

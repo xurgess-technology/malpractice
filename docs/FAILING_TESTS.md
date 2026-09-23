@@ -76,22 +76,39 @@ How to run things is at the bottom of this file.
   A passing run has her following in **9.2 s, 3.9 m** — a healthy follow, not a near-miss — and a
   failing one still reports exactly 60.0 s and 1444.3 m, which is just "she stayed in the hospital
   while the bot walked into the pocket", so the identical number says nothing about the cause.
-- **It is run order, not a coin flip** (established 2026-09-22 by the Natatorium task, which had a
-  third space to test the idea with): in a `pockettest` run only the space that goes **first**
-  reliably passes the Night Nurse check, and reversing the order moves the pass with it. Each space
-  passes when run alone with `--only=`.
-  The Chapel task saw one run fail `restaurant` (the second space) and a later run of the same
-  three spaces pass all 310 checks, so the ordering effect is not perfectly deterministic either --
-  but the order story explains far more of it than chance does.
-  **If you are changing Night Nurse behaviour, run your space alone before concluding anything.**
-  The Chapel's votive candle makes her count as watched inside its radius, which is exactly the
-  kind of change that would get blamed for this.
 - **So it is not fixed, and phase 1 did not break it either**: a deterministic failure became
   order-dependent. That is a strong hint about the cause. The Night Nurse's `_vanish()` asks
   `random_nav_point` for a point up to **400 m** away, which used to reach the pocket at tile 800;
   the fence now refuses those, so she is far likelier to still be nearby when the bot crosses.
   Whoever picks this up should look at `_vanish()` in `scripts/monsters/night_nurse_brain.gd` and at
   how `_nurse_follows` in `tools/pockettest.gd` stages her, rather than at the seam.
+- **2026-09-22, `pockets-natatorium`: it is not a coin flip. It is the run order.** Phase 2 added a
+  third space, which made the pattern visible: **only the space that runs FIRST passes this check;
+  every space after it fails.** Measured, with the natatorium third (`KINDS` order) and then with the
+  order reversed in `_ready`:
+  - factory, restaurant, **natatorium** -> factory ok, restaurant ok, **natatorium FAILS** (60.0 s,
+    1965.8 m)
+  - **natatorium**, restaurant, factory -> **natatorium ok** (9.2 s, 3.9 m), restaurant FAILS
+    (60.0 s, 1444.3 m), factory FAILS (60.0 s, 1235.7 m)
+  Each space passes on its own (`--only=<kind>` is green for all three), and the distances reported
+  are just each pocket's own origin, so they say nothing. This rules out the space, the seam, the
+  layout and the distance, and points squarely at **state left behind by the previous space's run** —
+  `_run_space` tears a shift down and starts another, and something the Night Nurse depends on does
+  not survive that. Start at what `_nurse_follows` assumes about a freshly rebuilt shift.
+- **2026-09-22, `pockets-chapel`, with four spaces: the order story does not fully hold.** A merged
+  run of factory, restaurant, natatorium, chapel gives **FAILED 4 of 430**: `restaurant` (second)
+  and `natatorium` (third) fail, while `factory` (first) **and `chapel` (fourth)** both pass. So it
+  is not simply "only the first one passes" -- something about the previous space's teardown, not
+  the position in the list. Worth re-measuring the phase 2 orderings now there is a fourth space.
+- **2026-09-22, `pockets-chapel`: a warning for anyone changing her.** With four spaces the Chapel
+  ran last and *passed* in one run while `restaurant` (second) failed, and an earlier run of the
+  same set passed every check, so the ordering effect is not perfectly deterministic — the cause
+  still looks like leftover state rather than position as such. **Alone, the Chapel is green**:
+  `--only=chapel` passes 102 checks with her following in **9.2 s, 3.9 m**.
+  **If you are changing Night Nurse behaviour, run your space alone before concluding anything.**
+  The Chapel's votive candle makes her count as watched inside its radius (it is in
+  `Perception.observed_any`, above the early-out), which is exactly the sort of change that would
+  otherwise get blamed for this.
 
 ## 1g. nettest `pockets`: client 1 never carries client 2 into the pocket
 
@@ -125,47 +142,48 @@ How to run things is at the bottom of this file.
   that depends on a short-lived state being sampled at 20 Hz is vulnerable to them, so this is worth
   its own look before the next netcode feature leans on snapshot timing.
 
-## 4. spawncheck: no suture kit ever spawns for a gunshot
+## 1k. spawncheck: 600 suture_kit failures
 
-- **Command:** `godot --headless --path . --script tools/spawncheck.gd [-- --seeds=6]`
-- **Result:** on essentially every seed, `seed N gunshot: suture_kit totals 0, needs at least 3x 1`
-  and `suture_kit is in only 0 places`. A gunshot case needs a suture kit and the spawner places
-  none anywhere on the map.
-- **Found 2026-09-22** by the POCKET_SPACES_2 phase 3 task, and **confirmed pre-existing** by
-  checking out `main`'s `scripts/items.gd` and `scripts/item_spawner.gd` over the branch and
-  re-running: the same failure on every one of six seeds. Never written down before.
-- **Probably the same lag as orscreentest's**, which was on this list for a supply count from
-  before SUTURE! gave `gunshot` a fourth step: the step was added and the spawning side was not
-  brought with it. `suture_kit` declares `"found": {"trauma_bag": 0.4, "station_drawers": 0.35,
+- **Found 2026-09-22** by the `syringe-draw` task, which generalised the loose-supply spawner and
+  wanted a clean baseline. **Confirmed identical on clean `main`**, so it is pre-existing and not
+  that branch's doing. It had never been written down.
+- **Confirmed a second time, independently**, by the POCKET_SPACES_2 phase 3 task, which checked
+  out `main`'s `scripts/items.gd` and `scripts/item_spawner.gd` over its own branch and got the
+  same failure on every one of six seeds: `seed N gunshot: suture_kit totals 0, needs at least
+  3x 1` and `suture_kit is in only 0 places`.
+- Nobody has looked at the cause. Worth knowing that `suture_kit` is the newest of the loose
+  supplies -- SUTURE! (0.10.4) added the closing step that needs it, and 0.10.33 generalised the
+  spawner that places it -- so if this turns out to date from either, it is young.
+- **One lead worth trying first:** `suture_kit` is in `Items.ITEMS` with `"surgical": true` but is
+  **not** in `Items.SURGICAL`, and `Items.SURGICAL` is the list `ItemSpawner.plan`'s needed/herring
+  split actually iterates. It also declares `"found": {"trauma_bag": 0.4, "station_drawers": 0.35,
   "drawer_unit": 0.25}` and no `"loose"`, so it can only ever appear inside a container.
-- **Where to look:** whether `ItemSpawner.plan` treats it as a needed consumable at all (it is in
-  `Items.ITEMS` with `"surgical": true` but **not** in `Items.SURGICAL`, which is the list the
-  spawner's needed/herring split actually iterates).
 
 
 ## 3. perfprobe --pockets crashes after the warmup, before it measures anything
 
-- **Command:** `godot --path . tools/perfprobe.tscn -- --pockets` (a real window; `tools/pocketperf.ps1`
-  runs it minimized and never activated)
+- **Command:** `godot --path . tools/perfprobe.tscn -- --pockets` (a real window;
+  `tools/pocketperf.ps1` runs it minimized and never activated)
 - **Result:** twelve `BUG, indexing did not unpair geometries from light` errors from
   `renderer_scene_cull.cpp`, then `CrashHandlerException: Program crashed with signal 11`. The log
   stops at the warmup line and **not one scenario is measured**.
-- **Found 2026-09-22** by the POCKET_SPACES_2 phase 3 task, and **confirmed pre-existing**: the same
-  crash, the same twelve errors, the same 67-line log with the Chapel taken back out of
-  `PocketSpaces.LAYOUTS` and perfprobe's kind loop pinned to the old `["none", "factory",
-  "restaurant"]`. It is not the third space's doing.
+- **Found independently by two tasks on 2026-09-22** (POCKET_SPACES_2 phases 2 and 3) and
+  **confirmed pre-existing by both**: phase 3 reproduced it exactly -- the same crash, the same
+  twelve errors, the same 67-line log -- with the Chapel taken back out of `PocketSpaces.LAYOUTS`
+  and perfprobe's kind loop pinned to the old `["none", "factory", "restaurant"]`. It is the
+  restart, not any one space.
 - **Where the fault is.** `perfprobe._run_pockets()` calls `game.start_session()` again, once per
   kind, and the first of those restarts lands immediately after the one-time warmup. Tearing that
   down while the renderer still holds the warmup shelf's light-geometry pairings is what trips the
   engine bug. Plain `perfprobe` (one session, no restart) completes all 27 scenarios on the same
   machine and only crashes **at exit**, after the summary table has printed, which is harmless and
   has presumably been happening for a while.
-- **The way round it, which works today:** `-- --pocketkind=<kind>` forces the kind *before* the one
-  and only `start_session` and measures that space in the session that is already up. Added by the
-  same task; it is what the Chapel's numbers were taken with.
+- **The way round it, which works today:** `-- --pocket=<kind>` forces the kind *before* the one
+  and only `start_session` and measures that space in the session already built. Both tasks landed
+  on this independently; it is what the Natatorium's and the Chapel's numbers were taken with.
 - **Where to look:** whether `_run_pockets` can wait out the renderer (a few frames, or
   `RenderingServer.force_sync()`) before restarting, or whether it should simply be rebuilt on top
-  of `--pocketkind` and run one process per kind.
+  of `--pocket` and run one process per kind.
 
 
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
@@ -196,6 +214,15 @@ How to run things is at the bottom of this file.
 The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe`
 (the `.exe` in that path is a folder). From Git Bash, run from the project root.
 
+- **A headless run starts from `Settings.DEFAULTS`, not from this machine's settings.** Every
+  `tools/*test.tscn`, nettest's child processes and windows opened onto a scene in `res://tools/`
+  boot on the defaults and never read or write `user://settings.cfg`, so a test measures the code
+  rather than whoever owns the machine. (Slots seed their save folder from Zach's, which says
+  `camera="shoulder"`; that read his view preference into four separate tests in one day.) Nothing
+  to opt into and nothing to restore -- a run that crashes leaves the saved settings alone, because
+  they were never opened. A test that genuinely wants settings behaviour calls
+  `Settings.use_path("user://mytest_settings.cfg")` on a scratch file of its own, as
+  `tools/settingstest.gd` and `tools/carrycamtest.gd` do. See `_machine_run` in `scripts/settings.gd`.
 - Import first after pulling or adding assets: `godot --headless --path . --import`
 - **Always add `--fixed-fps 60`** to headless test scenes (about 12x faster).
 - **Run headless tests one at a time per checkout.** Parallel runs in the same directory segfault.

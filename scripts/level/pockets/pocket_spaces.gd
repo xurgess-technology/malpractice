@@ -24,16 +24,23 @@ const Plan := preload("res://scripts/level/pockets/pocket_plan.gd")
 const Stub := preload("res://scripts/level/pockets/stub.gd")
 const Factory := preload("res://scripts/level/pockets/factory.gd")
 const Restaurant := preload("res://scripts/level/pockets/restaurant.gd")
+const Natatorium := preload("res://scripts/level/pockets/natatorium.gd")
 const Chapel := preload("res://scripts/level/pockets/chapel.gd")
 const Common := preload("res://scripts/level/pockets/pocket_common.gd")
 
-## Every pocket kind's layout script. A new space adds one line here, one to PocketPlan.KINDS, one
-## to ORIGINS and one to AIR, and needs nothing else: the three call sites below all come through
-## `script_for`, so adding a kind never touches them.
-const LAYOUTS := {"factory": Factory, "restaurant": Restaurant, "chapel": Chapel}
-
 ## World tile of each pocket's local tile (0, 0): far outside any hospital (maps are ~110 m).
-const ORIGINS := {"factory": Vector2i(800, 0), "restaurant": Vector2i(800, 500), "chapel": Vector2i(800, 1000)}
+## The Chapel sits at 1500 because the Natatorium took 1000: two spaces at one origin would build
+## on top of each other, and only one of them can ever exist at a time to notice.
+const ORIGINS := {"factory": Vector2i(800, 0), "restaurant": Vector2i(800, 500), "natatorium": Vector2i(800, 1000),
+		"chapel": Vector2i(800, 1500)}
+
+## The layout script of a kind. One place, so adding a space is a line here and a line in
+## PocketPlan.KINDS rather than an `if` in every builder.
+const LAYOUTS := {"factory": Factory, "restaurant": Restaurant, "natatorium": Natatorium, "chapel": Chapel}
+
+
+static func script_of(kind: String) -> GDScript:
+	return LAYOUTS.get(kind, Factory)
 ## A remote body that jumps further than this between snapshots is moved, not interpolated.
 const SNAP_DISTANCE := 6.0
 ## Noises within this many metres of a seam (on its own side) are also heard on the other side.
@@ -333,15 +340,10 @@ func build_kind(kind: String, info: Dictionary, parent: Node3D, pocket_seed: int
 		game.doors.register(pocket.get("doors", []))
 
 
-## The layout script of a pocket kind (the Factory, for an unknown one, so a bad kind builds
-## something rather than crashing a shift).
-static func script_for(kind: String) -> GDScript:
-	return LAYOUTS.get(kind, Factory)
-
 
 ## Data only (a worker thread): the layout, the surface arrays, the navigation mesh.
 static func prepare(kind: String, stubs: Array, pocket_seed: int) -> Dictionary:
-	var layout_script: GDScript = script_for(kind)
+	var layout_script: GDScript = script_of(kind)
 	var origin: Vector2i = ORIGINS.get(kind, Vector2i(800, 0))
 	var lay: Dictionary = layout_script.layout(stubs, pocket_seed)
 	var interior: Dictionary = layout_script.prepare(lay, origin)
@@ -361,7 +363,7 @@ static func build_into(kind: String, stubs: Array, pocket_seed: int, map_seed: i
 static func build_steps(prep: Dictionary, stubs: Array, map_seed: int, hospital_lights: Array,
 		info: Dictionary, parent: Node3D, out_seams: Array, links: bool, result: Dictionary) -> Array:
 	var kind: String = prep.kind
-	var layout_script: GDScript = script_for(kind)
+	var layout_script: GDScript = script_of(kind)
 	var origin: Vector2i = prep.origin
 	var lay: Dictionary = prep.lay
 	var out := {"lights": [], "containers": [], "loose_anchors": [], "monster_spawns": [], "nav_faces": PackedVector3Array()}
@@ -556,10 +558,61 @@ static var _ambient_cache := {}
 static func ambient_noise_of(kind: String) -> float:
 	if _ambient_cache.has(kind):
 		return float(_ambient_cache[kind])
-	var s: GDScript = LAYOUTS.get(kind, null)
+	var s: GDScript = LAYOUTS.get(kind)
 	var v := 0.0 if s == null else float(s.get_script_constant_map().get("AMBIENT_NOISE_LEVEL", 0.0))
 	_ambient_cache[kind] = v
 	return v
+
+
+# =========================================================================
+# POCKETS 2 phase 2: the Natatorium's water
+# =========================================================================
+
+## The one mechanic of the Natatorium (docs/POCKET_SPACES_2.md phase 2). Crossing the pool is the
+## short way between two entrances; the dry deck is the long way. The water is what makes that a
+## choice: a footstep taken in it is worth several times a footstep on tile, so the shortcut costs
+## exactly the thing the Sonographer spends.
+##
+## These are not a new sound system. They are the loudness numbers `game.emit_noise` already carries,
+## picked against `SonographerBrain`'s own maths: reach is `loudness * HEAR_PER_LOUDNESS` (22 m), and
+## `LOUD` (0.8) is the line between "fills the suspicion meter" and "stops guessing and comes". So
+##   - wading at a walk (0.95) is past that line: it carries ~21 m and it is *certain*, where a dry
+##     walk (0.25) carries 5.5 m and only ever makes it suspicious;
+##   - running through it (1.3, ~29 m) is louder than the Echo shriek;
+##   - and crouching (0.55, ~12 m) is the one way to cross without being certain of being caught —
+##     still more than twice a dry walk, and unlike dry crouching it is not silence. You cannot
+##     sneak through water. You can only be quieter about not sneaking.
+const WATER_WALK := 0.95
+const WATER_SPRINT := 1.3
+const WATER_CROUCH := 0.55
+## Seconds between wading footsteps: slightly quicker than dry, because a step in water is a splash
+## both going in and coming out.
+const WATER_STEP := 0.45
+const WATER_SPRINT_STEP := 0.28
+
+
+## Is `p` standing in the Natatorium's pool? False everywhere else, including in the other pockets
+## and in the stub copies (the water is a rect of the pocket's own grid, and no stub sits in it).
+func water_at(p: Vector3) -> bool:
+	if pocket.is_empty() or String(pocket.get("kind", "")) != "natatorium":
+		return false
+	if not (pocket.rect as Rect2).has_point(Vector2(p.x, p.z)):
+		return false
+	var o: Vector2i = pocket.origin
+	var r := Natatorium.water_rect()
+	var tx := p.x / C.TILE - float(o.x)
+	var tz := p.z / C.TILE - float(o.y)
+	return tx >= float(r.position.x) and tx < float(r.end.x) and tz >= float(r.position.y) and tz < float(r.end.y)
+
+
+## `[loudness, seconds between steps]` for a footstep taken at `p`, or `[]` when `p` is not in water
+## and the hospital's own numbers apply. Host side; `game._tick_noise` is the only caller.
+func water_footstep(p: Vector3, sprinting: bool, crouching: bool) -> Array:
+	if not water_at(p):
+		return []
+	if sprinting:
+		return [WATER_SPRINT, WATER_SPRINT_STEP]
+	return [WATER_CROUCH if crouching else WATER_WALK, WATER_STEP]
 
 
 ## [seam, to_pocket] when `p` stands in the half of a stub copy nobody should stand in, else [].
@@ -731,11 +784,16 @@ const AIR := {
 			"ambient_light_energy": 0.13, "ambient_light_color": Color(0.26, 0.55, 0.44)},
 	"restaurant": {"fog_depth_begin": 16.0, "fog_depth_end": 60.0, "fog_density": 0.35, "volumetric_fog_density": 0.016,
 			"ambient_light_energy": 0.3, "ambient_light_color": Color(0.62, 0.46, 0.34)},
+	# The Natatorium: humid chlorine haze, and the underwater lights throwing a blue-green bounce up
+	# into it. The volumetric density is the highest of these because the beams are the room.
+	"natatorium": {"fog_depth_begin": 20.0, "fog_depth_end": 72.0, "fog_density": 0.30, "volumetric_fog_density": 0.034,
+			"ambient_light_energy": 0.22, "ambient_light_color": Color(0.32, 0.60, 0.68)},
 	# The Chapel's ambient is almost nothing on purpose: what you can see, a candle is showing you.
-	# The volumetric density is deliberately LOW, lower than the Factory's. The nave is 24 m to its
-	# ceiling and the candles sit at waist height, so a dense volumetric filled that whole upper
-	# volume with lit haze and turned the vault -- the one thing the space is supposed to lose in
-	# the dark -- into a bright olive wall. Thin fog keeps the glow down where the candles are.
+	# Its volumetric density is deliberately the LOWEST here, lower even than the Factory's. The
+	# nave is 24 m to its ceiling and the candles sit at waist height, so a dense volumetric filled
+	# that whole upper volume with lit haze and turned the vault -- the one thing the space is
+	# supposed to lose in the dark -- into a bright olive wall. Thin fog keeps the glow down where
+	# the candles actually are.
 	"chapel": {"fog_depth_begin": 14.0, "fog_depth_end": 72.0, "fog_density": 0.22, "volumetric_fog_density": 0.012,
 			"ambient_light_energy": 0.08, "ambient_light_color": Color(0.40, 0.24, 0.13)},
 }

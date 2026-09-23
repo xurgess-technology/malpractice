@@ -10,13 +10,13 @@
 # WARNING: with no -Kind this runs perfprobe --pockets, which restarts the session once per kind,
 # and the first restart lands straight after the warmup and trips a renderer bug that kills the
 # process before it measures anything. That is pre-existing; see docs/FAILING_TESTS.md section 3.
-# -Kind uses --pocketkind, which forces the kind before the one and only start_session and works.
+# -Kind uses --pocket=<kind>, which forces the kind before the one and only start_session and works.
 param([string]$Kind = "", [string]$Extra = "")
 
 . "$PSScriptRoot\godot_path.ps1"
 $p = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $log = Join-Path $p ".godot\pocketperf.log"
-$mode = if ($Kind) { "--pocketkind=$Kind" } else { "--pockets" }
+$mode = if ($Kind) { "--pocket=$Kind" } else { "--pockets" }
 $a = @("--path", "`"$p`"", "--log-file", "`"$log`"", "--resolution", "1920x1080",
 	"res://tools/perfprobe.tscn", "--", "--no-steam", $mode)
 if ($Extra) { $a += "`"$Extra`"" }

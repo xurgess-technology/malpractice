@@ -21,6 +21,7 @@ extends Node
 
 const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
 const MonsterScript := preload("res://scripts/monster.gd")
+const SonoScript := preload("res://scripts/monsters/sonographer_brain.gd")
 const HiveBrain := preload("res://scripts/monsters/hive_brain.gd")
 const Percept := preload("res://scripts/perception.gd")
 
@@ -98,6 +99,7 @@ func _run() -> void:
 	await _phone()
 	await _pulse_ox()
 	await _hammer()
+	await _whistle()
 	await _candle()
 
 
@@ -140,6 +142,53 @@ func _laptop() -> void:
 		game.pickup_item(me, dropped)
 		await _frames(2)
 		_check(TrinketsScript.is_spent(me.selected_stack()), "picked back up, it is still used up")
+
+
+# =========================================================================
+# POCKETS 2 phase 2: the lifeguard whistle. One blast, everything comes
+# =========================================================================
+
+## The whistle is Echo's draw with none of Echo's sight. What has to be true: the blast is a real
+## noise event and a loud one, the deaf Hive is told by hand so it comes anyway, the Night Nurse is
+## not (she does not answer sound), it is spent in one blow, and nothing beyond WHISTLE_RANGE is
+## touched -- the item is a lure you aim by standing somewhere, so its edge has to be a real edge.
+func _whistle() -> void:
+	_stand(o + Vector3(10.0, 0, 22.0))
+	var near = await _monster("hive", me.global_position + Vector3(6.0, 0, 0))
+	var far = await _monster("hive", me.global_position + Vector3(0, 0, -6.0))
+	var nurse = await _monster("night_nurse", me.global_position + Vector3(-6.0, 0, 0))
+	# The far one is put well past the whistle's reach, by hand: no room here is 30 m wide.
+	if far != null and is_instance_valid(far):
+		far.global_position = me.global_position + Vector3(0, 0, -(TrinketsScript.WHISTLE_RANGE + 12.0))
+	await _frames(2)
+	var nurse_mode := int(nurse.mode) if nurse != null and is_instance_valid(nurse) else -1
+	_give("lifeguard_whistle", 1, 15)
+	await _use()
+	_check(String(tk.last_result.get("what", "")) == "whistle", "the whistle blows (%s)" % str(tk.last_result))
+	_check(TrinketsScript.is_spent(me.selected_stack()), "and it is spent in one blast")
+	var loud := _noise_near(me.global_position, "whistle", 3.0)
+	_check(loud >= TrinketsScript.WHISTLE_NOISE - 0.01, "the blast is a real noise event, and a loud one (%.2f)" % loud)
+	_check(loud >= SonoScript.LOUD, "loud enough that a Sonographer stops guessing and comes (LOUD %.2f)" % SonoScript.LOUD)
+	await _frames(4)
+	# The Hive is deaf to noise events, so "drawing wing monsters" has to reach it by hand.
+	_check(near != null and is_instance_valid(near) and int(near.mode) != MonsterScript.Mode.IDLE,
+		"the deaf Hive nearby was told by hand and is coming (mode %d)" % (int(near.mode) if near != null and is_instance_valid(near) else -1))
+	_check(far != null and is_instance_valid(far) and int(far.mode) == MonsterScript.Mode.IDLE,
+		"the Hive past %.0f m heard nothing" % TrinketsScript.WHISTLE_RANGE)
+	_check(nurse == null or not is_instance_valid(nurse) or int(nurse.mode) == nurse_mode,
+		"the Night Nurse does not answer a whistle")
+	# No wall-vision: the draw is a noise, not an Echo pulse.
+	_check(game.abilities == null or not bool(game.abilities.get("echo_view") != null and game.abilities.echo_view.get("active")),
+		"and it reveals nothing through a wall")
+	var money0: int = game.money
+	game.furnace_sell("lifeguard_whistle", 1, game.furnace_value("lifeguard_whistle", me.selected_stack()), me.global_position)
+	_check(game.money - money0 == TrinketsScript.scrap_value("lifeguard_whistle"),
+		"a blown whistle burns for scrap ($%d)" % (game.money - money0))
+	for m in [near, far, nurse]:
+		if m != null and is_instance_valid(m):
+			game.monsters.erase(int(m.monster_id))
+			m.queue_free()
+	await _frames(2)
 
 
 # =========================================================================

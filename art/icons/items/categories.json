@@ -108,6 +108,31 @@
       "category": "loot",
       "glow": null
     },
+    "pool_chemical_drum": {
+      "name": "Pool chemical drum",
+      "category": "loot",
+      "glow": null
+    },
+    "lifeguard_whistle": {
+      "name": "Lifeguard whistle",
+      "category": "trinket",
+      "glow": null
+    },
+    "votive_candle": {
+      "name": "Votive candle",
+      "category": "trinket",
+      "glow": null
+    },
+    "communion_wine": {
+      "name": "Communion wine",
+      "category": "surgery",
+      "glow": null
+    },
+    "collection_plate": {
+      "name": "Collection plate",
+      "category": "loot",
+      "glow": null
+    },
     "ultrasound": {
       "name": "Portable ultrasound",
       "category": "loot",

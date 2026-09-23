@@ -183,6 +183,8 @@ var or_screen: Node = null
 
 ## Downed players (sweep 2 wave 3; docs/CONTRACTS.md "Downed players").
 const PlayerSurgeryScript := preload("res://scripts/downed/player_surgery.gd")
+## SYRINGE DRAW (docs/ANESTHETIC_INJECTION_SPEC.md 9): the handheld draws, one per player.
+const SyringeStationsScript := preload("res://scripts/syringe/syringe_stations.gd")
 const DownedViewScript := preload("res://scripts/downed/downed_view.gd")
 const PlayerTableScript := preload("res://scripts/downed/player_table.gd")
 ## Seconds a downed player takes to bleed out (then dead until the next shift).
@@ -200,8 +202,15 @@ const STRAP_IN_PROMPT := "Hold E: lie down and strap in"
 const REVIVE_HP := 2
 const CALL_COOLDOWN := 4.0
 const SUTURE_KITS_PER_SHIFT := 3
+## SYRINGE DRAW: syringes scattered per shift. Three stacks of 1-2, so a crew that wants to pre-load
+## a dose can usually find one, and a crew that ignores them has lost nothing (the OR table still
+## draws its own).
+const SYRINGES_PER_SHIFT := 3
 ## scripts/downed/player_surgery.gd, child "PlayerSurgery": the stitches operation.
 var player_surgery: Node = null
+## SYRINGE DRAW: scripts/syringe/syringe_stations.gd, child "SyringeStations": the handheld draws
+## that are open right now, one per player (its header explains why it is a map and not a node).
+var syringe_stations: Node = null
 ## scripts/downed/downed_view.gd, child "DownedView": blood trails and the downed overlay.
 var downed_view: Node = null
 ## The player table: {position: Vector3 (floor), yaw: float, top: float (table top height)}.
@@ -291,6 +300,11 @@ func _ready() -> void:
 	player_surgery.name = "PlayerSurgery"
 	add_child(player_surgery)
 	player_surgery.setup(self)
+	# SYRINGE DRAW: the handheld draws, at the same path everywhere so their one RPC lines up.
+	syringe_stations = SyringeStationsScript.new()
+	syringe_stations.name = "SyringeStations"
+	add_child(syringe_stations)
+	syringe_stations.setup(self)
 	downed_view = DownedViewScript.new()
 	downed_view.name = "DownedView"
 	add_child(downed_view)
@@ -526,6 +540,8 @@ func _populate_shift_world() -> void:
 		if n.has_method("is_open") and n.is_open():
 			n.set_open(false, false)
 	spawn_suture_kits()  # downed: every shift has suture kits for the player table
+	spawn_syringes()     # SYRINGE DRAW: and syringes to pre-load a dose into
+	stock_first_aid_cabinets()  # POCKETS 2 phase 2: the Natatorium's cabinet is never empty
 	spawn_loot()
 	_spawn_monsters()
 
@@ -988,6 +1004,8 @@ func end_operations(p: Node) -> void:
 		s.end(p)
 	if player_surgery != null:
 		player_surgery.end(p)
+	if syringe_stations != null:
+		syringe_stations.end(p)   # SYRINGE DRAW: and their draw, if they had one open
 
 
 func _ensure_surgeries(n: int) -> void:
@@ -1335,6 +1353,12 @@ func player_pressed_interact(p: Node, target_id: String) -> void:
 		return
 	if target_id == "vat_hand":
 		vats.hand_put(p)   # GRAFTING part one: a vat and an eye both in hand
+		return
+	if target_id == "syringe_hand":
+		# SYRINGE DRAW: a syringe in hand and something to fill it from. No reach test and no node
+		# prompt on this path, so the station re-asks every question for itself.
+		if syringe_stations != null:
+			syringe_stations.hand_open(p)
 		return
 	var node := find_interactable(target_id)
 	if node == null or not _within_reach(p, node):
@@ -2214,6 +2238,8 @@ func _clear_case() -> void:
 	_apply_cases_locally()
 	if player_surgery != null:
 		player_surgery.reset()   # downed: nobody on the player table either
+	if syringe_stations != null:
+		syringe_stations.reset()   # SYRINGE DRAW: and no draws open
 	_call_at.clear()
 	if shelf_node != null and is_instance_valid(shelf_node):
 		shelf_node.show_stock(shelf)
@@ -2261,14 +2287,21 @@ func surgery_step_done(result: Dictionary, table_index: int = -1, operator_peer:
 		# 2026-09-18: used from the operator's hands (surgery_system.can_begin made sure they held it).
 		var p = players.get(operator_peer)
 		if p != null and p.has_method("consume_hand"):
-			# POCKETS 2 phase 3: spend what they actually held, which may be a substitute for the
-			# step's item (communion wine for anesthetic), and weaken the dose by that substitute's
-			# strength. The injection minigame is untouched: it reports the same sedation it always
-			# did and the substitute is applied to its result here.
-			var used_kind := Items.held_for_step(p, String(step.item), uses)
-			if used_kind == "":
-				used_kind = String(step.item)
-			p.consume_hand(used_kind, uses)
+			# SYRINGE DRAW: a dose that came out of a pre-loaded syringe spends the syringe, not a
+			# vial -- one off the count and the `x` cleared, which is what makes it one-use.
+			# POCKETS 2 phase 3: whichever way the dose arrived, it is weakened by what it actually
+			# WAS (Items.ANESTHETIC_KINDS). A syringe drawn from communion wine is still communion
+			# wine, so the fluid has to be read HERE, before spend_loaded clears it -- otherwise
+			# loading the wine into a syringe would quietly launder it into a full-strength dose.
+			# The injection minigame is untouched either way: it reports the sedation it always did
+			# and the substitute is applied to its result.
+			var loaded: Dictionary = Syringes.held_loaded(p) if Syringes.accepts_loaded(step) else {}
+			var used_kind := String(loaded.get("fluid", ""))
+			if not (Syringes.accepts_loaded(step) and Syringes.spend_loaded(p)):
+				used_kind = Items.held_for_step(p, String(step.item), uses)
+				if used_kind == "":
+					used_kind = String(step.item)
+				p.consume_hand(used_kind, uses)
 			var strength := Items.anesthetic_strength(used_kind)
 			if strength < 1.0 and result.has("sedation"):
 				result = result.duplicate()
@@ -2358,16 +2391,20 @@ func _tick_noise(delta: float) -> void:
 	while not _noises.is_empty() and float(_noises[0].time) < cut:
 		_noises.pop_front()
 	for p in alive_players():
+		# POCKETS 2 phase 2: standing in the Natatorium's pool replaces both numbers below, and is the
+		# one case where crouching does not buy silence (PocketSpaces.water_footstep says why).
+		var wet: Array = pockets.water_footstep(p.global_position, bool(p.sprinting), bool(p.get("crouching"))) if pockets != null else []
 		# SWEEP 4A HOOK (controls): a crouching player's footsteps make no sound and no noise event
 		# at all (not just quieter): the Sonographer can't hear a crouching player walk.
-		if not p.moving or bool(p.get("crouching")):
+		if not p.moving or (bool(p.get("crouching")) and wet.is_empty()):
 			_footstep_acc[p.peer_id] = 0.0
 			continue
 		var acc: float = float(_footstep_acc.get(p.peer_id, 0.0)) + delta
-		var interval := 0.3 if p.sprinting else 0.5
+		var interval: float = float(wet[1]) if not wet.is_empty() else (0.3 if p.sprinting else 0.5)
 		if acc >= interval:
 			acc = 0.0
-			emit_noise(p.global_position, 0.8 if p.sprinting else 0.25, "footstep")
+			var loudness: float = float(wet[0]) if not wet.is_empty() else (0.8 if p.sprinting else 0.25)
+			emit_noise(p.global_position, loudness, "footstep")
 		_footstep_acc[p.peer_id] = acc
 
 
@@ -2478,6 +2515,8 @@ func _physics_process(delta: float) -> void:
 	for s in surgeries:
 		s.physics_tick(delta)
 	player_surgery.physics_tick(delta)  # downed
+	if syringe_stations != null:
+		syringe_stations.physics_tick(delta)   # SYRINGE DRAW
 	for t in _bodies.keys():
 		var body := body_for_table(int(t))
 		if body == null:
@@ -2642,6 +2681,10 @@ func _simulate(delta: float) -> void:
 		var op: int = s.operator_peer()
 		if op != 0 and players.has(op):
 			players[op].operating = true
+	if syringe_stations != null:   # SYRINGE DRAW: a corridor draw makes you busy too
+		for op2 in syringe_stations.operator_peers():
+			if players.has(int(op2)):
+				players[int(op2)].operating = true
 	if phase != Phase.MENU:
 		_tick_downed(delta)
 		_tick_table_holds(delta)   # GRAFT HOOK: hold E to strap yourself in, and again to get up
@@ -3237,11 +3280,47 @@ func downed_call_out(p: Node) -> void:
 
 
 ## Host: put a few suture kits around the hospital (containers where they belong, else the floor).
+## POCKETS 2 phase 2 (docs/POCKET_SPACES_2.md, the Natatorium): the lifeguard stand's first-aid
+## cabinet is the one container in the game with guaranteed contents -- gauze in its first slot, a
+## tourniquet in its second -- so a crew that finds the pocket and walks to the stand is always paid
+## for it. The third slot is left alone, which is where the ordinary spawners sometimes put a
+## whistle. Runs before spawn_loot(), so those two slots are already taken when the planners look.
+## Host only, and a no-op on every shift without a Natatorium: nothing else builds this type.
+func stock_first_aid_cabinets() -> void:
+	if not is_host():
+		return
+	for c in level_info.get("containers", []):
+		if String(c.get("type", "")) != "first_aid_cabinet":
+			continue
+		var id := String(c.id)
+		for pair in [["gauze", 0], ["tourniquet", 1]]:
+			if int(pair[1]) >= int(c.get("slots", 0)):
+				continue
+			var kind := String(pair[0])
+			var batch: Array = Items.def(kind).get("batch", [1, 1])
+			_spawn_from_plan({"kind": kind, "count": int(batch[0]), "container_id": id,
+					"slot": int(pair[1]), "anchor": -1})
+
+
 func spawn_suture_kits() -> void:
+	_spawn_loose_supply("suture_kit", SUTURE_KITS_PER_SHIFT, "suture")
+
+
+## SYRINGE DRAW: and a few syringes, the same way. Neither kind is in Items.SURGICAL -- that list is
+## what a patient case can *need*, and a case never needs either of these -- so they get their own
+## scatter instead of riding the case's supply plan.
+func spawn_syringes() -> void:
+	_spawn_loose_supply("syringe", SYRINGES_PER_SHIFT, "syringe")
+
+
+## Host: scatter `per_shift` stacks of `kind` around the hospital, in the containers its `found`
+## table allows and on the floor when there is nowhere legal left. One stack per building unit where
+## it can manage it, so they are not all in one wing. `salt` keeps each kind's rng its own.
+func _spawn_loose_supply(kind: String, per_shift: int, salt: String) -> void:
 	if not is_host():
 		return
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash("%d|suture|%d" % [seed_value, shift])
+	rng.seed = hash("%d|%s|%d" % [seed_value, salt, shift])
 	var used := {}
 	for it in world_items.values():
 		if it.state == WorldItem.State.IN_CONTAINER:
@@ -3250,10 +3329,10 @@ func spawn_suture_kits() -> void:
 			used["anchor:%d" % it.anchor] = true
 	var locs: Array = []
 	for loc in SpawnerScript._locations(level_info):
-		if SpawnerScript._legal("suture_kit", loc, used):
+		if SpawnerScript._legal(kind, loc, used):
 			locs.append(loc)
 	var units := {}
-	for i in SUTURE_KITS_PER_SHIFT:
+	for i in per_shift:
 		var count := rng.randi_range(1, 2)
 		var pick := {}
 		for tries in 12:
@@ -3264,11 +3343,11 @@ func spawn_suture_kits() -> void:
 				pick = loc
 				break
 		if pick.is_empty():
-			_spawn_from_plan({"kind": "suture_kit", "count": count, "container_id": "", "slot": 0, "anchor": -1})
+			_spawn_from_plan({"kind": kind, "count": count, "container_id": "", "slot": 0, "anchor": -1})
 			continue
 		units[pick.unit] = true
 		locs.erase(pick)
-		_spawn_from_plan(SpawnerScript._entry("suture_kit", count, pick))
+		_spawn_from_plan(SpawnerScript._entry(kind, count, pick))
 
 
 # ---- the player table ----
@@ -3614,11 +3693,14 @@ func surgery_camera() -> Camera3D:
 	var cam: Camera3D = surgery.camera() if surgery != null else null
 	if cam == null and player_surgery != null:
 		cam = player_surgery.surgery.camera()
+	if cam == null and syringe_stations != null:   # SYRINGE DRAW
+		cam = syringe_stations.camera()
 	return cam
 
 
 func surgery_wants_mouse() -> bool:
-	return (surgery != null and surgery.wants_mouse()) or (player_surgery != null and player_surgery.surgery.wants_mouse())
+	return (surgery != null and surgery.wants_mouse()) or (player_surgery != null and player_surgery.surgery.wants_mouse()) \
+		or (syringe_stations != null and syringe_stations.wants_mouse())   # SYRINGE DRAW
 
 
 func surgery_local_exit() -> void:
@@ -3626,6 +3708,8 @@ func surgery_local_exit() -> void:
 		surgery.local_operator_exit()
 	if player_surgery != null and player_surgery.surgery.wants_mouse():
 		player_surgery.surgery.local_operator_exit()
+	if syringe_stations != null:   # SYRINGE DRAW
+		syringe_stations.local_exit()
 
 
 ## Host only. A shove lands. HANDS HOOK: `charge` 0..1 from the wind-up (scripts/combat/windup.gd:
@@ -4254,6 +4338,7 @@ func _global_fields() -> Dictionary:
 		"t": snappedf(world_time, 0.5), "ph": phase, "sh": shift, "sd": seed_value,
 		"pu": snappedf(punch, 0.01),
 		"pt": player_surgery.net_state(),  # downed: the player table's case and its surgery
+		"sy": syringe_stations.net_state() if syringe_stations != null else {},  # SYRINGE DRAW
 		"st": strap_table,  # GRAFT HOOK: the table a healthy surgeon strapped themselves to
 		"et": snappedf(end_timer, 0.1), "sf": shelf.duplicate(),
 		"wp": waiting_peers.keys(),
@@ -4553,6 +4638,10 @@ func _apply_state(state: Dictionary, msg: Dictionary, keyframe: bool) -> void:
 	# downed: the player table's case, after the players so its patient's colour is known.
 	var pt = g.get("pt", {})
 	player_surgery.apply_net_state(pt if pt is Dictionary else {})
+	# SYRINGE DRAW: the handheld draws, likewise after the players (a station reads its owner's hands).
+	var sy = g.get("sy", {})
+	if syringe_stations != null:
+		syringe_stations.apply_net_state(sy if sy is Dictionary else {})
 	strap_table = int(g.get("st", -1))   # GRAFT HOOK: after the case, which wins when there is one
 	_apply_strap_table()
 

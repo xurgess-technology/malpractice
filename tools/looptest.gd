@@ -83,7 +83,7 @@ func _run() -> void:
 	_say("---- shift 1: in, grace, phone, paramedics, two patients, clock out")
 	_check(game.phase == Game.Phase.LOBBY and game.shift == 1, "a run starts in the lobby of shift 1")
 	var pocket_root1 = null
-	if _pocket == "factory" or _pocket == "restaurant":
+	if preload("res://scripts/level/pockets/pocket_plan.gd").KINDS.has(_pocket):
 		_check(game.pockets.active() and String(game.pockets.pocket.kind) == _pocket, "POCKETS: shift 1 has the forced %s" % _pocket)
 		pocket_root1 = game.pockets.pocket.get("root")
 	# 2026-09-17: a run starts out in the fog past the parking lot (game._arrive_at_start), on levels
@@ -247,7 +247,7 @@ func _run() -> void:
 	var seed_before: int = game.seed_value
 	ok = await _do_until(func(): _go_use("clock", game.clock_pos(), true), func(): return game.phase == Game.Phase.SHIFT, 120.0)
 	_check(ok, "clock in for shift 2")
-	if _pocket == "factory" or _pocket == "restaurant":
+	if preload("res://scripts/level/pockets/pocket_plan.gd").KINDS.has(_pocket):
 		_check_pocket_rebuilt(pocket_root1)
 	_check(game.seed_value == seed_before, "same run (seed %d)" % game.seed_value)
 	_check(not game.doors.gates_locked, "the gates unlocked at clock-in")

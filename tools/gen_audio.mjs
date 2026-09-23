@@ -393,6 +393,25 @@ function build_step(variant, sprint) {
   return t;
 }
 
+// POCKETS 2 phase 2: a step taken in the Natatorium's pool. Much wetter and much bigger than
+// build_step: a broadband slap as the foot breaks the surface, then a longer, darker wash of water
+// closing over it. It is deliberately the loudest footstep in the game, because it is also the
+// loudest one the Sonographer hears (PocketSpaces.WATER_WALK).
+function build_step_water(variant) {
+  const rnd = rngFor(`step_water${variant}`);
+  const t = sfxTrack(0.7);
+  const bus = new Bus(t, null, 0);
+  // The slap: the foot hitting the surface.
+  bus.noise(0, { dur: 0.09, vol: 0.20, freq: 1100 + rnd() * 700, q: 1.1, rnd });
+  bus.tone(0, { freq: rnd.range(150, 210), end: 70, type: 'sine', dur: 0.08, vol: 0.09, attack: 0.001 });
+  // The wash: water falling back, a few beads of spray over it.
+  bus.noise(0.045, { dur: 0.34, vol: 0.11, freq: 520 + rnd() * 260, q: 0.8, rnd });
+  for (let i = 0; i < 4; i++) {
+    bus.noise(0.09 + i * rnd.range(0.05, 0.1), { dur: 0.05, vol: 0.045, freq: 2200 + rnd() * 2400, q: 4, rnd });
+  }
+  return t;
+}
+
 function build_skitter(variant) {
   const rnd = rngFor(`skitter${variant}`);
   const t = sfxTrack(0.6);
@@ -930,6 +949,8 @@ function main() {
 
   for (let v = 1; v <= 4; v++) emitFile(OUT_SFX, `step_0${v}.wav`, trim(build_step(v, false)), SFX_TARGET_DB);
   for (let v = 1; v <= 4; v++) emitFile(OUT_SFX, `sprint_0${v}.wav`, trim(build_step(v, true)), SFX_TARGET_DB);
+  // POCKETS 2 phase 2: wading through the Natatorium.
+  for (let v = 1; v <= 4; v++) emitFile(OUT_SFX, `step_water_0${v}.wav`, trim(build_step_water(v)), SFX_TARGET_DB);
   for (let v = 1; v <= 3; v++) emitFile(OUT_SFX, `skitter_0${v}.wav`, trim(build_skitter(v)), SFX_TARGET_DB);
   for (let v = 1; v <= 4; v++) emitFile(OUT_SFX, `print_line_0${v}.wav`, trim(build_print_line(v)), SFX_TARGET_DB);
   for (const [name, fn] of Object.entries(SFX_BUILDERS)) {

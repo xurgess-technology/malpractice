@@ -43,7 +43,7 @@ func _initialize() -> void:
 			"seeds": seed_count = int(kv[1])
 			"builds": build_count = int(kv[1])
 			"first": first_seed = int(kv[1])
-			"build_pocket": build_pocket = kv[1]   # POCKETS: "" cycles the kinds, "none", or a PocketPlan.KINDS name
+			"build_pocket": build_pocket = kv[1]   # POCKETS: "" round-robin, none, or a kind in PocketPlan.KINDS
 	var t0 := Time.get_ticks_msec()
 	_check_generation()
 	_check_determinism()
@@ -216,8 +216,8 @@ func _check_pockets() -> void:
 		natural[k0] = int(natural.get(k0, 0)) + 1
 		for ki in Plan.KINDS.size():
 			var kind: String = Plan.KINDS[ki]
-			if seed > first_seed + 40 and seed % Plan.KINDS.size() != ki:
-				continue   # every kind on the first 40 seeds, then one kind per seed in turn
+			if (seed % Plan.KINDS.size()) != ki and seed > first_seed + 40:
+				continue   # every kind on the first 40 seeds, then round-robin
 			Plan.force_kind = kind
 			tried += 1
 			# Wings differ every shift: later shifts' wing seeds too (the plan is rolled with the wings).
@@ -302,7 +302,7 @@ func _check_pocket_plan(seed: int, kind: String, gen: Dictionary, plan: Dictiona
 		fail("%s: every entrance leads to the same wing" % tag)
 	# The pocket's own grid: every stub has a port, the copies line up tile for tile with the hospital's
 	# stubs through the seam transform (both ways), and everything open is reachable from each opening.
-	var layout_script: GDScript = PS.script_for(kind)
+	var layout_script: GDScript = PS.script_of(kind)
 	var lay: Dictionary = layout_script.layout(stubs, int(plan.seed))
 	var g: Dictionary = lay.grid
 	var origin: Vector2i = PS.ORIGINS[kind]
@@ -842,7 +842,7 @@ class Runner extends Node:
 		var open := 0
 		# Coverage from the pocket's grid, rebuilt from the plan (layouts are pure).
 		var plan := Plan.of(gen)
-		var layout_script: GDScript = PS.script_for(String(plan.kind))
+		var layout_script: GDScript = PS.script_of(String(plan.kind))
 		var g: Dictionary = layout_script.layout(plan.stubs, int(plan.seed)).grid
 		for y in int(g.h):
 			for x in int(g.w):
