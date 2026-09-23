@@ -249,17 +249,28 @@ was, and why one green run proves nothing here.
 
 ---
 
-## 1m. A hospital corridor's 1% low of 30, on an idle machine
+## 1m was the instrument, not the hospital — checked and removed 2026-09-23 (POCKETS 2 phase 7)
 
-- **Not a failing test** — measured 2026-09-22 by the Chapel task during the perf read, on a machine
-  with zero other Godot processes, final content, q1/medium.
-- The Chapel's own worst view read **112 avg / 93 1% low** against a bar of 60 avg and 1% lows above
-  50, and every view in the space beat the hospital corridor it opens off. **The bar is met.**
-- But the *corridor baseline in the same table* read **86 avg / 30 1% low** — the only figure in the
-  run under the bar, and it is **untouched hospital**, nothing to do with pocket spaces.
-- It is the **first scenario measured**, so it may simply be the run settling rather than a real
-  stutter. Nobody has checked. Recorded here because it is exactly the kind of number that gets
-  noticed weeks later and blamed on whatever shipped near it.
+The corridor's **86 avg / 30 1% low** was not a stutter in the hospital. It was two measurement
+faults stacked, and both are now fixed in `tools/perfprobe.gd`. Kept as a short note because the
+number is quoted in docs/POCKET_SPACES_2.md and somebody will meet it again.
+
+- **The first scenario in a process is measured before the CPU has finished with the level.** Same
+  camera, same map, same ~480 draws, one run: `hospital corridor` as the **first** view read
+  **60 avg / 22 low with 58 ms of process time a frame**; as the **last** view it read
+  **127 / 100 with 5 ms**. Every kind showed it (20-40 ms of proc on its first row). The probe now
+  measures one view and throws the row away before it keeps anything. **The plain sweep's `lobby
+  clock-in room` was the same artefact**: it is that sweep's first scenario, it is quoted around
+  the docs at **31 / 17**, and with the warm-up dropped it reads **82 / 75**.
+- **A "1% low" over 240 frames is the third-worst frame of about two seconds**, so one hitch
+  decided it. Measured across three full sweeps on an idle machine, the *same* view swung
+  **24 to 105**. The default window is now 600 frames, and anything being published wants
+  `--frames=1200`, at which the rows do settle down.
+- **What is left after both fixes is small and is not the pocket spaces' doing.** At 1200 frames
+  the 1% low is still occasionally dragged to 24-46 by a single 30-55 ms frame, and it lands on
+  untouched hospital views (`chapel map: hospital corridor` 90/33, `factory: seam, hospital side`
+  102/24) as readily as on anything new. That looks like **1j** below seen from the rendering side,
+  and it is the thing actually worth chasing.
 
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
 
@@ -323,5 +334,16 @@ The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\
 - **Expect flakes when the machine is loaded.** With four slots running Godot at once, wall-clock
   timeouts get tight: `downedtest` has failed once under load and then
   passed on a quiet re-run. Re-run alone before chasing.
+- **perfprobe: the first row is thrown away, and a published number wants `--frames=1200`.** See
+  the 1m note above for why both. `tools\perfprobe.ps1 -Extra "--pockets --quality=1 --frames=1200"`
+  is the whole five-space sweep plus the bare-hospital baseline, one process per kind, about
+  25 minutes on an idle machine. It needs a **real rendering window** (it uses SW_SHOWNOACTIVATE,
+  which draws without taking focus); never run it headless or minimized, and close it when done.
+- **A pocket space's own air is blended in by where the CAMERA stands** (`PocketSpaces.air_factor`:
+  0 within a few metres of a seam opening, 1 by 14 m in), so a view taken just inside an entrance
+  draws the whole room in the *hospital's* fog and ambient. `tools/gameshot.gd --pocket=<kind>`
+  prints the factor with every shot. On seed 4242 the Laundromat's three canonical wide views sit
+  at **0.00, 0.11 and 0.76** — and perfprobe measures those same three positions, so its Laundromat
+  interior rows are partly measuring hospital air.
 - Windowed screenshot tools write to `tools/game_shots/` and friends: `menushot`, `faxshot`,
   `tipshot`, `database_shot` (`-- --wall`, `-- --wall2`), `gameshot`, `bootsshot` (rocket boots)
