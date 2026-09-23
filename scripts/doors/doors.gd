@@ -33,6 +33,12 @@ const CREW_SENSOR_RANGE := 4.6
 const PUSH_RANGE := 2.2
 const PUSH_SIDE := 0.3
 const CARRIER_RANGE := 1.4
+## The crew is a convoy, not a point: `cr.p` is the middle of the gurney and the paramedic pulling
+## at the front walks this far ahead of it (scripts/loop/crew.gd puts him at local z -1.55). Pushing
+## from the middle meant the lead medic and the gurney's nose were already through the doorway
+## before the leaves started to move, so they clipped a shut door on the way in. Doors sense the
+## crew at its front instead.
+const CREW_LEAD := 1.55
 const OUT_MIN_DEG := 80.0
 
 const SPEED_OPEN := 1.9
@@ -207,7 +213,8 @@ func _host_tick(delta: float) -> void:
 	for a in agents:
 		if a.kind != "crew":
 			continue
-		for d in near(a.pos):
+		# From the front of the convoy, not its middle: see CREW_LEAD.
+		for d in near(a.push_pos):
 			if d.kind == "double" and bool(d.data.get("base", false)):
 				_push_check(d, a)
 
@@ -240,7 +247,11 @@ func _agents() -> Array:
 	if game.loop != null:
 		for cr in game.loop.crews.values():
 			var yaw := float(cr.get("y", 0.0))
-			out.append({"kind": "crew", "pos": cr.p, "fwd": Vector3(-sin(yaw), 0.0, -cos(yaw)), "node": null})
+			var fwd := Vector3(-sin(yaw), 0.0, -cos(yaw))
+			# `pos` stays the middle (the automatic sensor already allows for the convoy with its own
+			# CREW_SENSOR_RANGE); `push_pos` is the lead paramedic, who meets a manual door first.
+			out.append({"kind": "crew", "pos": cr.p, "push_pos": (cr.p as Vector3) + fwd * CREW_LEAD,
+				"fwd": fwd, "node": null})
 	return out
 
 
@@ -418,7 +429,9 @@ func swing_side(d: Node, pos: Vector3) -> int:
 
 
 func _push_check(d: Node, a: Dictionary) -> void:
-	var lp: Vector3 = d.global_transform.affine_inverse() * (a.pos as Vector3)
+	# The crew pushes with the front of the convoy (CREW_LEAD); everyone else is a single body.
+	var at: Vector3 = a.get("push_pos", a.pos)
+	var lp: Vector3 = d.global_transform.affine_inverse() * at
 	var kind: String = a.kind
 	var reach := CARRIER_RANGE if (kind == "carrier" or kind == "player") else PUSH_RANGE
 	if kind == "player":
@@ -433,7 +446,7 @@ func _push_check(d: Node, a: Dictionary) -> void:
 		pushing = pushing or fwd_z * signf(lp.z) <= 0.3
 	if not pushing:
 		return
-	var side := swing_side(d, a.pos)
+	var side := swing_side(d, at)
 	var want: float = float(side) * d.limit(side)
 	if absf(d.target) >= absf(want) - 0.05 and signf(d.target) == signf(want):
 		return   # already opening (or open) that way

@@ -36,30 +36,39 @@ camera puts that camera 1.4 m behind and 0.5 m right of the head, looking along 
 first aim target (a whole door) survived that; a thin open leaf at arm's length did not, and the
 three checks after it only failed because that first press never happened. Slots seed their settings
 from Zach's, which say "shoulder", so the test read his view preference. `tools/doortest.gd` now pins
-first person for its run, exactly as `devtest` did for the same reason. That leaves `doortest` failing
-the one gurney check in section 1 and nothing else.
+first person for its run, exactly as `devtest` did for the same reason.
+
+**Section 1, `doortest`'s gurney check, went the same way on 2026-09-23 and has been removed.**
+`doortest` now passes **all 91 checks**. It was half test bug and half product bug, and neither half
+was visible until the door's `amount` was logged frame by frame against the crew's position through
+an arrival.
+
+- **The product half — late, not clipping.** The OR doors did open, all the way to 1.00, and the
+  crew's *centre* never crossed a shut leaf. But they only began to move 0.67 m before that centre
+  reached the door plane, and the paramedic pulling at the front stands **1.55 m ahead** of `cr.p`
+  (`scripts/loop/crew.gd`). He and the gurney's nose were through a dead-shut door — he was 0.9 m
+  past the plane before a leaf twitched. `Doors._agents` was sensing a three-metre convoy as the
+  single point in its middle, and the lateral bound in `_push_check` is what held it off: the crew
+  swings in off the hallway at a slant and its centre is outside the doorway's width until the last
+  moment. Fixed by giving the crew agent a `push_pos` at `CREW_LEAD` (1.55 m) ahead of its middle,
+  used for manual-door pushes only; the automatic sensor still uses the middle, since
+  `CREW_SENSOR_RANGE` already allows for the convoy. The doors now stand fully open before anything
+  reaches them.
+- **The test half — the check was watching nothing.** The crew crosses about **0.96 m** off the
+  doorway's centre, and the doorway is **3 m** wide, so a flat `|lp.x| < 0.8` side bound never once
+  contained it: closest approach **0.81 m**, missed by a centimetre. *Both* gurney checks in that
+  loop were vacuous, which is why "the crew never passed the doorway with the door mostly shut" had
+  been quietly "passing" — it was never evaluated, not satisfied. The bound is now the door's own
+  `width * 0.5`, which is what "in the doorway" actually means.
+- **Not the same bug as the playtest's monsters walking through doors** (docs/KNOWN_ISSUES.md,
+  "PLAYTEST 2026-09-22"), whose reproduced half was the open leaf's collider and is already fixed.
+  This one is crew-only: nothing else in the game is sensed at a point set back from its leading
+  edge. `4b7a431` ("Operator rooted at the table") was **not** involved — the lead named in the old
+  section was a dead end.
 
 How to run things is at the bottom of this file.
 
 ---
-
-## 1. doortest: the paramedics don't push the OR doors open for the gurney
-
-- **Command:** `godot --headless --path . --fixed-fps 60 tools/doortest.tscn`
-- **Result:** `FAIL (1 of 91 checks)`, the check `the crew pushed the OR's doors open to bring the gurney through`
-  — the only check `doortest` still fails, as of 2026-09-22 (the four in the old section 1b were the
-  test's own camera setting and are fixed).
-- **The check:** `tools/doortest.gd`, around line 361. While the paramedic crew is right in the OR
-  doorway (`|lp.z| < 0.9`, `|lp.x| < 0.8` in the door's frame), the OR door's `amount` must go past
-  0.7 at some point before the patient is on the table. It never does.
-- **The patient still arrives.** The crew gets through, so a shift isn't broken; the doors just
-  don't visibly swing for them. Whether the crew clips through a closed door or the door opens too
-  late for the check to see it hasn't been established.
-- **Where to look:** how the crew pushes manual doors (the loop's crew movement and the door scripts
-  in `scripts/doors/`), and `scripts/player.gd` from commit `4b7a431` ("Operator rooted at the
-  table"), which changed how the crew and the operating player push each other. That commit is the
-  most recent change near this behaviour, but it hasn't been confirmed as the cause.
-
 
 ## 1f. pockettest: the Night Nurse follows you through a seam
 
