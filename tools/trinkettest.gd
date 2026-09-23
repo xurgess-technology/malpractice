@@ -303,7 +303,7 @@ func _laptop() -> void:
 ## not (she does not answer sound), it is spent in one blow, and nothing beyond WHISTLE_RANGE is
 ## touched -- the item is a lure you aim by standing somewhere, so its edge has to be a real edge.
 func _whistle() -> void:
-	_stand(o + Vector3(10.0, 0, 22.0))
+	_stand(o + Vector3(10.0, 0, 17.0))
 	var near = await _monster("hive", me.global_position + Vector3(6.0, 0, 0))
 	var far = await _monster("hive", me.global_position + Vector3(0, 0, -6.0))
 	var nurse = await _monster("night_nurse", me.global_position + Vector3(-6.0, 0, 0))
@@ -381,7 +381,7 @@ func _defib() -> void:
 	var lay: Vector3 = mate.global_position
 	_give("defibrillator", 1, 120)
 	# Out of reach first.
-	_stand(o + Vector3(14.0, 0, 20.0))
+	_stand(o + Vector3(14.0, 0, 17.0))
 	_look_at(lay)
 	await _use()
 	_check(mate.downed and not TrinketsScript.is_spent(me.selected_stack()),
@@ -528,7 +528,7 @@ func _pulse_ox() -> void:
 # =========================================================================
 
 func _hammer() -> void:
-	var m := await _monster("hive", o + Vector3(12.0, 0, 20.0))
+	var m := await _monster("hive", o + Vector3(12.0, 0, 17.0))
 	_calm(m)
 	_give("reflex_hammer", 1, 20)
 	_face(m)
@@ -620,8 +620,14 @@ func _hammer() -> void:
 ## that rectangle drops the player into the void -- silently, because every check in this file is a
 ## question about positions and a falling player answers them just as well as a standing one. This
 ## section used to stand at `o + (8, 0, 20)` and then at `o + (30, 0, 2)`, both outside it.
-## **Two other sections still do**: the ones standing at `o + (10, 0, 22)` and `o + (14, 0, 20)`.
-## They pass, and they were not touched here, but they are not standing on anything.
+## **Fixed here too (fix-void-tests-onlooker-nettest):** `_whistle` stood at `o + (10, 0, 22)`,
+## `_defib` stood at `o + (14, 0, 20)`, and `_hammer`'s Hive spawned at `o + (12, 0, 20)` -- a third
+## void spot the phase 7 sweep missed, since it was a monster's spawn point rather than the player's
+## own stand. All three now land inside the rectangle, at `z = 17`. None of it was masking a real
+## bug: the checks that survived being in free fall did so because they read relative or angular
+## quantities (whistle range, defib reach, spin angle, sight) whose horizontal component alone
+## already cleared or missed the threshold in play, so grounding them changed nothing but the y they
+## measure from. Re-run and still green.
 func _candle() -> void:
 	_stand(o + Vector3(8.0, 0, 16.0), 0.0)
 	await _frames(2)
