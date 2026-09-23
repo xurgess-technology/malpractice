@@ -119,6 +119,43 @@ const LOOT := {
 		"rooms": {"factory_office": 3.0, "factory_floor": 0.7, "factory_catwalk": 0.5},
 		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.35},
 	},
+	# ... and the Restaurant's. Same rule: only `restaurant`, `restaurant_kitchen` and
+	# `restaurant_restroom`, and never "*".
+	"cast_iron_molcajete": {
+		"name": "Cast iron molcajete", "short": "Cast iron molcajetes", "value": [50, 120], "tier": 3, "bulky": true,
+		"rooms": {"restaurant_kitchen": 2.6, "restaurant": 0.7},
+		"surfaces": ["counter", "floor"], "containers": {},
+	},
+	# RESTAURANT PAGERS. `restaurant_pagers` is what spawns: the base station with both pagers still
+	# sitting in it. Using it lifts the pair out, and what you are left holding is two
+	# `restaurant_pager` stacks that know about each other (Trinkets.PAIR_MARK, carried in the stack's
+	# `x` so the binding survives being dropped, thrown, shelved or scattered on death).
+	#
+	# A single pager therefore never spawns -- its `rooms` is empty, the way the grafted eyes' is --
+	# it only ever comes out of a station. And a pager whose partner has stopped existing (sold,
+	# burnt, left behind at the end of a shift) is worth listing on its own, because it is then plain
+	# loot: half the money and no trick.
+	"restaurant_pagers": {
+		"name": "Restaurant pagers", "short": "Sets of restaurant pagers", "value": [28, 48], "tier": 1,
+		"trinket": true, "trinket_weight": 1.6, "max_per_shift": 1,
+		"rooms": {"restaurant": 2.4, "restaurant_kitchen": 1.0},
+		"surfaces": ["counter"], "containers": {"drawer_unit": 0.3},
+	},
+	# TEQUILA, TOP SHELF. Loot that is also a fluid: `Syringes.FLUIDS` has listed `tequila` since the
+	# rack was built (0.10.34), waiting for something to actually carry. This is that something, so
+	# the rack needed no change at all -- it populates itself from what you are holding.
+	# `consumable` is what lets a syringe spend it, and the batch is 1 because the spec says so: one
+	# bottle, one draw, and it is gone. The weak dose lives in Syringes.FLUID_POTENCY, not here.
+	"tequila": {
+		"name": "Tequila, top shelf", "short": "Bottles of tequila", "value": [35, 60], "tier": 2,
+		"consumable": true, "fragile": true, "batch": [1, 1],
+		"rooms": {"restaurant": 2.2, "restaurant_kitchen": 1.1},
+		"surfaces": ["counter"], "containers": {},
+	},
+	"restaurant_pager": {
+		"name": "Restaurant pager", "short": "Restaurant pagers", "value": [14, 24], "tier": 1, "trinket": true,
+		"rooms": {}, "surfaces": [], "containers": {},
+	},
 	# GRAFTING part one (scripts/grafting/eyes.gd): taken out of a strapped Hive, or a surgeon's own
 	# eye swapped out; never found. They spoil outside a vat (Eyes.spoil_factor).
 	"eye_hive": {
@@ -162,7 +199,10 @@ static func def(kind: String) -> Dictionary:
 	var out := d.duplicate()
 	out["loot"] = true
 	out["surgical"] = false
-	out["consumable"] = false
+	# Loot is not consumed by default, and almost none of it ever is. POCKETS 2 phase 5 made the one
+	# exception: an anesthetic substitute is loot you find in a pocket AND a fluid a syringe draws
+	# out of, so it has to be spendable like a vial. Opt in per kind rather than by kind name.
+	out["consumable"] = bool(d.get("consumable", false))
 	out["fragile"] = bool(d.get("fragile", false))
 	out["bulky"] = bool(d.get("bulky", false))
 	out["stack"] = bool(d.get("stack", false))

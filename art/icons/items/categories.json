@@ -167,6 +167,26 @@
       "name": "Foreman's clipboard",
       "category": "loot",
       "glow": null
+    },
+    "cast_iron_molcajete": {
+      "name": "Cast iron molcajete",
+      "category": "loot",
+      "glow": null
+    },
+    "tequila": {
+      "name": "Tequila, top shelf",
+      "category": "loot",
+      "glow": null
+    },
+    "restaurant_pagers": {
+      "name": "Restaurant pagers",
+      "category": "trinket",
+      "glow": null
+    },
+    "restaurant_pager": {
+      "name": "Restaurant pager",
+      "category": "trinket",
+      "glow": null
     }
   }
 }

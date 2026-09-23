@@ -26,6 +26,7 @@ const Stub := preload("res://scripts/level/pockets/stub.gd")
 const NatatoriumScript := preload("res://scripts/level/pockets/natatorium.gd")
 const SonoScript := preload("res://scripts/monsters/sonographer_brain.gd")
 const LootTableScript := preload("res://scripts/economy/loot_table.gd")
+const PocketSpacesScript := preload("res://scripts/level/pockets/pocket_spaces.gd")
 const PlayerScript := preload("res://scripts/player.gd")
 
 var main: Node3D
@@ -54,12 +55,85 @@ func _ready() -> void:
 	game = main.game
 	main.menu.hide_menu()
 	Net.start_solo("Bot")
+	if only == "":
+		_check_pocket_items()
 	for kind in Plan.KINDS:
 		if only != "" and only != kind:
 			continue
 		await _run_space(kind)
 	Plan.force_kind = ""
 	_finish()
+
+
+## POCKETS 2 phase 5: POCKET_ITEMS, checked for every space at once rather than per space.
+##
+## The convention is the Natatorium's (phase 2) and the queued "items bleed out near the seam" task
+## reads it from all of them, so the thing worth testing is that the spaces AGREE -- one shape, one
+## meaning -- not that any one of them has a list. It needs no built shift, so it runs before the
+## walk-throughs and costs nothing.
+func _check_pocket_items() -> void:
+	_say("==== POCKET_ITEMS")
+	var seen := {}         # item kind -> the space that claimed it
+	for kind: String in PocketSpacesScript.LAYOUTS.keys():
+		var script: GDScript = PocketSpacesScript.LAYOUTS[kind]
+		var items: Array = script.get("POCKET_ITEMS") if script.get("POCKET_ITEMS") != null else []
+		# Every space declares one. An empty list is a space that contributes nothing, which after
+		# phase 5 is no longer true of any of them -- so an empty one here means someone forgot.
+		_check(not items.is_empty(), "%s: declares a non-empty POCKET_ITEMS (%s)" % [kind, str(items)])
+		# The room kinds this space's own layout uses. A pocket item must live in its own space and
+		# nowhere else, which is what "rooms names only my rooms, and never the wildcard" means.
+		var my_rooms := _room_kinds_of(kind)
+		for k: String in items:
+			_check(LootTableScript.has(k), "%s: %s is a real loot kind" % [kind, k])
+			if not LootTableScript.has(k):
+				continue
+			var rooms: Dictionary = LootTableScript.LOOT[k].get("rooms", {})
+			_check(not rooms.has("*"), "%s: %s does not list \"*\", so it cannot spawn in the hospital" % [kind, k])
+			_check(not rooms.is_empty(), "%s: %s names somewhere to spawn" % [kind, k])
+			for r: String in rooms.keys():
+				_check(my_rooms.has(r), "%s: %s spawns in %s, which is one of this space's rooms" % [kind, k, r])
+			# Two spaces claiming the same kind would make "which space is this from" unanswerable.
+			_check(not seen.has(k), "%s: %s is claimed by exactly one space (also %s)" % [kind, k, String(seen.get(k, ""))])
+			seen[k] = kind
+	# And the other way round: a loot kind whose rooms are a pocket's rooms must be in that pocket's
+	# POCKET_ITEMS, or the list silently drifts out of date as items are added.
+	for k: String in LootTableScript.kinds():
+		var rooms: Dictionary = LootTableScript.LOOT[k].get("rooms", {})
+		if rooms.is_empty() or rooms.has("*"):
+			continue
+		for kind: String in PocketSpacesScript.LAYOUTS.keys():
+			var my_rooms := _room_kinds_of(kind)
+			var all_mine := true
+			for r: String in rooms.keys():
+				if not my_rooms.has(r):
+					all_mine = false
+					break
+			if all_mine:
+				_check(String(seen.get(k, "")) == kind,
+					"%s: %s spawns only here, so POCKET_ITEMS lists it" % [kind, k])
+
+
+## The room kinds a space's own layout puts on the map, gathered from the layout itself rather than
+## written down twice: a list that had to be maintained by hand would be the thing going stale.
+func _room_kinds_of(kind: String) -> Dictionary:
+	var out := {}
+	var script: GDScript = PocketSpacesScript.LAYOUTS[kind]
+	var fake := {"rect": Rect2i(0, 0, 60, 60), "origin": Vector2i(0, 0)}
+	var lay: Dictionary = script.layout(fake, 1)
+	var built := {"lights": [], "containers": [], "loose_anchors": [], "monster_spawns": [],
+		"nav_faces": PackedVector3Array(), "wing": "", "depth": 1}
+	var root: Node3D = script.build(lay, Vector2i.ZERO, built)
+	for a in built.get("loose_anchors", []):
+		var r := String((a as Dictionary).get("room", ""))
+		if r != "":
+			out[r] = true
+	for c in built.get("containers", []):
+		var r2 := String((c as Dictionary).get("room", ""))
+		if r2 != "":
+			out[r2] = true
+	if root != null:
+		root.queue_free()
+	return out
 
 
 func _run_space(kind: String) -> void:

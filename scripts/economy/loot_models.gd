@@ -27,6 +27,10 @@ static func build(root: Node3D, kind: String, count: int) -> void:
 		"grease_bucket": _grease_bucket(root)
 		"copper_wire_spool": _wire_spool(root)
 		"foremans_clipboard": _clipboard(root)
+		"cast_iron_molcajete": _molcajete(root)
+		"tequila": _tequila(root)
+		"restaurant_pagers": _pager_station(root)
+		"restaurant_pager": _pager(root)
 		_: _add(root, _box(Vector3(0.15, 0.1, 0.15), _m("magenta", Color.MAGENTA)), Vector3(0, 0.05, 0))
 
 
@@ -74,6 +78,10 @@ static func footprint(kind: String) -> Vector3:
 		"ultrasound": return Vector3(0.42, 0.34, 0.32)
 		"pool_chemical_drum": return Vector3(0.42, 0.62, 0.42)
 		"lifeguard_whistle": return Vector3(0.1, 0.04, 0.05)
+		"cast_iron_molcajete": return Vector3(0.3, 0.2, 0.3)
+		"tequila": return Vector3(0.1, 0.3, 0.1)
+		"restaurant_pagers": return Vector3(0.26, 0.12, 0.2)
+		"restaurant_pager": return Vector3(0.12, 0.035, 0.12)
 		"grease_bucket": return Vector3(0.28, 0.32, 0.28)
 		"copper_wire_spool": return Vector3(0.44, 0.44, 0.44)
 		"foremans_clipboard": return Vector3(0.24, 0.03, 0.33)
@@ -447,3 +455,76 @@ static func _clipboard(root: Node3D) -> void:
 		_add(root, _box(Vector3(0.15, 0.002, 0.0035), ink), Vector3(-0.012, 0.017, z))
 		if i != 2 and i != 5:
 			_add(root, _box(Vector3(0.158, 0.002, 0.0045), ink), Vector3(-0.012, 0.019, z), Vector3(0, 0, 0))
+
+
+# --- POCKETS 2 phase 5: the Restaurant's ------------------------------------------------------
+
+## A three-legged basalt molcajete with its pestle standing in the bowl. Heavy, dark and pitted:
+## the most expensive thing in the Restaurant, and the only loot in the game made of rock.
+static func _molcajete(root: Node3D) -> void:
+	var stone := _m("molcajete_stone", Color(0.26, 0.25, 0.24), 0.95)
+	var inner := _m("molcajete_inner", Color(0.19, 0.18, 0.18), 0.98)
+	# The bowl, sitting on three stubby legs.
+	for a in [0.0, TAU / 3.0, TAU * 2.0 / 3.0]:
+		_add(root, _cyl(0.026, 0.05, stone, 8, 0.03), Vector3(cos(a) * 0.09, 0.025, sin(a) * 0.09))
+	_add(root, _cyl(0.145, 0.105, stone, 20, 0.16), Vector3(0, 0.102, 0))
+	_add(root, _cyl(0.128, 0.03, inner, 20, 0.14), Vector3(0, 0.148, 0))       # the hollow
+	# The pestle (the tejolote), standing in it.
+	_add(root, _cyl(0.028, 0.1, stone, 10, 0.036), Vector3(0.04, 0.2, 0.02))
+
+
+## A tall bottle of top-shelf tequila: clear glass with the spirit standing in it, a long neck, a
+## foil-wrapped cork and a label. It reads as a bottle first and a drug second, which is the joke.
+static func _tequila(root: Node3D) -> void:
+	var glass := _m("tequila_glass", Color(0.86, 0.90, 0.86, 0.45), 0.12)
+	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var spirit := _m("tequila_spirit", Color(0.84, 0.72, 0.36), 0.2)
+	var label := _m("tequila_label", Color(0.93, 0.89, 0.76), 0.85)
+	var foil := _m("tequila_foil", Color(0.78, 0.66, 0.24), 0.3, 0.9)
+	_add(root, _cyl(0.042, 0.19, glass, 14), Vector3(0, 0.095, 0))            # the body
+	_add(root, _cyl(0.037, 0.13, spirit, 14), Vector3(0, 0.068, 0))           # what is in it
+	_add(root, _cyl(0.042, 0.04, glass, 14, 0.018), Vector3(0, 0.21, 0))      # the shoulder
+	_add(root, _cyl(0.018, 0.05, glass, 12), Vector3(0, 0.255, 0))            # the neck
+	_add(root, _cyl(0.021, 0.028, foil, 12), Vector3(0, 0.288, 0))            # the capsule
+	_add(root, _cyl(0.0435, 0.075, label, 14), Vector3(0, 0.1, 0))            # the label
+	_add(root, _cyl(0.0445, 0.012, foil, 14), Vector3(0, 0.148, 0))           # the band above it
+
+
+## The base station: a shallow tray with two charging wells, a pager sitting in each. This is what
+## spawns -- the pair, still docked -- and using it is what takes them out.
+static func _pager_station(root: Node3D) -> void:
+	var base := _m("pager_base", Color(0.13, 0.14, 0.16), 0.6)
+	_add(root, _box(Vector3(0.24, 0.045, 0.18), base), Vector3(0, 0.022, 0))
+	_add(root, _box(Vector3(0.24, 0.02, 0.03), base), Vector3(0, 0.055, -0.075))   # the back wall
+	for x in [-0.055, 0.055]:
+		_pager_body(root, Vector3(x, 0.048, 0.012), 1.0)
+	# The two contacts in the wells, lit while they charge.
+	for x in [-0.055, 0.055]:
+		_add(root, _box(Vector3(0.02, 0.004, 0.01), _m("pager_charge", Color(0.2, 0.9, 0.4), 0.3, 0.0, Color(0.2, 1.0, 0.45), 1.4)),
+			Vector3(x, 0.046, -0.058))
+
+
+## One pager out of the station: a wedge of restaurant plastic with a ring of lamps round the rim
+## and the call button in the middle of the face.
+static func _pager(root: Node3D) -> void:
+	_pager_body(root, Vector3.ZERO, 1.0)
+
+
+## Shared by both, so a docked pager and a carried one are the same object.
+static func _pager_body(root: Node3D, at: Vector3, s: float) -> void:
+	var shell := _m("pager_shell", Color(0.62, 0.13, 0.12), 0.55)
+	var face := _m("pager_face", Color(0.16, 0.16, 0.18), 0.5)
+	var lamp := _m("pager_lamp", Color(0.95, 0.72, 0.2), 0.35, 0.0, Color(1.0, 0.7, 0.15), 0.9)
+	var holder := root
+	if at != Vector3.ZERO:
+		holder = Node3D.new()
+		holder.position = at
+		root.add_child(holder)
+	_add(holder, _cyl(0.05 * s, 0.022 * s, shell, 14), Vector3(0, 0.011 * s, 0))
+	_add(holder, _cyl(0.038 * s, 0.006 * s, face, 14), Vector3(0, 0.024 * s, 0))
+	# The lamps round the rim: the thing you look for across a dark room.
+	for i in 6:
+		var a := TAU * float(i) / 6.0
+		_add(holder, _cyl(0.006 * s, 0.008 * s, lamp, 6), Vector3(cos(a) * 0.043 * s, 0.021 * s, sin(a) * 0.043 * s))
+	# The call button.
+	_add(holder, _cyl(0.014 * s, 0.006 * s, _m("pager_button", Color(0.85, 0.84, 0.8), 0.6), 10), Vector3(0, 0.028 * s, 0))

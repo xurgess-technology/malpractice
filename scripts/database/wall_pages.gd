@@ -77,8 +77,57 @@ const LOOT_BLURBS := {
 	"defibrillator": "A portable defibrillator. Takes both hands.",
 	"ultrasound": "A portable ultrasound. The best find in the wings.",
 	"eye_hive": "The eyeball of a strapped Hive. It clouds over and spoils in a minute or two unless it goes in a vat.",
+	# POCKETS 2 phase 5: the Restaurant.
+	"cast_iron_molcajete": "A basalt mortar the size of a football, pestle and all. It weighs what a rock weighs, and it is worth what the office watches are worth.",
+	"tequila": "Top shelf, barely touched. A syringe will draw from it, and it works — but it is not anesthetic, and a patient under it does not lie as still or as long.",
+	"restaurant_pagers": "The station from a restaurant's front desk with two pagers still docked in it. Take them out and they stay bound to each other.",
+	"restaurant_pager": "One of a bound pair. Press it and the other one goes off — quietly, if somebody is holding it; out loud on the floor, if they are not. On its own it is just a pager.",
 	"eye_surgeon": "A surgeon's own eyeball, labelled with whose it is. It spoils outside a vat, too.",
 }
+
+## POCKETS 2 phase 5: SHARED TAGS. A tag is a word two or more unrelated items have in common, shown
+## on each of their database entries so a player reading one is told the others exist. It is the
+## database noticing a pattern the items were designed to share but which nothing in the game ever
+## says out loud.
+##
+## "lure" is the first and, so far, the only one: things whose whole job is to make a noise somewhere
+## you are not. They were built in three different pocket spaces by three different phases and would
+## otherwise never be seen together.
+const TAG_TEXT := {
+	"lure": "LURE — makes a noise somewhere you are not standing.",
+}
+
+## Item kind -> the tags it carries.
+##
+## The bucket of quarters from the Laundromat (POCKET_SPACES_2 phase 4) is the third member of this
+## family and is being built in parallel with this phase. It was NOT on `main` when phase 5 landed,
+## so its kind name is deliberately not guessed at here: whoever merges the Laundromat adds the one
+## line for it rather than phase 5 shipping a tag on a kind that may not exist.
+const ITEM_TAGS := {
+	"lifeguard_whistle": ["lure"],    # the Natatorium (phase 2)
+	"restaurant_pager": ["lure"],     # the Restaurant (phase 5): a planted pager, not the station
+}
+
+
+## The tag lines for an item kind, ready to print. Empty for the great majority of items.
+static func tags_for(kind: String) -> Array:
+	var out: Array = []
+	for t: String in ITEM_TAGS.get(kind, []):
+		var line := String(TAG_TEXT.get(t, ""))
+		if line != "":
+			out.append(line)
+	return out
+
+
+## Every kind carrying `tag`. The database uses it to say "and these others"; tests use it to check
+## the family is whole.
+static func kinds_tagged(tag: String) -> Array:
+	var out: Array = []
+	for k: String in ITEM_TAGS.keys():
+		if (ITEM_TAGS[k] as Array).has(tag):
+			out.append(k)
+	out.sort()
+	return out
 
 
 # ---------------------------------------------------------------------------
@@ -222,10 +271,23 @@ static func _other(kind: String) -> Dictionary:
 	var worth := "Sells for $%d to $%d at the furnace." % [int(value[0]), int(value[value.size() - 1])]
 	if kind.begins_with("eye_"):
 		worth = "Sells for less every second it spends out of a vat."
+	# POCKETS 2 phase 5: a tagged item says so, and names the rest of its family, so the three lures
+	# read as one idea rather than three coincidences in three different pocket spaces.
+	var paras: Array = [String(LOOT_BLURBS.get(kind, "")), worth]
+	for t: String in ITEM_TAGS.get(kind, []):
+		var line := String(TAG_TEXT.get(t, ""))
+		var family: Array = []
+		for other: String in kinds_tagged(t):
+			if other != kind:
+				family.append(ItemsDB.display_name(other))
+		if not family.is_empty():
+			line += " Also: %s." % ", ".join(family)
+		if line != "":
+			paras.append(line)
 	return {
 		"title": ItemsDB.display_name(kind).to_upper(),
 		"subtitle": "SALVAGE",
-		"paragraphs": [String(LOOT_BLURBS.get(kind, "")), worth],
+		"paragraphs": paras,
 		"models": [{"item": kind, "count": 1}],
 	}
 

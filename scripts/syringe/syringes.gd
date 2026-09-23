@@ -36,6 +36,28 @@ const REFERENCE_WEIGHT_KG := 80.0
 ## in here the day they exist, with no other change to the rack.
 const FLUIDS := ["anesthetic", "communion_wine", "tequila"]
 
+## POCKETS 2 phase 5: HOW WEAK "weak dose" IS, as a multiplier on the sedation a perfect injection
+## would otherwise earn. It is one number and no new system, because the game already has the rule
+## that makes it mean something: `SurgerySystem` stirs a patient whenever sedation is under **0.75**,
+## and stirs harder the further under it goes (`_body_stir`, `scripts/surgery/surgery_system.gd`).
+##
+## So 0.7 is chosen against that threshold rather than picked for feel. A flawless shot of anesthetic
+## is 1.0 and lies still. A flawless shot of tequila is 0.70 -- just under the line, so it stirs, but
+## only just, and a sloppy one drops away fast. That is exactly "shorter sedation, stirs sooner":
+## the booze does not fail, it buys you less room for error than the real thing. The same number
+## covers communion wine (phase 3), which the spec gives the identical rule.
+const FLUID_POTENCY := {"anesthetic": 1.0, "communion_wine": 0.7, "tequila": 0.7}
+
+
+## How strongly this fluid sedates, 0..1, against anesthetic's 1.0.
+static func potency(fluid: String) -> float:
+	return float(FLUID_POTENCY.get(fluid, 1.0))
+
+
+## True when this fluid is an anesthetic substitute rather than the real thing.
+static func is_weak(fluid: String) -> bool:
+	return potency(fluid) < 1.0
+
 
 ## True when `kind` is something a syringe can be loaded from.
 static func is_fluid(kind: String) -> bool:

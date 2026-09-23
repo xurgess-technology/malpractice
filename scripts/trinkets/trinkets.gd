@@ -16,6 +16,11 @@ extends Node
 ##                   Reusable, short cooldown.
 ##   EpiPen          once: jab yourself or a teammate for EPI_SECONDS of double sprint, then a
 ##                   EPI_COLLAPSE second collapse.
+##   Restaurant pagers  a base station holding two pagers that know about each other. Using the
+##                   station lifts the pair out. Pressing one buzzes the OTHER, anywhere in the
+##                   hospital: if a person is holding it, only that person hears it; if it is lying
+##                   on the floor, it rattles out loud where it lies and the monsters hear that.
+##                   Break the pair (sell one, burn it, leave it behind) and what is left is loot.
 ##
 ## A one-use trinket that has been spent is marked `used` on its hand slot and its value drops to
 ## SCRAP: greyed with a crack in the item bar (hud.gd), and it still sells at the furnace. The mark
@@ -28,8 +33,9 @@ extends Node
 const MonsterScript := preload("res://scripts/monster.gd")
 const LootTable := preload("res://scripts/economy/loot_table.gd")
 
-## The seven. Anything else falls through to combat.use (the saw and the needle).
-const KINDS := ["desk_phone", "laptop", "defibrillator", "pulse_oximeter", "reflex_hammer", "epipen", "lifeguard_whistle"]
+## The nine. Anything else falls through to combat.use (the saw and the needle).
+const KINDS := ["desk_phone", "laptop", "defibrillator", "pulse_oximeter", "reflex_hammer", "epipen",
+	"lifeguard_whistle", "restaurant_pagers", "restaurant_pager"]
 ## Spent once and never again. The phone, the hammer and the pulse oximeter keep working.
 const ONE_USE := ["laptop", "defibrillator", "epipen", "lifeguard_whistle"]
 ## What a spent one-use trinket sells for: scrap, not nothing.
@@ -97,6 +103,26 @@ const WHISTLE_NOISE := 1.4
 ## emitted, so there is no wall-vision (see scripts/abilities/abilities.gd `_echo`).
 const WHISTLE_RANGE := 30.0
 
+# --- the restaurant pagers (POCKETS 2 phase 5, the Restaurant)
+## The shortest gap between one player's buzzes. Short, because the item is a conversation: long
+## enough that you cannot use it as a siren, short enough to answer with.
+const PAGER_COOLDOWN := 2.5
+## A pager lying on the floor is a noisemaker, and this is how loud. Deliberately BELOW the desk
+## phone's 0.95: the phone is a decoy you spend a whole item on and it shouts every RING_PERIOD for
+## RING_SECONDS, while this is one rattle you can fire again in PAGER_COOLDOWN. It is still past
+## SonographerBrain's LOUD (0.8), so what hears it comes rather than merely wondering -- the point
+## of planting one is that it WORKS, just on a shorter leash than the phone.
+const PAGER_NOISE := 0.85
+## ... and the deaf Hive is walked over to it by hand, exactly as the phone's ring does.
+const PAGER_HIVE_RANGE := 14.0
+## How hard the private buzz kicks the holder's camera (CameraFX.add_shake trauma, 0..1). Small:
+## it is a pager in your pocket, not a hit.
+const PAGER_SHAKE := 0.1
+const PAGER_SHAKE_TIME := 0.35
+## The prefix of the pair id a bound pager carries in its stack's `x` (WorldItem.x). Two pagers with
+## the same mark are the same pair; anything else is a lone pager, which is plain loot.
+const PAIR_MARK := "pg"
+
 var game: Node = null
 ## Host: the break roll for the pull-out ring. Tests seed it.
 var rng := RandomNumberGenerator.new()
@@ -111,6 +137,8 @@ var _tagged: Dictionary = {}     ## monster id -> the peer id whose pulse oximet
 var _epi: Dictionary = {}        ## peer id -> world_time the sprint boost ends
 var _spins: Dictionary = {}      ## peer id -> how many times the reflex hammer has turned them (mod 64)
 var _swings: Dictionary = {}     ## peer id -> how many reflex-hammer swings they have thrown (mod 64)
+var _buzz: Dictionary = {}       ## peer id -> how many times the pager IN THEIR HANDS has buzzed (mod 64)
+var _rattle: Dictionary = {}     ## world item id -> how many times that dropped pager has rattled (mod 64)
 
 # --- host only
 var _tag_value: Dictionary = {}  ## monster id -> the dollars the clipped-on pulse oximeter was worth
@@ -125,6 +153,12 @@ var _beat: Dictionary = {}       ## monster id -> seconds until its next heartbe
 var _ring_at: Dictionary = {}    ## ring key -> seconds until its next ring
 var _spin_seen: Dictionary = {}  ## peer id -> the spin counter this machine has already acted on
 var _swing_seen: Dictionary = {} ## peer id -> the swing counter this machine has already animated
+var _buzz_seen: Dictionary = {}  ## peer id -> the buzz counter this machine has already felt
+var _rattle_seen: Dictionary = {}## world item id -> the rattle counter this machine has already played
+
+# --- host only, the pagers
+var _pager_cd: Dictionary = {}   ## peer id -> world_time their pager may be pressed again
+var _pair_next := 0              ## the next pair id to hand out
 
 
 func setup(g: Node) -> void:
@@ -170,6 +204,11 @@ func local_try_use(p) -> bool:
 	if game == null or p == null or not is_instance_valid(p):
 		return false
 	if not is_usable(String(p.selected_stack().kind)):
+		return false
+	# A pager whose partner is gone is plain loot and nothing else, so the click must fall through
+	# to the shove rather than being swallowed by a trinket that has no trick left. Checked on the
+	# clicking machine because that is where the click is spent; the host checks again in _use_pager.
+	if String(p.selected_stack().kind) == "restaurant_pager" and not _is_paired(p.selected_stack()):
 		return false
 	# The swing plays here the moment you click, so a melee swing feels like one even on a client
 	# waiting on the host's answer. The host's `sw` counter arrives a moment later and _tick_swings
@@ -225,6 +264,8 @@ func use(p) -> void:
 		"reflex_hammer": _use_hammer(p, head)
 		"epipen": _use_epipen(p, head)
 		"lifeguard_whistle": _use_whistle(p, head)
+		"restaurant_pagers": _use_pager_station(p, head)
+		"restaurant_pager": _use_pager(p, head)
 
 
 ## Every machine (Player._update_aim, a few Hz): the crosshair line while holding a trinket that
@@ -246,6 +287,17 @@ func use_prompt(p) -> String:
 			return "[Click] Jab %s" % (q.player_name if q != null else "yourself")
 		"lifeguard_whistle":
 			return "[Click] Blow it. Everything nearby will come."
+		"restaurant_pagers":
+			return "[Click] Take the two pagers off the station"
+		"restaurant_pager":
+			if not _is_paired(s):
+				return ""        # a lone pager is loot: no prompt, and the click shoves
+			var where := _partner_where(s, p)
+			if where == "held":
+				return "[Click] Buzz the other pager"
+			if where == "floor":
+				return "[Click] Buzz the other pager. You left it somewhere."
+			return ""
 		"defibrillator":
 			var d := _downed_mate(p)
 			if d == null:
@@ -679,6 +731,180 @@ func _use_whistle(p, head: int) -> void:
 	last_result = {"what": "whistle", "pos": at}
 
 
+# =============================================================================== the pagers
+#
+# THE PAIR. Two pagers are bound by a pair id living in the stack's `x` -- the same small string
+# field that carries a spent trinket's `used` mark and a grafted eye's owner. That is the whole
+# binding, and it is deliberately not a table on this node: `x` already survives being dropped,
+# thrown, shelved, scattered on death and picked up again (game.gd writes it both ways), and it is
+# already replicated with the world item. A table here would have to be taught all of that.
+#
+# BREAKING THE PAIR is therefore not an event anyone has to remember to fire. A pager asks, at the
+# moment it is pressed, whether anything else in the world still carries its mark. Sell one, burn
+# one in the furnace, or simply leave one behind when the shift rebuilds, and the survivor finds
+# nothing -- and a pager that finds nothing is plain loot, with no prompt and a click that falls
+# through to a shove. One rule covers every way a pair can be broken, including ways we have not
+# thought of.
+
+## Is this stack one of a bound pair (as opposed to a lone pager)?
+func _is_paired(s: Dictionary) -> bool:
+	return String(s.get("x", "")).begins_with(PAIR_MARK)
+
+
+## The pair id a stack carries, or "".
+static func pair_id(s: Dictionary) -> String:
+	var x := String(s.get("x", ""))
+	return x if x.begins_with(PAIR_MARK) else ""
+
+
+## Everything in the world wearing `mark`, as [{where, peer?, head?, item?}]. `skip_head` and
+## `skip_peer` leave out the pager doing the asking, so a pager never finds itself.
+func _pair_members(mark: String, skip_peer: int, skip_head: int) -> Array:
+	var out: Array = []
+	if mark == "" or game == null:
+		return out
+	for p in game.players.values():
+		if p == null or not is_instance_valid(p):
+			continue
+		for i in p.slots.size():
+			var s: Dictionary = p.slots[i]
+			if String(s.get("kind", "")) != "restaurant_pager" or String(s.get("x", "")) != mark:
+				continue
+			if int(p.peer_id) == skip_peer and i == skip_head:
+				continue
+			out.append({"where": "held", "peer": int(p.peer_id), "head": i, "node": p})
+	for it in game.world_items.values():
+		if it == null or not is_instance_valid(it) or not it.is_inside_tree():
+			continue
+		if String(it.kind) != "restaurant_pager" or String(it.x) != mark:
+			continue
+		out.append({"where": "floor", "item": int(it.item_id), "node": it})
+	return out
+
+
+## Every machine (the crosshair line): where this pager's partner is -- "held", "floor" or "".
+func _partner_where(s: Dictionary, p) -> String:
+	var found := _pair_members(pair_id(s), int(p.peer_id), p.selected_head())
+	return String(found[0].where) if not found.is_empty() else ""
+
+
+## Host: lift the two pagers off the station. One ends up in your hands and one on the floor at your
+## feet, which is the item stating what it is for: one of them is meant to leave with somebody else,
+## or to be put somewhere on purpose.
+func _use_pager_station(p, head: int) -> void:
+	var s: Dictionary = p.slots[head]
+	var mark := "%s%d" % [PAIR_MARK, _pair_next]
+	_pair_next += 1
+	var worth: int = int(s.get("v", 0))
+	var each: int = maxi(1, worth / 2)
+	# The station itself is consumed: what it was worth is now split between the two pagers, so
+	# taking the pair out never mints or burns money.
+	p.clear_slot(head)
+	var fwd: Vector3 = -p.global_transform.basis.z
+	var spot: Vector3 = game._floor_at(p.global_position + fwd * 0.7) + Vector3.UP * 0.05
+	# One in your hands. The station's slot was just freed, so there is room -- but if something has
+	# taken it in the meantime, that pager goes on the floor beside the other rather than vanishing.
+	var mine: int = p.take_into("restaurant_pager", 1, each)
+	if mine >= 0:
+		p.slots[mine]["x"] = mark
+	else:
+		var spare: Node = game._spawn_item("restaurant_pager", 1, Transform3D(Basis(Vector3.UP, p.rotation.y), spot + fwd * 0.25), WorldItem.State.LOOSE)
+		spare.value = each
+		spare.x = mark
+	# ... and one at your feet.
+	var it: Node = game._spawn_item("restaurant_pager", 1, Transform3D(Basis(Vector3.UP, p.rotation.y), spot), WorldItem.State.LOOSE)
+	it.value = worth - each
+	it.x = mark
+	last_result = {"what": "pagers_out", "kind": mark, "id": int(it.item_id)}
+	game._sound("trinkets_phone_pick", spot)
+	game.tell(p, "Two pagers, bound to each other. One of you takes the other.", 4.0)
+
+
+## Host: press this pager and the OTHER one goes off, wherever in the hospital it is.
+##
+## THE PRIVATE BUZZ. When the partner is in somebody's hands, only that somebody may hear it. This
+## is done the way the rest of this file does everything: a counter in the replicated state, not a
+## targeted RPC. `_buzz[peer]` goes up by one, every machine receives it, and every machine then
+## decides for itself whether it is the one that should render it -- which is true only on the
+## machine where that peer is the LOCAL player. Privacy is enforced at the render, not at the
+## delivery. The reason is the one written at the top of this file and in the reflex hammer's
+## comment: a counter cannot be lost or repeated by a dropped packet, while a one-off event can,
+## and a communication device that silently drops messages is a broken communication device.
+## The sound is played with no position (Audio.play's 2D path), so it is in that player's ears
+## rather than in the room, and it cannot be heard by standing next to them.
+func _use_pager(p, head: int) -> void:
+	var s: Dictionary = p.slots[head]
+	var mark := pair_id(s)
+	var found := _pair_members(mark, int(p.peer_id), head)
+	if mark == "" or found.is_empty():
+		# Sold, burnt, or left behind in a shift that has been rebuilt since.
+		last_result = {"what": "pager_alone"}
+		game.tell(p, "Nothing answers. The other one is gone.", 2.5)
+		return
+	var now: float = game.world_time
+	if now < float(_pager_cd.get(int(p.peer_id), 0.0)):
+		last_result = {"what": "pager_cooldown"}
+		return
+	_pager_cd[int(p.peer_id)] = now + PAGER_COOLDOWN
+	var other: Dictionary = found[0]
+	if String(other.where) == "held":
+		var peer := int(other.peer)
+		_buzz[peer] = (int(_buzz.get(peer, 0)) + 1) % 64
+		last_result = {"what": "pager_buzz", "id": peer}
+	else:
+		# On the floor: nothing is damping it, so it walks around and every machine hears it where
+		# it lies. This is the remote noisemaker, and it is the host that tells the monsters.
+		var iid := int(other.item)
+		_rattle[iid] = (int(_rattle.get(iid, 0)) + 1) % 64
+		var at: Vector3 = (other.node as Node3D).global_position + Vector3.UP * 0.05
+		_pager_heard(at)
+		last_result = {"what": "pager_rattle", "id": iid, "pos": at}
+
+
+## Host: a planted pager going off is a noise like any other, and the deaf Hive is told by hand --
+## the same two lines the desk phone's ring uses, for the same reason.
+func _pager_heard(at: Vector3) -> void:
+	game.emit_noise(at, PAGER_NOISE, "pager")
+	for m in game.monsters.values():
+		if m == null or not is_instance_valid(m) or String(m.kind) != MonsterScript.HIVE:
+			continue
+		if m.global_position.distance_to(at) <= PAGER_HIVE_RANGE and m.has_method("alert_to"):
+			m.alert_to(at)
+
+
+## Every machine: act on the two pager counters. The buzz is rendered only where its owner is the
+## local player; the rattle is rendered by everyone, positionally, because it really is in the room.
+func _tick_pagers() -> void:
+	for peer in _buzz.keys():
+		var n := int(_buzz[peer])
+		var seen := int(_buzz_seen.get(peer, -1))
+		_buzz_seen[peer] = n
+		if seen < 0 or seen == n:
+			continue        # first sight of a counter is never a buzz: a late joiner must not jump
+		var q = game.players.get(int(peer))
+		if q == null or not is_instance_valid(q) or not q.is_local:
+			continue        # everyone else received it and deliberately renders nothing
+		Audio.play("trinkets_pager_buzz")     # no position: in their ears, not in the room
+		if q.fx != null and q.fx.has_method("add_shake"):
+			q.fx.add_shake(PAGER_SHAKE, PAGER_SHAKE_TIME)
+	for peer in _buzz_seen.keys():
+		if not _buzz.has(peer):
+			_buzz_seen.erase(peer)
+	for iid in _rattle.keys():
+		var n2 := int(_rattle[iid])
+		var seen2 := int(_rattle_seen.get(iid, -1))
+		_rattle_seen[iid] = n2
+		if seen2 < 0 or seen2 == n2:
+			continue
+		var it = game.world_items.get(int(iid))
+		if it == null or not is_instance_valid(it) or not it.is_inside_tree():
+			continue
+		Audio.play("trinkets_pager_rattle", it.global_position + Vector3.UP * 0.05)
+	for iid in _rattle_seen.keys():
+		if not _rattle.has(iid):
+			_rattle_seen.erase(iid)
+
+
 ## Host: the boost starts on `q` (tests call it directly).
 func jab_epipen(q) -> void:
 	if q == null or not is_instance_valid(q) or game == null or not game.is_host():
@@ -724,6 +950,7 @@ func physics_tick(delta: float) -> void:
 	_apply_boosts()
 	_tick_spins()
 	_tick_swings()
+	_tick_pagers()
 	_play_rings(delta)
 	_play_heartbeats(delta)
 
@@ -860,6 +1087,10 @@ func net_state() -> Dictionary:
 		s["sp"] = _spins.duplicate()
 	if not _swings.is_empty():
 		s["sw"] = _swings.duplicate()
+	if not _buzz.is_empty():
+		s["pb"] = _buzz.duplicate()
+	if not _rattle.is_empty():
+		s["pr"] = _rattle.duplicate()
 	return s
 
 
@@ -880,6 +1111,8 @@ func apply_net_state(s: Dictionary) -> void:
 	_epi = _ints((s.get("ep", {}) as Dictionary))
 	_spins = _ints((s.get("sp", {}) as Dictionary))
 	_swings = _ints((s.get("sw", {}) as Dictionary))
+	_buzz = _ints((s.get("pb", {}) as Dictionary))
+	_rattle = _ints((s.get("pr", {}) as Dictionary))
 
 
 ## Dictionary keys come back off the wire as floats; every key here is an id.
@@ -916,3 +1149,9 @@ func on_reset() -> void:
 	_beat.clear()
 	_ring_at.clear()
 	_noise_at.clear()
+	_buzz.clear()
+	_buzz_seen.clear()
+	_rattle.clear()
+	_rattle_seen.clear()
+	_pager_cd.clear()
+	_pair_next = 0
