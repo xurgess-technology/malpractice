@@ -82,6 +82,19 @@ How to run things is at the bottom of this file.
   the fence now refuses those, so she is far likelier to still be nearby when the bot crosses.
   Whoever picks this up should look at `_vanish()` in `scripts/monsters/night_nurse_brain.gd` and at
   how `_nurse_follows` in `tools/pockettest.gd` stages her, rather than at the seam.
+- **2026-09-22, `pockets-natatorium`: it is not a coin flip. It is the run order.** Phase 2 added a
+  third space, which made the pattern visible: **only the space that runs FIRST passes this check;
+  every space after it fails.** Measured, with the natatorium third (`KINDS` order) and then with the
+  order reversed in `_ready`:
+  - factory, restaurant, **natatorium** -> factory ok, restaurant ok, **natatorium FAILS** (60.0 s,
+    1965.8 m)
+  - **natatorium**, restaurant, factory -> **natatorium ok** (9.2 s, 3.9 m), restaurant FAILS
+    (60.0 s, 1444.3 m), factory FAILS (60.0 s, 1235.7 m)
+  Each space passes on its own (`--only=<kind>` is green for all three), and the distances reported
+  are just each pocket's own origin, so they say nothing. This rules out the space, the seam, the
+  layout and the distance, and points squarely at **state left behind by the previous space's run** —
+  `_run_space` tears a shift down and starts another, and something the Night Nurse depends on does
+  not survive that. Start at what `_nurse_follows` assumes about a freshly rebuilt shift.
 
 ## 1g. nettest `pockets`: client 1 never carries client 2 into the pocket
 

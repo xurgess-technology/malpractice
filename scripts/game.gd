@@ -541,6 +541,7 @@ func _populate_shift_world() -> void:
 			n.set_open(false, false)
 	spawn_suture_kits()  # downed: every shift has suture kits for the player table
 	spawn_syringes()     # SYRINGE DRAW: and syringes to pre-load a dose into
+	stock_first_aid_cabinets()  # POCKETS 2 phase 2: the Natatorium's cabinet is never empty
 	spawn_loot()
 	_spawn_monsters()
 
@@ -2375,16 +2376,20 @@ func _tick_noise(delta: float) -> void:
 	while not _noises.is_empty() and float(_noises[0].time) < cut:
 		_noises.pop_front()
 	for p in alive_players():
+		# POCKETS 2 phase 2: standing in the Natatorium's pool replaces both numbers below, and is the
+		# one case where crouching does not buy silence (PocketSpaces.water_footstep says why).
+		var wet: Array = pockets.water_footstep(p.global_position, bool(p.sprinting), bool(p.get("crouching"))) if pockets != null else []
 		# SWEEP 4A HOOK (controls): a crouching player's footsteps make no sound and no noise event
 		# at all (not just quieter): the Sonographer can't hear a crouching player walk.
-		if not p.moving or bool(p.get("crouching")):
+		if not p.moving or (bool(p.get("crouching")) and wet.is_empty()):
 			_footstep_acc[p.peer_id] = 0.0
 			continue
 		var acc: float = float(_footstep_acc.get(p.peer_id, 0.0)) + delta
-		var interval := 0.3 if p.sprinting else 0.5
+		var interval: float = float(wet[1]) if not wet.is_empty() else (0.3 if p.sprinting else 0.5)
 		if acc >= interval:
 			acc = 0.0
-			emit_noise(p.global_position, 0.8 if p.sprinting else 0.25, "footstep")
+			var loudness: float = float(wet[0]) if not wet.is_empty() else (0.8 if p.sprinting else 0.25)
+			emit_noise(p.global_position, loudness, "footstep")
 		_footstep_acc[p.peer_id] = acc
 
 
@@ -3260,6 +3265,28 @@ func downed_call_out(p: Node) -> void:
 
 
 ## Host: put a few suture kits around the hospital (containers where they belong, else the floor).
+## POCKETS 2 phase 2 (docs/POCKET_SPACES_2.md, the Natatorium): the lifeguard stand's first-aid
+## cabinet is the one container in the game with guaranteed contents -- gauze in its first slot, a
+## tourniquet in its second -- so a crew that finds the pocket and walks to the stand is always paid
+## for it. The third slot is left alone, which is where the ordinary spawners sometimes put a
+## whistle. Runs before spawn_loot(), so those two slots are already taken when the planners look.
+## Host only, and a no-op on every shift without a Natatorium: nothing else builds this type.
+func stock_first_aid_cabinets() -> void:
+	if not is_host():
+		return
+	for c in level_info.get("containers", []):
+		if String(c.get("type", "")) != "first_aid_cabinet":
+			continue
+		var id := String(c.id)
+		for pair in [["gauze", 0], ["tourniquet", 1]]:
+			if int(pair[1]) >= int(c.get("slots", 0)):
+				continue
+			var kind := String(pair[0])
+			var batch: Array = Items.def(kind).get("batch", [1, 1])
+			_spawn_from_plan({"kind": kind, "count": int(batch[0]), "container_id": id,
+					"slot": int(pair[1]), "anchor": -1})
+
+
 func spawn_suture_kits() -> void:
 	_spawn_loose_supply("suture_kit", SUTURE_KITS_PER_SHIFT, "suture")
 

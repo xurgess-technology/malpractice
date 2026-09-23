@@ -42,6 +42,9 @@ const GRIPS := {
 	"reflex_hammer": {"pos": Vector3(-0.06, 0.02, 0.0), "fwd": Vector3(1, 0, 0), "up": Vector3(0, -1, 0), "style": "fist"},
 	# EpiPen: cap at -X, needle end +X, held like the reflex hammer.
 	"epipen": {"pos": Vector3(-0.03, 0.016, 0.0), "fwd": Vector3(1, 0, 0), "up": Vector3(0, -1, 0), "style": "fist"},
+	# POCKETS 2 phase 2: the whistle's mouthpiece is at -X and its barrel runs along +X, so it is held
+	# like the reflex hammer -- mouthpiece out of the fist, which is what you need to blow it.
+	"lifeguard_whistle": {"pos": Vector3(-0.03, 0.017, 0.0), "fwd": Vector3(1, 0, 0), "up": Vector3(0, -1, 0), "style": "fist"},
 	"pill_bottle": {"bundle": 3},
 }
 

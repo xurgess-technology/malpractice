@@ -25,6 +25,8 @@ const DrawerUnitScript := preload("res://scripts/containers/drawer_unit.gd")
 const StationScript := preload("res://scripts/containers/station_drawers.gd")
 const TraumaBagScript := preload("res://scripts/containers/trauma_bag.gd")
 const PegboardScript := preload("res://scripts/containers/pegboard.gd")
+## POCKETS 2 phase 2: only the Natatorium builds one (pocket_common.container), never a wing room.
+const FirstAidCabinetScript := preload("res://scripts/containers/first_aid_cabinet.gd")
 const TERMINAL_MODEL_PATH := "res://scripts/database/terminal_model.gd"
 
 ## Places where nothing a case needs is placed and monsters never spawn.

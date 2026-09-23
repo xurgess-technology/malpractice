@@ -253,6 +253,27 @@ add("gold_watch", "Gold watch", "loot", { body: `
 <rect x="184" y="120" width="14" height="16" rx="4" fill="${GOLD}" stroke="${O}" stroke-width="5"/>
 <path d="M92 104 Q100 90 114 86" fill="none" stroke="#fff" stroke-width="5" opacity="0.8"/>` });
 
+// POCKETS 2 phase 2: the Natatorium (docs/POCKET_SPACES_2.md).
+add("pool_chemical_drum", "Pool chemical drum", "loot", { body: `
+<path d="M74 70 L182 70 L182 216 Q128 228 74 216 Z" fill="#2a5fa8" stroke="${O}" stroke-width="9"/>
+<ellipse cx="128" cy="70" rx="54" ry="16" fill="#e8ece8" stroke="${O}" stroke-width="9"/>
+<ellipse cx="150" cy="66" rx="14" ry="6" fill="#b8352a" stroke="${O}" stroke-width="5"/>
+<path d="M74 112 L182 112 M74 168 L182 168" stroke="${O}" stroke-width="7" opacity="0.55"/>
+<path d="M128 116 L160 146 L128 176 L96 146 Z" fill="${GOLD}" stroke="${O}" stroke-width="7"/>
+<path d="M128 130 L128 152" stroke="${O}" stroke-width="8"/>
+<circle cx="128" cy="163" r="5" fill="${O}"/>
+<path d="M88 84 Q84 140 90 200" fill="none" stroke="#7fa8dd" stroke-width="6" opacity="0.7"/>` });
+
+add("lifeguard_whistle", "Lifeguard whistle", "trinket", { body: `
+<path d="M40 122 Q70 96 118 100 L178 104 Q206 106 206 130 Q206 154 178 156 L118 160 Q70 164 40 138 Z" fill="${STEEL}" stroke="${O}" stroke-width="9"/>
+<path d="M118 100 L118 160" stroke="${O}" stroke-width="7" opacity="0.6"/>
+<path d="M60 112 Q82 104 110 106" fill="none" stroke="${STEEL_HI}" stroke-width="7"/>
+<rect x="128" y="86" width="26" height="22" rx="6" fill="#8d9aa0" stroke="${O}" stroke-width="7"/>
+<circle cx="196" cy="130" r="9" fill="${O}"/>
+<path d="M40 130 Q22 130 16 118" fill="none" stroke="${O}" stroke-width="8"/>
+<path d="M62 186 Q100 214 146 206 Q190 198 206 172" fill="none" stroke="${RED}" stroke-width="12" stroke-linecap="round"/>
+<path d="M214 92 Q236 110 236 130 M214 62 Q252 98 252 130" fill="none" stroke="${GOLD}" stroke-width="9" stroke-linecap="round"/>` });
+
 add("ultrasound", "Portable ultrasound", "loot", { body: `
 <rect x="30" y="38" width="196" height="180" rx="16" fill="#dfe4e6" stroke="${O}" stroke-width="9"/>
 <rect x="44" y="52" width="168" height="132" rx="6" fill="#0d1216" stroke="${O}" stroke-width="5"/>
