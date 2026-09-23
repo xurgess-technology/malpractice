@@ -61,68 +61,37 @@ How to run things is at the bottom of this file.
   most recent change near this behaviour, but it hasn't been confirmed as the cause.
 
 
-## 1f. pockettest: the Night Nurse follows you through a seam
+## 1f was two bugs, both fixed 2026-09-23 (`fix-1f`)
 
-- **Command:** `godot --headless --path . --fixed-fps 60 tools/pockettest.tscn`
-- **Result:** `FAILED 2 of 180 checks`:
-  `restaurant: the Night Nurse followed the player through the seam (60.0 s, 1444.3 m away)` and
-  `restaurant: she crossed exactly once`.
-- **Found 2026-09-22** during the strapping fix, and **confirmed identical on plain `main`** at
-  `c933607` — the same two checks with the same numbers to the decimal (60.0 s, 1444.3 m), so
-  nothing about it is timing-dependent. Never written down before; nobody has looked at the cause.
-- The other 178 checks pass, the seams themselves included.
-- **It became intermittent on 2026-09-22** with the POCKET_SPACES_2 phase 1 fence (`pockets-phase1`),
-  which stops idle wander crossing a seam. Five runs on that branch: **pass, fail, pass, pass, fail**.
-  A passing run has her following in **9.2 s, 3.9 m** — a healthy follow, not a near-miss — and a
-  failing one still reports exactly 60.0 s and 1444.3 m, which is just "she stayed in the hospital
-  while the bot walked into the pocket", so the identical number says nothing about the cause.
-- **So it is not fixed, and phase 1 did not break it either**: a deterministic failure became
-  order-dependent. That is a strong hint about the cause. The Night Nurse's `_vanish()` asks
-  `random_nav_point` for a point up to **400 m** away, which used to reach the pocket at tile 800;
-  the fence now refuses those, so she is far likelier to still be nearby when the bot crosses.
-  Whoever picks this up should look at `_vanish()` in `scripts/monsters/night_nurse_brain.gd` and at
-  how `_nurse_follows` in `tools/pockettest.gd` stages her, rather than at the seam.
-- **2026-09-22, `pockets-natatorium`: it is not a coin flip. It is the run order.** Phase 2 added a
-  third space, which made the pattern visible: **only the space that runs FIRST passes this check;
-  every space after it fails.** Measured, with the natatorium third (`KINDS` order) and then with the
-  order reversed in `_ready`:
-  - factory, restaurant, **natatorium** -> factory ok, restaurant ok, **natatorium FAILS** (60.0 s,
-    1965.8 m)
-  - **natatorium**, restaurant, factory -> **natatorium ok** (9.2 s, 3.9 m), restaurant FAILS
-    (60.0 s, 1444.3 m), factory FAILS (60.0 s, 1235.7 m)
-  Each space passes on its own (`--only=<kind>` is green for all three), and the distances reported
-  are just each pocket's own origin, so they say nothing. This rules out the space, the seam, the
-  layout and the distance, and points squarely at **state left behind by the previous space's run** —
-  `_run_space` tears a shift down and starts another, and something the Night Nurse depends on does
-  not survive that. Start at what `_nurse_follows` assumes about a freshly rebuilt shift.
-- **2026-09-22, `pockets-chapel`, with FIVE spaces (factory, restaurant, natatorium, chapel,
-  laundromat): FAILED 2 of 547, and the one that fails is the `chapel`** -- a different space
-  again, and not the last in the list. Run alone it is green. Across the runs recorded here the
-  identity of the failing space keeps moving while the failure itself never does, which is the
-  strongest argument yet that this is per-run leftover state and nothing to do with any space.
-- **2026-09-22, `pockets-chapel`, with four spaces: the order story does not fully hold.** A merged
-  run of factory, restaurant, natatorium, chapel gives **FAILED 4 of 430**: `restaurant` (second)
-  and `natatorium` (third) fail, while `factory` (first) **and `chapel` (fourth)** both pass. So it
-  is not simply "only the first one passes" -- something about the previous space's teardown, not
-  the position in the list. Worth re-measuring the phase 2 orderings now there is a fourth space.
-- **2026-09-22, `pockets-chapel`: a warning for anyone changing her.** With four spaces the Chapel
-  ran last and *passed* in one run while `restaurant` (second) failed, and an earlier run of the
-  same set passed every check, so the ordering effect is not perfectly deterministic — the cause
-  still looks like leftover state rather than position as such. **Alone, the Chapel is green**:
-  `--only=chapel` passes 102 checks with her following in **9.2 s, 3.9 m**.
-- **2026-09-23, `pockets-bleed`: a second check now shows the same behaviour, and it is not the
-  Night Nurse's.** One run failed `laundromat seam 0 ... the follower crossed exactly once` — a
-  *different* check from the two this section names — and it behaves exactly like 1f: it moves
-  between runs and `--only=laundromat` is green (111 checks). The next run of the same tree failed
-  6 of 670, all of them the ordinary Night Nurse checks at the familiar 1444.3 / 1965.8 / 2600.3 m.
-  **Nobody has re-run plain `main` to prove this one pre-existing**, so it is recorded as a lead and
-  not yet folded into 1f proper. If it is the same leftover state, then whatever `_run_space`
-  fails to tear down is something *both* followers read — which would be a bigger clue than
-  anything above, because it stops being a fact about her.
-  **If you are changing Night Nurse behaviour, run your space alone before concluding anything.**
-  The Chapel's votive candle makes her count as watched inside its radius (it is in
-  `Perception.observed_any`, above the early-out), which is exactly the sort of change that would
-  otherwise get blamed for this.
+The Night Nurse "followed the player through the seam" failure, and the `laundromat seam 0 ... the
+follower crossed exactly once` failure recorded beneath it as a lead, were **not the same fault and
+neither was leftover state from `_run_space`**. Three days of notes here read them as one moving,
+order-dependent bug; measuring found two ordinary ones. Kept as a short note because the reasoning
+that misled everybody is worth not repeating.
+
+- **The Night Nurse wedged on the floor.** She was not staying behind, refusing to cross or failing
+  to see the player: she was walking on the spot in a hospital corridor for the whole 60 s, at
+  `y = 0.000943 m` -- a hair inside the physics safe margin of `0.001` -- with her capsule tangent
+  to the map-wide floor box. `move_and_slide()` spent all six of its slides on that one contact
+  every frame: six collisions, all with the floor's own upward normal, all with zero travel.
+  Lifting her two centimetres freed her instantly and every horizontal direction was clear up
+  there. `step_toward`'s existing unjam could not help, because it only sidesteps, and what was in
+  the way was underfoot. Fixed with `_unwedge()` in `scripts/monster.gd`: a monster that has gone
+  nowhere at all for a second steps up over the lip, when both the lift and the step after it
+  measure clear. **Which space it hit moved between runs because the pocket builds on a worker
+  thread**, so a shift takes a slightly different number of frames each run and everything after it
+  diverges -- nothing to do with the space, the seam or the run order.
+- **The follower crossing check was counting from a window.** `pocket_spaces.crossings` keeps only
+  the last 64 crossings; a full `pockettest` run makes more than that, monsters and items included,
+  so once the window is full an older entry for the same body falls off the front and the
+  before/after delta reads 0 instead of 1. That is why it only ever bit the last space, why it
+  moved about, and why `--only=<kind>` was always green. `crossing_tally` / `crossed_times()` now
+  keep a count that is never trimmed, and `tools/pockettest.gd` counts with it.
+
+`pockettest` runs green: four full runs of 670 checks on `fix-1f`. On plain `main` the full run
+failed every time it was tried (4 of 670 at `0756682`), and the cut-down reproducer
+`--only=factory,natatorium` failed about half its runs -- which is all "it moves between runs" ever
+was, and why one green run proves nothing here.
 
 ## 1g. nettest `pockets`: client 1 never carries client 2 into the pocket
 
@@ -132,8 +101,8 @@ How to run things is at the bottom of this file.
   pocket`. The carry never starts, so nothing about the seam itself is exercised.
 - **Found 2026-09-22** during the strapping fix, **confirmed on plain `main`** at `c933607` with the
   identical message, and it reproduces every run (not a load flake). Never written down before.
-- Not to be confused with the headless `pockettest` scene (section 1f), which fails on something
-  else entirely (the Night Nurse).
+- Not to be confused with the headless `pockettest` scene, whose own failures (the old section 1f,
+  above) were something else entirely and are fixed.
 
 ## 1i. nettest `full_shift_lag` is a load flake
 

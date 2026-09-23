@@ -48,6 +48,8 @@ static func script_of(kind: String) -> GDScript:
 const SNAP_DISTANCE := 6.0
 ## Noises within this many metres of a seam (on its own side) are also heard on the other side.
 const NOISE_REACH := 26.0
+## How many recent crossings the `crossings` window holds.
+const CROSSINGS_KEPT := 64
 const LINK_OFFSET := 0.6
 const T2 := 1.5
 
@@ -59,8 +61,15 @@ var game: Node = null
 var pocket: Dictionary = {}
 ## Seam records, see _make_seam.
 var seams: Array = []
-## Crossings this machine performed (tests): [{what, id, seam, to_pocket, time}]
+## The last CROSSINGS_KEPT crossings this machine performed (tests): [{what, id, seam, to_pocket, time}]
 var crossings: Array = []
+## How many crossings each body has made, ever: "what:id" -> count. `crossings` above is a window,
+## so counting entries in it under-reports as soon as a run has made more than CROSSINGS_KEPT of
+## them and the oldest start falling off the front -- which is a lie that only shows up late in a
+## long run, and then moves about as monsters and items cross too (FAILING_TESTS 1f, 2026-09-23:
+## it cost `pockettest` a day being read as a seam fault). A test asking "did this body cross once"
+## wants crossed_times(); the list is for looking at what happened.
+var crossing_tally: Dictionary = {}
 ## Tools (screenshots of both copies): false stops moving anything across seams.
 var crossing_enabled := true
 ## A pocket is being built for this shift's wings (clock-in and the gates wait for it).
@@ -780,10 +789,18 @@ func transfer_item(it: RigidBody3D, s: Dictionary, to_pocket: bool) -> void:
 	_note("item", int(it.item_id), s, to_pocket)
 
 
+## How many crossings `what` id has made since the process started. Never trimmed, so this is the
+## one to count with; see crossing_tally.
+func crossed_times(what: String, id: int) -> int:
+	return int(crossing_tally.get("%s:%d" % [what, id], 0))
+
+
 func _note(what: String, id: int, s: Dictionary, to_pocket: bool) -> void:
+	var key := "%s:%d" % [what, id]
+	crossing_tally[key] = int(crossing_tally.get(key, 0)) + 1
 	crossings.append({"what": what, "id": id, "seam": int(s.id), "to_pocket": to_pocket,
 			"time": float(game.world_time) if game != null else 0.0})
-	if crossings.size() > 64:
+	if crossings.size() > CROSSINGS_KEPT:
 		crossings.pop_front()
 
 

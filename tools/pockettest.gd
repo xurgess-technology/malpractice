@@ -1,7 +1,7 @@
 extends Node
 ## POCKETS: headless check of pocket spaces in the real game, for both the Factory and the Restaurant.
 ##
-##   godot --headless --fixed-fps 60 --path . tools/pockettest.tscn [-- --seed=N] [--only=factory]
+##   godot --headless --fixed-fps 60 --path . tools/pockettest.tscn [-- --seed=N] [--only=factory,chapel]
 ##   godot --path . tools/pockettest.tscn --resolution 1280x720 -- --frames   # windowed rebuild frame times
 ##
 ## For each space (forced on the run's hospital):
@@ -60,7 +60,7 @@ func _ready() -> void:
 	if only == "":
 		_check_pocket_items()
 	for kind in Plan.KINDS:
-		if only != "" and only != kind:
+		if only != "" and not only.split(",").has(kind):
 			continue
 		await _run_space(kind)
 	Plan.force_kind = ""
@@ -541,12 +541,12 @@ func _walk_through(kind: String, s: Dictionary, into: bool, carried: Player, fol
 	await _frames(2)
 
 
+## Ask the tally, never the `crossings` window: the window keeps only the last CROSSINGS_KEPT and
+## a full run of this test makes more than that, so counting its entries quietly loses a crossing
+## late in the run (FAILING_TESTS 1f, 2026-09-23 -- it read as "the follower crossed twice", in a
+## different space every run, because monsters and items fill the window too).
 func _count_crossings(what: String, id: int) -> int:
-	var n := 0
-	for c in game.pockets.crossings:
-		if c.what == what and int(c.id) == id:
-			n += 1
-	return n
+	return game.pockets.crossed_times(what, id)
 
 
 func _make_bot(id: int, nm: String) -> Player:
