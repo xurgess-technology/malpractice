@@ -220,9 +220,9 @@ static func build(st: S, ox: int, oy: int) -> void:
 			(st.spots["vat_benches"] as Array).append({"pos": Vector2(ox + 14.0 - depth.call(e[0]), oy + e[1]), "yaw": Defs.yaw_facing(WEST)})
 	put.call("lab_corner", 13.0 + depth.call("lab_corner") - 0.01, 13.0 - depth.call("lab_corner"), N, or_room)
 	# 2026-09-18: no supply shelf (tools are used from your hands); the closet is the janitor's. Its
-	# middle row (7) stays clear from the OR door to the west wall, where dev mode's door opens
-	# (dev_room.gd). Mop sink and shelving on the north wall, the bucket, washer and brooms on the
-	# south wall.
+	# middle row (7) stays clear from the OR door to the west wall (2026-09-23: no longer a dev
+	# door there -- the dev room is gone -- just an easy walkway). Mop sink and shelving on the
+	# north wall, the bucket, washer and brooms on the south wall.
 	var jan := func(kind: String, x: float, y: float, face: Vector2) -> void:
 		if not put.call(kind, x, y, face, storage):
 			push_error("entrance: janitor's closet %s at (%.2f, %.2f) did not fit" % [kind, x, y])

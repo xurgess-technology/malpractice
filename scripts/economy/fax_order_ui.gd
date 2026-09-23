@@ -14,7 +14,7 @@ extends CanvasLayer
 ##
 ## DEV HOOK: a quantity of exactly game.DEV_CODE placebo pills is the secret order. It sends whatever
 ## the team has; instead of closing, the machine prints a reply page while the host turns dev mode on
-## and every machine builds the hidden dev room (dev_room.gd), then the reply ejects and it closes.
+## for everyone in the session, then the reply ejects and it closes.
 ##
 ##   open(game)   show it; the player stops (main.gd frees the mouse while is_open())
 ##   close()      send it away (is_open() is false at once)
@@ -62,7 +62,7 @@ const REPLY_HOLD_SECONDS := 1.2
 const REPLY_TIMEOUT := 15.0
 const SECRET_KIND := "placebo_pills"
 var _reply := -1.0                # seconds since the reply page started, < 0 while not printing
-var _reply_lines: Array = []      # the lines still to print ("@build" waits for the room)
+var _reply_lines: Array = []      # the lines still to print ("@build" waits for dev_on() to replicate)
 var _reply_next := 0.0
 var _reply_sent := false
 var _reply_wait: Label = null
@@ -600,7 +600,6 @@ func _start_reply() -> void:
 		["@rule"],
 		["ORDER VOIDED. NO CHARGE.", Fax.FONT_SIZE, Fax.INK],
 		["AUTHORIZATION ........ 3.14159265", Fax.FONT_SIZE, Fax.INK],
-		["UNLOCKING SUPPLY CLOSET ........ OK", Fax.FONT_SIZE, Fax.INK],
 		["@build"],
 		["@rule"],
 		["DEV MODE ON.  F1: DEV PANEL.", Fax.FONT_SIZE, Fax.DEV_INK],
@@ -611,13 +610,13 @@ func _start_reply() -> void:
 func _tick_reply(delta: float) -> void:
 	_reply += delta
 	if _reply_sent and _reply_wait != null:
-		var ready: bool = game != null and game.dev_on() and game.dev.room_ready()
+		var ready: bool = game != null and game.dev_on()
 		if ready or _reply >= REPLY_TIMEOUT:
-			_reply_wait.text = "BUILDING DEV ROOM ................ " + ("DONE" if ready else "LATE")
+			_reply_wait.text = "ENABLING DEV MODE ................ " + ("DONE" if ready else "LATE")
 			_reply_wait = null
 			_reply_next = _reply + REPLY_LINE_SECONDS
 		else:
-			_reply_wait.text = "BUILDING DEV ROOM " + ".".repeat(1 + int(_reply * 6.0) % 16)
+			_reply_wait.text = "ENABLING DEV MODE " + ".".repeat(1 + int(_reply * 6.0) % 16)
 	elif _reply >= _reply_next and not _reply_lines.is_empty():
 		_print_reply_line(_reply_lines.pop_front())
 		_reply_next = _reply + REPLY_LINE_SECONDS
@@ -639,7 +638,7 @@ func _print_reply_line(line: Array) -> void:
 		"@rule":
 			_sheet.add_child(_rule())
 		"@build":
-			_reply_wait = _ink("BUILDING DEV ROOM .", Fax.FONT_SIZE)
+			_reply_wait = _ink("ENABLING DEV MODE .", Fax.FONT_SIZE)
 			_sheet.add_child(_reply_wait)
 		_:
 			_sheet.add_child(_ink(String(line[0]), int(line[1]), line[2]))

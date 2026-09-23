@@ -267,14 +267,14 @@ var bot_crouch_press: int = 0
 ## SPRINT-DIVE HOOK: bump to fire the sprint+crouch-dive once (only the dive, never a stance step).
 var bot_dive: int = 0
 
-## DEV HOOK (scripts/dev): a dev room bot or target dummy. The host simulates it like a local
+## DEV HOOK (scripts/dev): a dev bot or target dummy. The host simulates it like a local
 ## player through the bot_* seam; everyone else sees it like a remote player.
 var is_bot: bool = false
 ## GRAFT HOOK (dev panel, "Control Dr. Botsworth"): a human at this machine is driving this bot's
 ## body instead of their own. Local presentation only, never replicated: `bot_active` goes off so
 ## _local_step reads the keyboard, the body goes first person on this machine alone, and every
 ## other machine still sees an ordinary bot. Only the host can possess (it is the machine that
-## simulates bots); see scripts/dev/dev_room.gd possess_bot().
+## simulates bots); see scripts/dev/dev_controller.gd possess_bot().
 var possessed_local: bool = false
 
 

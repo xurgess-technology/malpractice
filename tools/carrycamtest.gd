@@ -49,7 +49,7 @@ func _ready() -> void:
 	game.loop._end_call()
 	game.loop.first_called = true
 	game.loop.extra_done = true
-	_check(on_shift and game.dev_on() and game.dev.room_ready(), "set-up: dev mode on, clocked in (phase %d)" % game.phase)
+	_check(on_shift and game.dev_on(), "set-up: dev mode on, clocked in (phase %d)" % game.phase)
 	await _run()
 	_finish()
 

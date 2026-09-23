@@ -127,11 +127,11 @@ var danger: float = 0.0
 var spectating: int = 0
 var paused: bool = false
 ## DEV HOOK: dev mode for this session, on every machine (the pharmacy fax's secret order,
-## DEV_CODE placebo pills). The F1 panel works anywhere and the hidden dev room is built. Replicated.
+## DEV_CODE placebo pills). The F1 panel works anywhere, out in the open. Replicated.
 var dev_tools: bool = false
 const DEV_CODE := 3141592653
 var _new_run_pending := false
-## DEV HOOK: the dev room controller (scripts/dev/dev_room.gd), idle outside the dev room.
+## DEV HOOK: dev mode's controller (scripts/dev/dev_controller.gd), idle outside dev mode.
 var dev: Node = null
 
 var _entities: Node3D
@@ -161,7 +161,7 @@ const StorageShelfScript := preload("res://scripts/containers/storage_shelf.gd")
 const BodyScript := preload("res://scripts/patient_body.gd")
 const SpawnerScript := preload("res://scripts/item_spawner.gd")
 const SurgeryScript := preload("res://scripts/surgery/surgery_system.gd")
-const DevRoomScript := preload("res://scripts/dev/dev_room.gd")
+const DevControllerScript := preload("res://scripts/dev/dev_controller.gd")
 const EconomyScript := preload("res://scripts/economy/economy.gd")
 const ExteriorScript := preload("res://scripts/level/exterior.gd")   # the hospital's front, seen from the lot
 # SWEEP 4A HOOK (pharmacy, chunk 3): PillLines is a class_name (scripts/economy/pill_lines.gd),
@@ -290,8 +290,8 @@ func _ready() -> void:
 	wall.name = "WallSession"
 	add_child(wall)
 	wall.setup(self)
-	# DEV HOOK: the dev room lives on every machine at the same path so its RPCs line up.
-	dev = DevRoomScript.new()
+	# DEV HOOK: dev mode's controller lives on every machine at the same path so its RPCs line up.
+	dev = DevControllerScript.new()
 	dev.name = "Dev"
 	add_child(dev)
 	dev.setup(self)
@@ -830,7 +830,6 @@ func _build_level(for_seed: int) -> void:
 	doors.register(level_info.get("door_nodes", []))
 	wing_loader.on_level_built(level_info)
 	pockets.finish_now()   # POCKETS HOOK: a whole level (a loading screen) does not wait frames for its pocket
-	dev.on_level_built()   # DEV HOOK: the supply closet's locked door; the hidden room again if dev mode is on
 
 
 func _level_info_usable() -> bool:
@@ -2531,14 +2530,15 @@ func spawn_hive(pos: Vector3) -> Node:
 	return _add_monster(MonsterScript.HIVE, pos)
 
 
-## `keep_dev_room`: the monsters in the hidden dev room's pen stay (a new shift's monsters coming in).
-func _clear_monsters(keep_dev_room := false) -> void:
+## `keep_dev_spawns`: monsters the dev panel spawned (meta "dev_spawned", set by
+## dev_controller.gd spawn_monster) stay for a new shift's roster instead of being swept away.
+func _clear_monsters(keep_dev_spawns := false) -> void:
 	if combat != null:
 		combat.on_monsters_cleared()   # SWEEP 3 HOOK: nobody is dragging a monster any more
 	var kept := {}
 	for id in monsters.keys():
 		var m = monsters[id]
-		if keep_dev_room and is_instance_valid(m) and dev.in_room(m.global_position):
+		if keep_dev_spawns and is_instance_valid(m) and bool(m.get_meta("dev_spawned", false)):
 			kept[id] = m
 			continue
 		if is_instance_valid(m):

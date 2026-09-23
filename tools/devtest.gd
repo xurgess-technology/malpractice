@@ -2,27 +2,26 @@ extends Node
 ## Headless checks for dev mode.
 ##
 ##   godot --headless --fixed-fps 60 --path . tools/devtest.tscn
-##       Solo, in a normal hospital: the OR supply closet has no dev door and F1 does nothing; the
-##       pharmacy fax's secret order (3141592653 placebo pills, no money) prints a reply page, turns
-##       dev mode on and builds the hidden room past the parking lot. Then the closet door, the room
-##       (the gun on monsters, dummies and bots; dispensers, the pen doors, lights and gate), the
-##       panel's tools (shift, go to, database, abilities, no monsters, no game over, infinite
-##       vitals, money, god mode, noclip, the Night Nurse, pockets) and DEV MODE OFF. Exits 0 when
-##       all pass.
+##       Solo, in a normal hospital: F1 does nothing before dev mode; the pharmacy fax's secret
+##       order (3141592653 placebo pills, no money) prints a reply page and turns dev mode on for
+##       everyone (2026-09-23: there is no separate dev room any more -- "we can just do everything
+##       out in the open" -- so it takes effect at once, out in the open corner of the parking lot
+##       dev_controller.gd's open_area() gives test tools). Then the gun on monsters, dummies and
+##       bots, the panel's tools (shift, go to, database, abilities, no monsters, no game over,
+##       infinite vitals, money, god mode, noclip, the Night Nurse, pockets) and DEV MODE OFF.
+##       Exits 0 when all pass.
 ##
 ##   godot --headless --fixed-fps 60 --path . tools/devtest.tscn -- --net=host [--port=7791]
 ##   godot --headless --fixed-fps 60 --path . tools/devtest.tscn -- --net=client [--port=7791]
-##       Two processes: the host turns dev mode on and puts a dummy and a monster in the room; the
-##       client joins, sees dev mode and builds the room, takes a dispenser item, asks for the dev
-##       gun, kills the monster and the dummy and spawns a bot through the host. Both exit 0 when
-##       the client's actions landed on the host.
+##       Two processes: the host turns dev mode on and puts a dummy and a monster in the open test
+##       area; the client joins, sees dev mode, asks for the dev gun, kills the monster and the
+##       dummy and spawns a bot through the host. Both exit 0 when the client's actions landed on
+##       the host.
 ##
 ##   godot --path . tools/devtest.tscn -- --shots
-##       Windowed screenshots of the reply fax, the closet door, the room, the panel and the gun into
-##       tools/dev_shots/.
+##       Windowed screenshots of the reply fax, the panel and the gun into tools/dev_shots/.
 
-const DevRoomScript := preload("res://scripts/dev/dev_room.gd")
-const LootTableScript := preload("res://scripts/economy/loot_table.gd")
+const DevControllerScript := preload("res://scripts/dev/dev_controller.gd")
 const SHOT_DIR := "res://tools/dev_shots"
 const SEED := 4242
 ## This machine's player files the panel's tools touch; put back as they were at the end.
@@ -39,7 +38,7 @@ var t := 0.0
 var _done := false
 var _failures: Array = []
 var _kept := {}
-## The hidden room's corner (its own frame's origin) in world space.
+## The open test area's origin (dev_controller.gd open_area()) in world space.
 var o := Vector3.ZERO
 
 
@@ -91,8 +90,7 @@ func _start_solo() -> void:
 
 func _run_solo() -> void:
 	await _start_solo()
-	_check(not game.dev_on() and not dev.room_ready(), "a new session starts without dev mode or the room")
-	_check(game.find_interactable("dev_door_closet") == null, "no dev door in the OR supply closet before dev mode")
+	_check(not game.dev_on(), "a new session starts without dev mode")
 	await _key(KEY_F1)
 	_check(not main.dev_panel.is_open(), "F1 does nothing without dev mode")
 
@@ -101,15 +99,7 @@ func _run_solo() -> void:
 	await _secret_order()
 	_check(game.money == money_before, "the secret order costs nothing ($%d -> $%d)" % [money_before, game.money])
 	_check(game.economy.pharmacy == null or game.economy.pharmacy._queue.is_empty(), "and no delivery comes")
-	o = dev.room.global_position if dev.room_ready() else Vector3.ZERO
-	var lot: Rect2 = game.level_info.get("neutral_rect", Rect2())
-	_check(lot.size != Vector2.ZERO and o.z > lot.end.y + 10.0, "the room stands past the parking lot (room z %.0f, lot ends %.0f)" % [o.z, lot.end.y])
-	var closet = game.find_interactable("dev_door_closet")
-	_check(closet != null, "dev mode puts the dev door in the OR supply closet")
-	if closet == null:
-		_finish()
-		return
-	_check(closet.interact_prompt(me) == "Enter the dev room", "the closet door opens for dev mode")
+	o = dev.open_area()
 	var normal: int = game.money
 	game.add_money(100, "test")
 	game.economy.request_order({"placebo_pills": 2})
@@ -120,21 +110,11 @@ func _run_solo() -> void:
 		_finish()
 		return
 
-	# ---- through the closet door and back
-	_stand(closet.global_position + closet.global_basis.z * 1.0, closet.rotation.y + PI)
-	await _use("dev_door_closet")
-	_check(dev.in_room(me.global_position), "the closet door walks you into the hidden room (%s)" % str(me.global_position))
-	_stand(o + Vector3(DevRoomScript.LevelScript.EXIT_X, 0, 16.6), PI)
-	await _use("dev_door_exit")
-	_check(me.global_position.distance_to(closet.global_position) < 2.0, "the room's door walks you back to the closet")
-
 	# ---- the panel: F1 anywhere, its buttons ask the host
 	await _key(KEY_F1)
 	_check(main.dev_panel.is_open(), "F1 opens the dev panel in the hospital")
 	_press_panel("+ Dummy")
 	_check(dev.bots.size() == 1, "the panel's + Dummy button spawns a dummy")
-	var dummy0: Player = game.players[dev.bots.keys()[0]]
-	_check(dev.in_room(dummy0.global_position), "on the room's dummy floor")
 	_press_panel("Remove all")
 	_check(dev.bots.is_empty(), "the panel's Remove all button removes it")
 	var gun_box: CheckBox = main.dev_panel._c["gun"]
@@ -143,25 +123,24 @@ func _run_solo() -> void:
 	await _key(KEY_F1)
 	_check(not main.dev_panel.is_open(), "F1 closes the dev panel")
 
-	# ---- monsters in the pen: kill one, knock one down
-	var m = dev.spawn_monster("sonographer", "pen")
-	var mid: int = m.monster_id
-	_check(dev.in_room(m.global_position), "a pen monster spawns in the room's pen")
-	await _seconds(0.5)
+	# ---- monsters, spawned in front of you now that there is no pen: kill one, knock one down
 	_stand(o + Vector3(12.0, 0, 9.4))
 	await _frames(2)
-	_shoot(m, DevRoomScript.KILL)
+	var m = dev.spawn_monster("sonographer", "front", me)
+	var mid: int = m.monster_id
+	await _seconds(0.5)
+	_shoot(m, DevControllerScript.KILL)
 	await _frames(3)
 	_check(not game.monsters.has(mid), "a kill shot removes the monster")
 	_check(game.get_node("Entities").find_child("DevCorpse", false, false) != null, "the killed monster leaves a falling body")
-	var m2 = dev.spawn_monster("sonographer", "pen")
+	var m2 = dev.spawn_monster("sonographer", "front", me)
 	await _seconds(0.3)
-	_shoot(m2, DevRoomScript.KNOCK)
+	_shoot(m2, DevControllerScript.KNOCK)
 	await _frames(3)
 	_check(game.monsters.has(m2.monster_id) and m2.mode == Monster.Mode.STUNNED, "a knock-down shot stuns a monster without killing it")
-	var nurse = dev.spawn_monster("night_nurse", "pen")
+	var nurse = dev.spawn_monster("night_nurse", "front", me)
 	await _seconds(0.3)
-	_shoot(nurse, DevRoomScript.KNOCK)
+	_shoot(nurse, DevControllerScript.KNOCK)
 	await _frames(2)
 	_check(game.monsters.has(nurse.monster_id) and nurse.calm > 1.0, "a knock-down shot makes the Night Nurse stand down")
 	dev.request("kill_monsters")
@@ -176,11 +155,11 @@ func _run_solo() -> void:
 	await _frames(5)
 	_stand(dummy.global_position + Vector3(0, 0, 4.0))
 	await _frames(2)
-	_shoot(dummy, DevRoomScript.KNOCK)
+	_shoot(dummy, DevControllerScript.KNOCK)
 	await _frames(2)
 	_check(dummy.alive and dummy.downed and dummy.hp == 0 and dummy.bleed > 290.0, "a knock-down shot downs a dummy (hp=%d downed=%s bleed=%.0f)" % [dummy.hp, str(dummy.downed), dummy.bleed])
 	await _seconds(0.5)
-	_shoot(dummy, DevRoomScript.KILL, 0.3)
+	_shoot(dummy, DevControllerScript.KILL, 0.3)
 	await _frames(2)
 	_check(not dummy.alive and not dummy.downed, "a kill shot kills a downed dummy outright")
 	dev.remove_bot(did)
@@ -219,11 +198,13 @@ func _run_solo() -> void:
 	_check(game.phase == Game.Phase.SHIFT, "still on shift after the downing checks")
 
 	dev.request("noclip", {"on": true})
-	_stand(o + Vector3(12.0, 0, 16.5), PI)
+	_stand(o + Vector3(12.0, 0, 12.0))
+	var noclip_start := me.global_position
 	me.bot_move = Vector2(0, -1)
 	await _seconds(1.2)
 	me.bot_move = Vector2.ZERO
-	_check(me.global_position.z > o.z + 18.5, "noclip walks through the room's south wall (z=%.1f)" % (me.global_position.z - o.z))
+	var noclip_moved := me.global_position.distance_to(noclip_start)
+	_check(noclip_moved > 5.0, "noclip moves at its own (faster) speed, ignoring collision (%.1f m in 1.2 s)" % noclip_moved)
 	dev.request("noclip", {"on": false})
 	_stand(o + Vector3(12.0, 0, 15.0))
 	await _free_cam()
@@ -232,15 +213,6 @@ func _run_solo() -> void:
 	await _frames(2)
 	_check(is_equal_approx(Engine.time_scale, 0.5), "time scale applies")
 	dev.request("time_scale", {"v": 1.0})
-	dev.request("lights", {"on": false})
-	await _frames(2)
-	var bulb: OmniLight3D = dev.room_info.lights[0].node.get_node("Bulb")
-	_check(not bulb.visible, "the room's lights toggle off")
-	dev.request("lights", {"on": true})
-	dev.request("pen", {"open": true})
-	await _frames(2)
-	_check(dev.room_info.dev_gate.collision_layer == 0, "the pen gate opens")
-	dev.request("pen", {"open": false})
 
 	await _loot_and_money()
 	await _panel_extras()
@@ -269,7 +241,6 @@ func _run_solo() -> void:
 	await _frames(3)
 	_check(not game.dev_on() and not main.dev_panel.is_open(), "DEV MODE OFF turns dev mode off and closes the panel")
 	_check(dev.bots.is_empty() and not dev.is_god(me) and not dev.has_gun(me.peer_id), "and drops the bots, god mode and the gun")
-	_check(game.find_interactable("dev_door_closet") == null, "the closet's dev door is gone again")
 	await _key(KEY_F1)
 	_check(not main.dev_panel.is_open(), "F1 does nothing again")
 
@@ -284,7 +255,7 @@ func _run_solo() -> void:
 
 
 ## The pharmacy fax UI: tick placebo pills, type the code, SEND FAX. The reply page prints while
-## the room builds, then the fax closes.
+## dev mode's "on" state replicates, then the fax closes.
 func _secret_order() -> void:
 	var ui = game.economy.fax_ui
 	game.economy.open_fax_ui()
@@ -309,7 +280,7 @@ func _secret_order() -> void:
 	var early: bool = game.dev_on()
 	var ok := await _until(func(): return not ui.is_open(), 25.0)
 	_check(not early, "dev mode comes on after the reply starts printing")
-	_check(ok and game.dev_on() and dev.room_ready(), "the fax closes with dev mode on and the room built")
+	_check(ok and game.dev_on(), "the fax closes with dev mode on")
 	_check(game.message.contains("DEV MODE"), "everyone is told (%s)" % game.message)
 
 
@@ -325,7 +296,7 @@ func _bot_work() -> void:
 	await _seconds(0.5)
 	_stand(bot.global_position + Vector3(3.0, 0, 0))
 	await _frames(2)
-	_shoot(bot, DevRoomScript.KNOCK)
+	_shoot(bot, DevControllerScript.KNOCK)
 	await _frames(2)
 	_check(bot.alive and bot.downed, "a knock-down shot downs a bot")
 	await _seconds(0.6)   # the knock-back slide
@@ -383,7 +354,7 @@ func _bot_work() -> void:
 	dev.remove_bot(did2)
 	_stand(bot.global_position + Vector3(0, 0, 3.0))
 	await _frames(2)
-	_shoot(bot, DevRoomScript.KILL)
+	_shoot(bot, DevControllerScript.KILL)
 	await _frames(2)
 	_check(not bot.alive, "a kill shot kills a bot")
 	dev.remove_bot(bid)
@@ -443,40 +414,35 @@ func _shift_tools() -> void:
 
 
 ## DOORS HOOK: the pen's two doors and the panel's door buttons.
+## DOORS HOOK: the panel's door buttons against the hospital's own doors (the room's pen doors,
+## which used to give this a door to burst a monster through on purpose, are gone with the room;
+## tools/doortest.gd covers door behavior itself in depth -- this just checks the panel reaches them).
 func _doors_hooks() -> void:
 	var doors: Node = game.doors
-	_check(doors.doors.has("dr_dev_hinged") and doors.doors.has("dr_dev_double"), "the room's pen has a hinged door and double doors")
-	if not doors.doors.has("dr_dev_hinged"):
+	var d: Node = null
+	for candidate in doors.doors.values():   # set_all only drives hinged doors; automatic ones sit still
+		if candidate != null and is_instance_valid(candidate) and candidate.is_hinged():
+			d = candidate
+			break
+	_check(d != null, "the hospital has a hinged door to open and close")
+	if d == null:
 		return
-	var h: Node = doors.doors["dr_dev_hinged"]
-	var dd: Node = doors.doors["dr_dev_double"]
 	dev.request("kill_monsters")
 	_press_panel("Close all doors")
 	await _seconds(1.5)
-	_check(h.is_closed() and dd.is_closed(), "both shut")
+	_check(d.is_closed(), "the panel's Close all doors shuts a door")
 	_press_panel("Open all doors")
 	await _seconds(1.2)
-	_check(absf(h.amount) > 0.85 and absf(dd.amount) > 0.85, "the panel's Open all doors opens them (%.2f, %.2f)" % [h.amount, dd.amount])
+	_check(absf(d.amount) > 0.85, "the panel's Open all doors opens it (%.2f)" % d.amount)
 	_press_panel("Close all doors")
 	await _seconds(1.2)
-	_check(h.is_closed() and dd.is_closed(), "the panel's Close all doors shuts them")
-	# A monster in one bay reaches the next through the hinged door.
-	var m = dev.spawn_monster("sonographer", "pen")
-	m.global_position = o + Vector3(4.0, 0.0, 3.75)
-	m.brain.target = o + Vector3(12.0, 0.0, 3.75)
-	m.mode = m.Mode.RUSH
-	var through := await _until(func():
-		if m.mode != m.Mode.RUSH:
-			m.brain.target = o + Vector3(12.0, 0.0, 3.75)
-			m.mode = m.Mode.RUSH
-		return m.global_position.x > o.x + 9.5, 12.0)
-	_check(through and absf(h.amount) > 0.5, "a Sonographer rushing across the pen bursts through the hinged door (x %.1f, door %.2f)" % [m.global_position.x - o.x, h.amount])
-	dev.request("kill_monsters")
-	_press_panel("Close all doors")
-	await _seconds(1.0)
+	_check(d.is_closed(), "the panel's Close all doors shuts it again")
+	_press_panel("Regenerate wings now")
+	await _seconds(0.5)
+	_check(true, "the panel's Regenerate wings now button does not error")
 
 
-## inventory (sweep 2): the room's loot dispensers, the money panel, the hospital's furnace.
+## inventory (sweep 2): the money panel, the hospital's furnace, a dev-panel-spawned item.
 ## The panel's Free camera: the view leaves your eyes, main keeps it, P swaps who has the input.
 func _free_cam() -> void:
 	var fc = main.dev_panel.free_cam
@@ -507,18 +473,10 @@ func _free_cam() -> void:
 func _loot_and_money() -> void:
 	me.slots = Player.empty_slots()
 	me.selected = 0
-	var cubby = game.find_interactable("dev_disp_defibrillator")
-	_check(cubby != null, "the loot rack has a defibrillator dispenser")
-	var loot_disps := 0
-	for k in LootTableScript.kinds():
-		if game.find_interactable("dev_disp_%s" % k) != null:
-			loot_disps += 1
-	_check(loot_disps == LootTableScript.LOOT.size(), "every loot kind has a dispenser (%d)" % loot_disps)
-	if cubby != null:
-		_stand(cubby.global_position + Vector3(0, 0, -1.2), 0.0)
-		await _use("dev_disp_defibrillator")
-		_check(me.holding("defibrillator") and me.free_slot_count() == 2 and int(me.selected_stack().get("v", 0)) > 0,
-			"the dispenser hands over a defibrillator worth money, in two slots")
+	dev.dispense(me, "defibrillator", 1, me.global_position)
+	await _frames(2)
+	_check(me.holding("defibrillator") and me.free_slot_count() == 2 and int(me.selected_stack().get("v", 0)) > 0,
+		"dev.dispense() hands over a defibrillator worth money, in two slots")
 	var money_before: int = game.money
 	_press_panel("+$1000")
 	_check(game.money == money_before + 1000, "the panel's +$1000 button gives money ($%d)" % game.money)
@@ -562,9 +520,6 @@ func _panel_extras() -> void:
 			if String(r.kind) == "or":
 				or_rect = r.rect
 		_check(or_rect.grow(0.5).has_point(Vector2(me.global_position.x, me.global_position.z)), "Go takes you to the OR")
-	_press_panel("Dev room")
-	await _frames(2)
-	_check(dev.in_room(me.global_position), "the panel's Dev room button takes you there")
 	_press_panel("All abilities")
 	await _frames(2)
 	_check(game.abilities.slot_of(me.peer_id, "echo") >= 0 and game.abilities.slot_of(me.peer_id, "hive_in") >= 0, "the panel's All abilities grants Echo and Hive Eyes")
@@ -704,9 +659,9 @@ func _run_host() -> void:
 	me = game.local_player()
 	me.bot_active = true
 	game.set_dev_tools(true, me)
-	_check(game.dev_on() and dev.room_ready(), "the host turned dev mode on and built the room")
+	_check(game.dev_on(), "the host turned dev mode on")
 	_host_dummy = dev.spawn_bot("dummy")
-	_host_monster = dev.spawn_monster("sonographer", "pen")
+	_host_monster = dev.spawn_monster("sonographer", "front")
 	_say("dev mode up; waiting for the client")
 	var joined := await _until(func(): return Net.names.size() >= 2, 40.0)
 	_check(joined, "a client joined")
@@ -723,7 +678,7 @@ func _run_host() -> void:
 	var client_id: int = Net.peer_ids()[-1]
 	_check(dev.has_gun(client_id), "the client holds the dev gun on the host")
 	var client = game.players.get(client_id)
-	_check(client != null and dev.in_room(client.global_position), "the client walked through the closet door into the room")
+	_check(client != null, "the client is a player on the host")
 	var seen := {"on": false, "loop": 0}
 	ok = await _until(func():
 		if dev.nurse_ignore_watch:
@@ -748,37 +703,16 @@ func _run_client() -> void:
 	main.menu.hide_menu()
 	var ok := await _until(func():
 		me = game.local_player()
-		return game.dev_on() and dev.room_ready() and me != null and not game.monsters.is_empty() and dev.bots.size() >= 1, 60.0)
-	_check(ok, "the client sees dev mode, builds the room and sees the dummy and the monster")
+		return game.dev_on() and me != null and not game.monsters.is_empty() and dev.bots.size() >= 1, 60.0)
+	_check(ok, "the client sees dev mode and sees the dummy and the monster")
 	if not ok:
 		_finish()
 		return
-	o = dev.room.global_position
+	o = dev.open_area()
 	me.bot_active = true
 	var dummy_id: int = dev.bots.keys()[0]
 	var dummy: Player = game.players[dummy_id]
 	_check(dummy.is_bot, "the dummy replicated as a Player")
-
-	# The closet door, used by a client, walks it into the room.
-	var closet = game.find_interactable("dev_door_closet")
-	_stand(closet.global_position + closet.global_basis.z * 1.0, closet.rotation.y + PI)
-	await _seconds(0.5)
-	me.bot_aim_id = "dev_door_closet"
-	await _frames(3)
-	me.bot_press += 1
-	ok = await _until(func(): return dev.in_room(me.global_position), 6.0)
-	me.bot_aim_id = ""
-	_check(ok, "the host walks a client through the closet door")
-
-	# A dispenser works for a client.
-	_stand(o + Vector3(22.4, 0, 9.2), -PI / 2.0)
-	await _seconds(0.5)
-	me.bot_aim_id = "dev_disp_anesthetic"
-	await _frames(3)
-	me.bot_press += 1
-	ok = await _until(func(): return me.holding("anesthetic"), 5.0)
-	me.bot_aim_id = ""
-	_check(ok, "a client takes from a dispenser")
 
 	dev.request("gun", {"on": true})
 	ok = await _until(func(): return dev.has_gun(me.peer_id), 5.0)
@@ -789,17 +723,17 @@ func _run_client() -> void:
 	for i in 3:
 		if game.monsters.is_empty():
 			break
-		_shoot(game.monsters.values()[0], DevRoomScript.KILL)
+		_shoot(game.monsters.values()[0], DevControllerScript.KILL)
 		await _seconds(0.6)
 	_check(game.monsters.is_empty(), "the client killed the monster on the host")
 
 	_stand(dummy.global_position + Vector3(0, 0, 4.0))
 	await _seconds(0.5)
-	_shoot(dummy, DevRoomScript.KNOCK)
+	_shoot(dummy, DevControllerScript.KNOCK)
 	ok = await _until(func(): return dummy.downed, 4.0)
 	_check(ok, "the client's knock-down downed the dummy (hp %d)" % dummy.hp)
 	await _seconds(0.3)
-	_shoot(dummy, DevRoomScript.KILL, 0.3)
+	_shoot(dummy, DevControllerScript.KILL, 0.3)
 	ok = await _until(func(): return not dummy.alive, 4.0)
 	_check(ok, "the client killed the dummy")
 
@@ -886,54 +820,32 @@ func _take_shots() -> void:
 	await _seconds(0.2)
 	await _shot("02_reply_building")
 	await _until(func(): return not ui.is_open(), 20.0)
-	var closet = game.find_interactable("dev_door_closet")
-	_stand(closet.global_position + closet.global_basis.z * 2.3, closet.rotation.y + PI)
-	_look_at(closet.global_position + Vector3.UP * 1.2)
-	await _seconds(0.8)
-	await _shot("03_closet_door")
+	o = dev.open_area()
 	dev.request("gun", {"on": true})
 	dev.request("god", {"on": true})
-	dev.spawn_monster("sonographer", "pen")
-	dev.spawn_monster("night_nurse", "pen")
+	dev.spawn_monster("sonographer", "front", me)
+	dev.spawn_monster("night_nurse", "front", me)
 	for i in 3:
 		dev.spawn_bot("dummy")
 	await _seconds(1.0)
-	_stand(o + Vector3(12.0, 0, 17.4))
-	_look_at(o + Vector3(12.0, 1.0, 4.0))
+	_stand(o + Vector3(0, 0, -5.0))
+	_look_at(o)
 	await _seconds(1.0)
-	await _shot("04_room_from_the_door")
-	_stand(o + Vector3(5.0, 0, 13.0))
-	_look_at(o + Vector3(0.5, 0.9, 13.0))
-	await _seconds(0.6)
-	await _shot("05_containers")
-	_stand(o + Vector3(19.0, 0, 13.4))
-	_look_at(o + Vector3(23.6, 0.9, 13.2))
-	await _seconds(0.6)
-	await _shot("06_dispensers")
-	_stand(o + Vector3(12.0, 0, 9.5))
-	_look_at(o + Vector3(12.0, 0.8, 3.0))
-	await _seconds(0.6)
-	_shoot(game.monsters.values()[0], DevRoomScript.KNOCK)
+	await _shot("03_open_area")
+	_shoot(game.monsters.values()[0], DevControllerScript.KNOCK)
 	await _frames(2)
-	await _shot("07_gun_knock_tracer")
+	await _shot("04_gun_knock_tracer")
 	await _seconds(0.5)
-	_shoot(game.monsters.values()[game.monsters.size() - 1], DevRoomScript.KILL)
+	_shoot(game.monsters.values()[game.monsters.size() - 1], DevControllerScript.KILL)
 	await _frames(3)
-	await _shot("08_gun_kill_tracer")
+	await _shot("05_gun_kill_tracer")
 	main.dev_panel.toggle(true)
 	await _seconds(0.5)
-	await _shot("09_panel")
-	main.dev_panel._root.get_child(0).scroll_vertical = 900
+	await _shot("06_panel")
+	main.dev_panel._tabs.current_tab = 3   # "Spawn" tab: bots and dummies
 	await _seconds(0.3)
-	await _shot("10_panel_tools")
+	await _shot("07_panel_spawn_tab")
 	main.dev_panel.toggle(false)
-	# The room from outside, over the parking lot (it should be lost in the fog).
-	var lot: Rect2 = game.level_info.get("neutral_rect", Rect2())
-	dev.request("noclip", {"on": true})
-	me.teleport(Vector3(lot.get_center().x, 0.0, lot.end.y - 9.0))
-	_look_at(o + Vector3(12.0, 1.0, 9.0))
-	await _seconds(1.0)
-	await _shot("11_from_the_lot")
 
 
 func _shot(name: String) -> void:

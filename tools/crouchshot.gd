@@ -18,7 +18,7 @@ extends Node
 ## 01 against 02 is the shot that shows whether that is fixed.
 ##
 ## A normal hospital (seed 4242) with dev mode on (No monsters, No game over), clocked in with the
-## phone hung up, on the hidden dev room's floor.
+## phone hung up, in an open corner of the parking lot.
 
 const SHOT_DIR := "res://tools/crouch_shots"
 const SEED := 4242
@@ -28,7 +28,7 @@ var game: Game
 var dev: Node
 var me: Player
 var t := 0.0
-## The hidden dev room's corner (its own frame's origin) in world space.
+## The open test area's origin (dev_controller.gd open_area()) in world space.
 var o := Vector3.ZERO
 
 
@@ -48,7 +48,7 @@ func _ready() -> void:
 	me = game.local_player()
 	me.bot_active = true
 	game.set_dev_tools(true, me)
-	o = dev.room.global_position
+	o = dev.open_area()
 	dev.request("monsters_off", {"on": true})
 	dev.request("no_game_over", {"on": true})
 	dev.request("god", {"on": true})

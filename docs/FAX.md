@@ -53,7 +53,7 @@ the old constants added up to.
 | Pharmacy order form open (E, `economy/fax_order_ui.gd`) | machine rises, blank form feeds up. Controls live at once | 0.61 s | instant pop |
 | Pharmacy Esc / CANCEL | control back at once; form ejects while machine sinks. E again before it has gone brings the same form back | 0.38 s | instant |
 | Pharmacy SEND FAX | form locked, pulled down into the machine (0.6 s), order sent, control back, machine sinks | 0.97 s (control at 0.6 s) | 1.1 s then instant |
-| Secret dev order reply | reply page prints line by line up out of the slot (0.3 s a line), waits on the dev room, holds 1.2 s, ejects + machine sinks | ~4 s + build | ~6.5 s + build, then instant |
+| Secret dev order reply | reply page prints line by line up out of the slot (0.3 s a line), waits on dev mode going on, holds 1.2 s, ejects + machine sinks | ~4 s | ~6.5 s, then instant |
 | Session ends under an open page (host left, died at the pharmacy) | page vanishes with the session (nothing to animate over) | 0 | 0 |
 
 Not fax screens: the in-world pharmacy fax and terminal props (`economy_props.gd`,

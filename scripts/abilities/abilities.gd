@@ -446,7 +446,7 @@ func _spawn_echo_pulse(pos: Vector3) -> void:
 
 
 # =========================================================================
-# dev room (scripts/dev/dev_room.gd forwards "ab_*" requests here) and warmup
+# dev mode (scripts/dev/dev_controller.gd forwards "ab_*" requests here) and warmup
 # =========================================================================
 
 func dev_request(sender: int, action: String, a: Dictionary) -> void:

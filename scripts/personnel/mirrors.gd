@@ -55,7 +55,7 @@ const BIG_LAMP_ENERGY := 0.6
 const SINK_LAMP_RANGE := 3.2
 const SINK_LAMP_ENERGY := 0.5
 ## The mirror cameras see everything the first-person camera does except the first-person hands
-## (fp_hands.gd HANDS_LAYER) and the dev gun's first-person model (dev_room.gd GUN_FP_LAYER), plus
+## (fp_hands.gd HANDS_LAYER) and the dev gun's first-person model (dev_controller.gd GUN_FP_LAYER), plus
 ## the local player's own body. Plain numbers: piece_factory.gd preloads this script, and map
 ## generation runs where the autoloads those scripts need don't exist.
 const HIDE_FROM_MIRRORS := (1 << 18) | (1 << 17)
