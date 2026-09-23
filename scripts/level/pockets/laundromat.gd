@@ -386,32 +386,87 @@ static func _dryer_mesh(enamel: Material, chrome: Material, dark: Material) -> M
 		return mb.commit())
 
 
+## Contiguous runs of an (unsorted) tile-x list, as inclusive [x0, x1] pairs. A doorway reserve or
+## a cross aisle breaks a run; everything else in one bank collapses into one collider, the same way
+## the Chapel merges a whole pew row into two boxes instead of one per tile (chapel.gd `_pews`).
+static func _runs(xs: Array) -> Array:
+	var sx: Array = xs.duplicate()
+	sx.sort()
+	var runs: Array = []
+	var i := 0
+	while i < sx.size():
+		var j := i
+		while j + 1 < sx.size() and int(sx[j + 1]) == int(sx[j]) + 1:
+			j += 1
+		runs.append([int(sx[i]), int(sx[j])])
+		i = j + 1
+	return runs
+
+
 static func _washers(props: Common.Props, body: StaticBody3D, lay: Dictionary, world: Callable,
 		enamel: Material, chrome: Material, dark: Material, out: Dictionary) -> void:
 	var mesh := _washer_mesh(enamel, chrome, dark)
+	# One StaticBody3D collider per island tile (~90 of them) measured 15-20 ms of frame time
+	# against every other pocket space's 9-13, everywhere in the level, not just standing in the
+	# room (docs/FAILING_TESTS.md, fix-laundromat-perf): the machines are a bank bolted together, so
+	# their collision is now one box per contiguous run along a row, exactly as dense as the visible
+	# geometry already reads. Meshes, anchors and the per-tile placement are unchanged.
+	var rows := {}   # tile.y -> Array[tile.x]
 	for e in lay.islands:
-		var p: Vector3 = world.call(Vector2(e.tile) + Vector2(0.5, 0.5))
+		var t: Vector2i = e.tile
+		var p: Vector3 = world.call(Vector2(t) + Vector2(0.5, 0.5))
 		# Back-to-back: one row faces -Z, the row behind it faces +Z.
 		var yaw: float = 0.0 if bool(e.flip) else PI
 		var b := Basis(Vector3.UP, yaw)
 		props.add(mesh, Transform3D(b, p), 40.0)
-		Common.collider(body, Transform3D(b, p + Vector3(0, 0.43, 0)), Vector3(1.48, 0.9, 0.72))
 		# The tops of the island are where people put things down.
 		Common.anchor(out, p + Vector3(0.0, 0.88, 0.0), yaw, "counter", "laundromat")
+		if not rows.has(t.y):
+			rows[t.y] = []
+		(rows[t.y] as Array).append(t.x)
+	for y in rows.keys():
+		for run in _runs(rows[y]):
+			var x0: int = run[0]
+			var x1: int = run[1]
+			var cx := (float(x0) + float(x1 + 1)) * 0.5
+			var p: Vector3 = world.call(Vector2(cx, float(y) + 0.5))
+			var width := float(x1 - x0 + 1) * T - 0.02
+			# A plain AABB box is symmetric front-to-back, so the row's yaw (0 or PI) never mattered
+			# to its shape; merging front- and back-facing tiles of the same run needs no basis at all.
+			Common.collider(body, Transform3D(Basis(), p + Vector3(0, 0.43, 0)), Vector3(width, 0.9, 0.72))
 
 
 static func _dryers(props: Common.Props, body: StaticBody3D, lay: Dictionary, world: Callable,
 		enamel: Material, chrome: Material, dark: Material, out: Dictionary) -> void:
 	var mesh := _dryer_mesh(enamel, chrome, dark)
+	# Same fix as the washers: one collider per contiguous run along a wall instead of one per
+	# dryer tile (~62 of them).
+	var rows := {}   # wall.y -> {"wall": Vector2i, "tile_y": int, "xs": Array[int]}
 	for e in lay.dryers:
 		var wall: Vector2i = e.wall
-		var p: Vector3 = world.call(Vector2(e.tile) + Vector2(0.5, 0.5))
+		var t: Vector2i = e.tile
+		var p: Vector3 = world.call(Vector2(t) + Vector2(0.5, 0.5))
 		# Local +Z (the doors) points away from the wall.
 		var yaw := atan2(float(-wall.x), float(-wall.y))
 		var b := Basis(Vector3.UP, yaw)
 		var at := p + Vector3(wall.x, 0, wall.y) * (T * 0.5 - 0.37)
 		props.add(mesh, Transform3D(b, at), 44.0)
-		Common.collider(body, Transform3D(b, at + Vector3(0, 0.9, 0)), Vector3(1.5, 1.8, 0.74))
+		var key: int = wall.y
+		if not rows.has(key):
+			rows[key] = {"wall": wall, "tile_y": t.y, "xs": []}
+		(rows[key].xs as Array).append(t.x)
+	for key in rows.keys():
+		var row: Dictionary = rows[key]
+		var wall: Vector2i = row.wall
+		var tile_y: int = row.tile_y
+		for run in _runs(row.xs):
+			var x0: int = run[0]
+			var x1: int = run[1]
+			var cx := (float(x0) + float(x1 + 1)) * 0.5
+			var p: Vector3 = world.call(Vector2(cx, float(tile_y) + 0.5))
+			var at := p + Vector3(wall.x, 0, wall.y) * (T * 0.5 - 0.37)
+			var width := float(x1 - x0 + 1) * T - 0.02
+			Common.collider(body, Transform3D(Basis(), at + Vector3(0, 0.9, 0)), Vector3(width, 1.8, 0.74))
 
 
 static func _tables(props: Common.Props, body: StaticBody3D, lay: Dictionary, world: Callable,
