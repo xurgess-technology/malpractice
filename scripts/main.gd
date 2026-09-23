@@ -227,6 +227,8 @@ func _boot_setup(setup: String) -> void:
 	if role == "join":
 		await _boot_setup_join(ReviewSetups.port())
 		return
+	# POCKETS 2: a setup that wants a pocket space has to say so before the map is generated.
+	ReviewSetups.before_session(setup)
 	if role == "host":
 		if not await _start_setup_host("Reviewer", ReviewSetups.seed_of(setup), ReviewSetups.port()):
 			return

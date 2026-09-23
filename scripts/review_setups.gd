@@ -33,6 +33,10 @@ const MirrorsScript := preload("res://scripts/personnel/mirrors.gd")
 
 const SETUPS := {
 	"icons": {"seed": 4242, "stage": "_icons"},
+	# POCKETS 2 phase 2 (docs/POCKET_SPACES_2.md): standing on the Natatorium's deck at the water's
+	# edge, a lifeguard whistle and a pool chemical drum to hand, the stocked first-aid cabinet on the
+	# lifeguard stand behind you. Walk the pool and walk the deck and listen to the difference.
+	"natatorium": {"seed": 4242, "pocket": "natatorium", "stage": "_natatorium"},
 	"items": {"seed": 1, "stage": "_items"},
 	# GRAFTING chunk C (docs/GRAFTING.md): strapped to a table with a loaded vat on its stand, as
 	# Dr. Botsworth, ready to operate. `graft_back` is the same with the graft already done.
@@ -185,6 +189,15 @@ static func seed_of(setup: String) -> int:
 
 
 ## Run the setup's stage function (the shift has begun and the world has settled).
+## POCKETS 2 phase 2: anything a setup needs done BEFORE the session generates. A setup asks for a
+## pocket space with `"pocket": "natatorium"` in its entry; the kind has to be forced before the map
+## is rolled, so main.gd calls this just before it starts the session. Harmless for every other setup.
+static func before_session(setup: String) -> void:
+	var kind := String((SETUPS.get(setup, {}) as Dictionary).get("pocket", ""))
+	if kind != "":
+		preload("res://scripts/level/pockets/pocket_plan.gd").force_kind = kind
+
+
 static func stage(setup: String, game: Game) -> void:
 	if not exists(setup):
 		return
@@ -1146,3 +1159,36 @@ static func _vats(game: Game) -> void:
 	await tree.physics_frame
 	floor_item(game, "eye_hive", game._floor_at(at + out * 1.6), 1, 100)
 	game.say("E takes a vat off the bench (both hands). With the eye selected, E puts it in instead; V takes it back out.", 10.0)
+
+
+# ---------------------------------------------------------------------------
+# POCKETS 2 phase 2: the Natatorium (docs/POCKET_SPACES_2.md)
+
+## On the deck at the water's edge, looking down the length of the pool, with the whistle and a drum
+## in hand. The thing to test is the choice the room exists for: walk across the water, walk round on
+## the deck, and hear how different those two are -- then decide whether the shortcut is worth it.
+static func _natatorium(game: Game) -> void:
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	var pk = game.pockets
+	if pk == null or not pk.active():
+		print("[review] natatorium: no pocket was built")
+		return
+	var o: Vector2i = pk.pocket.origin
+	var w := func(t: Vector2, y := 0.0) -> Vector3:
+		return Vector3((float(o.x) + t.x) * C.TILE, y, (float(o.y) + t.y) * C.TILE)
+	var Nat := preload("res://scripts/level/pockets/natatorium.gd")
+	var r: Rect2i = Nat.water_rect()
+	# On the deck at the short end, looking down all fifty metres of it.
+	place(game, w.call(Vector2(float(r.position.x) - 2.5, float(r.get_center().y))),
+			w.call(Vector2(float(r.end.x), float(r.get_center().y)), 1.4))
+	give(game, "lifeguard_whistle", 1, 15)
+	give(game, "pool_chemical_drum", 1, 60)
+	# One Sonographer, well away across the water, so there is something to be heard by.
+	game._clear_monsters()
+	await game.get_tree().physics_frame
+	game._add_monster("sonographer", game._floor_at(w.call(Vector2(float(r.end.x) + 3.0, float(r.get_center().y)))))

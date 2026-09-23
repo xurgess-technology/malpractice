@@ -447,6 +447,14 @@ var hands: Node3D
 var game: Node = null
 
 
+## POCKETS 2 phase 2: standing in the Natatorium's pool. Every machine can answer this — the pocket
+## is built on all of them — so a wading teammate splashes on your screen too, not only on the host's.
+func _in_water() -> bool:
+	if game == null or game.get("pockets") == null:
+		return false
+	return bool(game.pockets.water_at(global_position))
+
+
 ## SPRINT-DIVE HOOK: in the air in a dive: this machine's own dive, or the replicated bit for others.
 func dive_in_air() -> bool:
 	return (diving and _dive_airborne) or _remote_dive_air
@@ -1216,11 +1224,14 @@ func _local_step(delta: float) -> void:
 
 	# Footsteps (a crawl makes none). SWEEP 4A HOOK (controls): crouching makes no sound at all,
 	# on top of emit_noise() never firing for a crouching player (game.gd's _tick_noise).
-	if moving and is_on_floor() and not downed and not crouching:
+	# POCKETS 2 phase 2: wading through the Natatorium's pool is heard even crouched, because the
+	# monsters hear it even crouched (game.gd's _tick_noise). The splash is how you know that.
+	var wading := _in_water()
+	if moving and is_on_floor() and not downed and (not crouching or wading):
 		_step_accum += delta * (3.0 if sprinting else 1.9)
 		if _step_accum >= 1.0:
 			_step_accum = 0.0
-			Audio.play("step", global_position, -4.0, 0.12)
+			Audio.play("step_water" if wading else "step", global_position, -1.0 if wading else -4.0, 0.12)
 
 	if fx.has_method("set_motion"):
 		fx.set_motion(clampf(Vector2(velocity.x, velocity.z).length() / C.SPRINT_SPEED, 0.0, 1.0), sprinting, is_on_floor())
@@ -1298,11 +1309,12 @@ func _remote_step(delta: float) -> void:
 	head.rotation.x = lerpf(head.rotation.x, -0.95 if hive_view else _pitch, k)   # head droops
 	if _hive_glaze != null:
 		_hive_glaze.visible = hive_view   # SWEEP 4A HOOK (Hive Eyes, chunk 4): glazed eyes for teammates
-	if moving and not downed and not crouching:
+	var wading := _in_water()   # POCKETS 2 phase 2: a teammate crossing the pool is loud from here too
+	if moving and not downed and (not crouching or wading):
 		_step_accum += delta * (3.0 if sprinting else 1.9)
 		if _step_accum >= 1.0:
 			_step_accum = 0.0
-			Audio.play("step", global_position, -8.0, 0.12)
+			Audio.play("step_water" if wading else "step", global_position, -5.0 if wading else -8.0, 0.12)
 
 
 ## Downed hook: carried or lying on the player table. Every machine puts the body where the carrier

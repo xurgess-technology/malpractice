@@ -399,12 +399,21 @@ recorded above, looked up through `Assets` and degrading to flat colours when a 
 | `mat/concrete` | Factory floor, lower walls, columns, office roof slab (world-triplanar, tinted) |
 | `mat/metal` | Factory machines, conveyors, catwalk grating, racks, beams; restaurant kitchen steel |
 | `mat/floor`, `mat/wall`, `mat/ceiling` | Factory site offices; restaurant stucco (tinted terracotta) and back-room ceilings |
-| `mat/tile_floor`, `mat/wall_tile` | Restaurant kitchen and restrooms (tinted) |
+| `mat/tile_floor`, `mat/wall_tile` | Restaurant kitchen and restrooms; Natatorium locker room (tinted) |
+| `mat/metal` (again) | Natatorium roof trusses, flag poles, starting blocks, lockers, lifeguard stands |
+| `mat/wall`, `mat/ceiling` (again) | Natatorium upper walls and roof deck (tinted cold grey-blue) |
 | `mat/linoleum`, `mat/ceiling`, `mat/wall` | the pocket copy of each entrance stub (the hospital's hallway materials) |
 | `hosp/fridge_kitchen`, `hosp/sink_cabinet` | the restaurant kitchen |
 | `hosp/toilet`, `hosp/sink_wall`, `hosp/mirror` | the restaurant restrooms |
 | `hosp/plant` | the restaurant's corners and front door |
 | existing container scripts | pegboards, drawer units, a medicine fridge, trauma bags, station drawers |
+
+The **Natatorium** (POCKET_SPACES_2 phase 2) adds no files at all: every surface it does not take from
+the keys above is generated in-house at runtime -- its deck tiles, its pool-floor lane tiles and its
+wall tiles -- and everything in it (the water plane, lane ropes, backstroke flags, starting blocks,
+bleachers, lifeguard stands, chemical drums, lockers, trusses and high bays) is built from primitives
+in `scripts/level/pockets/natatorium.gd`. Its two loot models and the first-aid cabinet are primitives
+too, and its icons are the project's own SVGs. Nothing here is third-party.
 
 Generated at runtime, in-house (no third-party source): the Factory's corrugated cladding, and the
 Restaurant's saltillo floor tiles, Talavera wainscot tiles, wood planks and four small paintings

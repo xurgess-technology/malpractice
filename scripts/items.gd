@@ -11,6 +11,9 @@ const CONTAINER_TYPES := {
 	"station_drawers": {"name": "nurse station drawers", "rooms": ["nurse_station"]},
 	"trauma_bag": {"name": "trauma bag", "rooms": ["corridor", "nurse_station", "patient_room"]},
 	"pegboard": {"name": "pegboard", "rooms": ["janitor_closet", "supply_closet", "morgue"]},
+	# POCKETS 2 phase 2: the Natatorium's lifeguard stand, and nowhere in the hospital proper -- no
+	# rooms, so RoomFurnish never places one. The pocket builds it directly.
+	"first_aid_cabinet": {"name": "first-aid cabinet", "rooms": []},
 }
 
 const SURGICAL := ["anesthetic", "gauze", "forceps", "tourniquet", "bone_saw"]

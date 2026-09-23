@@ -305,6 +305,7 @@ func _build() -> void:
 	var pk1 := _row(col)
 	_button(pk1, "Factory", func(): _req("pocket", {"kind": "factory"}))
 	_button(pk1, "Restaurant", func(): _req("pocket", {"kind": "restaurant"}))
+	_button(pk1, "Natatorium", func(): _req("pocket", {"kind": "natatorium"}))
 	_button(pk1, "Remove", func(): _req("pocket", {"kind": ""}))
 	var pk2 := _row(col)
 	_button(pk2, "Go there", func(): game.dev.pocket_go(true))

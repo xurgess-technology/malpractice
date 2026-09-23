@@ -66,6 +66,9 @@ const LOOT_BLURBS := {
 	"desk_phone": "A desk phone, ripped off its cord.",
 	"laptop": "A hospital laptop. Fragile.",
 	"gold_watch": "A patient's gold watch, still ticking.",
+	# POCKETS 2 phase 2: the Natatorium.
+	"pool_chemical_drum": "A sealed drum of pool chemicals. Nobody ordered it and nobody opened it. Takes both hands.",
+	"lifeguard_whistle": "A lifeguard's whistle on a red lanyard. Blow it once and every monster within thirty metres comes to look at you. There is no second blast.",
 	"heart_monitor": "A bedside heart monitor. Takes both hands.",
 	"defibrillator": "A portable defibrillator. Takes both hands.",
 	"ultrasound": "A portable ultrasound. The best find in the wings.",
