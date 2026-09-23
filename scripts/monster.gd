@@ -53,6 +53,13 @@ const STAGGER_KNOCK := 0.45
 ## Getting up after sedation wears off, before it hunts.
 const WAKE_STAGGER := 1.2
 
+## Stepping over a lip a monster has wedged itself against; see _unwedge().
+const WEDGE_AFTER := 1.0     ## seconds of going nowhere at all before we call it wedged
+const WEDGE_MOVE := 0.002    ## metres in a frame that count as nowhere
+const WEDGE_LIFT := 0.06     ## how far up to step, about a threshold's height
+const WEDGE_PROBE := 0.01    ## how far up a probe starts, to get clear of the floor's own margin
+const WEDGE_STEP := 0.25     ## how far ahead must be clear up there for the lift to be worth it
+
 const Model := preload("res://scripts/monsters/monster_model.gd")
 const SonographerBrain := preload("res://scripts/monsters/sonographer_brain.gd")
 const SonoRig := preload("res://scripts/monsters/sonographer_rig.gd")
@@ -125,6 +132,7 @@ var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _repath := 0.0
 var _blocked_t := 0.0
+var _wedge_t := 0.0
 var _unjam_t := 0.0
 var _unjam_side := 1.0
 var _last_mode := -1
@@ -604,6 +612,14 @@ func step_toward(point: Vector3, move_speed: float, delta: float, face := true, 
 	var before := global_position
 	move_and_slide()
 	var moved := Vector2(global_position.x - before.x, global_position.z - before.z).length()
+	# Wedged on the floor itself, not on anything beside it: lift it over the lip. See _unwedge().
+	if moved < WEDGE_MOVE:
+		_wedge_t += delta
+		if _wedge_t > WEDGE_AFTER:
+			_wedge_t = 0.0
+			_unwedge()
+	else:
+		_wedge_t = 0.0
 	moving = moved > 0.002
 	speed = moved / maxf(delta, 0.0001)
 	if speed < move_speed * 0.25:
@@ -618,6 +634,43 @@ func step_toward(point: Vector3, move_speed: float, delta: float, face := true, 
 	if face:
 		face_dir(face_to, delta, 7.0)
 	return left
+
+
+## A body can come to rest hard against the floor's own collider -- its capsule tangent to the
+## map-wide floor box, inside the physics margin -- and then every slide of move_and_slide() is
+## eaten by that one contact: six contacts a frame, all with the floor's own upward normal, all
+## with zero travel. It walks on the spot until something moves it. The sidestep above cannot help,
+## because what is in the way is UNDERFOOT rather than beside it, and turning on the spot only
+## picks another direction the floor eats just the same.
+##
+## Measured 2026-09-23 (FAILING_TESTS 1f): a Night Nurse stood in one hospital corridor for the
+## whole 60 s of pockettest's follow check at y = 0.000943 m, a hair inside the 0.001 m safe
+## margin, with the contact point on her own origin. Lifting her two centimetres freed her
+## instantly, and every horizontal direction was clear at that height.
+##
+## So: step over the lip. Only when both the lift and the step after it are clear -- a monster with
+## a real wall in front of it is a different problem, and the sidestep is its answer.
+func _unwedge() -> void:
+	var ahead := Vector3(velocity.x, 0.0, velocity.z)
+	if ahead.length() < 0.01:
+		return
+	# Every probe starts a centimetre up. A body inside the floor's margin answers "blocked" to a
+	# test_move in ANY direction, straight up included, so asking from where it stands proves
+	# nothing -- which is the whole reason it cannot walk out of this by itself.
+	var probe: Transform3D = global_transform
+	probe.origin += Vector3.UP * WEDGE_PROBE
+	var lift := Vector3.UP * (WEDGE_LIFT - WEDGE_PROBE)
+	if test_move(probe, lift):
+		return                       # something overhead: not this kind of stuck
+	var up: Transform3D = global_transform
+	up.origin += Vector3.UP * WEDGE_LIFT
+	if test_move(up, ahead.normalized() * WEDGE_STEP):
+		return                       # a real wall ahead at body height: leave it to the sidestep
+	global_position += Vector3.UP * WEDGE_LIFT + ahead.normalized() * WEDGE_STEP
+	velocity.y = 0.0
+	_repath = 0.0
+	_unjam_t = 0.0
+	_blocked_t = 0.0
 
 
 func stop() -> void:
