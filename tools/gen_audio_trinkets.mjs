@@ -12,6 +12,11 @@
 //   trinkets_epipen         the spring, the click and the hiss of an auto-injector
 //   trinkets_whistle        one long pea-whistle blast: two close tones beating, the pea warbling
 //                           over them, and a tiled room ringing after it (POCKETS 2, the Natatorium)
+//   trinkets_pager_buzz     the buzz only the pager's holder hears: an eccentric motor muffled by a
+//                           palm, played flat on that one machine and never into the world
+//                           (POCKETS 2, the Restaurant)
+//   trinkets_pager_rattle   the same motor with nothing holding it: a pager left on a hard floor,
+//                           walking and clattering. This one is in the world, and monsters hear it.
 //   trinkets_softener       POCKETS 2 phase 4: a cap cracking, then long thick glugs of syrup
 //   trinkets_candle_light   POCKETS 2 phase 3: a match struck, and a wick catching
 //   trinkets_candle_out     the same wick giving up: a small wet snuff and a breath of smoke
@@ -258,6 +263,61 @@ function whistle(name) {
   writeWav(name, highpass(lowpass(x, 11000), 700));
 }
 
+// POCKETS 2 phase 5: the restaurant pagers. Both sounds are the SAME eccentric-mass motor -- a
+// lopsided weight spun against the case -- because they are the same object; what differs is what
+// the object is resting against. Two pulses, the way a pager always buzzes twice.
+//
+// `held` is the one only its holder hears: a palm around the case damps the high end to almost
+// nothing and leaves the low hum, so it is dull, close and private. It is played flat (2D) on that
+// one machine, so it must sound like it is already against your hand rather than across a room.
+// `held=false` is the planted one: nothing damps it, the case is free to chatter against a hard
+// floor, and every strike of the motor's high side is a tick of plastic on tile. That is the
+// remote noisemaker, and the difference you hear is the whole item.
+function pager(name, held) {
+  const r = rngFor(name);
+  const dur = held ? 0.95 : 1.15;
+  const n = Math.floor(SR * dur);
+  const x = new Float32Array(n);
+  const motor = held ? 128 : 134;        // revs per second of the eccentric weight
+  const pulses = held ? [[0.0, 0.34], [0.46, 0.34]] : [[0.0, 0.42], [0.54, 0.44]];
+  for (const [at, len] of pulses) {
+    const start = Math.floor(SR * at);
+    const pn = Math.floor(SR * len);
+    let ph = 0;
+    for (let i = 0; i < pn && start + i < n; i++) {
+      const t = i / SR;
+      // The motor takes a moment to come up to speed and coasts down when the drive stops.
+      const spin = Math.min(1, t / 0.035) * (t > len - 0.06 ? Math.max(0, (len - t) / 0.06) : 1);
+      const f = motor * (0.72 + 0.28 * spin);
+      ph += TAU * f / SR;
+      // A lopsided weight is not a sine: it is a lump going round, so the harmonics matter.
+      let v = Math.sin(ph) * 0.9 + Math.sin(ph * 2) * 0.45 + Math.sin(ph * 3) * 0.22;
+      v += Math.sin(ph * 5) * (held ? 0.05 : 0.16);
+      v += (r() * 2 - 1) * (held ? 0.05 : 0.13);      // bearing hash
+      // Once per revolution the heavy side comes round and the case answers.
+      const knock = 0.5 + 0.5 * Math.cos(ph);
+      if (!held) {
+        // Free on a hard floor: that knock is a real tick of plastic against tile.
+        const sharp = Math.pow(knock, 14);
+        v += (r() * 2 - 1) * sharp * 0.85;
+        v += Math.sin(TAU * 1850 * t) * sharp * 0.2;
+      } else {
+        // In a palm: the same knock, but the hand swallows it into a thud.
+        v *= 0.82 + 0.18 * knock;
+      }
+      x[start + i] += v * spin * (held ? 0.85 : 0.95);
+    }
+  }
+  if (held) {
+    // Flesh is a low-pass filter and a poor radiator. Twice through, so the corner is properly
+    // soft: what is left is the hum you feel more than hear.
+    writeWav(name, highpass(lowpass(lowpass(x, 620), 620), 55));
+  } else {
+    // Tile and a thin plastic shell: bright, with nothing soaking up the clatter.
+    writeWav(name, highpass(lowpass(x, 7200), 140));
+  }
+}
+
 
 // POCKETS 2 phase 4 (the Laundromat): the fabric softener jug. The cap cracks off its ring, then
 // somebody drinks a thick blue liquid straight from the bottle: slow, resonant glugs with the neck
@@ -362,6 +422,8 @@ hammerBonk('trinkets_hammer_bonk');
 clipOn('trinkets_clip_on');
 epipen('trinkets_epipen');
 whistle('trinkets_whistle');
+pager('trinkets_pager_buzz', true);
+pager('trinkets_pager_rattle', false);
 softener('trinkets_softener');
 candleLight('trinkets_candle_light');
 candleOut('trinkets_candle_out');

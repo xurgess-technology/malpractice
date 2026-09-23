@@ -31,9 +31,14 @@ extends RefCounted
 ## there is one and this when there is not.
 const REFERENCE_WEIGHT_KG := 80.0
 
-## Item kinds that can be drawn from. `anesthetic` is the only one built; the two alcohols are
-## docs/POCKET_SPACES_2.md phases 3 and 5 ("anesthetic substitute, batch of 1, weak dose") and slot
-## in here the day they exist, with no other change to the rack.
+## Item kinds that can be drawn from. All three are built now: `anesthetic`, the Chapel's
+## communion wine (phase 3) and the Restaurant's tequila (phase 5). The rack needed no change for
+## either alcohol -- it populates itself from what the player is carrying.
+##
+## HOW WEAK a substitute is does NOT live here. It is `Items.ANESTHETIC_KINDS`, applied once in
+## `game.gd` where the step is completed, and this file deliberately knows nothing about it: a
+## syringe drawn from wine is still wine, and reading the fluid there (before `spend_loaded` clears
+## it) is what stops loading a substitute into a barrel from laundering it into a full dose.
 const FLUIDS := ["anesthetic", "communion_wine", "tequila"]
 
 

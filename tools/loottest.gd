@@ -29,9 +29,11 @@ const KEPT := ["pill_bottle", "xray_film", "heart_monitor", "gold_watch", "ultra
 	# weight, so they never turn up in the hospital — see POCKET_ONLY below.
 	"pool_chemical_drum", "lifeguard_whistle",
 	"votive_candle", "collection_plate",
-	"quarter_bucket", "warm_scrubs", "fabric_softener"]
+	"quarter_bucket", "warm_scrubs", "fabric_softener",
+	"grease_bucket", "copper_wire_spool", "foremans_clipboard",
+	"cast_iron_molcajete", "restaurant_pagers"]
 const TRINKETS := ["desk_phone", "laptop", "defibrillator", "reflex_hammer", "epipen", "pulse_oximeter",
-	"lifeguard_whistle", "fabric_softener", "votive_candle"]
+	"lifeguard_whistle", "fabric_softener", "votive_candle", "restaurant_pagers"]
 ## POCKETS 2: kinds that belong to one pocket space, and the room kinds of the space each belongs to.
 ## They are exempt from the "must be findable in the hospital" rules below and checked the other way
 ## round instead. A new space's POCKET_ITEMS go here. (Spelt out rather than read from the layout
@@ -51,6 +53,15 @@ const POCKET_ONLY := {
 	"quarter_bucket": ["laundromat", "laundromat_back"],
 	"warm_scrubs": ["laundromat", "laundromat_back"],
 	"fabric_softener": ["laundromat", "laundromat_back"],
+	# POCKETS 2 phase 5. The Restaurant's tequila is NOT here: it is an anesthetic substitute, so it
+	# lives in Items.ITEMS beside the Chapel's communion wine rather than in the loot table, and this
+	# test only walks the loot table. `restaurant_pager` (singular) is not here either -- it never
+	# spawns at all, it only ever comes out of a station, so it has no rooms to check.
+	"grease_bucket": ["factory_floor", "factory_office", "factory_catwalk"],
+	"copper_wire_spool": ["factory_floor", "factory_catwalk"],
+	"foremans_clipboard": ["factory_office", "factory_floor", "factory_catwalk"],
+	"cast_iron_molcajete": ["restaurant_kitchen", "restaurant"],
+	"restaurant_pagers": ["restaurant", "restaurant_kitchen"],
 }
 ## POCKETS 2: which of a space's kinds may bleed out near an entrance. Spelt out here for the same
 ## reason as POCKET_ONLY, and checked against the table's own `may_bleed` flags.
@@ -60,9 +71,12 @@ const BLEEDS := {
 	# warm_scrubs is deliberately absent: it is a permanent cosmetics unlock, and finding one in a
 	# corridor would devalue the space it belongs to.
 	"laundromat": ["fabric_softener", "quarter_bucket"],
-	# The Factory and the Restaurant contribute no loot kinds at all, so they bleed nothing.
-	"factory": [],
-	"restaurant": [],
+	"factory": ["copper_wire_spool", "foremans_clipboard", "grease_bucket"],
+	# restaurant_pagers is deliberately absent, and unlike warm_scrubs the reason is mechanical: it is
+	# the only bleed candidate with a `max_per_shift`, and the bleed runs after the plan is made and
+	# cannot honour one, so a bled station could be the shift's second. Tequila is absent because it
+	# is a supply in Items.ITEMS, not loot -- the same reason the Chapel's communion wine is.
+	"restaurant": ["cast_iron_molcajete"],
 }
 ## Room kinds the loot could turn up in before the cut (the union of the old table's `rooms`).
 const OLD_ROOMS := ["ward", "patient_room", "nurse_station", "office", "corridor", "waiting_room", "pharmacy",
@@ -193,10 +207,15 @@ func _static_checks() -> void:
 		for hospital_room in ["corridor", "office", "patient_room", "supply_closet"]:
 			_check(LootTable.weight(k, hospital_room, 3) <= 0.0,
 				"%s is not found in a deep hospital %s" % [k, hospital_room])
-	# The table holds only the kept kinds plus the grafting parts.
+	# The table holds only the kept kinds plus the ones nothing ever places. A kind with no `rooms`
+	# at all is never spawned by the spawner and only ever comes into being some other way -- the
+	# grafted eyes are cut out of a monster, and POCKETS 2 phase 5's lone `restaurant_pager` only
+	# ever comes out of a pager station. Those cannot be "findable", so they are not KEPT kinds.
 	for k in LootTable.kinds():
 		var d: Dictionary = LootTable.LOOT[k]
-		_check(KEPT.has(k) or d.get("eye", false) or k == "specimen_vat", "%s is a kept kind" % k)
+		var never_placed: bool = (d.get("rooms", {}) as Dictionary).is_empty()
+		_check(KEPT.has(k) or d.get("eye", false) or k == "specimen_vat" or never_placed,
+			"%s is a kept kind" % k)
 
 
 func _check(ok: bool, what: String) -> void:

@@ -17,10 +17,16 @@ const Stub := preload("res://scripts/level/pockets/stub.gd")
 ## so it has no floor and monsters hear here exactly what they hear in the hospital.
 const AMBIENT_NOISE_LEVEL := 0.0
 
-## POCKETS 2: the loot kinds this space contributes, beside AMBIENT_NOISE_LEVEL as every other
-## space declares them. The Factory holds no loot of its own -- it is empty and that is the point, so it also bleeds nothing into the hospital
-## around its entrances (scripts/economy/pocket_bleed.gd).
-const POCKET_ITEMS := []
+## POCKETS 2: the item kinds this space contributes, as a set anything else can read without digging
+## through the layout below. The bleed -- a space's items turning up in the hospital rooms around one
+## of its entrances -- reads this (scripts/economy/pocket_bleed.gd); so does anything that wants to
+## know what a space is worth. Phase 5 is what gave the Factory items of its own; before it this list
+## was empty and the Factory bled nothing.
+##
+## All three bleed: each is a plain stack of industrial stuff, and one of them lying three rooms from
+## a seam reads as something that came out through it. LootTable carries the `pocket` / `may_bleed`
+## flags that say so, because the loot planner must not load the pocket runtime.
+const POCKET_ITEMS := ["grease_bucket", "copper_wire_spool", "foremans_clipboard"]
 
 const T := 1.5
 const M := 10

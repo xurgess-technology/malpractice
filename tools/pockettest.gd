@@ -27,6 +27,7 @@ const PocketSpaces := preload("res://scripts/level/pockets/pocket_spaces.gd")
 const NatatoriumScript := preload("res://scripts/level/pockets/natatorium.gd")
 const SonoScript := preload("res://scripts/monsters/sonographer_brain.gd")
 const LootTableScript := preload("res://scripts/economy/loot_table.gd")
+const ItemsScript := preload("res://scripts/items.gd")
 const PlayerScript := preload("res://scripts/player.gd")
 const PocketBleedScript := preload("res://scripts/economy/pocket_bleed.gd")
 
@@ -56,13 +57,133 @@ func _ready() -> void:
 	game = main.game
 	main.menu.hide_menu()
 	Net.start_solo("Bot")
-	_pocket_item_checks()
+	if only == "":
+		_check_pocket_items()
 	for kind in Plan.KINDS:
 		if only != "" and only != kind:
 			continue
 		await _run_space(kind)
 	Plan.force_kind = ""
 	_finish()
+
+
+## POCKETS 2 phase 5: POCKET_ITEMS, checked for every space at once rather than per space.
+##
+## The convention is the Natatorium's (phase 2) and the queued "items bleed out near the seam" task
+## reads it from all of them, so the thing worth testing is that the spaces AGREE -- one shape, one
+## meaning -- not that any one of them has a list. It needs no built shift, so it runs before the
+## walk-throughs and costs nothing.
+func _check_pocket_items() -> void:
+	_say("==== POCKET_ITEMS")
+	var seen := {}         # item kind -> the space that claimed it
+	# SPACE_ROOMS is written by hand, so the first thing to check is that it has not gone stale.
+	for kind: String in PocketSpaces.LAYOUTS.keys():
+		_check(not _room_kinds_of(kind).is_empty(),
+			"%s: pockettest's SPACE_ROOMS knows this space's room kinds" % kind)
+	for kind: String in PocketSpaces.LAYOUTS.keys():
+		var script: GDScript = PocketSpaces.LAYOUTS[kind]
+		var items: Array = script.get("POCKET_ITEMS") if script.get("POCKET_ITEMS") != null else []
+		# Every space declares one. An empty list is a space that contributes nothing, which after
+		# phase 5 is no longer true of any of them -- so an empty one here means someone forgot.
+		_check(not items.is_empty(), "%s: declares a non-empty POCKET_ITEMS (%s)" % [kind, str(items)])
+		# The room kinds this space's own layout uses. A pocket item must live in its own space and
+		# nowhere else, which is what "rooms names only my rooms, and never the wildcard" means.
+		var my_rooms := _room_kinds_of(kind)
+		for k: String in items:
+			# A pocket item may be sellable loot (most of them) or a supply: the Chapel's communion
+			# wine and the Restaurant's tequila are anesthetic substitutes, so they live in
+			# Items.ITEMS and are fenced by the same `rooms` key (ItemSpawner._legal). Both tables
+			# are legitimate; what matters is that the kind is real and fenced to this space.
+			var rooms := _rooms_of(k)
+			_check(not rooms.is_empty(), "%s: %s is a real item kind that names where it spawns" % [kind, k])
+			_check(not rooms.has("*"), "%s: %s does not list \"*\", so it cannot spawn in the hospital" % [kind, k])
+			for r: String in rooms.keys():
+				_check(my_rooms.has(r), "%s: %s spawns in %s, which is one of this space's rooms" % [kind, k, r])
+			# Two spaces claiming the same kind would make "which space is this from" unanswerable.
+			_check(not seen.has(k), "%s: %s is claimed by exactly one space (also %s)" % [kind, k, String(seen.get(k, ""))])
+			seen[k] = kind
+	# And the other way round: any kind, from either table, whose rooms are wholly one pocket's must
+	# be in that pocket's POCKET_ITEMS, or the lists silently drift as items are added.
+	var every: Array = LootTableScript.kinds() + ItemsScript.ITEMS.keys()
+	for k: String in every:
+		var rooms := _rooms_of(k)
+		if rooms.is_empty() or rooms.has("*"):
+			continue
+		for kind: String in PocketSpaces.LAYOUTS.keys():
+			var my_rooms := _room_kinds_of(kind)
+			var all_mine := true
+			for r: String in rooms.keys():
+				if not my_rooms.has(r):
+					all_mine = false
+					break
+			if all_mine:
+				_check(String(seen.get(k, "")) == kind,
+					"%s: %s spawns only here, so POCKET_ITEMS lists it" % [kind, k])
+	_bleed_agrees()
+
+
+## POCKETS 2, the bleed. Each space declares what it holds as POCKET_ITEMS beside its layout, and
+## LootTable says the same thing again with a per-kind `pocket` field, because the loot planner runs
+## in `-s` tools that must not load the pocket runtime. The two must not drift apart.
+func _bleed_agrees() -> void:
+	_say("==== the bleed")
+	_check(PocketBleedScript.MOUTH_TILES == Stub.CORRIDOR,
+		"the bleed measures a seam's mouth the same way the stub builds it (%d / %d)"
+			% [PocketBleedScript.MOUTH_TILES, Stub.CORRIDOR])
+	for space: String in PocketSpaces.LAYOUTS.keys():
+		var script: GDScript = PocketSpaces.LAYOUTS[space]
+		var items: Array = script.get("POCKET_ITEMS") if script.get("POCKET_ITEMS") != null else []
+		# Only the loot half of POCKET_ITEMS can bleed: the bleed is a swap made inside the loot plan,
+		# so a kind that lives in Items.ITEMS is invisible to it. That is the Chapel's communion wine
+		# and the Restaurant's tequila -- both anesthetic substitutes, both supplies, neither loot.
+		var loot: Array = []
+		for k in items:
+			if LootTableScript.has(String(k)):
+				loot.append(String(k))
+		loot.sort()
+		_check(LootTableScript.pocket_kinds(space) == loot,
+			"%s: the loot table names the same items the space does (%s)" % [space, str(loot)])
+		# A kind may only bleed out of a space that actually holds it.
+		for k: String in LootTableScript.bleeding_kinds(space):
+			_check(loot.has(k), "%s: %s may only bleed if the space actually holds it" % [space, k])
+		# A space that holds loot has something to swap in, or the bleed is dead for that space.
+		_check(loot.is_empty() or not LootTableScript.bleeding_kinds(space).is_empty(),
+			"%s: a space that holds loot bleeds at least one kind" % space)
+
+
+## Where a kind is allowed to spawn, from whichever table defines it. {} when it names nowhere,
+## which for a supply means "anywhere" and for loot means "never" -- either way it is not a fenced
+## pocket item, and the caller treats an empty result as a failure or a skip as it needs.
+func _rooms_of(kind: String) -> Dictionary:
+	if LootTableScript.has(kind):
+		return (LootTableScript.LOOT[kind] as Dictionary).get("rooms", {})
+	if ItemsScript.ITEMS.has(kind):
+		return (ItemsScript.ITEMS[kind] as Dictionary).get("rooms", {})
+	return {}
+
+
+## The room kinds each space puts on the map. Spelt out rather than reflected out of the layout
+## scripts, for the reason tools/loottest.gd gives for its own copy: building five layouts just to
+## read their room names is slow and fragile, and a helper that quietly returns nothing turns every
+## check below into a false failure instead of an honest one. (It did exactly that the first time
+## this section ran: it asked for a `room` key that is really called `room_kind` and passed a
+## Dictionary where `layout()` wants an Array of stubs, and all five spaces "failed" identically.)
+##
+## _check_pocket_items asserts this covers every space in LAYOUTS, so a new space cannot slip past.
+const SPACE_ROOMS := {
+	"factory": ["factory_floor", "factory_office", "factory_catwalk"],
+	"restaurant": ["restaurant", "restaurant_kitchen", "restaurant_restroom"],
+	"natatorium": ["natatorium_deck", "natatorium_pool", "natatorium_lockers"],
+	"chapel": ["chapel_nave", "chapel_aisle", "chapel_sanctuary", "chapel_sacristy"],
+	"laundromat": ["laundromat", "laundromat_back"],
+}
+
+
+func _room_kinds_of(kind: String) -> Dictionary:
+	var out := {}
+	for r: String in SPACE_ROOMS.get(kind, []):
+		out[r] = true
+	return out
 
 
 func _run_space(kind: String) -> void:
@@ -721,35 +842,3 @@ func _finish() -> void:
 		for f in _failures:
 			_say("  " + f)
 		get_tree().quit(1)
-
-
-## POCKETS 2, the bleed. Each space declares what it holds as POCKET_ITEMS beside its layout, and
-## LootTable says the same thing again with a per-kind `pocket` field, because the loot planner runs
-## in `-s` tools that must not load the pocket runtime. The two must not drift apart.
-func _pocket_item_checks() -> void:
-	_check(PocketBleedScript.MOUTH_TILES == Stub.CORRIDOR,
-		"the bleed measures a seam's mouth the same way the stub builds it (%d / %d)"
-			% [PocketBleedScript.MOUTH_TILES, Stub.CORRIDOR])
-	var declared := {
-		"factory": preload("res://scripts/level/pockets/factory.gd"),
-		"restaurant": preload("res://scripts/level/pockets/restaurant.gd"),
-		"natatorium": preload("res://scripts/level/pockets/natatorium.gd"),
-		"chapel": preload("res://scripts/level/pockets/chapel.gd"),
-		"laundromat": preload("res://scripts/level/pockets/laundromat.gd"),
-	}
-	for space in Plan.KINDS:
-		var script: GDScript = declared[space]
-		var items: Array = []
-		for k in script.POCKET_ITEMS:
-			items.append(String(k))
-		items.sort()
-		# communion_wine is a surgical kind (Items.SURGICAL, room-restricted in ItemSpawner._legal),
-		# not loot, so it is in the Chapel's POCKET_ITEMS but never in the loot table and never bleeds.
-		var loot: Array = []
-		for k in items:
-			if LootTableScript.has(k):
-				loot.append(k)
-		_check(LootTableScript.pocket_kinds(space) == loot,
-			"%s: the loot table names the same items the space does (%s)" % [space, str(loot)])
-		for k in LootTableScript.bleeding_kinds(space):
-			_check(loot.has(k), "%s: %s may only bleed if the space actually holds it" % [space, k])
