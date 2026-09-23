@@ -890,16 +890,26 @@ zones: {grid, width, height, names}   # HospitalBuilder.zone_of(info, pos) -> wi
 
 ### Pocket spaces (pockets worker, docs/POCKET_SPACES.md)
 
-A map (each shift's wings) rolls 0-1 pocket space (`PocketPlan.CHANCE` 0.5; about 40% of seeds end up with one): **the Factory**
+A map (each shift's wings) rolls 0-1 pocket space: **the Factory**
 or **the Restaurant**, built far from the hospital (world tile origin `PocketSpaces.ORIGINS`: factory
 (800, 0), restaurant (800, 500)) with 2-3 entrances into at least two different wings, deeper wings more
 likely. Code in `scripts/level/pockets/`: `pocket_plan.gd` (generation), `stub.gd` (an entrance, its frame
 and its pocket-side copy), `pocket_spaces.gd` (runtime, `game.pockets`), `pocket_common.gd`,
 `factory.gd`, `restaurant.gd`.
 
+**The roll** (POCKET_SPACES_2 phase 1) is not a flat chance. Every wing rolls
+`BASE_CHANCE + DEPTH_STEP * (depth - 1)` — 4%, 9%, 14% for the usual depths 1-3 — and the map takes the
+chance that at least one of them lands, capped at `MAX_CHANCE`. Measured over 300 seeds x 4 shifts with
+`tools/pocketrate.gd`: **24.5% of shifts get a pocket**, against the 20-30% docs/POCKET_SPACES.md asks
+for. **No repeats**: the host keeps the kind the run last saw in `game.pocket_seen_kind`, sets
+`PocketPlan.exclude_kind` from it before the next shift's wings are generated, and sends it to clients in
+the globals as `"px"` — a client rolling from a different pool would build a different hospital.
+
 ```gdscript
 # Generation (MapGen._attempt, before room kinds are chosen)
 PocketPlan.plan(st, gens, defs, seed) / PocketPlan.release(gens)
+PocketPlan.chance_for(defs) -> float   # the map's chance, from the wings' depths (BASE_CHANCE, DEPTH_STEP, MAX_CHANCE)
+PocketPlan.exclude_kind # static: the kind kept out of the next roll (host-owned, replicated as "px"); pool()
 PocketPlan.of(gen) -> {kind: "factory" | "restaurant", seed, stubs: [{id, wing, depth, zone, o: Vector2i, eu: Vector2i, ev: Vector2i, w, d, lights: [Vector2i]}]} or {}
 PocketPlan.force_kind   # static: "" roll, "none", "factory", "restaurant" (tools, dev); force_entrances
 PocketPlan.ZONE_STUB    # 10: the zone of stub tiles (HospitalBuilder.zone_of answers "")
@@ -924,6 +934,11 @@ game.pockets.phantom_at(pos) -> [seam, to_pocket] or []    # standing in a stub'
 game.pockets.real_point(pos)       # a point in an unwalked half -> the same point in the other copy
 game.pockets.steer_point(from, next)   # a path point past a seam link -> the same point on this side
 game.pockets.mirror_noise(pos, loudness) -> [Vector3]      # host; game.emit_noise adds them
+game.pockets.ambient_noise_at(pos) -> float   # POCKET_SPACES_2 phase 1: the noise floor a sound-hunting
+                                   # monster stands in. A pocket layout script may declare AMBIENT_NOISE_LEVEL;
+                                   # the Factory and the Restaurant both declare 0.0 (no change). The
+                                   # Sonographer subtracts it from a noise's loudness before the reach maths,
+                                   # so the floor masks quiet noises outright. ambient_noise_of(kind) is the static.
 game.pockets.mirror_points(points) -> [Vector3]            # Perception: bodies inside a stub seen in the other copy
 game.pockets.crossings -> [{what: "player"|"monster"|"item", id, seam, to_pocket, time}]   # this machine's moves
 game.pockets.crossing_enabled      # tools only
@@ -1343,6 +1358,14 @@ game.player_faceplanted(p)           # host; a rocket dive hit a wall head on: d
   `scripts/rocket_boots.gd` (heel pods on `foot.L`/`foot.R`, top-level flames and a glow trailing
   the travel direction, cue `rocket_burn`); HUD element `"fuel"` under stamina while wearing a pair
   and it isn't full. Test: `tools/controlstest.tscn` ("rocket boots").
+- **The burn survives the trip to other machines.** A burn lasts under a second, and both hops that
+  carry it (the wearer's 20 Hz report, the host's 20 Hz snapshot) are samples of a boolean, over an
+  unreliable datagram: a stalled host frame or one lost snapshot used to drop the flame entirely for
+  everyone but the wearer. So a machine that hears the bit second hand holds it `BURN_HOLD` past the
+  last word of it (`_burn_hold`; the wearer's own `rocketing` is never held), and the boots lighting
+  is also counted -- `rocket_count`, report_state index 19 / report_full `"rc"` -- so the event
+  itself cannot be lost: a count that rises gives a remote copy at least `BURN_MIN` of flame.
+  Tested by nettest `rocket_boots` (client 2 sees client 1's burn).
 
 - **The pharmacy** (`scripts/economy/economy_props.gd`, hub rebuild chunk 3): a wall of steel bars
   across the pharmacy (width 13.5 m in the hub, 3 m in the dev room) with a pickup drawer through a
@@ -1445,7 +1468,10 @@ game.finish_shift(text, secs)   # host: the paycheck screen (Phase.WON), then th
 game.game_over(text)            # host: Phase.LOST, then game.reset_money() and a new run (new seed, shift 1)
 game._end_shift(won, text)      # tests: won = forced clock-out, else game over
 game.dev_phone_call() / dev_extra_patient() / dev_skip_grace()
-game.monster_may_wander_to(p) -> bool   # false inside the entrance building or the neutral area (zone_of)
+game.monster_may_wander_to(p, from := Vector3.INF) -> bool   # false inside the entrance building or the neutral area (zone_of).
+                                   # POCKET_SPACES_2 phase 1: given `from` (where the monster stands), also false for a goal
+                                   # in a different space or in a stub's dead half, so idle wander never crosses a seam.
+                                   # Spawning inside a pocket and chasing through a seam are untouched.
 loop.grace_left, call_kind ("first"|"extra"), call_state ("ringing"|"talking"), subtitle, first_called,
   crews {case id: {p, y, ph "in"|"hand"|"out", pt, ai, tb}}, pay_note     # replicated as g "lp.*"
 loop.start_call(kind) / answer(p) / clock_out(force) / can_clock_out() / skip_grace()

@@ -96,6 +96,8 @@ func _run_space(kind: String) -> void:
 			worst = maxf(worst, ((s.t_inv as Transform3D) * q).distance_to(h))
 		_check(worst < 0.001, "%s seam %d: both copies line up (%.5f m)" % [kind, int(s.id), worst])
 	await _check_nav(kind, pk)
+	_ambient_noise_floor(kind, pk)
+	_wander_fenced(kind, pk)
 	# Helpers: a downed bot to carry and a second bot holding supplies.
 	var carried := _make_bot(-101, "Carried")
 	var follower := _make_bot(-102, "Follower")
@@ -112,6 +114,57 @@ func _run_space(kind: String) -> void:
 	game._clear_monsters()
 	await _rebuild_next_shift(kind)
 	game._clear_monsters()
+
+
+# =========================================================================
+# POCKET_SPACES_2 phase 1
+# =========================================================================
+
+## The ambient noise floor. The Factory and the Restaurant declare 0.0, which has to mean "hearing
+## is exactly what it always was": the floor is subtracted from a noise's loudness before the
+## Sonographer's reach maths, so 0.0 is the identity. The checks below pin both halves of that —
+## the declared value and what `ambient_noise_at` answers inside the space and out in the hospital.
+## A space that wants a real floor (the Laundromat, phase 4) will need its own expectation here.
+func _ambient_noise_floor(kind: String, pk) -> void:
+	var declared: float = pk.ambient_noise_of(kind)
+	_check(is_equal_approx(declared, 0.0), "%s: declares an ambient noise floor of 0.0 (got %.3f)" % [kind, declared])
+	var inside: float = pk.ambient_noise_at(pk.pocket.spawn)
+	_check(is_equal_approx(inside, 0.0), "%s: the floor inside the pocket is 0.0, so hearing is unchanged (got %.3f)" % [kind, inside])
+	var outside: float = pk.ambient_noise_at(bot.global_position)
+	_check(is_equal_approx(outside, 0.0), "%s: the hospital has no floor (got %.3f)" % [kind, outside])
+	_check(not pk.in_pocket(bot.global_position), "%s: ... and that reading was taken in the hospital" % kind)
+
+
+## Idle wander is fenced at the stub. A goal in the other space is refused whichever side you stand
+## on, a goal in your own space is allowed, and a goal in a stub's dead half is refused — that half
+## is the other copy, so walking to it is walking through the seam. Chases and spawns do not come
+## through this predicate and are checked elsewhere (_nurse_follows, _sonographer_hears).
+func _wander_fenced(kind: String, pk) -> void:
+	# A wing hallway, not wherever the bot happens to be standing: at the start of a shift that is
+	# the neutral area, which monster_may_wander_to excludes on its own account and always did.
+	var here := Vector3.INF
+	for sp in game.level_info.get("monster_spawns", []):
+		if not pk.in_pocket(sp):
+			here = sp
+			break
+	var there: Vector3 = pk.pocket.spawn
+	_check(here.is_finite() and pk.in_pocket(there), "%s: a hospital wing point and a pocket point to test with" % kind)
+	if not here.is_finite():
+		return
+	_check(not game.monster_may_wander_to(there, here), "%s: a monster in the hospital may not wander into the pocket" % kind)
+	_check(not game.monster_may_wander_to(here, there), "%s: a monster in the pocket may not wander out into the hospital" % kind)
+	_check(game.monster_may_wander_to(there, there), "%s: a monster in the pocket may still wander inside it" % kind)
+	_check(game.monster_may_wander_to(here, here), "%s: a monster in the hospital may still wander the hospital" % kind)
+	# The dead half of every stub, from both sides.
+	for s in pk.seams:
+		var mid := Stub.seam_s(s.w)
+		var dead_h := Stub.local_point(s.xh, mid + (float(s.w) - mid) * 0.5, float(s.d) * 0.5, 0.1)
+		var dead_p := Stub.local_point(s.xp, mid * 0.5, float(s.d) * 0.5, 0.1)
+		_check(not game.monster_may_wander_to(dead_h, here), "%s seam %d: the hospital stub's dead half is not a wander goal" % [kind, int(s.id)])
+		_check(not game.monster_may_wander_to(dead_p, there), "%s seam %d: the pocket stub's dead half is not a wander goal" % [kind, int(s.id)])
+	# Left as it was without a `from`: the old two-argument-free behaviour still answers on zones
+	# alone, so nothing that has not been taught to pass its position changes meaning.
+	_check(game.monster_may_wander_to(there), "%s: with no `from` the fence stays out of it" % kind)
 
 
 # =========================================================================

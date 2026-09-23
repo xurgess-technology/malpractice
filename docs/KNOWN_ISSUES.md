@@ -582,6 +582,11 @@ left below is what still applies to the shared strapped-monster infrastructure.
   the danger heartbeat counts only monsters in the same space. Hearing does cross: a noise within 26 m of
   a seam is mirrored into the other copy, pulled into the stub (the Sonographer comes through and then
   hears the real noise).
+  **Still open, and wider than it was** (POCKET_SPACES_2 phase 1): this and the Hive-sight half of it are
+  properties of the seam, not of any one space, and the seam system is unchanged by that sweep. So they
+  apply to **five** pocket spaces now, not two — the Factory and the Restaurant plus the Natatorium, the
+  Chapel and the Laundromat that phases 2-4 add. The Chapel is the one to watch: its light *is* votive
+  candlelight, so whatever the mirrors fail to carry across a seam is most visible there.
 - **Mirrors copy meshes, not animation state**: a mirror shares the body's skeleton, so it animates, but
   anything drawn without a MeshInstance3D (particles, decals, Label3D name tags) does not show, and blend
   shape weights (the human model's GashOpen) are not copied. The skinned human bodies mirror correctly
@@ -597,8 +602,14 @@ left below is what still applies to the shared strapped-monster infrastructure.
 - **The Restaurant's fourth entrance wall is the kitchen's back wall**, so an entrance can open into the
   kitchen between the stove and the sink (only when the dining room's walls are taken).
 - **The pockets add loot, containers and monster spawn points** to the map's lists, so a map with a pocket
-  has more loot, and a Sonographer or a Night Nurse may spawn inside the pocket. `Monster.random_nav_point`
-  can pick a pocket point, so hospital monsters sometimes wander into a pocket through a seam.
+  has more loot, and a Sonographer or a Night Nurse may spawn inside the pocket. Spawning inside one is
+  intended and stays.
+  **Fixed 2026-09-22** (POCKET_SPACES_2 phase 1): idle wander no longer crosses a seam. It used to, because
+  `Monster.random_nav_point` samples the whole navigation map and the pocket's region is part of it, and
+  because the Night Nurse's vanish asks for a point up to 400 m away — far enough to reach the pocket
+  origins out at tile 800. `Game.monster_may_wander_to` now takes the monster's own position and rejects
+  any goal in a different space, or in the dead half of a stub. Chases are untouched: they steer at the
+  quarry, not at a wander goal, so a monster still follows a player through a seam.
 - **The Factory reads dim**: pools of high-bay light 12-20 m apart and the flashlight; the far walls are
   lost in the (per-pocket) fog on purpose. Its machines are primitive silhouettes.
 - **The two copies of a stub are not pixel-identical**: the gameshot comparison (same pose in both copies,
@@ -936,6 +947,12 @@ left below is what still applies to the shared strapped-monster infrastructure.
   things are aimed at the way they look, but at 1 m to the side a table right in front of the head
   needs the crosshair on it, not the head pointed at it (bots that aim by yaw from the head, like
   `tools/downedtest.gd`, use `bot_aim_id` and are unaffected; `tools/carrycamtest.gd` aims the camera).
+  This bites any test that aims by head yaw and then reads `aim_prompt`, because the carry camera is
+  active in ordinary play whenever the `camera` setting is "shoulder" or "front" -- and each slot
+  seeds its settings from Zach's, which say "shoulder". It is what made four of `doortest`'s
+  hinged-door E checks fail (2026-09-22; the door code was right). Such a test pins
+  `Settings.set_value("camera", "first_person")` for its run and puts the old mode back, as
+  `tools/doortest.gd` and `tools/devtest.gd` now do.
 - **nettest `combat` under `--lag=120 --jitter=40 --loss=0.03` is flaky here.** Of seven lagged runs,
   three on `--port=9970` lost every connection because another session was running
   `full_shift_lag` on the same port at the same time (use a free `--port`); on `--port=9990` three of

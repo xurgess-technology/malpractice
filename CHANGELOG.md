@@ -5,6 +5,12 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.31**: Pocket spaces are rare again, and monsters stay out of them
+    - Changed: A pocket space turned up in nearly half of all shifts, which is not what "you found something that shouldn't be here" is supposed to feel like. Now it's about a quarter, and the deeper the wing the likelier it is.
+    - Changed: You won't get the same one twice in a row.
+    - Fixed: Monsters no longer wander into a pocket on their own. They can still be in there waiting for you, and they'll still chase you through a seam -- they just don't stroll in.
+- **0.10.30**: Everyone can see your boots light up
+    - Fixed: When somebody else fired their rocket boots, the third person in the room often saw nothing at all -- no flame, just a teammate abruptly airborne. A burn lasts under a second and the game was only sampling it twenty times a second, so one hiccup swallowed the whole thing. It's held and counted now, so it always lands.
 - **0.10.29**: People who go down actually fall over
     - Fixed: A teammate who went down without crawling anywhere stayed standing bolt upright on everyone else's screen -- a corpse at attention, while they lay there insisting they were bleeding out. They fall over properly now. You never saw it yourself, which is why it lasted this long.
 - **0.10.28**: Polish
