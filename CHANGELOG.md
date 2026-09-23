@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.49**: The Laundromat stops costing everyone else frame time 🧺
+    - Fixed: Every washer and dryer had its own individual piece of collision geometry -- about 150 of them, roughly double any other pocket space -- and that cost real time every frame, everywhere in the hospital, whether anyone was near the Laundromat or not. They're merged into a few dozen now, the same way the Chapel's pews already were. Nothing changed to look at.
 - **0.10.48**: Every morgue tray is reachable now 🗄️
     - Fixed: A supply cart and a sink could land close enough together to wall off the tray between them, so on a couple of maps a morgue tray sat behind furniture nobody could actually reach. Every tray now keeps a clear path to it.
 - **0.10.47**: The pocket spaces, checked over 🔎
