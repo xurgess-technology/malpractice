@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.52**: The dev room is gone; the dev panel is tabs now 🧰
+    - Changed: The hidden dev room -- reached through a locked closet door -- is gone. Everything it did happens out in the open now.
+    - Changed: The dev panel (F1) is organized into tabs by what you're trying to do -- You, World, Go to, Spawn, Shift, Surgery, Database -- instead of one long list that grew by accretion. Every control does exactly what it did before; only where it lives changed.
 - **0.10.51**: Two more test blind spots closed, and the Onlooker's real hop finally watched on two machines 🔬
     - Fixed: A pager test and a monster-spawn test were both standing outside the floor, so nothing they checked meant anything. On solid ground now.
     - Note: The Onlooker had only ever been tested with its hop staged by hand. It's now been watched making its own real decision on a real second machine, landing where it's supposed to. Nothing changed about how it plays -- this closes the last real gap in how thoroughly it was checked.
