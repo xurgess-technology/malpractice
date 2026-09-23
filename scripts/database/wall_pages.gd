@@ -85,6 +85,9 @@ static func entries(section: String, view: Dictionary) -> Array:
 				out.append({"key": kind, "title": String(MonsterPages.entry(kind).get("name", kind)), "known": _tier(view, kind) >= 2})
 		"procedures":
 			for id in ProceduresDB.AILMENTS.keys():
+				# SYRINGE DRAW: loading a syringe is an action, not a procedure.
+				if bool(ProceduresDB.AILMENTS[id].get("handheld", false)):
+					continue
 				out.append({"key": id, "title": String(ProceduresDB.AILMENTS[id].get("name", id)), "known": true})
 		"surgery":
 			for kind in Pages.item_order():

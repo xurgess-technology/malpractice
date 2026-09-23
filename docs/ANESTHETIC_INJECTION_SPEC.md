@@ -123,6 +123,73 @@ A Debug toggle overlays: vein polylines (bright green), the reach the tip has to
 
 ---
 
+## 9 · Loading a syringe away from the table (SYRINGE DRAW, 2026-09-22)
+
+DRAW! and FLICK! stop being things you only do standing over a patient. There is a `syringe` item
+(`scripts/items.gd`), a batch consumable like the vials, and the two loading stages can be played
+anywhere with one in your hand. This is the first minigame that happens outside the OR.
+
+**One game, two entry points, no fork.** `inject_arcade.gd` already had `_stick_only()` — a `--stick`
+debug flag that pre-filled the barrel and opened on STICK!. That is now the real mechanism, driven
+by the context instead of the command line:
+
+| context | stages | where |
+|---|---|---|
+| `draw_only` | DRAW! FLICK! | anywhere, holding a syringe |
+| `loaded` | STICK! PUSH! | the table, holding a syringe you already loaded |
+| neither | DRAW! FLICK! STICK! PUSH! | the table, empty-handed |
+
+**The last row is not a legacy path, it is the fallback, and it stays.** Arriving at a patient with
+no syringe still offers the whole game exactly as before. Loading ahead is a convenience that saves
+time at the table, never a requirement.
+
+**What a loaded syringe carries, and why it is a level and not a dose.** The contents ride the
+stack's / world item's `x` string (`scripts/syringe/syringes.gd`), the way a specimen vat carries
+its eye — so they survive every carry, drop, shelf and snapshot path with no new replication. The
+string is `fluid|level|bubbles`, and `level` is the **absolute barrel level**, not a score.
+
+The green band is placed by the patient's weight, and a corridor has no patient. So a syringe loaded
+away from the table aims at a **standard 80 kg dose** and stores the level it actually reached; at
+the table the real band is worked out from the real patient and that stored level is scored against
+it, unchanged. **Pre-loading buys time and costs precision** — a standard dose is light for a heavy
+patient and heavy for a light one, and the syringe has no idea which it is about to meet. That is
+the trade, and it is deliberate. (The self-test already measured this shape: "bob's dose into the
+seal -> sedation 0.63".)
+
+**One loaded syringe per slot.** A slot has one `x` and a batch of three syringes shares it, so the
+loaded one is the top of the batch: draw one, stick it, draw the next. That is also what makes a
+syringe one-use — injecting takes one off the count and clears `x`.
+
+**Nothing is billed in the corridor.** No dose is scored and no vitals are charged for a draw away
+from the table: you have not touched a patient, so there is no patient to hurt. The bill comes at
+the table, on the dose that actually goes in.
+
+### The second anchoring mode
+
+The panel is anchored at the step's site and lifted along the site normal, oriented **once** at open
+time — it is not a billboard. Standing in a corridor there is no site and no patient.
+
+The answer is **a synthetic site**, not a second kind of panel: `surgery_system._site_transform()`
+lets a stand-in game pin the site itself, in front of the player instead of on a body. Everything
+downstream is untouched — the panel still lifts `panel_lift` along the site's +Y and still orients
+once to the operator's leaned-in camera, the camera pose is still derived from the site, the cursor
+still projects onto the panel's plane. Neither `surgery_panel.gd` nor the OR path knows which kind
+of site it got, which is exactly why the OR path is unaffected.
+
+Freeze / hand-over comes along for free with it: the arcade's "step away and the game stops dead,
+whoever picks it up gets a READY countdown" is driven by `operating`, not by a table.
+
+### Not built yet
+
+The item, the split and the anchoring mode are in. **The station that opens the window
+(`scripts/syringe/syringe_station.gd`), the three-fluid rack, and the table's acceptance of a
+loaded syringe are not.** The shape is a stand-in game after the model of
+`scripts/downed/player_surgery.gd`, reached by the `"vat_hand"` pseudo-target pattern
+(`player._update_aim` → `game.player_pressed_interact`), with the rack drawn across the top of the
+DRAW! page and the syringe moving between up to three fluids the player is actually carrying.
+
+---
+
 ## Decisions (Zach, 2026-09-21) — these override the spec
 
 1. **It replaces DOSE!, and there is one version.** Delete `scripts/surgery/arcade/dose_arcade.gd` *and* the legacy `scripts/surgery/games/anesthetic.gd`, their `ARCADE_ENABLED` / `MINIGAME_SCRIPTS` / `ARCADE_SCRIPTS` entries and the dev-panel toggle for them. This game is the only sedation game. Rewrite ARCADE_SURGERY.md §5.1 to describe it.

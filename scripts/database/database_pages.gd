@@ -63,6 +63,9 @@ static func entries() -> Array:
 	out.append({"id": "placebo", "type": "placebo", "key": "placebo", "title": PLACEBO.name})
 	for ailment_id in ProceduresDB.AILMENTS.keys():
 		var a: Dictionary = ProceduresDB.AILMENTS[ailment_id]
+		# SYRINGE DRAW: loading a syringe runs as a step but is not an operation on anybody.
+		if bool(a.get("handheld", false)):
+			continue
 		out.append({"id": "procedure:" + ailment_id, "type": "procedure", "key": ailment_id,
 			"title": a.get("name", ailment_id.capitalize())})
 	for locked_name in ItemsDB.LOCKED:

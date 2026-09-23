@@ -324,6 +324,11 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	# Every surgery minigame, set up on a patient the way the surgery system does it
 	var games := []
 	for ail in Procedures.AILMENTS.keys():
+		# SYRINGE DRAW: a handheld "ailment" is played in front of the player, not on a body, so
+		# there is no patient to warm it on (and no `bodies` entry for it). Its game is the
+		# injection, which the real procedures above have already built a copy of.
+		if Procedures.is_handheld(ail):
+			continue
 		for i in Procedures.steps(ail).size():
 			var step: Dictionary = Procedures.step(ail, i)
 			var path: String = Procedures.minigame_script(String(step.game), String(step.get("variant", "")))
