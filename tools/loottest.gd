@@ -19,8 +19,15 @@ const LootModels := preload("res://scripts/economy/loot_models.gd")
 const CUT := ["stethoscope", "thermometer", "bp_cuff", "otoscope", "patient_records", "wheelchair_wheel",
 	"sample_rack", "wedding_ring", "coffee_maker", "iv_pump", "microscope"]
 const KEPT := ["pill_bottle", "xray_film", "heart_monitor", "gold_watch", "ultrasound",
-	"desk_phone", "laptop", "defibrillator", "reflex_hammer", "epipen", "pulse_oximeter"]
-const TRINKETS := ["desk_phone", "laptop", "defibrillator", "reflex_hammer", "epipen", "pulse_oximeter"]
+	"desk_phone", "laptop", "defibrillator", "reflex_hammer", "epipen", "pulse_oximeter",
+	# POCKETS 2 phase 4: the Laundromat's three. Unlike everything above they list no "*" room
+	# weight, so they never turn up in the hospital — see POCKET_ONLY below.
+	"quarter_bucket", "warm_scrubs", "fabric_softener"]
+const TRINKETS := ["desk_phone", "laptop", "defibrillator", "reflex_hammer", "epipen", "pulse_oximeter",
+	"fabric_softener"]
+## POCKETS 2: kinds that belong to one pocket space. They are exempt from the "must be findable in
+## the hospital" rules below, and checked the other way round instead.
+const POCKET_ONLY := ["quarter_bucket", "warm_scrubs", "fabric_softener"]
 ## Room kinds the loot could turn up in before the cut (the union of the old table's `rooms`).
 const OLD_ROOMS := ["ward", "patient_room", "nurse_station", "office", "corridor", "waiting_room", "pharmacy",
 	"restroom", "radiology", "storage", "maintenance", "janitor", "lab", "morgue", "break_room", "cafeteria"]
@@ -137,6 +144,13 @@ func _static_checks() -> void:
 		root.free()
 		# Every place a kept kind may turn up is a real room kind or the catch-all.
 		_check(not (LootTable.LOOT[k].rooms as Dictionary).is_empty(), "%s has rooms" % k)
+	# POCKETS 2 phase 4: a pocket space's kinds are found in that space and nowhere else, which is
+	# exactly "its room kinds have a weight and there is no `*` catch-all".
+	for k in POCKET_ONLY:
+		var rooms: Dictionary = LootTable.LOOT[k].rooms
+		_check(not rooms.has("*"), "%s has no catch-all room weight, so it stays in its pocket" % k)
+		_check(float(rooms.get("laundromat", 0.0)) > 0.0, "%s is found in the laundromat" % k)
+		_check(LootTable.weight(k, "corridor", 3) <= 0.0, "%s is not found in a deep hospital corridor" % k)
 	# The table holds only the kept kinds plus the grafting parts.
 	for k in LootTable.kinds():
 		var d: Dictionary = LootTable.LOOT[k]

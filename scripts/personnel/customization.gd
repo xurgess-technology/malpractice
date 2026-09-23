@@ -212,6 +212,8 @@ static func cycle(look: Dictionary, key: String, by: int) -> Dictionary:
 	var n: int = (a.options as Array).size()
 	if n <= 0:
 		return look
+	if by == 0:
+		return sanitize(look)
 	var next := look.duplicate()
 	var at := int(look.get(key, int(a.default)))
 	# POCKETS 2 phase 4: step over anything this machine has not unlocked, so a locked pattern is
