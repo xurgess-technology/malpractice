@@ -108,9 +108,12 @@ const SETUPS := {
 }
 
 
-## POCKETS: force the pocket kind a setup asks for, before the map is generated (scripts/main.gd).
-## Setups that do not name one leave the roll alone.
-static func force_pocket(name: String) -> void:
+## Anything a setup needs doing before the map is generated (scripts/main.gd calls it first thing).
+## POCKETS: a setup may name the pocket kind it wants; the pocket is rolled with the wings, so it
+## cannot be forced after the session starts. Clients build their own copy of the map, so a joining
+## window of a -Count 2 set has to force the same kind or it builds a different hospital.
+## Setups that ask for nothing leave everything alone.
+static func before_session(name: String) -> void:
 	var kind := String((SETUPS.get(name, {}) as Dictionary).get("pocket", ""))
 	if kind != "":
 		(load("res://scripts/level/pockets/pocket_plan.gd") as GDScript).set("force_kind", kind)

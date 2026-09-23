@@ -243,7 +243,7 @@ built and never rebuilt, which is how the numbers above were taken. See
 docs/FAILING_TESTS.md 1g.
 
 ### The three items
-`Laundromat.ITEM_KINDS` declares the set (see "the item set" below).
+`Laundromat.POCKET_ITEMS` declares the set (see "the item set" below).
 All three give the `laundromat` / `laundromat_back` room kinds a weight
 in `loot_table.gd` and **no `"*"` weight**, so they are found here and
 nowhere else. All three are primitives in `loot_models.gd` (no CC0
@@ -290,8 +290,10 @@ radius of that pocket's entrance — a separate task. **No convention
 for "this space's item kinds" existed**: the Factory and the
 Restaurant contribute no kinds of their own, and loot is keyed by
 `room_kind` in `loot_table.gd`. The smallest one that works is a
-`const ITEM_KINDS` on the layout script, next to `AMBIENT_NOISE_LEVEL`,
-which is what the Laundromat declares. Phases 2 and 3 should match it.
+`const POCKET_ITEMS` on the layout script, next to `AMBIENT_NOISE_LEVEL`.
+**Phase 2 reached the same conclusion independently and the name is now
+settled across all three spaces**, so a new space declares `POCKET_ITEMS`
+and the bleed-out task finds one shape everywhere.
 Warm scrubs is in the set, but whether a permanent cosmetic unlock
 *should* bleed into a corridor is the follow-up's call, not this one's.
 

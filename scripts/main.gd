@@ -224,10 +224,7 @@ const SETUP_COOP_WAIT_MS := 180000
 ## share one world: see scripts/review_setups.gd's header. Only the host stages.
 func _boot_setup(setup: String) -> void:
 	var role := ReviewSetups.role()
-	# POCKETS: a setup that wants a particular pocket space has to say so before the map is built,
-	# because the pocket is rolled with the wings. Clients build their own copy of the map, so the
-	# joining windows of a -Count 2 set have to force the same kind or they build a different one.
-	ReviewSetups.force_pocket(setup)
+	ReviewSetups.before_session(setup)
 	if role == "join":
 		await _boot_setup_join(ReviewSetups.port())
 		return

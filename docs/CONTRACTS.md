@@ -901,14 +901,14 @@ and its pocket-side copy), `pocket_spaces.gd` (runtime, `game.pockets`), `pocket
 **Adding a kind is four lines**: `PocketPlan.KINDS`, `PocketSpaces.ORIGINS`, a `match` arm in
 `PocketSpaces.layout_script(kind)` and one in `PocketSpaces.ambient_noise_of(kind)`, plus the layout script
 itself (`layout` / `prepare` / `build_steps` / `build` / `doorways` / `door_entries`, and optionally
-`AMBIENT_NOISE_LEVEL` and `ITEM_KINDS`). Re-run `tools/pocketrate.gd` after any of it.
+`AMBIENT_NOISE_LEVEL` and `POCKET_ITEMS`). Re-run `tools/pocketrate.gd` after any of it.
 
-**`ITEM_KINDS`** (POCKET_SPACES_2): a layout script may declare the loot kinds that space contributes, as
+**`POCKET_ITEMS`** (POCKET_SPACES_2): a layout script may declare the loot kinds that space contributes, as
 one discoverable set, rather than leaving them as literals spread through the loot table. The Laundromat
 declares `["quarter_bucket", "warm_scrubs", "fabric_softener"]`. Each of those gives the space's room kinds
 (`laundromat`, `laundromat_back`) a weight in `LootTable.LOOT` and **no `"*"` weight**, which is what keeps
 them in the space. A planned follow-up wants a pocket's items to bleed a short way into the hospital around
-its entrances; `ITEM_KINDS` is what it reads.
+its entrances; `POCKET_ITEMS` is what it reads.
 
 **The Laundromat** (`laundromat.gd`) is one mechanic: `AMBIENT_NOISE_LEVEL = 0.30`, above `Game.FOOTSTEP_LOUDNESS`
 (0.25), so a walking player makes no audible noise in there at all and a sprinting one (0.8) carries 11 m

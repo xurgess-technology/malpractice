@@ -28,12 +28,13 @@ const Stub := preload("res://scripts/level/pockets/stub.gd")
 ## Outside the Laundromat the floor is 0.0 and every one of those numbers is the hospital's own.
 const AMBIENT_NOISE_LEVEL := 0.30
 
-## POCKETS 2: the item kinds this space puts into the world, as one discoverable set. The loot
-## table (scripts/economy/loot_table.gd) gives each of these a weight for the "laundromat" and
-## "laundromat_back" room kinds and no "*" weight, so today they are found here and nowhere else.
-## A later task wants a pocket's items to bleed a little way out into the hospital around its
-## entrances; this constant is what it reads rather than digging literals out of the layout.
-const ITEM_KINDS := ["quarter_bucket", "warm_scrubs", "fabric_softener"]
+## POCKETS 2: the item kinds this space puts into the world, as one discoverable set, beside
+## AMBIENT_NOISE_LEVEL. The loot table (scripts/economy/loot_table.gd) gives each of these a weight
+## for the "laundromat" and "laundromat_back" room kinds and no "*" weight, so today they are found
+## here and nowhere else. A later task wants a pocket's items to bleed a little way out into the
+## hospital around its entrances; this constant is what it reads rather than digging literals out of
+## the layout. The name is shared with the Natatorium and the Chapel -- match it in a new space.
+const POCKET_ITEMS := ["quarter_bucket", "warm_scrubs", "fabric_softener"]
 
 const T := 1.5
 const M := 10
@@ -45,6 +46,10 @@ const BACK_CEIL := 2.9
 const INTERIOR := Rect2i(M + 1, M + 1, W, H)        # x 11..48, y 11..30
 const MAIN := Rect2i(M + 1, M + 1, W, 15)           # x 11..48, y 11..25; wall row y 26
 const UTILITY := Rect2i(M + 1, M + 17, 10, 4)       # x 11..20, y 27..30
+## The trough sink against the utility room's west wall. It runs from the corner rather than
+## stopping short of it: a one-tile nook walled on two sides is floor the navigation bake cannot
+## reach, which tools/mapcheck.gd reports as an unreachable tile on every seed.
+const SINK := Rect2i(M + 1, M + 17, 1, 3)          # x 11, y 27..29
 const OFFICE := Rect2i(M + 12, M + 17, 8, 4)        # x 22..29, y 27..30; wall column x 21
 
 ## The two bands of back-to-back washer islands, and the row of folding tables between them.
@@ -96,7 +101,7 @@ static func layout(stubs: Array, seed: int) -> Dictionary:
 		Common.reserve(g, Rect2i(d.x - 1, MAIN.end.y - 3, 3, 3))
 	# The back rooms' fixed furniture, so nothing paths through the trough sink, the water heater or
 	# the desk. They are built in _back_rooms; these are the tiles they stand on.
-	_block(g, Rect2i(UTILITY.position.x, UTILITY.get_center().y - 1, 1, 2))          # the trough sink
+	_block(g, SINK)                                                                 # the trough sink
 	_block(g, Rect2i(UTILITY.end.x - 1, UTILITY.end.y - 1, 1, 1))                    # the water heater
 	_block(g, Rect2i(OFFICE.get_center().x, OFFICE.get_center().y, 1, 1))            # the desk
 	# The change machine keeps its piece of the north wall.
@@ -472,12 +477,13 @@ static func _front(root: Node3D, body: StaticBody3D, lay: Dictionary, world: Cal
 static func _back_rooms(root: Node3D, body: StaticBody3D, lay: Dictionary, world: Callable,
 		steel: Material, out: Dictionary) -> void:
 	var mb := Common.MeshBuilder.new()
-	# A long steel trough sink against the utility room's west wall.
-	var sx := float(UTILITY.position.x)
-	var sink_c: Vector3 = world.call(Vector2(sx + 0.5, UTILITY.get_center().y + 0.5))
-	mb.box("s", steel, Transform3D(Basis(), sink_c + Vector3(-T * 0.5 + 0.32, 0.45, 0)), Vector3(0.6, 0.9, T * 2.0))
-	Common.collider(body, Transform3D(Basis(), sink_c + Vector3(-T * 0.5 + 0.32, 0.45, 0)), Vector3(0.6, 0.9, T * 2.0))
-	Common.anchor(out, sink_c + Vector3(-T * 0.5 + 0.32, 0.92, 0.4), -PI * 0.5, "counter", "laundromat_back")
+	# A long steel trough sink against the utility room's west wall, over exactly the SINK tiles.
+	var sink_len := float(SINK.size.y) * T
+	var sink_c: Vector3 = world.call(Vector2(SINK.position) + Vector2(0.5, float(SINK.size.y) * 0.5))
+	var sink_at := sink_c + Vector3(-T * 0.5 + 0.32, 0.45, 0)
+	mb.box("s", steel, Transform3D(Basis(), sink_at), Vector3(0.6, 0.9, sink_len))
+	Common.collider(body, Transform3D(Basis(), sink_at), Vector3(0.6, 0.9, sink_len))
+	Common.anchor(out, sink_at + Vector3(0.0, 0.47, 0.4), -PI * 0.5, "counter", "laundromat_back")
 	# The water heater in the utility room's far corner.
 	var heater: Vector3 = world.call(Vector2(UTILITY.end.x - 0.6, UTILITY.end.y - 0.6))
 	mb.cylinder("s", steel, Transform3D(Basis(), heater + Vector3(0, 0.85, 0)), 0.34, 1.7, 14)

@@ -79,7 +79,7 @@ const LOOT := {
 		"surfaces": ["counter", "tray"], "containers": {"station_drawers": 0.5, "trauma_bag": 0.3},
 	},
 	# ---- POCKETS 2 phase 4: the Laundromat's own three. None of them lists a "*" weight, so they are
-	# found in that space and nowhere else (docs/POCKET_SPACES_2.md; Laundromat.ITEM_KINDS is the
+	# found in that space and nowhere else (docs/POCKET_SPACES_2.md; Laundromat.POCKET_ITEMS is the
 	# same set, declared where the space is).
 	"quarter_bucket": {
 		"name": "Bucket of quarters", "short": "Buckets of quarters", "value": [10, 18], "tier": 1,
