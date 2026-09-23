@@ -14,12 +14,15 @@ extends Node
 ##     set down rings, makes noise and can be picked up again;
 ##   - a tagged monster's heartbeat follows its mode, and the pulse oximeter comes back when that
 ##     monster is caught (strapped) or killed; the Night Nurse refuses the clip;
-##   - the reflex hammer turns a Hive right round and it loses sight of you.
+##   - the reflex hammer turns a Hive right round and it loses sight of you;
+##   - POCKETS 2 phase 3: a burning votive candle counts as watching the Night Nurse with
+##     nobody there, only inside its radius, and stops when it burns out.
 ## Exits 0 when every check passes.
 
 const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
 const MonsterScript := preload("res://scripts/monster.gd")
 const HiveBrain := preload("res://scripts/monsters/hive_brain.gd")
+const Percept := preload("res://scripts/perception.gd")
 
 var main: Node3D
 var game: Game
@@ -95,6 +98,7 @@ func _run() -> void:
 	await _phone()
 	await _pulse_ox()
 	await _hammer()
+	await _candle()
 
 
 # =========================================================================
@@ -400,6 +404,61 @@ func _hammer() -> void:
 	await _use_on(nurse)
 	_check(String(tk.last_result.get("what", "")) == "immune", "the Night Nurse ignores the hammer (%s)" % str(tk.last_result))
 	dev.request("remove_bot", {"id": did})
+	game.kill_monster(nurse)
+	await _frames(2)
+
+
+# =========================================================================
+# the votive candle: a safe zone with a two minute fuse (POCKETS 2 phase 3)
+# =========================================================================
+
+## The spec sentence is "within its radius the Night Nurse counts as watched with no player
+## looking", so that is what this checks: Percept.observed_any over her body, which is the same
+## call her brain makes, with the player parked far away facing the other way.
+func _candle() -> void:
+	_stand(o + Vector3(8.0, 0, 20.0), 0.0)
+	await _frames(2)
+	_give("votive_candle", 1, 14)
+	await _use()
+	var lit := int(tk.last_result.get("id", -1))
+	_check(String(tk.last_result.get("what", "")) == "candle_lit", "the candle is set down and lit (%s)" % str(tk.last_result))
+	var candle: Node = game.world_items.get(lit)
+	_check(candle != null and is_instance_valid(candle), "it exists in the world as an item")
+	if candle == null or not is_instance_valid(candle):
+		return
+	_check(String(candle.x) == TrinketsScript.USED_MARK and int(candle.value) == TrinketsScript.scrap_value("votive_candle"),
+		"lighting it spends it: it is worth scrap where it stands ($%d)" % int(candle.value))
+	_check(tk.candle_left(lit) > TrinketsScript.CANDLE_SECONDS - 2.0,
+		"it has about two minutes of burn (%.0f s)" % tk.candle_left(lit))
+	var at: Vector3 = candle.global_position
+
+	# Her, standing in it. The player goes to the far side of the dev room looking away, so that
+	# nothing but the candle can possibly be doing the watching.
+	var nurse := await _monster("night_nurse", at)
+	nurse.global_position = game._floor_at(at + Vector3(1.0, 0, 0.0))
+	_stand(o + Vector3(30.0, 0, 2.0), PI)
+	await _frames(4)
+	var points := [nurse.global_position + Vector3.UP * 0.15, nurse.global_position + Vector3.UP * 1.3]
+	_check(Percept.observed_any(game, points), "a burning candle counts as watching her with nobody there")
+	# Her brain samples observation a few times a second, not every frame (NightNurse OBSERVE_FAR).
+	await _seconds(0.8)
+	_check(bool(nurse.observed), "so she is frozen: observed with the room empty")
+
+	# Step her out of the radius and nothing is watching her any more.
+	nurse.global_position = game._floor_at(at + Vector3(TrinketsScript.CANDLE_RADIUS + 3.0, 0, 0.0))
+	await _frames(3)
+	var out_points := [nurse.global_position + Vector3.UP * 0.15, nurse.global_position + Vector3.UP * 1.3]
+	_check(not Percept.observed_any(game, out_points), "a step outside the radius and she is on her own again")
+
+	# Back in, and then wait it out: when the flame dies the safe zone dies with it.
+	nurse.global_position = game._floor_at(at + Vector3(1.0, 0, 0.0))
+	await _frames(3)
+	_check(Percept.observed_any(game, [nurse.global_position + Vector3.UP * 1.3]), "back inside, it watches her again")
+	await _seconds(tk.candle_left(lit) + 1.0)
+	_check(tk.candle_left(lit) <= 0.0, "the flame burns out on its own")
+	_check(not Percept.observed_any(game, [nurse.global_position + Vector3.UP * 1.3]),
+		"and she is unwatched the moment it does")
+	_check(not tk.lit_candles().has(lit), "the burnt-out candle stops counting")
 	game.kill_monster(nurse)
 	await _frames(2)
 

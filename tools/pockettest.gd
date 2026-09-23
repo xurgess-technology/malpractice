@@ -51,7 +51,7 @@ func _ready() -> void:
 	game = main.game
 	main.menu.hide_menu()
 	Net.start_solo("Bot")
-	for kind in ["factory", "restaurant"]:
+	for kind in Plan.KINDS:
 		if only != "" and only != kind:
 			continue
 		await _run_space(kind)
