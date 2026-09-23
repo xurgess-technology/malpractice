@@ -672,14 +672,14 @@ func eye_transform() -> Transform3D                         # every machine: eye
   entrance building and within 12 m of the wing's shallowest such tile; blocked tiles rejected
   with a sphere query when a physics space is given. Groups of 2-3 (4 when there are more
   Hives than wings can take), one group per wing while wings last, each within 3.5 m of a
-  random shallow centre. Levels without `wings`/`zones`/`entrance_rect` (dev room, lab) group
-  them around `monster_spawns`.
+  random shallow centre. Levels without `wings`/`zones`/`entrance_rect` (`monster_lab`'s test
+  level) group them around `monster_spawns`.
 - **Shapes.bake(root, key)**: every part added through `MonsterModel.add_part` is merged into one
   mesh per material, cached per kind and part for the session (a Hive went from about 90 draw
   calls to about 6). Parts that move on their own must carry meta `no_bake` (the ears).
 - Sounds (`tools/gen_audio_monsters.mjs`): `monsters_hive_groan` (occasional, and when it first
   sees someone), `monsters_hive_shuffle` (per step), `monsters_flesh_hit` (any struck monster),
-  `monsters_hive_death` (played by the dev room's `monster_died_fx` for a Hive),
+  `monsters_hive_death` (played by the dev tools' `monster_died_fx` for a Hive),
   `monsters_sedated_breath` (every 3-4 s near a sedated monster).
 - Tests: `tools/monster_lab.tscn` (headless scenarios 1-10: hearing, darkness, the Nurse, contact,
   roster, client mirrors, the Hive, hits/sedation/waking, dragging/lying copies, placement over
@@ -712,7 +712,7 @@ NurseRig.WALK_SPEED 1.0      # m/s at which Walk's planted foot keeps pace; rate
   while she stands down; otherwise Idle. Footstep squeaks follow the clip (0.8 s / speed).
 - She never lies down, is never dragged, sedated or strapped (sweep 3 locked design), so she has no
   lying or dissection body. `make_lying("night_nurse")` returns her rest pose if anyone asks.
-- The dev room's corpse (`dev_gun.gd monster_corpse`) shows her `Frozen` pose with `slump` 1.
+- The dev tools' corpse (`dev_gun.gd monster_corpse`) shows her `Frozen` pose with `slump` 1.
 
 ### The Night Nurse's grab (2026-09-18)
 
@@ -1126,7 +1126,11 @@ game.pockets.build_wings(info, wing_seed, generation)   # game.wing_loader.extra
 game.pockets.teardown_wings()      # the wings are going: evict, forget, free the old nodes over frames
 game.pockets.busy / finish_now() / stats   # building (clock-in and the gates wait); {generation, frames, steps,
                                    # max_frame_ms, slowest_step_ms, thread_ms, wall_ms}
-game.pockets.build_kind(kind, level_info, parent, seed)   # no hospital entrances (dev room); nothing crosses
+game.pockets.build_kind(kind, level_info, parent, seed)   # no hospital entrances (built the now-deleted
+                                   # dev room's bare test space); left in place in case an isolated
+                                   # art-review space is wanted again, but nothing calls it any more --
+                                   # dev-force-pocket replaced it and the panel's old "Pocket spaces"
+                                   # section that called it is gone
 game.pockets.teardown()
 PocketSpaces.prepare(kind, stubs, seed) -> Dictionary      # data only (layout, surface arrays, nav bake): thread-safe
 PocketSpaces.build_steps(prep, stubs, map_seed, lights, info, parent, out_seams, links, result) -> Array[Callable]
@@ -1657,7 +1661,9 @@ furnace (a thrown-item Area3D, `scripts/economy/furnace.gd`). **HUB REDESIGN**: 
 walled rooms off the lobby, each with its own single door (`scripts/level/entrance.gd`), not just
 open floor. Placement, first match: `level_info.safe_zone {pharmacy_rect, crematorium_rect}` (the
 lobby rects `entrance.gd`'s `spots["reserve"]` fixed, chunk 2, now sized to those rooms'
-interiors), `level_info.economy {shop, furnace}` (hand-placed; the dev room), else a deterministic
+interiors), `level_info.economy {shop, furnace}` (a hand-placed spot set; nothing sets it now that
+the dev room that used to populate it is gone, but `economy.gd` still falls back to it if something
+does), else a deterministic
 search for free floor around the time clock (`economy.gd`'s `_search_spots`). Placement runs two
 physics frames after `_add_landmarks`.
 
@@ -1705,7 +1711,8 @@ game.player_faceplanted(p)           # host; a rocket dive hit a wall head on: d
   Tested by nettest `rocket_boots` (client 2 sees client 1's burn).
 
 - **The pharmacy** (`scripts/economy/economy_props.gd`, hub rebuild chunk 3): a wall of steel bars
-  across the pharmacy (width 13.5 m in the hub, 3 m in the dev room) with a pickup drawer through a
+  across the pharmacy (width 13.5 m in the hub; 3 m when placed via the now-unused
+  `level_info.economy` fallback) with a pickup drawer through a
   slot in them, a receiving fax machine behind the bars, and the Night Nurse's model as the
   attendant -- set dressing, no Monster node, no brain, never a threat. Ordering is E on the lobby
   **fax terminal** in front of the bars (interact_id `"pharmacy_fax"`; `interact` is a no-op, main.gd
@@ -1756,9 +1763,9 @@ game.player_faceplanted(p)           # host; a rocket dive hit a wall head on: d
   - a **miss**: the pill settles as an ordinary floor pickup, same as any dropped item.
   - Chunk 4 adds the database entry for placebo pills (`docs/SWEEP4A.md` 3e).
 
-Dev room: `dev_disp_<loot kind>` cubbies (a rack on the south wall, `DispenserScript.create(kind,
-true)`), `game.dev.request("money", {amount})` / `{reset: true}` (panel "Money" section), and
-`level_info.economy {shop, furnace}` spots. Tests: `tools/inventorytest.tscn` (headless, including
+Dev tools: `game.dev.request("money", {amount})` / `{reset: true}` (panel "Money" section). The dev
+room's `dev_disp_<loot kind>` loot cubbies went with it (2026-09-23); nothing replaces them. Tests:
+`tools/inventorytest.tscn` (headless, including
 the pharmacy/furnace/pill checks), `tools/inventoryshot.tscn` (windowed shots to
 `tools/inventory_shots/`), nettest scenario `economy`, devtest inventory checks, perfprobe
 `crematorium, fire up close` and `--ab` rows `no item rims` / `loot hidden`.
@@ -1792,7 +1799,7 @@ game.spawn_supplies_for(c)      # host: the first case gets ItemSpawner.plan; la
 
 - Vitals drain only while `on_table`. Player cases (`patient_id "player"`) get no PatientBody, no
   surgery system, no drain and no pay from this code: the `downed` worker owns them.
-- Levels without `level_info.tables` (the dev room, the fallback ward, old tile maps) get the
+- Levels without `level_info.tables` (the fallback ward, old tile maps) get the
   level's `table` plus a second table built beside it (`scripts/loop/tables.gd`, deterministic);
   `level_info.tables` is then filled with both and `tables_fallback` set.
 
@@ -1837,8 +1844,8 @@ loop.pay_for(case, shift) -> int   # stable 200 (+25/shift), extra stable 300 (+
   dead and late joiners get up at the start. Game over builds a new hospital (`seed + 7919`).
   Clients learn the phase from `_rpc_shift`/snapshots and move themselves.
 - Game over: during a shift, `game.all_players_out()` (downed worker: every non-waiting player is
-  downed or dead). Never in the dev room. At the next shift's lobby the dead and the downed get
-  up at the start.
+  downed or dead), unless the dev panel's `no_game_over` toggle is on. At the next shift's lobby
+  the dead and the downed get up at the start.
 - The player table (downed worker): the stitches operation stays in
   `scripts/downed/player_surgery.gd`; the host mirrors it into `game.cases` every tick as a
   `patient_id "player"` case with `mirror: true`, `table = game.player_table_index()` (hub rebuild
@@ -1969,7 +1976,8 @@ OrScreenModel.build(game) -> Dictionary # scripts/orscreen/or_screen_model.gd, p
   `level_info.or_screens` (hub rebuild chunk 2; each shows only its table's panel), else one at
   `level_info.or_screen` (centre of the glass on the wall, `yaw` facing -Z into the room, as the
   hospital builds it; the glass is laid onto the hospital's own `or_screen_mount` piece), else on
-  the flattest wall facing the tables found by ray casts (the dev room), else floating near the
+  the flattest wall facing the tables found by ray casts (a level with no `or_screen`/`or_screens`
+  data, e.g. a tool level), else floating near the
   table.
 - Model: `{mode: "idle" | "cases", phase, shift, lobby, panels: [{id, table, patient_id,
   patient_name, ailment_id, ailment_name, code, state, vitals, level: "ok" | "low" | "critical",
@@ -2098,10 +2106,12 @@ game.downed_view           # scripts/downed/downed_view.gd: blood trails, the lo
   outside one edge then on the ring across; amber = loose (closes less, oozes), red = torn skin
   (1.5) or a stab into the open wound (2.5). Net state `s h fq q c pu b bt be st p`. Self-test
   `--selftest=stitches`; the lab runs it on a player body with `--game=stitches`.
-- Dev room: `game.dev.request("down_me", {id?})` (the panel's "Down me" and each bot row's "Down"),
+- Dev tools: `game.dev.request("down_me", {id?})` (the panel's "Down me" and each bot row's "Down"),
   a carry order with `to: "table"` ("downed to table") lifts the nearest downed player and lays them
   on the player table, and the operate order stitches up whoever lies there first (stocking a kit).
-  `dev_level` adds a player table south of the OR table.
+  Wherever you are, the player table is whichever one `_add_player_table` placed for the level (see
+  "Shift loop and patients" above); the dev room's own dedicated table south of the OR table is gone
+  with it.
 - Sounds `downed_fall`, `downed_call`, `downed_lift`, `downed_stitch`, `downed_tug`
   (`tools/gen_audio_downed.mjs`).
 - Tests: `tools/downedtest.tscn` (headless), `tools/downedshot.tscn` (windowed shots into
@@ -2268,7 +2278,8 @@ game.combat.last_result / swings_seen / rng / break_chance / anim_freeze / pose_
 - Sounds (`tools/gen_audio_combat.mjs`): `combat_swing_01/_02`, `combat_jab_swish`,
   `combat_hit_01/_02`, `combat_clang`, `combat_snap`, `combat_jab`, `combat_needle_fail`,
   `combat_drag`, `combat_strap`.
-- Tests: `tools/combattest.tscn` (headless, dev room; wind-up cases at the end),
+- Tests: `tools/combattest.tscn` (headless, `dev_controller.gd`'s `open_area()`; wind-up cases at
+  the end),
   `tools/combatshot.tscn` (windowed shots to `tools/combat_shots/`), `tools/carrycamtest.tscn`,
   `tools/gameshot.tscn -- --only=hands`, nettest scenario `combat` (wind-ups seen before strikes,
   the capped charge).
@@ -2582,7 +2593,7 @@ game.abilities.camera() -> Camera3D        # every machine: the Hive Eyes camera
 game.abilities.local_hive_active() / local_exit()   # main.gd: Esc during Hive Eyes
 game.abilities.on_reset()                  # host, from game.reset_money (game over, new session)
 game.abilities.dev_request(sender, action, args)    # "ab_levels" {id, level}, "ab_reset"
-                                           # (dev_room forwards ab_*)
+                                           # (dev_controller.gd forwards ab_*)
 game.spawn_hive(pos) -> Node               # host (dev, tests): a Hive. It lives on game.gd, not here.
 ```
 
@@ -3003,12 +3014,12 @@ game.clock_in_pending        # host: clock-in waits for the wings
   from 57 steps / 1330 ms (worst 35-43 ms) to 163 ms (worst 8 ms). Children that are not primitive
   meshes skip the cache. Keep container materials shared (`ContainerMats`), or every build misses.
 
-### Dev room
+### Dev tools: doors
 
-- The pen has two partitions with doors (`dr_dev_hinged`, `dr_dev_double`); monsters spawn in its
-  middle bay and reach the side bays through them.
 - Panel section "Doors": "Open all doors", "Close all doors" (hinged doors; requests `doors_all
-  {open}`), "Regenerate wings now" (`regen_wings`).
+  {open}`), "Regenerate wings now" (`regen_wings`). These act on whatever hospital doors exist
+  wherever you are now; the dev room's own pen doors (`dr_dev_hinged`, `dr_dev_double`) went with
+  the room (2026-09-23).
 
 ### Tests
 
