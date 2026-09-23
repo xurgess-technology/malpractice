@@ -200,6 +200,10 @@ const STRAP_IN_PROMPT := "Hold E: lie down and strap in"
 const REVIVE_HP := 2
 const CALL_COOLDOWN := 4.0
 const SUTURE_KITS_PER_SHIFT := 3
+## SYRINGE DRAW: syringes scattered per shift. Three stacks of 1-2, so a crew that wants to pre-load
+## a dose can usually find one, and a crew that ignores them has lost nothing (the OR table still
+## draws its own).
+const SYRINGES_PER_SHIFT := 3
 ## scripts/downed/player_surgery.gd, child "PlayerSurgery": the stitches operation.
 var player_surgery: Node = null
 ## scripts/downed/downed_view.gd, child "DownedView": blood trails and the downed overlay.
@@ -526,6 +530,7 @@ func _populate_shift_world() -> void:
 		if n.has_method("is_open") and n.is_open():
 			n.set_open(false, false)
 	spawn_suture_kits()  # downed: every shift has suture kits for the player table
+	spawn_syringes()     # SYRINGE DRAW: and syringes to pre-load a dose into
 	spawn_loot()
 	_spawn_monsters()
 
@@ -3227,10 +3232,24 @@ func downed_call_out(p: Node) -> void:
 
 ## Host: put a few suture kits around the hospital (containers where they belong, else the floor).
 func spawn_suture_kits() -> void:
+	_spawn_loose_supply("suture_kit", SUTURE_KITS_PER_SHIFT, "suture")
+
+
+## SYRINGE DRAW: and a few syringes, the same way. Neither kind is in Items.SURGICAL -- that list is
+## what a patient case can *need*, and a case never needs either of these -- so they get their own
+## scatter instead of riding the case's supply plan.
+func spawn_syringes() -> void:
+	_spawn_loose_supply("syringe", SYRINGES_PER_SHIFT, "syringe")
+
+
+## Host: scatter `per_shift` stacks of `kind` around the hospital, in the containers its `found`
+## table allows and on the floor when there is nowhere legal left. One stack per building unit where
+## it can manage it, so they are not all in one wing. `salt` keeps each kind's rng its own.
+func _spawn_loose_supply(kind: String, per_shift: int, salt: String) -> void:
 	if not is_host():
 		return
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash("%d|suture|%d" % [seed_value, shift])
+	rng.seed = hash("%d|%s|%d" % [seed_value, salt, shift])
 	var used := {}
 	for it in world_items.values():
 		if it.state == WorldItem.State.IN_CONTAINER:
@@ -3239,10 +3258,10 @@ func spawn_suture_kits() -> void:
 			used["anchor:%d" % it.anchor] = true
 	var locs: Array = []
 	for loc in SpawnerScript._locations(level_info):
-		if SpawnerScript._legal("suture_kit", loc, used):
+		if SpawnerScript._legal(kind, loc, used):
 			locs.append(loc)
 	var units := {}
-	for i in SUTURE_KITS_PER_SHIFT:
+	for i in per_shift:
 		var count := rng.randi_range(1, 2)
 		var pick := {}
 		for tries in 12:
@@ -3253,11 +3272,11 @@ func spawn_suture_kits() -> void:
 				pick = loc
 				break
 		if pick.is_empty():
-			_spawn_from_plan({"kind": "suture_kit", "count": count, "container_id": "", "slot": 0, "anchor": -1})
+			_spawn_from_plan({"kind": kind, "count": count, "container_id": "", "slot": 0, "anchor": -1})
 			continue
 		units[pick.unit] = true
 		locs.erase(pick)
-		_spawn_from_plan(SpawnerScript._entry("suture_kit", count, pick))
+		_spawn_from_plan(SpawnerScript._entry(kind, count, pick))
 
 
 # ---- the player table ----

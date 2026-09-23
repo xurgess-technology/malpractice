@@ -353,6 +353,30 @@ are easy to miss:
 `bot_input()`, and can take screenshots:
 `godot --path . tools/minigame_lab.tscn -- --game=<id> [--patient=bob|seal] [--ailment=...] [--variant=...] [--bot=1.0|0.0] [--seconds=N] [--shot=res://tools/lab_shots/name.png] [--headless-report]`.
 
+### A step away from a patient (SYRINGE DRAW, 2026-09-22, docs/ANESTHETIC_INJECTION_SPEC.md §9)
+
+A step normally happens at a marker on a body. Two hooks let a **stand-in game** (the
+`scripts/downed/player_surgery.gd` pattern: a node that exposes the surface the surgery system
+reads and runs its own copy of it) put one somewhere else instead. Both are opt-in by
+`has_method`, so a game that does not define them behaves exactly as before.
+
+- `site_override() -> Transform3D` — **the second anchoring mode.** Pins the site itself rather
+  than looking it up on a patient body. Local +Y is "out of the body", local +Z is back toward the
+  operator, exactly as a body site. Everything downstream is unchanged: the panel still lifts
+  `panel_lift` along +Y and still orients **once** at open time to the leaned-in camera, the
+  camera pose still comes from the site, the cursor still projects onto the panel's plane. Neither
+  `surgery_panel.gd` nor the OR path can tell which kind of site it got.
+- `extra_ctx() -> Dictionary` — merged over the context last, so a stand-in game can add or
+  override any knob. The syringe station uses it for `draw_only`; a table hands the sedate step a
+  `loaded` syringe's contents the same way.
+
+Freeze and hand-over need nothing new: the arcade's "step away and the game stops dead, whoever
+picks it up gets a READY countdown" keys off `operating`, not off a table.
+
+Procedures gets a matching flag: `handheld: true` on an ailment means it is something you do to a
+thing in your hand, not an operation on anybody. `Procedures.is_handheld()`; it is kept off the
+patient tables' roll (`patient_ailments()`) and out of the terminal's procedure lists.
+
 ## Minigames (minigames worker, sweep 2)
 
 The five steps no longer ask the player to read gauges or match sliders; the patient and the

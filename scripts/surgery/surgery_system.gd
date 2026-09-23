@@ -511,6 +511,13 @@ func _spawn_mg() -> void:
 	for k in ["no_fail", "eye_kind", "eye_kind_in", "eye_radius"]:
 		if c.flags.has(k):
 			ctx[k] = c.flags[k]
+	# SYRINGE DRAW: a stand-in game adds its own knobs on top (the syringe station's `draw_only`,
+	# and the `loaded` syringe a table's sedate step is handed). Last word, so a station can
+	# override anything above it.
+	if game.has_method("extra_ctx"):
+		var extra = game.extra_ctx()
+		if extra is Dictionary:
+			ctx.merge(extra as Dictionary, true)
 	mg.setup(ctx)
 	if _mg_state_key == mg_key and not _mg_state.is_empty():
 		mg.apply_net_state(_mg_state)
@@ -562,7 +569,18 @@ func _free_mg() -> void:
 	_mg_step = {}
 
 
+## SYRINGE DRAW -- THE SECOND ANCHORING MODE. A step normally happens at a marker on a patient's
+## body. A stand-in game can instead pin the site itself (the syringe station puts it in front of
+## the player, where there is no patient and no table), and everything downstream is unchanged:
+## the panel still lifts `panel_lift` along the site's +Y and orients itself ONCE to the operator's
+## leaned-in camera, the camera pose is still derived from the site, the cursor still projects onto
+## the panel's plane. Nothing below this line, and nothing in surgery_panel.gd, has to know which
+## kind of site it got -- which is why the OR path is untouched by any of it.
 func _site_transform() -> Transform3D:
+	if game != null and game.has_method("site_override"):
+		var over = game.site_override()
+		if over is Transform3D:
+			return (over as Transform3D).orthonormalized()
 	var site := String(_mg_step.get("site", ""))
 	var body = _body()
 	if body != null and is_instance_valid(body) and body.has_method("site_transform") \
