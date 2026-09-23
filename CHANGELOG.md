@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.35**: There is a swimming pool in the hospital 🏊
+    - Added: The Natatorium. An Olympic pool under a nine-metre ceiling, lane ropes, starting blocks, bleachers, the lot -- behind a door in a building with one storey. The underwater lights are on. Nobody is swimming.
+    - Added: Wading across is the short way and it is *loud* -- louder than sprinting on tile, loud enough that anything listening knows exactly where you are. The dry deck is the long way round. Crouching through the water is the only crossing that isn't a certainty, and it's the one place in the hospital where crouching doesn't make you quiet.
+    - Added: A drum of pool chemicals worth taking, a lifeguard's whistle that brings the whole wing running to wherever you blew it, and a first-aid cabinet that always has gauze and a tourniquet in it.
 - **0.10.34**: Load a syringe anywhere you like 💉
     - Added: Hold a syringe, press E, and the clipboard comes up wherever you're standing -- a broom cupboard, a corridor, behind a gurney. Draw the dose and flick the bubbles out there, then walk to the table and go straight to sticking it in. The first thing in this game you can play outside the OR.
     - Added: A rack of up to three fluids across the top of the page, and you move the needle between them. Only anesthetic for now; the wine and the tequila are coming.
