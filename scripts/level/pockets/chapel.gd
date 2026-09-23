@@ -38,9 +38,9 @@ const AMBIENT_NOISE_LEVEL := 0.0
 ## without going digging through the layout below for string literals. The follow-up task that
 ## bleeds a pocket's items into the hospital rooms near its entrances reads exactly this.
 ## The Factory and the Restaurant contribute no items of their own (their loot comes from the
-## normal wing tables through containers and anchors), so the Chapel is the first space to declare
-## one and this is the convention the other new spaces should copy.
-const ITEM_KINDS := ["votive_candle", "communion_wine", "collection_plate"]
+## normal wing tables through containers and anchors), so there was no convention to follow and the
+## new spaces agreed on this name. Keep it beside AMBIENT_NOISE_LEVEL.
+const POCKET_ITEMS := ["votive_candle", "communion_wine", "collection_plate"]
 
 const T := 1.5
 const M := 10

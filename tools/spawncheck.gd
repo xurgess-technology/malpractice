@@ -197,6 +197,12 @@ func _check_plan(seed: int, ailment: String, info: Dictionary, p: Array, gen: Di
 			_fail("%s: wing %s holds nothing the case needs" % [tag, wd.id])
 		_count("needed stacks in a depth-%d wing" % int(wd.depth), int(needed_wings.get(String(wd.id), 0)))
 	for kind in ItemsData.SURGICAL:
+		# POCKETS 2 phase 3: a surgical item may name the room kinds it is ever found in
+		# (ItemSpawner._legal). The Chapel's communion wine is only in the Chapel, and most maps
+		# have no Chapel, so it cannot be a red herring the way a hospital supply is. An item
+		# without a `rooms` key is unrestricted, which is every other surgical item.
+		if not (ItemsData.def(kind).get("rooms", {}) as Dictionary).is_empty():
+			continue
 		if not need.has(kind) and int(totals.get(kind, 0)) < 1:
 			_fail("%s: no red herring %s" % [tag, kind])
 	if not far_needed:

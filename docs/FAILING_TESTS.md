@@ -76,8 +76,18 @@ How to run things is at the bottom of this file.
   A passing run has her following in **9.2 s, 3.9 m** — a healthy follow, not a near-miss — and a
   failing one still reports exactly 60.0 s and 1444.3 m, which is just "she stayed in the hospital
   while the bot walked into the pocket", so the identical number says nothing about the cause.
-- **So it is not fixed, and the branch did not break it either**: a deterministic failure became a
-  coin flip. That is a strong hint about the cause. The Night Nurse's `_vanish()` asks
+- **It is run order, not a coin flip** (established 2026-09-22 by the Natatorium task, which had a
+  third space to test the idea with): in a `pockettest` run only the space that goes **first**
+  reliably passes the Night Nurse check, and reversing the order moves the pass with it. Each space
+  passes when run alone with `--only=`.
+  The Chapel task saw one run fail `restaurant` (the second space) and a later run of the same
+  three spaces pass all 310 checks, so the ordering effect is not perfectly deterministic either --
+  but the order story explains far more of it than chance does.
+  **If you are changing Night Nurse behaviour, run your space alone before concluding anything.**
+  The Chapel's votive candle makes her count as watched inside its radius, which is exactly the
+  kind of change that would get blamed for this.
+- **So it is not fixed, and phase 1 did not break it either**: a deterministic failure became
+  order-dependent. That is a strong hint about the cause. The Night Nurse's `_vanish()` asks
   `random_nav_point` for a point up to **400 m** away, which used to reach the pocket at tile 800;
   the fence now refuses those, so she is far likelier to still be nearby when the bot crosses.
   Whoever picks this up should look at `_vanish()` in `scripts/monsters/night_nurse_brain.gd` and at
@@ -114,6 +124,24 @@ How to run things is at the bottom of this file.
 - **The stalls themselves were never explained**, and they are no longer anyone's known bug. Anything
   that depends on a short-lived state being sampled at 20 Hz is vulnerable to them, so this is worth
   its own look before the next netcode feature leans on snapshot timing.
+
+## 4. spawncheck: no suture kit ever spawns for a gunshot
+
+- **Command:** `godot --headless --path . --script tools/spawncheck.gd [-- --seeds=6]`
+- **Result:** on essentially every seed, `seed N gunshot: suture_kit totals 0, needs at least 3x 1`
+  and `suture_kit is in only 0 places`. A gunshot case needs a suture kit and the spawner places
+  none anywhere on the map.
+- **Found 2026-09-22** by the POCKET_SPACES_2 phase 3 task, and **confirmed pre-existing** by
+  checking out `main`'s `scripts/items.gd` and `scripts/item_spawner.gd` over the branch and
+  re-running: the same failure on every one of six seeds. Never written down before.
+- **Probably the same lag as orscreentest's**, which was on this list for a supply count from
+  before SUTURE! gave `gunshot` a fourth step: the step was added and the spawning side was not
+  brought with it. `suture_kit` declares `"found": {"trauma_bag": 0.4, "station_drawers": 0.35,
+  "drawer_unit": 0.25}` and no `"loose"`, so it can only ever appear inside a container.
+- **Where to look:** whether `ItemSpawner.plan` treats it as a needed consumable at all (it is in
+  `Items.ITEMS` with `"surgical": true` but **not** in `Items.SURGICAL`, which is the list the
+  spawner's needed/herring split actually iterates).
+
 
 ## 3. perfprobe --pockets crashes after the warmup, before it measures anything
 

@@ -227,11 +227,13 @@ top-shelf tequila should be one more line in that dictionary.
 - `perfprobe --pocketkind=<kind>`, because `--pockets` crashes before it measures anything. That is
   **pre-existing** and now written up as FAILING_TESTS 3.
 
-**The item set, for the task that bleeds pocket items into the hospital.** `Chapel.ITEM_KINDS`
-lists `votive_candle`, `communion_wine`, `collection_plate`. There was no existing convention — the
-Factory and the Restaurant contribute no items of their own, their loot coming from the normal wing
-tables through containers and anchors — so this is the smallest one that works and the other new
-spaces should copy the name.
+**The item set, for the task that bleeds pocket items into the hospital.** `Chapel.POCKET_ITEMS`
+lists `votive_candle`, `communion_wine`, `collection_plate`, and sits beside `AMBIENT_NOISE_LEVEL`.
+There was no existing convention — the Factory and the Restaurant contribute no items of their own,
+their loot coming from the normal wing tables through containers and anchors — so the Natatorium
+and the Chapel arrived at the same shape independently and settled on this name. The wine is in the
+set deliberately: it is a fluid the syringe rack is designed for, so it is the likeliest of the
+three to be wanted outside the Chapel.
 
 **No new assets.** Everything is procedural over the existing CC0 tileables through `Common.tri_mat`
 and `LootModels`/`ItemModels` primitives, exactly as the Factory and the Restaurant are, so
