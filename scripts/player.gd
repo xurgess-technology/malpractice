@@ -1483,6 +1483,14 @@ func _consume_actions() -> void:
 # aiming and hands
 # =========================================================================
 
+## Physical keycode -> the label we print for it, worked out once. `_update_aim_core` asks for the
+## drop key on *every* frame you are carrying someone, and the layout lookup below is a display
+## server call: headless has no keyboard layout, so that call prints an eight-line error with a
+## backtrace every frame, which is enough output to drag a headless client down to 5 fps (it was
+## what made nettest `pockets` time out). Rebinding lands on a different keycode and so a different
+## entry; only changing the machine's keyboard layout mid-session would leave a label stale.
+static var _key_labels: Dictionary = {}
+
 ## The key bound to an action right now, for a prompt ("G"). Rebinding in the settings follows.
 func _key_label(action: String) -> String:
 	if InputMap.has_action(action):
@@ -1490,7 +1498,12 @@ func _key_label(action: String) -> String:
 			if ev is InputEventKey:
 				var kc: int = (ev as InputEventKey).physical_keycode
 				if kc > 0:
-					return OS.get_keycode_string(DisplayServer.keyboard_get_keycode_from_physical(kc)).to_upper()
+					if not _key_labels.has(kc):
+						# Headless has no layout to translate through: the physical key is the label.
+						var shown: int = kc if DisplayServer.get_name() == "headless" \
+							else DisplayServer.keyboard_get_keycode_from_physical(kc)
+						_key_labels[kc] = OS.get_keycode_string(shown).to_upper()
+					return String(_key_labels[kc])
 	return action.to_upper()
 
 
