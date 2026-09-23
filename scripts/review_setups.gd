@@ -57,6 +57,8 @@ const SETUPS := {
 	# gunshot wound. `--patient=seal` puts the seal on the table instead of Bob; `--stick` opens on
 	# STICK! with the dose already drawn, so the aim is all there is to try.
 	"sedate": {"seed": 4242, "stage": "_sedate"},
+	# SYRINGE DRAW: the new syringe item -- three in hand, vials to load them from, some on the floor.
+	"syringe": {"seed": 4242, "stage": "_syringe"},
 	# 2026-09-21 (docs/ARCADE_SURGERY.md 5.2): DODGE!, a gunshot wound at the bullet step, sedated, and
 	# you already operating. `--undersedated` makes the patient squirm; `--patient=seal` swaps in the seal.
 	"dodge": {"seed": 4242, "stage": "_dodge"},
@@ -412,6 +414,21 @@ static func _arcade_eyes(game: Game) -> void:
 ## the barrel because it weighs more. `--stick` skips DRAW! and FLICK! and opens straight on STICK!,
 ## dose drawn and no bubbles, for when only the aim is being looked at. E steps back from the table,
 ## E again starts over where you were.
+## SYRINGE DRAW: syringes in hand with the fluid to load them from, plus a few lying loose and a
+## stack on the shelf. For looking at the new item -- the model in the hand and on the floor, the
+## icon in the bar, and what the terminal says about it.
+static func _syringe(game: Game) -> void:
+	clear_hands(game)
+	give(game, "syringe", 3)
+	give(game, "anesthetic", 3)
+	game.local_player().selected = 0
+	game.stock_storage("syringe", 3)
+	var here: Vector3 = game.local_player().global_position
+	floor_item(game, "syringe", here + Vector3(1.0, 0.0, -1.4), 2)
+	floor_item(game, "syringe", here + Vector3(-0.9, 0.0, -1.6), 1)
+	floor_item(game, "anesthetic", here + Vector3(0.1, 0.0, -1.9), 3)
+
+
 static func _sedate(game: Game) -> void:
 	var pid := "bob"
 	for a in OS.get_cmdline_user_args():
