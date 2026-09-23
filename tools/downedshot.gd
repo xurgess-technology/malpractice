@@ -3,7 +3,7 @@ extends Node
 ##
 ##   godot --path . --resolution 1280x720 tools/downedshot.tscn
 ##
-##   01_downed_view        your own view lying on the dev room's floor: vignette, bleed clock, blood trail
+##   01_downed_view        your own view lying in the open test area: vignette, bleed clock, blood trail
 ##   02_bot_carrying       a bot carrying a downed dummy in the OR, toward a patient table
 ##   03a_lifting           your view half-way through the hold to lift someone
 ##   03_carrying_fp        your view while carrying someone to a free patient table ("Place X on the table")
@@ -21,9 +21,8 @@ extends Node
 ##   10_downed_on_the_spot a teammate downed where they stood, never having crawled (2026-09-22)
 ##
 ## A normal hospital (seed 4242) with dev mode on (No monsters, No game over), clocked in with the
-## phone hung up. 01 is on the hidden dev room's floor; everything with a table is in the hospital's
-## OR, on its first free patient table (the room has no table, and its navigation is an island of
-## its own, so bots carry and operate in the OR).
+## phone hung up. 01 is in an open corner of the parking lot; everything with a table is in the
+## hospital's OR, on its first free patient table.
 
 const SHOT_DIR := "res://tools/downed_shots"
 const SEED := 4242
@@ -33,7 +32,7 @@ var game: Game
 var dev: Node
 var me: Player
 var t := 0.0
-## The hidden dev room's corner (its own frame's origin) in world space.
+## The open test area's origin (dev_controller.gd open_area()) in world space.
 var o := Vector3.ZERO
 
 
@@ -53,7 +52,7 @@ func _ready() -> void:
 	me = game.local_player()
 	me.bot_active = true
 	game.set_dev_tools(true, me)
-	o = dev.room.global_position
+	o = dev.open_area()
 	dev.request("monsters_off", {"on": true})
 	dev.request("no_game_over", {"on": true})
 	dev.request("god", {"on": true})

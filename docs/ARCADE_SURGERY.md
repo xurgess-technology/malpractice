@@ -54,7 +54,7 @@ built for it, per section 3.4.
   `"<game>:<variant>"`, the variant key winning. `minigame_script()` is the single place anything
   resolves a step's script: the surgery system, the lab and the warmup all go through it. The dev
   panel has an "Arcade surgery" checkbox per key; the host applies it and broadcasts
-  (`dev_room._rpc_arcade`) so every machine builds the same game.
+  (`dev_controller._rpc_arcade`) so every machine builds the same game.
 - **Warmup** builds the legacy game *and* the arcade rebuild for every step that has one.
 - **Onlookers.** Everything a spectator needs is in `net_state()` at 20 Hz and they interpolate.
 

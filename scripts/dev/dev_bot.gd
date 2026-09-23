@@ -43,9 +43,9 @@ var _op_table := -1
 var _gave := false
 
 
-func _init(dev_room: Node, player: Node) -> void:
-	dev = dev_room
-	game = dev_room.game
+func _init(controller: Node, player: Node) -> void:
+	dev = controller
+	game = controller.game
 	p = player
 
 
@@ -192,13 +192,6 @@ func _fetch(delta: float, kind: String) -> void:
 			best_d = d
 			best_id = id
 			best_pos = pos
-	var disp = game.find_interactable("dev_disp_%s" % kind)
-	if disp != null and dev.in_room(p.global_position):   # the room's floor doesn't reach the hospital
-		var dd: float = disp.global_position.distance_to(p.global_position)
-		# Prefer a dispenser unless the loose stack is clearly closer.
-		if best_id == "" or dd < best_d + 3.0:
-			best_id = "dev_disp_%s" % kind
-			best_pos = disp.global_position
 	if best_id == "":
 		status = "no %s anywhere" % Items.display_name(kind)
 		_halt()

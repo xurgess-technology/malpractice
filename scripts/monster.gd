@@ -1241,8 +1241,8 @@ func _onlooker_visual(delta: float) -> void:
 			rg.tick(delta, viewer.global_position + Vector3.UP * C.EYE_H if viewer != null else Vector3.INF)
 
 
-## Dev room settings for the Night Nurse (dev_room.gd `nurse_settings()`): {ignore_watch, walk
-## ("" | "follow" | "loop"), who, loop: Array of Vector3, speed}. Empty outside the dev room.
+## Dev mode's settings for the Night Nurse (dev_controller.gd `nurse_settings()`): {ignore_watch,
+## walk ("" | "follow" | "loop"), who, loop: Array of Vector3, speed}. Empty outside dev mode.
 func dev_nurse() -> Dictionary:
 	if game == null or not game.has_method("dev_on") or not game.dev_on():
 		return {}

@@ -5,12 +5,13 @@ extends Node
 ##
 ## The host owns the truth: everything here that changes the world runs on the host; clients ask
 ## through request() and fire() and see the result through the "dv" block of the game snapshot
-## (net_state / apply_net_state) and one-off events (tracers, fallen monsters, a walk through a dev
-## door).
+## (net_state / apply_net_state) and one-off events (tracers, fallen monsters).
 ##
-## The hidden dev room (dev_level.gd) is built on every machine the first time dev mode is on in a
-## level, out past the parking lot's fog, and entered through the locked door in the OR supply
-## closet (dev_door.gd), which every level has.
+## There is no separate dev room any more (removed 2026-09-23, "it's not needed, we can just do
+## everything out in the open" -- Zach): everything the panel does happens wherever you already
+## are, in the real hospital. This file used to also own a hidden room and its closet door
+## (`dev_level.gd`, `dev_door.gd`, now deleted); this is what stayed once the room went, moved out
+## the way `spawn_hive` moved onto `game.gd` during the brains removal (docs/backlog/ABILITIES_REMOVED.md).
 ##
 ## Contracts other code relies on are in docs/CONTRACTS.md ("Dev mode").
 
@@ -29,7 +30,8 @@ const MONSTER_KNOCK_SECONDS := 4.0
 const AUTO_REVIVE_SECONDS := 4.0
 ## Where the first-person gun sits on the camera: low on the right, clear of the crosshair.
 const GUN_FP_POS := Vector3(0.24, -0.23, -0.46)
-## Render layer 18 for the first-person gun (layer 20 is the minigames').
+## Render layer 18 for the first-person gun (layer 20 is the minigames'). Also read by
+## scripts/personnel/mirrors.gd, which keeps the gun's own first-person model out of the mirrors.
 const GUN_FP_LAYER := 1 << 17
 const ORDERS := ["follow", "stay", "carry", "operate"]
 const MONSTER_KINDS := ["hive", "sonographer", "night_nurse"]  # SWEEP 3 HOOK (monsters): the Hive
@@ -40,23 +42,17 @@ const NURSE_PACE_NAMES := ["Hunt (3.4 m/s)", "Stalk (1.6 m/s)", "Creep (0.8 m/s)
 const NURSE_LOOP := Vector2(3.0, 1.75)
 const BOT_NAMES :=["Dr. Botsworth", "Nurse Unit", "Intern 404", "Dr. Clank", "Orderly-9", "Dr. Servo", "Scrub Bot", "Dr. Byte"]
 
-const LevelScript := preload("res://scripts/dev/dev_level.gd")
 const BotBrain := preload("res://scripts/dev/dev_bot.gd")
 const GunFx := preload("res://scripts/dev/dev_gun.gd")
 const PlayerScript := preload("res://scripts/player.gd")
 const WorldItemScript := preload("res://scripts/world_item.gd")
 const LootTable := preload("res://scripts/economy/loot_table.gd")
 const MonsterScript3 := preload("res://scripts/monster.gd")  # SWEEP 3 HOOK (monsters): display names
-const DevDoorScript := preload("res://scripts/dev/dev_door.gd")
-## How far south of the parking lot's far edge the hidden room stands, metres (well past the fog).
-const ROOM_GAP := 30.0
 
 var game: Node = null
 
 # ---- replicated (host authoritative) ----
 var time_scale := 1.0
-var lights_on := true
-var pen_open := false
 var freeze_vitals := false
 var auto_revive := false
 ## Dev tools toggles: no monsters spawn (and the live ones go); nobody loses the run to everyone downed.
@@ -80,18 +76,9 @@ var brains := {}   # id -> BotBrain
 var _next_bot := 1
 var _fire_at := {}  # peer id -> world_time of the last shot
 var _dead_for := {}
-var _applied_gate := false
-var _applied_lights := true
 
 # ---- local ----
 var _recoil := {}   # peer id -> 0..1
-
-# ---- every machine: the hidden room and the closet door in this level ----
-var room: Node3D = null
-## The room's markers in world space: arrive, monster_spawns, dummy_spots, containers, lights,
-## dev_gate, nav_region, door_nodes.
-var room_info := {}
-var closet_door: Node3D = null
 
 
 func setup(g: Node) -> void:
@@ -106,11 +93,99 @@ func is_host() -> bool:
 	return game != null and game.is_host()
 
 
+## Test tools and shots: a big, open, obstacle-free, un-fogged spot to stage things in. Not the
+## parking lot itself -- it is real, playable ground, but shallow (its far quarter is the fog
+## belt, scripts/level/fog_ring.gd, which also bends a bot's facing once it's deep enough in, so a
+## test standing there can get silently turned round mid-check) and too small for what these tools
+## expect (many stand things tens of metres apart). Past its edge instead, where the old dev room
+## used to stand: a bare patch of floor and nothing else -- no walls, no pen, no dispensers, no
+## door, no signage, nothing a player can walk to in a real session. Built the first time a test
+## tool asks for it; torn down with the rest of dev mode's state.
+const OPEN_FLOOR_SIZE := 48.0
+const OPEN_FLOOR_GAP := 30.0   # how far south of the lot's far edge the floor starts
+## The walled part of the floor matches the old dev room's own footprint (dev_level.gd W/D) --
+## these are the numbers every `o + Vector3(x, 0, z)` in the test tools was written against, and a
+## few of them (a shove's knockback, mid-swing) need a wall nearby to land the same way it used to.
+const INNER_W := 24.0
+const INNER_D := 18.0
+const INNER_MARGIN := 6.0   # inset from the big floor's edge, so the walled part isn't flush with it
+var _open_floor: Node3D = null
+var _open_floor_origin := Vector3.ZERO
+
+
+func open_area() -> Vector3:
+	if game == null or game.level == null or not is_instance_valid(game.level):
+		return Vector3.ZERO
+	if _open_floor == null or not is_instance_valid(_open_floor) or _open_floor.get_parent() != game.level:
+		_build_open_floor()
+	return _open_floor_origin
+
+
+func _build_open_floor() -> void:
+	var lot: Rect2 = game.level_info.get("neutral_rect", Rect2())
+	var at := Vector3(-160.0, 0.0, -160.0) if lot.size == Vector2.ZERO else Vector3(lot.position.x, 0.0, lot.end.y + OPEN_FLOOR_GAP)
+	at = Vector3(snappedf(at.x, C.TILE), 0.0, snappedf(at.z, C.TILE))
+	var body := StaticBody3D.new()
+	body.name = "DevTestFloor"
+	body.collision_layer = C.L_WORLD
+	body.collision_mask = 0
+	var half := Vector3(OPEN_FLOOR_SIZE * 0.5, 0.2, OPEN_FLOOR_SIZE * 0.5)
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = half * 2.0
+	cs.shape = box
+	cs.position = Vector3(half.x, -half.y, half.z)
+	body.add_child(cs)
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = box.size
+	mi.mesh = bm
+	mi.position = cs.position
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.32, 0.34, 0.35)
+	mi.material_override = mat
+	body.add_child(mi)
+	var nav := NavigationRegion3D.new()
+	var nm := NavigationMesh.new()
+	nm.agent_radius = 0.5
+	nm.agent_height = 1.75
+	nm.agent_max_climb = 0.25
+	nm.agent_max_slope = 45.0
+	nm.cell_size = 0.25
+	nm.cell_height = 0.25
+	nm.set_vertices(PackedVector3Array([
+		Vector3(0.0, 0.0, 0.0), Vector3(OPEN_FLOOR_SIZE, 0.0, 0.0),
+		Vector3(OPEN_FLOOR_SIZE, 0.0, OPEN_FLOOR_SIZE), Vector3(0.0, 0.0, OPEN_FLOOR_SIZE)]))
+	nm.add_polygon(PackedInt32Array([0, 1, 2, 3]))
+	nav.navigation_mesh = nm
+	body.add_child(nav)
+	# The walled inner box, inset within the bigger bare floor.
+	const WALL_H := 3.0
+	const WALL_T := 0.4
+	var ix := INNER_MARGIN
+	var iz := INNER_MARGIN
+	for w in [
+			[Vector3(INNER_W, WALL_H, WALL_T), Vector3(ix + INNER_W * 0.5, WALL_H * 0.5, iz - WALL_T * 0.5)],
+			[Vector3(INNER_W, WALL_H, WALL_T), Vector3(ix + INNER_W * 0.5, WALL_H * 0.5, iz + INNER_D + WALL_T * 0.5)],
+			[Vector3(WALL_T, WALL_H, INNER_D), Vector3(ix - WALL_T * 0.5, WALL_H * 0.5, iz + INNER_D * 0.5)],
+			[Vector3(WALL_T, WALL_H, INNER_D), Vector3(ix + INNER_W + WALL_T * 0.5, WALL_H * 0.5, iz + INNER_D * 0.5)]]:
+		var wcs := CollisionShape3D.new()
+		var wbox := BoxShape3D.new()
+		wbox.size = w[0]
+		wcs.shape = wbox
+		wcs.position = w[1]
+		body.add_child(wcs)
+	body.position = at
+	game.level.add_child(body)
+	_open_floor = body
+	_open_floor_origin = at + Vector3(ix, 0.0, iz)
+
+
 # =========================================================================
 # lifecycle (called from game.gd hooks)
 # =========================================================================
 
-# ---- POCKETS HOOK: a pocket space built beside the room (every machine, from the dv state) ----
+# ---- POCKETS HOOK: a pocket space beside the hospital, and a way in and out ----
 
 var dev_pocket := ""
 
@@ -140,142 +215,7 @@ func pocket_go(into: bool) -> void:
 		me.teleport(spots[0] if not spots.is_empty() else Vector3.ZERO)
 
 
-## A new level exists (game._build_level): if dev mode is already on, the supply closet's door and
-## the hidden room again (the old ones went with the old level).
-func on_level_built() -> void:
-	room = null
-	room_info = {}
-	closet_door = null
-	_applied_gate = false
-	_applied_lights = true
-	if game.dev_on():
-		_add_closet_door()
-		build_room()
-
-
-## Whether a point is inside the hidden room (bots only use its dispensers from in there).
-func in_room(pos: Vector3) -> bool:
-	if not room_ready():
-		return false
-	var o := room.global_position
-	return pos.x >= o.x and pos.x <= o.x + LevelScript.W and pos.z >= o.z and pos.z <= o.z + LevelScript.D and absf(pos.y - o.y) < 4.0
-
-
-## Every machine: the hidden room is standing in this level.
-func room_ready() -> bool:
-	return room != null and is_instance_valid(room)
-
-
-## Every machine: build the hidden room past the parking lot (once per level). Built the same way
-## everywhere; the host stocks its containers.
-func build_room() -> void:
-	if room_ready() or game.level == null or not is_instance_valid(game.level):
-		return
-	var info := {}
-	room = LevelScript.build(info)
-	room.name = "DevRoom"
-	var origin := _room_origin()
-	room.position = origin
-	game.level.add_child(room)
-	for key in ["monster_spawns", "dummy_spots"]:
-		var moved: Array = []
-		for v in info.get(key, []):
-			moved.append((v as Vector3) + origin)
-		info[key] = moved
-	info["arrive"] = (info.get("arrive", Vector3.ZERO) as Vector3) + origin
-	for e in info.get("containers", []):
-		var ct = e.get("node")
-		if ct != null and is_instance_valid(ct):
-			e["position"] = (ct as Node3D).global_position
-	# DOORS HOOK: the pen's doors were placed in the room's frame; their tiles and centres move with it.
-	var tile_off := Vector2i(int(round(origin.x / C.TILE)), int(round(origin.z / C.TILE)))
-	for d in info.get("door_nodes", []):
-		var tiles: Array = []
-		for t in d.data.get("tiles", []):
-			tiles.append((t as Vector2i) + tile_off)
-		d.data["tiles"] = tiles
-		d.centre = (d as Node3D).global_position + Vector3.UP * 1.1
-	game.doors.register(info.get("door_nodes", []))
-	room_info = info
-	_applied_gate = false
-	LevelScript.set_gate_open(room_info, pen_open)
-	_applied_gate = pen_open
-	if is_host():
-		_stock_containers(info.get("containers", []))
-
-
-## South of the lot's far edge (past the fog), snapped to whole tiles. A level with no lot (the
-## fallback ward): somewhere nobody walks.
-func _room_origin() -> Vector3:
-	var lot: Rect2 = game.level_info.get("neutral_rect", Rect2())
-	var at := Vector3(-120.0, 0.0, -120.0) if lot.size == Vector2.ZERO else Vector3(lot.position.x, 0.0, lot.end.y + ROOM_GAP)
-	return Vector3(snappedf(at.x, C.TILE), 0.0, snappedf(at.z, C.TILE))
-
-
-## The door on the supply closet's west wall (every level with a supply closet). It only exists while
-## dev mode is on (Zach, 2026-09-17): no locked door hinting at anything before.
-func _add_closet_door() -> void:
-	if closet_door != null and is_instance_valid(closet_door):
-		return
-	if game.level == null or not is_instance_valid(game.level):
-		return
-	for r in game.level_info.get("rooms", []):
-		if String(r.get("kind", "")) != "or_storage":
-			continue
-		var rect: Rect2 = r.rect
-		closet_door = DevDoorScript.create("closet")
-		closet_door.position = game._floor_at(Vector3(rect.position.x, 0.0, rect.get_center().y))
-		closet_door.rotation.y = PI / 2.0   # its front (+Z) faces +X, into the closet
-		game.level.add_child(closet_door)
-		return
-
-
-## Host: a dev door was used. "closet" walks into the hidden room (building it first if it somehow
-## isn't), "exit" back into the supply closet.
-func walk_through(p: Node, which: String) -> void:
-	if not is_host() or p == null or not game.dev_on():
-		return
-	var to: Vector3
-	if which == "closet":
-		build_room()
-		if not room_ready():
-			return
-		to = room_info.arrive
-	else:
-		if closet_door == null or not is_instance_valid(closet_door):
-			return
-		to = closet_door.global_position + closet_door.global_basis.z * 0.9
-	game._sound("doors_heavy", p.global_position)
-	send_player(p, to)
-
-
-## Host: move a player; their own machine owns their position, so a guest is told to go.
-func send_player(p: Node, to: Vector3) -> void:
-	if p.is_local or bool(p.get("is_bot")):
-		p.teleport(to)
-	elif Net.active and multiplayer.get_peers().has(int(p.peer_id)):
-		game._event.rpc_id(int(p.peer_id), "dev_tp", {"pos": to})
-
-
-## Fill every container with what that kind of container normally holds.
-func _stock_containers(entries: Array) -> void:
-	for e in entries:
-		var ct = e.get("node")
-		if ct == null or not is_instance_valid(ct) or not ct.is_inside_tree():
-			continue
-		var kinds := []
-		for kind in Items.ITEMS.keys():
-			if Items.def(kind).get("found", {}).has(String(e.type)):
-				kinds.append(kind)
-		if kinds.is_empty():
-			continue
-		for i in ct.slot_count():
-			var kind: String = kinds[i % kinds.size()]
-			var batch: Array = Items.def(kind).get("batch", [1, 1])
-			game._spawn_item(kind, int(batch[batch.size() - 1]), ct.slot_transform(i), WorldItemScript.State.IN_CONTAINER, String(e.id), i)
-
-
-## Dev mode off or the session over: undo anything global (the room's geometry stays with its level).
+## Dev mode off or the session over: undo anything global.
 func reset_state() -> void:
 	release_bot()   # GRAFT HOOK: back into your own body before the bots go
 	for id in bots.keys():
@@ -289,8 +229,6 @@ func reset_state() -> void:
 	_fire_at.clear()
 	time_scale = 1.0
 	Engine.time_scale = 1.0
-	lights_on = true
-	pen_open = false
 	freeze_vitals = false
 	auto_revive = false
 	monsters_off = false
@@ -301,8 +239,6 @@ func reset_state() -> void:
 	dev_pocket = ""   # POCKETS HOOK (its nodes go with the level)
 	nurse_who = 0
 	nurse_loop = []
-	_applied_gate = false
-	_applied_lights = true
 	state_changed.emit()
 
 
@@ -352,37 +288,15 @@ func _host_tick(delta: float) -> void:
 				_revive(p)
 
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if game == null or game.phase == game.Phase.MENU:
 		return
 	for p in game.players.values():
-		_update_gun_visual(p, delta)
+		_update_gun_visual(p, _delta)
 	if not game.dev_on():
 		return
-	if not room_ready():
-		build_room()   # a client whose snapshot turned dev mode on before its level existed
-	if _applied_gate != pen_open and room_ready():
-		_applied_gate = pen_open
-		LevelScript.set_gate_open(room_info, pen_open)
-	if _applied_lights != lights_on:
-		_applied_lights = lights_on
-		_apply_lights()
 	if not is_equal_approx(Engine.time_scale, time_scale):
 		Engine.time_scale = time_scale
-
-
-## The hidden room's lights.
-func _apply_lights() -> void:
-	for l in room_info.get("lights", []):
-		var node = l.get("node")
-		if node == null or not is_instance_valid(node):
-			continue
-		var bulb = node.get_node_or_null("Bulb")
-		if bulb != null:
-			bulb.visible = lights_on
-		var panel = node.get_node_or_null("Panel")
-		if panel != null:
-			panel.visible = lights_on
 
 
 # =========================================================================
@@ -603,14 +517,7 @@ const DOOR_ACTIONS := ["doors_all", "regen_wings"]
 
 
 ## Every machine: dev mode went on or off in this session (game.set_dev_tools, or the snapshot).
-## On builds the hidden room here (the pharmacy fax's loading page covers the hitch).
 func on_dev_tools(on: bool) -> void:
-	if on:
-		_add_closet_door()
-		build_room()
-	elif closet_door != null and is_instance_valid(closet_door):
-		closet_door.queue_free()
-		closet_door = null
 	dev_tools_changed.emit(on)
 	state_changed.emit()
 
@@ -652,10 +559,6 @@ func _apply_request(sender: int, action: String, a: Dictionary) -> void:
 				Procedures.ARCADE_ENABLED[akey] = aon
 				if Net.active:
 					_rpc_arcade.rpc(akey, aon)
-		"lights":
-			lights_on = bool(a.get("on", not lights_on))
-		"pen":
-			pen_open = bool(a.get("open", not pen_open))
 		"freeze":
 			freeze_vitals = bool(a.get("on", not freeze_vitals))
 		"auto_revive":
@@ -693,7 +596,7 @@ func _apply_request(sender: int, action: String, a: Dictionary) -> void:
 		"spawn_item":
 			_spawn_item(who, String(a.get("kind", "gauze")), int(a.get("count", 1)))
 		"spawn_monster":
-			spawn_monster(String(a.get("kind", "sonographer")), String(a.get("where", "pen")), who)
+			spawn_monster(String(a.get("kind", "sonographer")), String(a.get("where", "front")), who)
 		"kill_monsters":
 			for m in game.monsters.values().duplicate():
 				game.kill_monster(m)
@@ -842,24 +745,20 @@ func _spawn_item(who: Node, kind: String, count: int) -> void:
 	it.toss(Transform3D(Basis(), at), Vector3.UP * 1.0)
 
 
-func spawn_monster(kind: String, where: String, who: Node = null) -> Node:
+## Host: a monster in front of `who` (there is no pen any more; every dev spawn happens out in
+## the open). Marked "dev_spawned" so a new shift's roster doesn't sweep it away
+## (see game._clear_monsters).
+func spawn_monster(kind: String, _where: String, who: Node = null) -> Node:
 	if not is_host() or not MONSTER_KINDS.has(kind):
 		return null
-	var pos: Vector3
-	if where == "front" and who != null:
-		pos = _in_front_of(who, 4.0)
-	else:
-		var spots: Array = room_info.get("monster_spawns", [])
-		if spots.is_empty():
-			pos = _in_front_of(who, 4.0)
-		else:
-			pos = spots[game.monsters.size() % spots.size()]
+	var pos: Vector3 = _in_front_of(who, 4.0)
 	var m = game._add_monster(kind, pos)
+	m.set_meta("dev_spawned", true)
 	game.say("A %s crawls out." % MonsterScript3.display_name(kind), 2.0)  # SWEEP 3 HOOK (monsters)
 	return m
 
 
-## NURSE HOOK: what every Night Nurse's brain reads in the dev room (Monster.dev_nurse()).
+## NURSE HOOK: what every Night Nurse's brain reads (Monster.dev_nurse()).
 func nurse_settings() -> Dictionary:
 	return {"ignore_watch": nurse_ignore_watch, "walk": nurse_walk, "who": nurse_who, "loop": nurse_loop,
 		"speed": float(NURSE_PACES[clampi(nurse_pace, 0, NURSE_PACES.size() - 1)])}
@@ -947,13 +846,9 @@ func spawn_bot(kind: String, who: Node = null, force_name: String = "", at = nul
 	bots[id] = {"name": bot_name, "kind": kind, "order": "stay" if kind == "dummy" else "follow",
 		"item": "gauze", "to": "shelf", "owner": owner_id, "status": "", "done": 0}
 	var p := _make_bot_node(id, bot_name, kind)
-	var pos: Vector3
+	var pos: Vector3 = _in_front_of(who, 3.0 if kind == "dummy" else 2.0) if who != null else game.spawn_points()[0]
 	if kind == "dummy":
-		var spots: Array = room_info.get("dummy_spots", [])
-		pos = spots[n_dummies % spots.size()] if not spots.is_empty() else _in_front_of(who, 3.0)
 		p.bot_yaw = PI   # face the spawn so the target rings show
-	else:
-		pos = _in_front_of(who, 2.0) if who != null else game.spawn_points()[0]
 	if at != null:
 		pos = at
 	p.teleport(pos)
@@ -1156,7 +1051,7 @@ func net_state() -> Dictionary:
 		if p.stun > 0.0:
 			stun[p.peer_id] = snappedf(p.stun, 0.1)
 	return {
-		"ts": time_scale, "lo": lights_on, "po": pen_open, "fv": freeze_vitals, "ar": auto_revive,
+		"ts": time_scale, "fv": freeze_vitals, "ar": auto_revive,
 		"mo": monsters_off, "ng": no_game_over,
 		"gd": god.keys(), "nc": noclip.keys(), "gn": gun.keys(), "bt": bots, "st": stun,
 		"nn": [nurse_ignore_watch, nurse_walk, nurse_pace],   # NURSE HOOK
@@ -1170,8 +1065,6 @@ func apply_net_state(s: Dictionary) -> void:
 	if is_host():
 		return
 	time_scale = float(s.get("ts", 1.0))
-	lights_on = bool(s.get("lo", true))
-	pen_open = bool(s.get("po", false))
 	freeze_vitals = bool(s.get("fv", false))
 	auto_revive = bool(s.get("ar", false))
 	monsters_off = bool(s.get("mo", false))
@@ -1216,15 +1109,11 @@ static func _as_set(ids: Array) -> Dictionary:
 	return out
 
 
-## One-off events from game._event that belong to the dev room.
+## One-off events from game._event that belong to dev mode.
 func on_event(kind: String, data: Dictionary) -> void:
 	match kind:
 		"monster_killed":
 			monster_died_fx(data)
-		"dev_tp":
-			var me = game.local_player()
-			if me != null:
-				me.teleport(data.pos)
 
 
 func monster_died_fx(data: Dictionary) -> void:

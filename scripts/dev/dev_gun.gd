@@ -1,5 +1,5 @@
 extends RefCounted
-## Visuals for the dev room: the dev gun, its tracers and impacts, fallen monsters, and the
+## Visuals for dev mode: the dev gun, its tracers and impacts, fallen monsters, and the
 ## target dummy's body. All primitives with shared materials, so nothing compiles mid-fight
 ## after the warmup has drawn them once (see warm()).
 

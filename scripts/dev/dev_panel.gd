@@ -3,12 +3,26 @@ extends CanvasLayer
 ## pharmacy fax's secret order); the mouse is free while it is open. Every world change goes through
 ## game.dev.request(), so on a client it is sent to the host. Local only: graphics quality, going
 ## somewhere (you own your position), this machine's database and tips.
+##
+## Reorganised 2026-09-23 (dev-panel-rework) into tabs, around what Zach reaches for to test a
+## thing, instead of the flat list it grew into by accretion. Every control's behavior is
+## unchanged from before; only where it lives moved:
+##   You         player cheats: god, noclip, the dev gun, free camera, Dr. Botsworth, down/revive.
+##   World       time scale, difficulty, graphics, and the session's toggles (infinite vitals,
+##               auto-revive, no monsters, no game over).
+##   Go to       jump to a room (you own your position) and pocket spaces.
+##   Spawn       items, monsters, the Night Nurse's own controls, bots and dummies.
+##   Shift       clock in/out, the phone, patients, their vitals, money, stocking the shelf.
+##   Surgery     arcade surgery step toggles and the doors hook (open/close all, regen wings).
+##   Database    this machine's database and tips, DEV MODE OFF.
+## The dev room is gone (2026-09-23, "we can just do everything out in the open" -- Zach):
+## everything above happens wherever you already are.
 
 const ACCENT := Color(0.3, 0.95, 0.8)
 const DIM := Color(0.6, 0.68, 0.7)
-const PANEL_W := 400.0
+const PANEL_W := 430.0
 const LootTableScript := preload("res://scripts/economy/loot_table.gd")
-const DevRoomScript := preload("res://scripts/dev/dev_room.gd")   # NURSE HOOK: pace names
+const DevControllerScript := preload("res://scripts/dev/dev_controller.gd")   # NURSE HOOK: pace names
 const MonsterPages := preload("res://scripts/database/monster_pages.gd")
 const OFF := Color(1.0, 0.4, 0.35)
 const FreeCamScript := preload("res://scripts/dev/free_cam.gd")
@@ -17,6 +31,7 @@ var game: Node = null
 var main: Node = null
 
 var _root: PanelContainer
+var _tabs: TabContainer
 var _open := false
 var _refresh_t := 0.0
 var _c := {}              # control name -> Control
@@ -126,28 +141,55 @@ func _build() -> void:
 	_root.add_theme_stylebox_override("panel", sb)
 	add_child(_root)
 
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_root.add_child(scroll)
-	var col := VBoxContainer.new()
-	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override("separation", 6)
-	scroll.add_child(col)
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 6)
+	_root.add_child(outer)
 
 	var title := Label.new()
 	title.text = "DEV MODE"
 	title.add_theme_font_size_override("font_size", 26)
 	title.add_theme_color_override("font_color", ACCENT)
-	var top := _row(col)
+	var top := _row(outer)
 	top.add_child(title)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var off := _button(top, "DEV MODE OFF", func(): _req("dev_off"); toggle(false))
 	off.add_theme_color_override("font_color", OFF)
 	off.add_theme_color_override("font_hover_color", OFF.lightened(0.3))
-	_c["role"] = _label(col, "", 12, DIM)
+	_c["role"] = _label(outer, "", 12, DIM)
 
-	# ---- you
-	_section(col, "You")
+	_tabs = TabContainer.new()
+	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tabs.tabs_visible = true
+	_tabs.clip_tabs = false
+	outer.add_child(_tabs)
+
+	_build_you(_tab(_tabs, "You"))
+	_build_world(_tab(_tabs, "World"))
+	_build_go_to(_tab(_tabs, "Go to"))
+	_build_spawn(_tab(_tabs, "Spawn"))
+	_build_shift(_tab(_tabs, "Shift"))
+	_build_surgery(_tab(_tabs, "Surgery"))
+	_build_database(_tab(_tabs, "Database"))
+
+	_label(outer, "F1 or Esc closes this panel.", 11, DIM)
+
+
+## A scrollable tab: added to `tabs`, named `title`, returns the VBoxContainer to fill.
+func _tab(tabs: TabContainer, title: String) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.name = title
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	tabs.add_child(scroll)
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", 6)
+	scroll.add_child(col)
+	return col
+
+
+# ---- You: player cheats -----------------------------------------------------
+
+func _build_you(col: VBoxContainer) -> void:
 	var you := _row(col)
 	_c["god"] = _check(you, "God mode", func(on): _req("god", {"on": on}))
 	_c["noclip"] = _check(you, "Noclip", func(on): _req("noclip", {"on": on}))
@@ -167,8 +209,10 @@ func _build() -> void:
 	_c["botsworth_label"] = _label(bw, "", 12, DIM)
 	_label(col, "Spawns Dr. Botsworth beside you (a full surgeon: he can pick things up and operate) and moves your input and camera into him. The same button brings you back; your own body stays where you left it.", 11, DIM)
 
-	# ---- world
-	_section(col, "World")
+
+# ---- World: time, difficulty, quality, session toggles ----------------------
+
+func _build_world(col: VBoxContainer) -> void:
 	var ts := _row(col)
 	_label(ts, "Time", 13, Color.WHITE).custom_minimum_size.x = 44
 	var slider := HSlider.new()
@@ -210,60 +254,35 @@ func _build() -> void:
 	gfx.item_selected.connect(_set_quality)
 	_c["gfx"] = gfx
 
-	# ---- going places (local: you own your position)
+
+# ---- Go to: places and pocket spaces (local: you own your position) --------
+
+func _build_go_to(col: VBoxContainer) -> void:
 	_section(col, "Go to")
 	var g1 := _row(col)
 	var places := _option(g1, [])
 	places.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_c["places"] = places
 	_button(g1, "Go", func(): _go_place(places.selected))
-	var g2 := _row(col)
-	_button(g2, "Dev room", func(): _go_dev_room())
-	_button(g2, "Start", func(): game.dev.pocket_go(false))
-	var g3 := _row(col)
-	_c["lights"] = _check(g3, "Dev room lights", func(on): _req("lights", {"on": on}))
-	_c["pen"] = _check(g3, "Pen gate open", func(on): _req("pen", {"open": on}))
-	_label(col, "The dev room is behind the locked door in the OR supply closet.", 11, DIM)
+	_button(g1, "Start", func(): game.dev.pocket_go(false))
 
-	# ---- ARCADE (docs/ARCADE_SURGERY.md): which steps play their arcade rebuild
-	_section(col, "Arcade surgery")
-	var ar := _row(col)
-	var n := 0
-	for key in Procedures.ARCADE_ENABLED.keys():
-		if n > 0 and n % 3 == 0:
-			ar = _row(col)
-		var k := String(key)
-		_c["arcade_" + k] = _check(ar, k, func(on): _req("arcade", {"key": k, "on": on}))
-		(_c["arcade_" + k] as CheckBox).button_pressed = bool(Procedures.ARCADE_ENABLED[k])
-		n += 1
-	_label(col, "Off plays the legacy step. The host sets it for everyone; it takes effect at the next step.", 11, DIM)
+	# ---- POCKETS HOOK: a pocket space beside the hospital, and a way in and out
+	_section(col, "Pocket spaces")
+	var pk1 := _row(col)
+	_button(pk1, "Factory", func(): _req("pocket", {"kind": "factory"}))
+	_button(pk1, "Restaurant", func(): _req("pocket", {"kind": "restaurant"}))
+	_button(pk1, "Natatorium", func(): _req("pocket", {"kind": "natatorium"}))
+	_button(pk1, "Remove", func(): _req("pocket", {"kind": ""}))
+	var pk2 := _row(col)
+	_button(pk2, "Go there", func(): game.dev.pocket_go(true))
+	_button(pk2, "Back to the start", func(): game.dev.pocket_go(false))
+	_label(col, "Builds the space beside the hospital for this session (no entrances to it).", 11, DIM)
 
-	# ---- the shift loop
-	_section(col, "Shift")
-	var sh1 := _row(col)
-	_button(sh1, "Clock in", func(): _req("clock_in"))
-	_button(sh1, "Clock out (force)", func(): _req("clock_out"))
-	var sh2 := _row(col)
-	_button(sh2, "Phone call", func(): _req("phone"))
-	_button(sh2, "Extra patient", func(): _req("extra_patient"))
-	_button(sh2, "Skip grace", func(): _req("skip_grace"))
-	var sh3 := _row(col)
-	_button(sh3, "Skip to table", func(): _req("skip_to_table"))
-	_c["shift_label"] = _label(col, "", 12, DIM)
 
-	# ---- this machine's own database and tips
-	_section(col, "Database and tips (this machine)")
-	var db1 := _row(col)
-	_button(db1, "Unlock every entry", func(): _database(true))
-	_button(db1, "Reset database", func(): _database(false))
-	var db2 := _row(col)
-	_button(db2, "Reset tips", func():
-		if main != null and main.get("tips") != null:
-			main.tips.reset_seen()
-			game.say("Every tip shows again.", 2.0))
+# ---- Spawn: items, monsters, the Night Nurse, bots and dummies -------------
 
-	# ---- spawning
-	_section(col, "Spawn")
+func _build_spawn(col: VBoxContainer) -> void:
+	_section(col, "Items")
 	var s1 := _row(col)
 	var item_names: Array = Items.ITEMS.keys() + LootTableScript.kinds()  # inventory: loot too
 	var items := _option(s1, item_names.map(func(k): return Items.display_name(k)))
@@ -275,12 +294,13 @@ func _build() -> void:
 	count.custom_minimum_size.x = 80
 	s1.add_child(count)
 	_button(s1, "Spawn item", func(): _req("spawn_item", {"kind": item_names[items.selected], "count": int(count.value)}))
+
+	_section(col, "Monsters")
 	var s2 := _row(col)
 	var monsters := _option(s2, ["The Hive", "The Sonographer", "The Night Nurse"])  # SWEEP 3 HOOK (monsters): the Hive
 	monsters.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var kinds := ["hive", "sonographer", "night_nurse"]
-	_button(s2, "In the dev room pen", func(): _req("spawn_monster", {"kind": kinds[monsters.selected], "where": "pen"}))
-	_button(s2, "In front", func(): _req("spawn_monster", {"kind": kinds[monsters.selected], "where": "front"}))
+	_button(s2, "Spawn", func(): _req("spawn_monster", {"kind": kinds[monsters.selected], "where": "front"}))
 	var s3 := _row(col)
 	_button(s3, "Kill all monsters", func(): _req("kill_monsters"))
 	_c["monster_count"] = _label(s3, "", 12, DIM)
@@ -295,32 +315,37 @@ func _build() -> void:
 	var walk := _option(nn2, ["Hunts players", "Follows me", "Walks a loop here"])
 	walk.item_selected.connect(func(i): _req("nurse_walk", {"mode": walks[i]}))
 	_c["nurse_walk"] = walk
-	var pace := _option(nn2, DevRoomScript.NURSE_PACE_NAMES)
+	var pace := _option(nn2, DevControllerScript.NURSE_PACE_NAMES)
 	pace.item_selected.connect(func(i): _req("nurse_pace", {"i": i}))
 	_c["nurse_pace"] = pace
 	_label(col, "Follows me: stops 2.5 m away, never attacks. A loop is a 6 x 3.5 m rectangle round where you stand, long side the way you face.", 11, DIM)
 
-	# ---- POCKETS HOOK: a pocket space beside the dev room, and a way in and out
-	_section(col, "Pocket spaces")
-	var pk1 := _row(col)
-	_button(pk1, "Factory", func(): _req("pocket", {"kind": "factory"}))
-	_button(pk1, "Restaurant", func(): _req("pocket", {"kind": "restaurant"}))
-	_button(pk1, "Natatorium", func(): _req("pocket", {"kind": "natatorium"}))
-	_button(pk1, "Remove", func(): _req("pocket", {"kind": ""}))
-	var pk2 := _row(col)
-	_button(pk2, "Go there", func(): game.dev.pocket_go(true))
-	_button(pk2, "Back to the start", func(): game.dev.pocket_go(false))
-	_label(col, "Builds the space beside the hospital for this session (no entrances to it).", 11, DIM)
+	# ---- bots
+	_section(col, "Bots and dummies")
+	var b1 := _row(col)
+	_button(b1, "+ Bot", func(): _req("spawn_bot", {"kind": "bot"}))
+	_button(b1, "+ Dummy", func(): _req("spawn_bot", {"kind": "dummy"}))
+	_button(b1, "Remove all", func(): _req("remove_bots"))
+	_bots_box = VBoxContainer.new()
+	_bots_box.add_theme_constant_override("separation", 4)
+	col.add_child(_bots_box)
 
-	# ---- money (inventory, sweep 2)
-	_section(col, "Money")
-	var mo1 := _row(col)
-	for amt in [100, 1000, 10000, -1000]:
-		_button(mo1, ("+$%d" if amt > 0 else "-$%d") % absi(amt), func(): _req("money", {"amount": amt}))
-	_button(mo1, "Reset", func(): _req("money", {"reset": true}))
-	_c["money_label"] = _label(col, "", 12, DIM)
 
-	# ---- patient
+# ---- Shift: the shift loop, the patient, money, the shelf -------------------
+
+func _build_shift(col: VBoxContainer) -> void:
+	_section(col, "Shift")
+	var sh1 := _row(col)
+	_button(sh1, "Clock in", func(): _req("clock_in"))
+	_button(sh1, "Clock out (force)", func(): _req("clock_out"))
+	var sh2 := _row(col)
+	_button(sh2, "Phone call", func(): _req("phone"))
+	_button(sh2, "Extra patient", func(): _req("extra_patient"))
+	_button(sh2, "Skip grace", func(): _req("skip_grace"))
+	var sh3 := _row(col)
+	_button(sh3, "Skip to table", func(): _req("skip_to_table"))
+	_c["shift_label"] = _label(col, "", 12, DIM)
+
 	_section(col, "Patient")
 	var p1 := _row(col)
 	var pids: Array = Procedures.human_patients()  # GRAFTING part one: the Hive straps below
@@ -360,30 +385,53 @@ func _build() -> void:
 	_button(p4, "Clear shelf", func(): _req("clear_shelf"))
 	_c["case_label"] = _label(col, "", 12, DIM)
 
-	# ---- bots
-	_section(col, "Bots and dummies")
-	var b1 := _row(col)
-	_button(b1, "+ Bot", func(): _req("spawn_bot", {"kind": "bot"}))
-	_button(b1, "+ Dummy", func(): _req("spawn_bot", {"kind": "dummy"}))
-	_button(b1, "Remove all", func(): _req("remove_bots"))
-	_bots_box = VBoxContainer.new()
-	_bots_box.add_theme_constant_override("separation", 4)
-	col.add_child(_bots_box)
+	# ---- money (inventory, sweep 2)
+	_section(col, "Money")
+	var mo1 := _row(col)
+	for amt in [100, 1000, 10000, -1000]:
+		_button(mo1, ("+$%d" if amt > 0 else "-$%d") % absi(amt), func(): _req("money", {"amount": amt}))
+	_button(mo1, "Reset", func(): _req("money", {"reset": true}))
+	_c["money_label"] = _label(col, "", 12, DIM)
+
+
+# ---- Surgery: arcade step toggles, doors ------------------------------------
+
+func _build_surgery(col: VBoxContainer) -> void:
+	# ---- ARCADE (docs/ARCADE_SURGERY.md): which steps play their arcade rebuild
+	_section(col, "Arcade surgery")
+	var ar := _row(col)
+	var n := 0
+	for key in Procedures.ARCADE_ENABLED.keys():
+		if n > 0 and n % 3 == 0:
+			ar = _row(col)
+		var k := String(key)
+		_c["arcade_" + k] = _check(ar, k, func(on): _req("arcade", {"key": k, "on": on}))
+		(_c["arcade_" + k] as CheckBox).button_pressed = bool(Procedures.ARCADE_ENABLED[k])
+		n += 1
+	_label(col, "Off plays the legacy step. The host sets it for everyone; it takes effect at the next step.", 11, DIM)
 
 	# ---- DOORS HOOK: every door, and the wings behind the gates
 	_section(col, "Doors")
-	_door_buttons(col)
-
-	_label(col, "F1 or Esc closes this panel.", 11, DIM)
-
-
-func _door_buttons(parent: Control) -> void:
-	var d1 := _row(parent)
+	var d1 := _row(col)
 	_button(d1, "Open all doors", func(): _req("doors_all", {"open": true}))
 	_button(d1, "Close all doors", func(): _req("doors_all", {"open": false}))
-	var d2 := _row(parent)
+	var d2 := _row(col)
 	_button(d2, "Regenerate wings now", func(): _req("regen_wings"))
-	_label(parent, "Hinged doors swing away from you on E.", 11, DIM)
+	_label(col, "Hinged doors swing away from you on E.", 11, DIM)
+
+
+# ---- Database: this machine's database and tips, DEV MODE OFF --------------
+
+func _build_database(col: VBoxContainer) -> void:
+	_section(col, "Database and tips (this machine)")
+	var db1 := _row(col)
+	_button(db1, "Unlock every entry", func(): _database(true))
+	_button(db1, "Reset database", func(): _database(false))
+	var db2 := _row(col)
+	_button(db2, "Reset tips", func():
+		if main != null and main.get("tips") != null:
+			main.tips.reset_seen()
+			game.say("Every tip shows again.", 2.0))
 
 
 func _section(parent: Control, text: String) -> void:
@@ -504,15 +552,6 @@ func _go_place(i: int) -> void:
 	me.teleport(game._floor_at(at))
 
 
-func _go_dev_room() -> void:
-	var me = game.local_player()
-	if me == null:
-		return
-	game.dev.build_room()
-	if game.dev.room_ready():
-		me.teleport(game.dev.room_info.arrive)
-
-
 func _set_quality(q: int) -> void:
 	var settings := get_node_or_null("/root/Settings")
 	if settings != null and settings.has_method("set_value"):
@@ -543,8 +582,6 @@ func _refresh() -> void:
 	(_c["no_game_over"] as CheckBox).set_pressed_no_signal(dev.no_game_over)
 	(_c["shift_label"] as Label).text = "Phase: %s, shift %d. %s" % [String(Game.Phase.keys()[int(game.phase)]).capitalize(),
 		int(game.shift), game.loop.objective_text() if game.loop != null else ""]
-	(_c["lights"] as CheckBox).set_pressed_no_signal(dev.lights_on)
-	(_c["pen"] as CheckBox).set_pressed_no_signal(dev.pen_open)
 	(_c["freeze"] as CheckBox).set_pressed_no_signal(dev.freeze_vitals)
 	(_c["auto_revive"] as CheckBox).set_pressed_no_signal(dev.auto_revive)
 	(_c["nurse_ignore"] as CheckBox).set_pressed_no_signal(dev.nurse_ignore_watch)   # NURSE HOOK

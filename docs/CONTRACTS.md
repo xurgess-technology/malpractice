@@ -1295,13 +1295,23 @@ normally: `tools/settingstest.gd` and `tools/carrycamtest.gd` use it.
 - Tests: `tools/settingstest.tscn` (headless), `tools/settingsshot.tscn` (windowed screenshots to
   `tools/settings_shots/`, plus the mouse-look sensitivity check that needs a captured mouse).
 
-## Dev mode (dev worker, sweep 2 wave 1; redesigned 2026-09-16)
+## Dev mode (dev worker, sweep 2 wave 1; redesigned 2026-09-16; dev room removed 2026-09-23)
 
 Secret tools for a normal session (`scripts/dev/**`). There is no dev level any more: a secret
 pharmacy fax order (`game.DEV_CODE`, checked first in `game.order_pharmacy`: no money, no delivery)
 calls `game.set_dev_tools(true, p)` on the host, which turns dev mode on for everyone in the session
 (snapshot key `"dt"`) until DEV MODE OFF on the panel or the session ends. The fax UI prints a reply
-page and waits on `dev.room_ready()` before it closes.
+page and waits on `game.dev_on()` before it closes.
+
+**No separate dev room** (2026-09-23, "it's not needed, we can just do everything out in the open"
+-- Zach): there used to be a hidden room (`dev_level.gd`) past the parking lot's fog, reached
+through a locked door in the OR supply closet (`dev_door.gd`). Both are gone, along with their
+dispensers, containers, monster pen and gate, and the panel's "Dev room" / "Dev room lights" / "Pen
+gate open" controls. Everything the panel does now happens wherever you already are. The bot/brain
+controller that used to live alongside the room moved onto `scripts/dev/dev_controller.gd` (the
+precedent: `spawn_hive` moved onto `game.gd` the same way when the brains removal took the room's
+predecessor apart, see `docs/backlog/ABILITIES_REMOVED.md`); `game.dev` still points at it, same
+child-of-Game wiring, so every call site that used `game.dev.<method>()` is unchanged.
 
 ```gdscript
 game.dev_tools: bool                     # every machine; replicated
@@ -1309,22 +1319,16 @@ game.dev_on() -> bool                    # what code checks
 game.set_dev_tools(on, p := null)        # host; off also runs dev.reset_state()
 ```
 
-- F1 (or the key left of 1) opens the dev panel anywhere while `dev_on()`. Local-only buttons: go to
-  (you own your position), this machine's database (unlock every entry / reset) and tips.
-- The hidden room (`dev_level.gd`): built on every machine by `dev.build_room()` when dev mode comes
-  on (and again after a level rebuild), south of `level_info.neutral_rect` past the fog, snapped to
-  tiles. `dev.room`, `dev.room_info` (world space: `arrive`, `monster_spawns`, `dummy_spots`,
-  `containers`, `lights`, `dev_gate`, `nav_region`, `door_nodes`), `dev.in_room(pos)`. It holds the
-  specimen pen and gate, one of every container, the item and loot dispensers, the gun rack and the
-  dummy floor, and a separate navigation island (bots only use its dispensers from inside it). No
-  tables, shelf, pharmacy or furnace: those are the hospital's.
-- Every level with an `or_storage` room has `dev_door_closet` on the closet's west wall
-  (`dev_door.gd`, "!Locked" unless dev mode is on); it and the room's `dev_door_exit` move the user
-  (host `dev.walk_through`, a guest by the `dev_tp` event).
+- F1 (or the key left of 1) opens the dev panel anywhere while `dev_on()`. It is tabbed (You,
+  World, Go to, Spawn, Shift, Surgery, Database) around what a control is *for*, not a flat list.
+  Local-only buttons: go to (you own your position), this machine's database (unlock every entry /
+  reset) and tips.
 - Toggles default off in a normal session (`freeze_vitals`, `auto_revive`, `monsters_off`,
   `no_game_over`); `monsters_off` clears the monsters and stops `_spawn_monsters`, `no_game_over`
-  keeps `all_players_out` from ending the run. A new shift's `_spawn_monsters` keeps the room's
-  monsters.
+  keeps `all_players_out` from ending the run. A new shift's `_spawn_monsters` keeps monsters the
+  panel spawned (`Node.set_meta("dev_spawned", true)`, set by `dev.spawn_monster`; checked by
+  `game._clear_monsters(keep_dev_spawns)` instead of a position test now that there is no room to
+  check against).
 - Requests new with the redesign: `dev_off`, `monsters_off {on}`, `no_game_over {on}`, `clock_in`,
   `clock_out` (forced), `skip_to_table` (`loop.dev_skip_to_table`: incoming patients onto free
   tables now), `abilities` (every ability at max level for the sender).
@@ -1332,7 +1336,7 @@ game.set_dev_tools(on, p := null)        # host; off also runs dev.reset_state()
 Game API (host only; wave 3 `downed` changes what these do, not their signatures):
 
 ```gdscript
-game.dev: Node                           # scripts/dev/dev_room.gd, child "Dev" of Game, always present
+game.dev: Node                           # scripts/dev/dev_controller.gd, child "Dev" of Game, always present
 game.damage_player(p, amount: int, source: String, knock := Vector3.ZERO)
     # every hurt goes here; monster_hit_player calls it. source: "monster:<kind>", "dev_gun:<name>"
 game.knock_down_player(p, source: String, knock := Vector3.ZERO, seconds := 3.0)
@@ -1358,12 +1362,15 @@ knocked down, no movement; a `"stun"` event plus the dev snapshot block), `nocli
 - `surgery_system.gd` lets an `is_bot` operator operate on the host with the minigame's
   `bot_input(t, skill)` (skill from the bot's meta `bot_skill`). Minigames must keep
   `bot_input` finishing their step.
-- Interactables: `dev_disp_<item kind>` dispensers (endless stacks) and `dev_disp_dev_gun`.
 - Test tool: `--dev` after `--` turns dev mode on as soon as the level exists, so a review window
   (`tools
 eview.bat 2 "..." --dev`) opens with the panel a keypress away.
 - World changes from the panel or tests: `game.dev.request(action, args)`; the host applies,
   a client sends. Shots: `game.dev.fire(shooter, from, dir, "kill" | "knock")`.
+  `spawn_monster(kind, where, who)` always spawns in front of `who` now (`where` is accepted but
+  ignored -- there is no pen to spawn "in" any more). `dev.open_area() -> Vector3` gives test tools
+  a big, open, obstacle-free spot (a corner of the parking lot) to stage things in, standing in for
+  what the room used to give them.
 - **Control Dr. Botsworth** (grafting chunk B, 2026-09-18): the panel's button spawns a bot called
   Dr. Botsworth if he is not there (an ordinary `is_bot` Player: real hands, a real operator at a
   table) and moves this machine's input and camera into him; the same button hands them back. Local
@@ -1377,7 +1384,7 @@ eview.bat 2 "..." --dev`) opens with the panel a keypress away.
   The bot's brain is skipped while you drive it and picks its order back up afterwards.
 - Sounds `dev_zap`, `dev_thump` from `tools/gen_audio_dev.mjs`.
 - **Pocket spaces** (2026-09-14): request `pocket {kind: "factory" | "restaurant" | ""}` builds that space
-  beside the room on every machine (`dv.pk`, `game.pockets.build_kind`); `dev.pocket_go(into)` moves the
+  beside the hospital on every machine (`dv.pk`, `game.pockets.build_kind`); `dev.pocket_go(into)` moves the
   local player to its spawn and back (panel "Go there" / "Back to the start").
 - **Night Nurse section** (2026-09-14): requests `nurse_ignore_watch {on}`, `nurse_walk {mode: "" |
   "follow" | "loop"}` (follow: the sender; loop: a 6 x 3.5 m rectangle round where the sender stands,

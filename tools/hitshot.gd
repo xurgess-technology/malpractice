@@ -3,14 +3,14 @@ extends Node
 ## tools/hit_shots/ (gitignored). Run it through tools\hitshot.ps1, which starts the window
 ## minimized so it never takes focus (RULES.md, Tests that make sense).
 ##
-##   01_monster_before   a Hive standing in the dev room, its normal colour
+##   01_monster_before   a Hive standing in the open test area, its normal colour
 ##   02_monster_flash    the same Hive the instant a saw lands: washed red
 ##   03_monster_after    a moment later, the flash gone and the Hive pushed back a step
 ##   04_player_before    a bot surgeon, normal
 ##   05_player_flash     the same bot the instant a saw lands on them (the PvP half)
 ##
 ## A solo session on the usual hospital (seed 4242) with dev mode, god mode and no roaming
-## monsters, staged in the hidden dev room past the parking lot like tools/combatshot.gd.
+## monsters, staged in an open corner of the parking lot like tools/combatshot.gd.
 
 const MonsterScript := preload("res://scripts/monster.gd")
 const SHOT_DIR := "res://tools/hit_shots"
@@ -21,7 +21,7 @@ var dev: Node
 var cb: Node
 var me: Player
 var t := 0.0
-## The hidden dev room's corner (its own frame's origin) in world space.
+## The open test area's origin (dev_controller.gd open_area()) in world space.
 var o := Vector3.ZERO
 
 
@@ -44,11 +44,11 @@ func _ready() -> void:
 	me = game.local_player()
 	me.bot_active = true
 	game.set_dev_tools(true, me)
-	if not dev.room_ready():
-		push_error("[hitshot] dev mode did not build the hidden room")
+	if not game.dev_on():
+		push_error("[hitshot] dev mode did not turn on")
 		get_tree().quit(1)
 		return
-	o = dev.room.global_position
+	o = dev.open_area()
 	dev.request("god", {"on": true})
 	dev.request("no_game_over", {"on": true})
 	dev.request("monsters_off", {"on": true})

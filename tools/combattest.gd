@@ -5,8 +5,8 @@ extends Node
 ##   godot --headless --fixed-fps 60 --path . tools/combattest.tscn
 ##
 ## Solo, in a normal hospital (seed 4242) with dev mode on, clocked in with the phone quiet, no roaming
-## monsters and no game over. The fights run in the hidden dev room past the parking lot (positions
-## are the room's own metres offset by its corner `o`); strapping uses the entrance building's OR
+## monsters and no game over. The fights run in an open corner of the parking lot (positions are
+## offset from `o`, dev_controller.gd's open_area()); strapping uses the entrance building's OR
 ## patient tables. The checks: the saw kills a monster in the expected number of hits and
 ## pays nothing, cuts air loudly, respects its cooldown, breaks at the seeded roll (and at about 12%
 ## over many rolls), clangs off the Night Nurse; the needle needs the stun window, uses one vial only
@@ -27,7 +27,7 @@ var me: Player
 var t := 0.0
 var _done := false
 var _failures: Array = []
-## The hidden dev room's corner (its own frame's origin) in world space.
+## The open test area's origin (dev_controller.gd open_area()) in world space.
 var o := Vector3.ZERO
 
 
@@ -39,16 +39,16 @@ func _ready() -> void:
 	dev = game.dev
 	cb = game.combat
 	await _start()
-	if not dev.room_ready():
-		_check(false, "dev mode on builds the hidden room")
+	if not game.dev_on():
+		_check(false, "dev mode turns on")
 		_finish()
 		return
 	await _run()
 	_finish()
 
 
-## A solo session on a normal hospital; dev mode on (the hidden room is built), no roaming monsters,
-## no game over; clocked in (strapping needs a shift) with the phone quiet so no patient takes a table.
+## A solo session on a normal hospital; dev mode on, no roaming monsters, no game over; clocked in
+## (strapping needs a shift) with the phone quiet so no patient takes a table.
 func _start() -> void:
 	if main.launching:
 		await main.launched
@@ -62,7 +62,7 @@ func _start() -> void:
 	me.bot_active = true
 	me.bot_invulnerable = true
 	game.set_dev_tools(true, me)
-	o = dev.room.global_position if dev.room_ready() else Vector3.ZERO
+	o = dev.open_area()
 	dev.request("monsters_off", {"on": true})
 	dev.request("no_game_over", {"on": true})
 	game.clock_in()
@@ -480,6 +480,11 @@ func _windups() -> void:
 	game.player_shoved(me)
 	await _frames(2)
 	_check(cb.can_sedate(m), "set-up: the monster is in its stun window")
+	# The shove's own knockback (Combat.shoved -> SonographerBrain.stun, 1.1 m) carries the monster
+	# a step further away; a real player follows up and re-aims before jabbing, not from where they
+	# stood to throw the shove, so step in again the same way _face() always has.
+	_face(m)
+	await _frames(2)
 	cb.last_result = {}
 	t_begin = game.world_time
 	me.bot_use += 1

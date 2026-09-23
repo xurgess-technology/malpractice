@@ -6,10 +6,10 @@ extends Node
 ## A generated hospital first (the Re-Gen Pod is gone, suture kits spawn, the hub's patient tables
 ## take a downed teammate (or a level's own player table), 0 HP downs, nobody standing fails the
 ## shift), then a second hospital with dev mode on (No monsters, No game over, clocked in): a bot
-## and dummies in the hidden dev room (crawling, carrying and dropping, getting hit while carrying,
-## monsters ignoring the downed), a carry into the hospital's OR onto a free patient table, stitches
-## with bot skill 1.0 reviving, a kit used up, all_players_out, bleeding out to dead at five
-## minutes. Exits 0 when every check passes.
+## and dummies in an open corner of the parking lot (crawling, carrying and dropping, getting hit
+## while carrying, monsters ignoring the downed), a carry into the hospital's OR onto a free patient
+## table, stitches with bot skill 1.0 reviving, a kit used up, all_players_out, bleeding out to
+## dead at five minutes. Exits 0 when every check passes.
 
 ## The dev-mode session's hospital (tools/devtest.gd uses the same one).
 const DEV_SEED := 4242
@@ -18,7 +18,7 @@ var main: Node3D
 var game: Game
 var dev: Node
 var me: Player
-## The hidden dev room's corner (its own frame's origin) in world space.
+## The open test area's origin (dev_controller.gd open_area()) in world space.
 var o := Vector3.ZERO
 var t := 0.0
 var _done := false
@@ -113,7 +113,7 @@ func _hospital() -> void:
 
 
 # =========================================================================
-# dev mode: the hidden room and the hospital's OR
+# dev mode: an open corner of the parking lot, and the hospital's OR
 # =========================================================================
 
 func _dev_room() -> void:
@@ -126,8 +126,8 @@ func _dev_room() -> void:
 	me.bot_active = true
 	game.set_dev_tools(true, me)
 	await _frames(2)
-	_check(game.dev_on() and dev.room_ready(), "dev mode is on and the hidden room is built")
-	o = dev.room.global_position if dev.room_ready() else Vector3.ZERO
+	_check(game.dev_on(), "dev mode is on")
+	o = dev.open_area()
 	# A normal session: no monsters and no game over while the test downs the only player; clock in
 	# (the tables and carrying only work on shift) and keep the phone quiet.
 	dev.request("monsters_off", {"on": true})
@@ -140,10 +140,9 @@ func _dev_room() -> void:
 	_check(game.downed_any_table and game.player_table.is_empty() and game.patient_tables.size() == 3,
 		"the hospital has no fixed player table: its patient tables take a downed teammate (%d tables)" % game.patient_tables.size())
 
-	# ---- crawling (on the room's lab floor)
+	# ---- crawling (in the open test area)
 	_stand(o + Vector3(14.0, 0, 15.0), 0.0)
 	await _frames(2)
-	_check(dev.in_room(me.global_position), "standing in the hidden room's lab")
 	game.knock_down_player(me, "test")
 	await _seconds(0.8)
 	_stand(o + Vector3(14.0, 0, 15.0), 0.0)
@@ -170,7 +169,7 @@ func _dev_room() -> void:
 	_check(me.alive and not me.downed and me.hp == me.max_hp, "revive all gets you up")
 	_check(game.phase == Game.Phase.SHIFT, "No game over: the only player downed and the shift went on")
 
-	# ---- carrying (on the room's lab floor)
+	# ---- carrying (in the open test area)
 	var did: int = dev.spawn_bot("dummy")
 	var dummy: Player = game.players[did]
 	_stand(o + Vector3(14.0, 0, 15.0), 0.0)
@@ -179,7 +178,6 @@ func _dev_room() -> void:
 	var bot: Player = game.players[bid]
 	dev.order_bot(bid, "stay")
 	await _frames(4)
-	_check(dev.in_room(dummy.global_position), "the dummy spawns on the room's dummy floor")
 	dummy.teleport(game._floor_at(o + Vector3(16.0, 0, 13.0)))
 	await _frames(2)
 	game.knock_down_player(dummy, "test")

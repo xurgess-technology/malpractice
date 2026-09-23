@@ -13,9 +13,9 @@ extends Node
 ##   08_strapped         the monster case on the table
 ##
 ## A solo session on a normal hospital (seed 4242) with dev mode on, god mode, no monsters roaming
-## and the phone quiet after clocking in. The fights and drags are in the hidden dev room past the
-## parking lot (room metres offset by its corner `o`); 06 and 08 are at an OR patient table in the
-## entrance building (the dragger is teleported there with the monster in tow).
+## and the phone quiet after clocking in. The fights and drags are in an open corner of the parking
+## lot (offset from `o`, dev_controller.gd open_area()); 06 and 08 are at an OR patient table in
+## the entrance building (the dragger is teleported there with the monster in tow).
 
 const MonsterScript := preload("res://scripts/monster.gd")
 const WindupScript := preload("res://scripts/combat/windup.gd")
@@ -27,7 +27,7 @@ var dev: Node
 var cb: Node
 var me: Player
 var t := 0.0
-## The hidden dev room's corner (its own frame's origin) in world space.
+## The open test area's origin (dev_controller.gd open_area()) in world space.
 var o := Vector3.ZERO
 
 
@@ -50,11 +50,11 @@ func _ready() -> void:
 	me = game.local_player()
 	me.bot_active = true
 	game.set_dev_tools(true, me)
-	if not dev.room_ready():
-		push_error("[combatshot] dev mode did not build the hidden room")
+	if not game.dev_on():
+		push_error("[combatshot] dev mode did not turn on")
 		get_tree().quit(1)
 		return
-	o = dev.room.global_position
+	o = dev.open_area()
 	dev.request("god", {"on": true})
 	dev.request("no_game_over", {"on": true})
 	dev.request("monsters_off", {"on": true})

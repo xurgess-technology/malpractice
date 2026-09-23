@@ -4,8 +4,8 @@ extends Node
 ##   godot --headless --fixed-fps 60 --path . tools/trinkettest.tscn
 ##
 ## Solo, in a normal hospital (seed 4242) with dev mode on, clocked in, the phone quiet, no roaming
-## monsters and no game over. Everything happens in the hidden dev room past the parking lot
-## (positions are that room's own metres offset by its corner `o`), the way combattest does it.
+## monsters and no game over. Everything happens in an open corner of the parking lot (positions
+## are offset from `o`, dev_controller.gd open_area()), the way combattest does it.
 ##
 ## What it checks, from the brief's "Done when":
 ##   - each one-use trinket (laptop, defibrillator, EpiPen) works once, is greyed and cracked
@@ -44,8 +44,8 @@ func _ready() -> void:
 	dev = game.dev
 	tk = game.trinkets
 	await _start()
-	if not dev.room_ready():
-		_check(false, "dev mode on builds the hidden room")
+	if not game.dev_on():
+		_check(false, "dev mode turns on")
 		_finish()
 		return
 	await _run()
@@ -65,7 +65,7 @@ func _start() -> void:
 	me.bot_active = true
 	me.bot_invulnerable = true
 	game.set_dev_tools(true, me)
-	o = dev.room.global_position if dev.room_ready() else Vector3.ZERO
+	o = dev.open_area()
 	dev.request("monsters_off", {"on": true})
 	dev.request("no_game_over", {"on": true})
 	game.clock_in()
