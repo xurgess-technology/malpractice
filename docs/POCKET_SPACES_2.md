@@ -1219,7 +1219,170 @@ is the one that makes no sound.
   any short reposition, not just a hop -- and leaves placement alone.
 - **The Factory-fog gameshot** the spec lists under phase 7 is phase 7's, not this one's.
 
-## Phase 7 — validation
+## Phase 7 — validation — DONE 2026-09-23, branch `pockets-phase7`
+
+The machine was idle for all of it (zero other Godot processes, checked before the first run and
+never violated), which is what the phase was waiting for.
+
+### The checklist, one verdict a line
+
+| the spec's line | verdict |
+| --- | --- |
+| `mapcheck` passes many seeds with all five kinds | **GREEN.** 300 seeds, **464/464 forced placements**, every entrance walked out through its own seam, pocket nav coverage 99.7-100%. The only failures are the pre-existing morgue trays on seeds 1, 38 and 112 (FAILING_TESTS 2), which is exactly the set that section names for a run with pockets. |
+| `pockettest` extended to the three new spaces | **GREEN, confirmed not rebuilt.** **PASS, 740 checks**, twice in a row. (1f was fixed on `main` at 0.10.46 and stayed fixed here.) |
+| headless bot walk through every entrance of each new space | **GREEN, already covered** — it is `pockettest`'s `_walk_through`, run for every seam in both directions with a carried body and a follower, inside the 740. |
+| Sonographer footstep masking | **GREEN, already covered** — phase 4's `_footstep_masking`, both the arithmetic and the live half, inside the 740. |
+| **Night Nurse frozen in a candle, moving when it burns out** | **WAS NOT TESTED. Now is.** See below — the freeze was being proved by a monster that had been told to stand still, and the "moves" half did not exist. |
+| Onlooker | **GREEN, confirmed.** `monster_lab` **179 checks, 0 failed** (38 of them the Onlooker); the 70-check per-space section is inside `pockettest`'s 740. |
+| `gameshot` of each space, each seam from the hallway side, the Onlooker in the Factory fog | **DONE**, and it found two things. 130 shots in `tools/game_shots/p_*`. |
+| `docs/MORNING_REPORT.md` | **DONE.** |
+
+### The Night Nurse check was not a check
+
+The spec's line is "frozen in a placed candle's radius with no player looking; moves when it burns
+out". `trinkettest`'s candle section asked `Perception.observed_any` and `nurse.observed` — the
+right predicate — but:
+
+- **the nurse it asked about had `calm = 999`**, set by the helper that spawns her, and a calm
+  Night Nurse stands still whether or not anybody is watching. The freeze was true of a monster
+  with no intention of going anywhere. She is now woken up first, and covers **0.000 m in 1.5 s**
+  while the flame burns.
+- **the "moves when it burns out" half was never written.** It is now, and it is measured flat and
+  with her feet checked, because the first version of it passed while she was **falling out of the
+  world at 55 m/s**. She now walks **7.3 m across the floor in 1.5 s** — her own `SPEED` — the
+  moment the flame dies.
+- **two things about the dev room fell out of that**, both worth knowing for anything else written
+  in `trinkettest`. Its floor stops at about `o + (25, 0, 19)`, and `_stand` puts the player at the
+  point itself when the floor probe misses, so `o + (8, 0, 20)` and `o + (30, 0, 2)` — both used by
+  this section — dropped the player into the void. **Every check passed anyway**, because they are
+  all questions about positions and a falling player answers them as well as a standing one. Two
+  other sections still stand off the edge; they are noted in the file and not touched here.
+  And the section used to `await` the real 120-second burn, by the end of which the player was
+  **133 km away**. The fuse is cut instead now, through the same expiry.
+
+### Perf: what was measured, and what the instrument is worth
+
+**Read this before the table.** Four full sweeps were run on an idle machine
+(`tools\perfprobe.ps1 -Extra "--pockets --quality=1"`), and the first two were thrown out once they
+showed what they showed:
+
+1. **perfprobe's first measured scenario is not settled.** Same camera, same map, same ~480 draws:
+   the bare hospital's corridor read **60 avg / 22 low with 58 ms of process time a frame** as the
+   first row of a process, and **127 / 100 with 5 ms** as the last. Every kind did it. **This is
+   FAILING_TESTS 1m, and it is the whole of it** — the Chapel's 86/30 corridor baseline was a
+   warm-up artefact and the hospital never had a stutter there. The probe now measures one view and
+   drops the row.
+2. **Every "map's hospital corridor" baseline published in this document is one of those first
+   rows.** So the comparisons phases 2, 3 and 4 made — "every view in the space beats the hospital
+   corridor it opens off" — were made against a number that was low for a reason that had nothing
+   to do with either. The claims may still be true; the evidence offered for them was not.
+3. **A "1% low" over 240 frames is the third-worst frame of about two seconds.** At the old default
+   the *same view* swung **24 to 105** between sweeps minutes apart. The default is now 600 frames
+   and anything published wants `--frames=1200`.
+4. **The `--pocket=none` baseline was one view.** It is five now, with the corridor measured first
+   and again last, which is what caught (1).
+
+**So: were the published per-space numbers comparable to the rebuilt sweep? No, and not for the
+reason the question expected.** The fixer's reading of the diff was right as far as it went — the
+camera positions and the view names are the same, and the extra views are appended after the old
+ones. But the numbers were never comparable to *anything*, including each other: they are single
+240-frame reads of a run that had not settled, and this machine does not reproduce them to better
+than a factor of two. **Nothing in this document's perf tables should be quoted as a measurement.**
+The two tables below are the first ones taken with the warm-up dropped and a twenty-second window,
+and they are given as a pair on purpose, because the pair is the honest statement.
+
+| view (q1, 1200 frames) | run A avg/low | run B avg/low |
+| --- | --- | --- |
+| *no pocket: hospital corridor (first)* | *118 / 86* | *128 / 100* |
+| *no pocket: hospital corridor (last, settled)* | *112 / 77* | *122 / 95* |
+| *no pocket: neutral area outside* | *75 / 61* | *89 / 69* |
+| *no pocket: lot, facing the fog* | *53 / 33* | *181 / 120* |
+| factory: hall, corner to corner | 119 / 96 | 132 / 98 |
+| factory: down a production line | 121 / 90 | 139 / 106 |
+| factory: seam, hospital side | 102 / 24 | 95 / 30 |
+| restaurant: dining room | 52 / 31 | 86 / 36 |
+| restaurant: bar | 58 / 35 | 69 / 36 |
+| restaurant: kitchen | 97 / 53 | 93 / 31 |
+| natatorium: down the length of the pool | 87 / 72 | 94 / 72 |
+| natatorium: across the water, lights on | 86 / 70 | 89 / 70 |
+| natatorium: corner to corner over the bleachers | 99 / 79 | 100 / 73 |
+| **chapel: the whole nave** (the designed worst frame) | **137 / 110** | **122 / 93** |
+| chapel: down a side aisle | 135 / 91 | 133 / 96 |
+| **laundromat: the length of the room** | **91 / 41** | **97 / 50** |
+| **laundromat: corner to corner** | **71 / 42** | **74 / 43** |
+| **laundromat: down an aisle** | **69 / 42** | **78 / 39** |
+| **laundromat: map's hospital corridor** | **119 / 33** | **59 / 31** |
+
+**Against the bar (60 avg, 1% lows above 50):**
+
+- **Averages clear it nearly everywhere**, including every view of the Chapel, the Natatorium and
+  the Factory, in both runs.
+- **The 1% lows do not clear it reliably anywhere, and the misses are not the pocket spaces'.** In
+  both runs some view is dragged to 24-46 by a single 30-55 ms frame, and it lands on *untouched
+  hospital* views as often as on new ones (`factory: seam, hospital side` 24 and 30;
+  `restaurant map: hospital corridor` 94 then 34; the bare hospital's own fog lot 33 then 120).
+  A view that reads 94 one run and 34 the next did not get slower. **This is a second, independent
+  sighting of FAILING_TESTS 1j** — the unexplained mid-shift host stall — seen from the rendering
+  side, at 30-55 ms rather than 130-540 ms, on a machine with nothing else running. It is the thing
+  actually worth chasing, and it is not ours.
+- **The Laundromat is the one space that is genuinely slower, and it is slower everywhere on its
+  map.** It is the only kind whose whole process carries **15-20 ms of process time a frame**
+  against 9-13 for every other kind, in all four sweeps, and its own *hospital corridor* — a view
+  with no Laundromat in it — is the slowest hospital corridor measured. Its interior sits at
+  **69-97 avg / 39-50 low** in both long runs: over the average bar, under the 1%-low bar, every
+  time. **The cause was not identified.** The leading candidate is that it is CPU and not the
+  renderer (it is `proc`, not draws — it draws 313-322 against the Chapel's 639), which points at
+  the ~40 pooled lights with their flicker nodes, or at the ~150 machine bodies. **That is a lead,
+  not a verdict**, and it is the one piece of pocket-space perf work still open.
+- One confound found and recorded rather than fixed: **a pocket's air is blended in by where the
+  camera stands**, and on seed 4242 the Laundromat's three interior probe views sit at air
+  **0.00 / 0.11 / 0.76** — they are partly measuring the hospital's fog, not the room's.
+
+### The shots, and the two things they caught
+
+`tools/gameshot.tscn -- --pocket=<kind>` for all five, 130 PNGs in `tools/game_shots/p_*`: each
+space from six or seven places, an entrance from inside, **every seam from the hallway side**, both
+copies of every stub compared (they differ by 0.08-0.48% mean, which is noise), the frames either
+side of a walk through, a teammate's ghost, and the Onlooker.
+
+- **The first shot of every run was being taken in the hospital's air.** One run of `--pocket=chapel`
+  produced a nave washed out cyan-green with the vault lit up like an olive wall — which is exactly
+  the bug phase 3 wrote up as fixed — and **the identical pose a run later produced the cathedral**.
+  The Laundromat's wide shot came out nearly black in a room that is meant to be flat fluorescent.
+  Nothing was wrong with either room: the shot was taken before the room's air arrived. `gameshot`
+  now stands on the pocket's spawn for ninety frames first, and prints the air factor with every
+  shot. **Worth knowing for anyone reading an old shot of a pocket space, or judging one.**
+- **The Onlooker at thirty-nine metres in the Factory fog is one pale dot.** It is *visible* — phase
+  6's fix works, and before it the frame was blank — but at that range the two eyes merge into a
+  single blob and there is no silhouette at all against the dark. It reads as a tell, not as a
+  figure. `p_factory_c_onlooker_stare.png`. Whether that is the intended amount of monster is
+  Zach's call, and it is in the morning report.
+
+### Also re-measured, because five kinds had never been
+
+`tools/pocketrate.gd`, 500 seeds x 4 shifts, the first run of it since the Chapel made three kinds:
+**23.9% of 2000 shifts**, every individual shift in the 20-30% band, **0 rolls that wanted a pocket
+and found no room**, and no-repeats still perfect (640 rolled with a kind excluded, 0 were it).
+The split across five kinds is factory 79 / laundromat 91 / restaurant 100 / natatorium 101 /
+chapel 107 out of 478 — the Factory is the low one at about 1.9 standard deviations, which is
+noise and not a placement problem. (`mapcheck`'s natural-roll line shows 3 factories against 16
+natatoriums; that is one shift per seed and is the same noise seen through a smaller sample.)
+
+### Skipped, and why
+
+- **`--quality=0` and `--quality=2` were not swept.** The three-preset sweep is six processes deep
+  per preset and the q1 evidence was already saying the instrument needed fixing twice over. Phase
+  3's note stands: q2 is under 60 across the board on this machine including the hospital, and is
+  what "high" costs here.
+- **The Laundromat's 15-20 ms of process time was not chased to its cause.** Measuring it four
+  times was phase 7's job; fixing it is a task.
+- **No nettest run.** Nothing here touches replication; phase 6's `--only=onlooker` scenario is the
+  one that covers the new wire and it passed on its branch.
+- **The two other `trinkettest` sections that stand in the void were not moved.** They pass, and
+  moving a test's ground out from under it is how you find out what it was quietly not testing —
+  worth doing deliberately, not in passing.
+
+### The original checklist
 - tools/mapcheck.gd passes many seeds with all five kinds.
 - pockettest extended to the three new spaces (seams, crossings,
   carried bodies, noise mirroring, shift rebuild).
