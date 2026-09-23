@@ -574,8 +574,10 @@ static func _signs(root: Node3D, world: Callable) -> void:
 		if glow:
 			m.emission_enabled = true
 			m.emission_texture = tex
-			m.emission = fg
-			m.emission_energy_multiplier = 1.4
+			# White, and gently: tinting the emission by the text colour at 1.4 blew the whole quad out
+			# to a solid bar and ate the letters.
+			m.emission = Color(1, 1, 1)
+			m.emission_energy_multiplier = 0.55
 		mi.material_override = m
 		mi.position = pos
 		mi.rotation.y = yaw
@@ -583,7 +585,7 @@ static func _signs(root: Node3D, world: Callable) -> void:
 	make.call("ST. DOE'S GENERAL  *  NATATORIUM", Color(0.90, 0.94, 0.96), Color(0.10, 0.26, 0.34),
 			Vector2(7.0, 1.1), world.call(Vector2(HALL.get_center().x, HALL.position.y + 0.02), 5.2), 0.0, false)
 	make.call("NO LIFEGUARD ON DUTY", Color(0.96, 0.86, 0.20), Color(0.12, 0.13, 0.14),
-			Vector2(3.2, 0.6), world.call(Vector2(HALL.get_center().x - 8.0, HALL.position.y + 0.02), 2.6), 0.0, true)
+			Vector2(4.2, 0.8), world.call(Vector2(HALL.get_center().x - 8.0, HALL.position.y + 0.02), 2.7), 0.0, true)
 	make.call("NO DIVING", Color(0.92, 0.94, 0.94), Color(0.14, 0.42, 0.50),
 			Vector2(2.6, 0.5), world.call(Vector2(HALL.end.x - 0.04, HALL.get_center().y), 2.4), -PI * 0.5, false)
 	make.call("SHOWER BEFORE ENTERING THE POOL", Color(0.90, 0.92, 0.92), Color(0.18, 0.34, 0.40),

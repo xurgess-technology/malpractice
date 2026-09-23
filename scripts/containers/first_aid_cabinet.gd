@@ -47,7 +47,12 @@ func _build() -> void:
 	for sx in [-1.0, 1.0]:
 		box(self, Vector3(T, CH, CD), Vector3(sx * (CW - T) * 0.5, yc, zc), enamel)
 	box(self, Vector3(CW - 2 * T, 0.008, CD - T), Vector3(0, BOTTOM + T + 0.004, zc), Mats.get_mat("liner"))
-	# Mounting plate and the two bolts through it into the stand's leg.
+	# It hangs on a post beside the lifeguard stand rather than on a wall, so it needs something to
+	# hang from: two legs to the floor and a brace, or it reads as a box floating in mid-air.
+	for sx in [-1.0, 1.0]:
+		box(self, Vector3(0.05, BOTTOM, 0.05), Vector3(sx * (CW - 0.1) * 0.5, BOTTOM * 0.5, -0.03), Mats.get_mat("steel_dark"))
+	box(self, Vector3(CW - 0.05, 0.04, 0.04), Vector3(0, 0.3, -0.03), Mats.get_mat("steel_dark"))
+	# Mounting plate and the two bolts through it into the post.
 	box(self, Vector3(CW + 0.06, 0.04, 0.01), Vector3(0, BOTTOM + CH + 0.03, -0.005), Mats.get_mat("steel_dark"))
 	for sx in [-1.0, 1.0]:
 		cyl(self, 0.008, 0.012, Vector3(sx * 0.16, BOTTOM + CH + 0.03, -0.012), Mats.get_mat("chrome"), Vector3(90, 0, 0), 8)
