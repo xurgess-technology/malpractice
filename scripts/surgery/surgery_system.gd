@@ -182,7 +182,12 @@ func can_begin(player) -> String:
 	# 2026-09-18: the step's item has to be in your hands, selected (and enough of it).
 	var needed: int = maxi(1, int(s.get("uses", 0)))
 	var held: Dictionary = player.selected_stack() if player.has_method("selected_stack") else {}
-	if String(held.get("kind", "")) != String(s.item) or int(held.get("count", 0)) < needed:
+	# SYRINGE DRAW: a syringe you loaded in a corridor stands in for the drug this step asks for.
+	# Turning up empty-handed with the vial is still the fallback and behaves exactly as before.
+	var by_syringe: bool = Syringes.accepts_loaded(s) and not Syringes.held_loaded(player).is_empty()
+	if not by_syringe and (String(held.get("kind", "")) != String(s.item) or int(held.get("count", 0)) < needed):
+		if Syringes.accepts_loaded(s):
+			return "Hold %s, or a loaded syringe." % Items.display_name(String(s.item))
 		if needed > 1:
 			return "Hold %d %s to do this." % [needed, Items.display_name(String(s.item))]
 		return "Hold %s to do this." % Items.display_name(String(s.item))
@@ -511,6 +516,15 @@ func _spawn_mg() -> void:
 	for k in ["no_fail", "eye_kind", "eye_kind_in", "eye_radius"]:
 		if c.flags.has(k):
 			ctx[k] = c.flags[k]
+	# SYRINGE DRAW: the operator walked up with a syringe already loaded, so the barrel is full and
+	# flicked and the step opens on STICK!. The level it stored is ABSOLUTE, and the band above was
+	# worked out from THIS patient -- a standard corridor dose meets a real band here, which is the
+	# whole cost of pre-loading. Every machine reads the same replicated hand slots.
+	if Syringes.accepts_loaded(step) and operator_id != 0:
+		var op_p = (game.get("players") as Dictionary).get(operator_id) if game.get("players") is Dictionary else null
+		var ld := Syringes.held_loaded(op_p)
+		if not ld.is_empty():
+			ctx["loaded"] = ld
 	# SYRINGE DRAW: a stand-in game adds its own knobs on top (the syringe station's `draw_only`,
 	# and the `loaded` syringe a table's sedate step is handed). Last word, so a station can
 	# override anything above it.

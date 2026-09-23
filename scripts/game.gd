@@ -2286,7 +2286,10 @@ func surgery_step_done(result: Dictionary, table_index: int = -1, operator_peer:
 		# 2026-09-18: used from the operator's hands (surgery_system.can_begin made sure they held it).
 		var p = players.get(operator_peer)
 		if p != null and p.has_method("consume_hand"):
-			p.consume_hand(String(step.item), uses)
+			# SYRINGE DRAW: a dose that came out of a pre-loaded syringe spends the syringe, not a
+			# vial -- one off the count and the `x` cleared, which is what makes it one-use.
+			if not (Syringes.accepts_loaded(step) and Syringes.spend_loaded(p)):
+				p.consume_hand(String(step.item), uses)
 	var flags: Dictionary = c.get("flags", {})
 	flags.merge(result, true)
 	c.flags = flags
