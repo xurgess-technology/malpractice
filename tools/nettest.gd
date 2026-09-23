@@ -38,6 +38,12 @@ extends Node
 ##                    client sees each (sweep 3). Then a Night Nurse grabs the client: it hangs from
 ##                    her hands with its view locked on her face, sees her head snap, drops downed
 ##                    and she is gone
+##   onlooker         host + 1 client, the Onlooker's hops driven by hand with the host's node's own
+##                    physics off: proves the wire (a `tp` counter change snaps a client)
+##   onlooker_live    host + 1 client, physics left on: the brain's OWN real hop (its own placement,
+##                    its own HOP_INTERVAL clock, cadence sped up only through its already-
+##                    overridable per-instance timers) lands right on the client, and only the
+##                    marked player loses a heart when a real stare runs out
 ##   trinkets         (chunk B) client 1 shocks a downed client 2 awake with a defibrillator over the
 ##                    wire; client 2 comes up where it lay on its own machine, and the paddles are
 ##                    spent on both
@@ -71,6 +77,8 @@ const NAMES := ["Host", "Álvaro", "Bea O'Neil", "Surgeon Chris"]
 const MonsterScript := preload("res://scripts/monster.gd")
 const WindupScript := preload("res://scripts/combat/windup.gd")
 const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
+const OnlookerWatch := preload("res://scripts/monsters/onlooker_watch.gd")
+const OnlookerBrain := preload("res://scripts/monsters/onlooker_brain.gd")
 
 var role := "host"
 var scenario := "deliver"
@@ -160,6 +168,7 @@ func _run() -> void:
 		"combat": await _sc_combat()
 		"monsters": await _sc_monsters()   # SWEEP 3 HOOK (monsters)
 		"onlooker": await _sc_onlooker()   # POCKETS 2 phase 6: a hop must JUMP on a client
+		"onlooker_live": await _sc_onlooker_live()   # POCKETS 2 phase 6 gap: the brain's OWN real hop, cross-machine
 		"hit_feedback": await _sc_hit_feedback()   # HIT FEEDBACK: the red flash and the push
 		"sono": await _sc_sono()   # docs/SONOGRAPHER.md chunk B: the Sonographer's echo over the wire
 		"graft": await _sc_graft()   # GRAFTING chunk C
@@ -2019,6 +2028,191 @@ func _sc_onlooker():
 	_say("watched %d hops of %.0f m each: longest run of moving frames %d" % [jumps, OL_HOP_M, worst])
 	_send("ol_seen", {"seen": jumps, "run": worst})
 	await _finish_together("saw every hop land as a single-frame jump")
+
+
+# =========================================================================
+# POCKETS 2 phase 7: the gap `_sc_onlooker` above cannot close on its own
+# =========================================================================
+
+## `_sc_onlooker` proves the WIRE: a scripted `tp` bump snaps a client, with the host's node's own
+## physics processing switched off so nothing but the test moves it. That is deliberate there and
+## it is exactly the thing flagged as the single biggest remaining gap in the pocket work: it never
+## watches the BRAIN's OWN hop -- picked by `_place()`, timed by `HOP_INTERVAL` -- land right on a
+## second machine, with physics running the way a real shift runs it.
+##
+## Host + 1 client. The host's own player stands in the pocket and is the only candidate for the
+## mark (the client never goes near it), so who gets marked is never in doubt; its camera hunts a
+## real heading the way `_try_appear` actually works, and from there the brain does everything
+## itself: which spot, when to hop, who to eat. The client never enters the pocket at all and does
+## nothing but watch its own copy of the monster -- proving the "ordinary replicated monster, seen
+## by anyone, only the mark is hurt" rule needs no proximity, exactly as advertised.
+##
+## **The only thing forced is the CADENCE, and only via already-overridable state.** `HOP_INTERVAL`
+## and `HOP_JITTER` stay exactly as shipped; what gets clamped every frame is `hop_left` and
+## `away_left`, the same plain, non-const vars tools/pockettest.gd's `_onlooker` zeroes to force a
+## hop without waiting out the jitter. `_hop()` and `_try_appear()` still choose everything for
+## real -- the clamp only shortens how long the brain is willing to wait before doing it again.
+## GRACE and the eating ramp are left alone (they are `const`, and nothing asked for them to move):
+## at --speed=4 the 9 s grace and the first 7 s tick cost under 5 s of wall clock, so there is no
+## need to touch them to keep this scenario's runtime sane.
+const OL_FAST_HOP := 1.2      ## clamp: a real hop at least this often, never the ~9 s shipped cadence
+const OL_FAST_AWAY := 0.3     ## clamp: retry a failed appear/placement quickly while hunting a heading
+const OL_HOPS_WANTED := 5     ## real hops to watch before calling the snap/position check satisfied
+const OL_SNAP_TOL := 0.15     ## metres: how close the client's post-snap copy must land to the host's real spot
+
+func _sc_onlooker_live():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		var me := _me()
+		me.bot_active = true
+		me.bot_invulnerable = true
+		game._clear_monsters()
+		if not game.pockets.active():
+			return _end(false, "no pocket on the host")
+		var pk := game.pockets
+		# Nobody else's roll competes with this test's own Onlooker (see onlooker_watch.gd: the roll
+		# is once-per-pocket and _clear_monsters already ended any it had already made, but this
+		# keeps a re-roll from ever landing a second one after a future shift change on this branch).
+		OnlookerWatch.force = "off"
+		me.teleport(_nav_point(pk.pocket.spawn))
+		me.bot_move = Vector2.ZERO
+		var o: Node = game.spawn_pocket_monster("onlooker", pk.pocket.spawn)
+		if o == null:
+			return _end(false, "the host could not add an Onlooker")
+		var br = o.brain
+		br.away_left = 0.0
+		# Turn on the spot until the brain's own _try_appear finds somewhere -- set-up, not the
+		# thing under test: tools/pockettest.gd already proves _place() for real, in all five spaces.
+		var t0 := _wall()
+		while not bool(o.present):
+			if _done:
+				return
+			if _wall() - t0 > 45.0:
+				return _end(false, "the Onlooker never found anywhere to stand in 45 s")
+			me.bot_yaw = wrapf(me.bot_yaw + 0.05, -PI, PI)
+			br.away_left = minf(br.away_left, OL_FAST_AWAY)
+			await get_tree().physics_frame
+		if int(br.mark_peer) != int(me.peer_id):
+			return _end(false, "the client got marked instead of the host, which should not be reachable (client never enters the pocket)")
+		_send("appeared", {"id": o.monster_id})
+		_say("marked and standing %.1f m off; watching the brain's own real hops" % o.global_position.distance_to(me.global_position))
+		var mate: Player = game.players[_peer_of(1)]
+		var hp0_mark := int(me.hp)
+		var hp0_other := int(mate.hp)
+		var last_hops := int(br.hops)
+		var placements_sent := int(o.teleports)
+		var t1 := _wall()
+		while _wall() - t1 < 45.0 and (int(br.hops) - last_hops < OL_HOPS_WANTED or int(br.hearts) < 1):
+			if _done:
+				return
+			# The only override: never let it wait more than OL_FAST_HOP before its next real hop.
+			# _hop() still picks the spot; this only shortens the countdown to calling it.
+			br.hop_left = minf(br.hop_left, OL_FAST_HOP)
+			_look_at_point(me, o.global_position)   # keep the stare on wherever it currently stands
+			if int(o.teleports) != placements_sent:
+				placements_sent = int(o.teleports)
+				_send("hop", {"n": placements_sent, "pos": o.global_position})
+			await get_tree().physics_frame
+		if int(br.hops) - last_hops < 1:
+			return _end(false, "the brain never hopped on its own clock in 45 s")
+		if int(br.hearts) < 1:
+			return _end(false, "no heart landed in 45 s of real, unbroken stare (grace %.0f s)" % OnlookerBrain.GRACE)
+		if int(me.hp) >= hp0_mark:
+			return _end(false, "the mark's hp did not drop despite a real heart (%d -> %d)" % [hp0_mark, me.hp])
+		if int(mate.hp) != hp0_other:
+			return _end(false, "the OTHER player took a heart that was never theirs (%d -> %d)" % [hp0_other, mate.hp])
+		_say("the brain hopped %d times on its own clock and ate one heart for real: %d -> %d hp; the other player stayed at %d"
+			% [int(br.hops) - last_hops, hp0_mark, me.hp, mate.hp])
+		_send("watch_done", {"mark_hp0": hp0_mark, "mark_hp1": int(me.hp), "other_hp0": hp0_other, "mark_peer": int(me.peer_id)})
+		if not await _until(func(): return _count_msgs("client_verdict") > 0 or _count_msgs("fail") > 0, 60.0, "the client's verdict"):
+			return
+		if _count_msgs("fail") > 0:
+			return
+		var v: Dictionary = _msgs("client_verdict")[0].data
+		_say("client saw %d real hops, longest run of moving frames %d (1 = jumped), worst snap error %.3f m"
+			% [int(v.get("hops", 0)), int(v.get("run", 0)), float(v.get("err", 0.0))])
+		await _finish_together("a real, brain-timed hop arrived as a jump on the client, right where the host actually placed it, and only the mark took a heart")
+		return
+
+	# Client: never goes near the pocket, is never a mark candidate and is never in the counter's
+	# range. It just watches its own copy of an "ordinary replicated monster" from a completely
+	# separate machine to the one whose brain is deciding anything -- which is the whole point.
+	if not await _wait_shift_as_client():
+		return
+	if not await _until(func(): return _count_msgs("appeared") > 0, 50.0, "the host to place the Onlooker"):
+		return
+	var oid: int = int(_msgs("appeared")[0].data.id)
+	if not await _until(func(): return game.monsters.has(oid) and is_instance_valid(game.monsters[oid]), 20.0, "the Onlooker on my machine"):
+		return
+	var o: Node = game.monsters[oid]
+	if String(o.kind) != "onlooker":
+		return _end(false, "monster %d is a %s on the client" % [oid, String(o.kind)])
+	var last: Vector3 = o.global_position
+	var seen_tp: int = int(o.teleports)
+	var run := 0
+	var worst := 0
+	var jumps := 0
+	var seen: Array = []   # [{n, pos}] this machine's own copy the instant the counter changed
+	while _count_msgs("watch_done") == 0:
+		if _done:
+			return
+		await _frames(1)
+		if not is_instance_valid(o):
+			return _end(false, "the Onlooker vanished from the client mid-test")
+		_look_at_point(_me(), o.global_position)   # watching it too: seeing it is not what hurts you
+		var d: float = o.global_position.distance_to(last)
+		last = o.global_position
+		if d > 0.05:
+			run += 1
+			if run > worst:
+				worst = run
+		else:
+			run = 0
+		if int(o.teleports) != seen_tp:
+			seen_tp = int(o.teleports)
+			jumps += 1
+			seen.append({"n": seen_tp, "pos": o.global_position})
+	if worst > 1:
+		_send("fail", {})
+		return _end(false, "the Onlooker SLID on the client during a REAL brain-timed hop: %d consecutive moving frames (a teleport is 1)" % worst)
+	if jumps < 1:
+		_send("fail", {})
+		return _end(false, "the client never saw the brain's own hop happen")
+	# watch_done only arrives after every earlier reliable "hop" message already has (same channel,
+	# sent first): match each snap this machine actually rendered against where the host really put it.
+	var worst_err := 0.0
+	for rec in seen:
+		for m in _msgs("hop"):
+			if int(m.data.n) == int(rec.n):
+				var err: float = (rec.pos as Vector3).distance_to(m.data.pos)
+				worst_err = maxf(worst_err, err)
+				if err > OL_SNAP_TOL:
+					_send("fail", {})
+					return _end(false, "hop %d landed %.2f m from where the host actually placed it (tolerance %.2f)" % [int(rec.n), err, OL_SNAP_TOL])
+				break
+	var wd: Dictionary = _msgs("watch_done")[0].data
+	if int(_me().hp) != int(wd.get("other_hp0", _me().hp)):
+		_send("fail", {})
+		return _end(false, "my own hp moved even though I was never the mark (%s -> %d)" % [str(wd.get("other_hp0")), int(_me().hp)])
+	var mark_peer := int(wd.get("mark_peer", 0))
+	var markp: Player = game.players.get(mark_peer)
+	if markp == null or not is_instance_valid(markp) or int(markp.hp) != int(wd.get("mark_hp1", -1)):
+		_send("fail", {})
+		return _end(false, "the marked player's hp on my machine does not match what the host saw (%s)" % str(wd))
+	_say("watched %d real hops: longest run of moving frames %d, worst snap error %.3f m; only the mark's hp moved (%s -> %s), mine stayed at %d"
+		% [jumps, worst, worst_err, str(wd.get("mark_hp0")), str(wd.get("mark_hp1")), int(_me().hp)])
+	_send("client_verdict", {"hops": jumps, "run": worst, "err": worst_err})
+	await _finish_together("saw the brain's own hop land as a jump, in the right place, and only the mark lose a heart")
+
+
+## Aim `p`'s bot camera straight at `target`, no movement -- the same shape as _face_at, minus the
+## teleport, so it can be called every frame on a monster that is itself moving between calls.
+func _look_at_point(p: Player, target: Vector3) -> void:
+	var eye: Vector3 = p.global_position + Vector3.UP * C.EYE_H
+	var d: Vector3 = target - eye
+	p.bot_yaw = atan2(-d.x, -d.z)
+	p.bot_pitch = clampf(atan2(d.y, Vector2(d.x, d.z).length()), -1.2, 1.2)
 
 
 func _clear_push_dir(m: Node) -> Vector3:

@@ -51,6 +51,11 @@ const SCENARIOS := [
 	# POCKETS 2 phase 6: a hop has to arrive as a JUMP on the client, never as a walk. Short hops
 	# on purpose -- a long one is snapped by the 6 m heuristic and would pass with the bug in.
 	{"name": "onlooker", "scenario": "onlooker", "clients": 1, "timeout": 240},
+	# POCKETS 2 phase 7: the gap `onlooker` above cannot close -- it drives hops by hand with the
+	# host's physics off. This one leaves physics on and watches the brain's OWN real hop (its own
+	# placement, its own HOP_INTERVAL clock) land right on a second machine, cadence sped up only
+	# through the brain's already-overridable per-instance timers, never the shipped constants.
+	{"name": "onlooker_live", "scenario": "onlooker_live", "clients": 1, "timeout": 240, "extra": ["--pocket=natatorium"]},
 	# docs/SONOGRAPHER.md chunk B: a client sees the neck, the charge, the fan and the deafen, and is
 	# imaged and hunted correctly.
 	{"name": "sono", "scenario": "sono", "clients": 1, "timeout": 300},
