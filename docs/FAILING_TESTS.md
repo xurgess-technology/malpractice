@@ -217,6 +217,18 @@ How to run things is at the bottom of this file.
 
 ---
 
+## 1m. A hospital corridor's 1% low of 30, on an idle machine
+
+- **Not a failing test** — measured 2026-09-22 by the Chapel task during the perf read, on a machine
+  with zero other Godot processes, final content, q1/medium.
+- The Chapel's own worst view read **112 avg / 93 1% low** against a bar of 60 avg and 1% lows above
+  50, and every view in the space beat the hospital corridor it opens off. **The bar is met.**
+- But the *corridor baseline in the same table* read **86 avg / 30 1% low** — the only figure in the
+  run under the bar, and it is **untouched hospital**, nothing to do with pocket spaces.
+- It is the **first scenario measured**, so it may simply be the run settling rather than a real
+  stutter. Nobody has checked. Recorded here because it is exactly the kind of number that gets
+  noticed weeks later and blamed on whatever shipped near it.
+
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
 
 - **Command:** `godot --headless --path . -s tools/mapcheck.gd`
