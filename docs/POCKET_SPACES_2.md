@@ -208,13 +208,26 @@ top-shelf tequila should be one more line in that dictionary.
   to lose in the dark, was a bright olive ceiling. All four are fixed and the shots now read as a
   cathedral. **Every one of these passed every headless check while it was broken.**
 - **`tools/perfprobe` was run**, on a real window, minimized and never activated
-  (`tools/pocketperf.ps1`). At **medium (q1)** every Chapel view holds the bar: the whole nave from
-  the narthex, which is the designed worst frame (every rack, every stand, both arcades, all the
-  pews and the reredos at once), is **72 fps avg / 55 1% low**; the reredos close up 109/80, a side
-  aisle 97/79, an entrance from inside 122/105, the seam from the pocket side 79/77. The one
-  marginal number is the seam from the **hospital** side at 73/50, sitting exactly on the 1% low
-  bar. The hospital-corridor baseline on the same map read 64/44 in this run against ~61/55 in a
-  plain run, so the machine was noisy by then and the 50 should be re-read on a quiet one.
+  (`tools/pocketperf.ps1 -Kind chapel`). **The absolute numbers are not trustworthy and the bar is
+  not confirmed**, because three other agents were building and testing in the other slots
+  throughout: by the last run there were **nine Godot processes** on the machine and the *hospital
+  corridor* — a shipped scene this branch does not touch — was reading 15 fps. What is usable is
+  that every run measures the corridor **in the same session** as the Chapel, so the ratio survives
+  the load:
+
+  | run | machine | chapel content | whole nave | hospital corridor | ratio |
+  |---|---|---|---|---|---|
+  | 1 | quiet | dim, no racks | 72 / 55 | 64 / 44 | 1.13x |
+  | 2 | 8 Godots | final | 35 / 28 | 34 / 29 | 1.03x |
+  | 3 | 9 Godots | final | 16 / 8 | 15 / 8 | 1.07x |
+
+  So the Chapel's worst frame costs about what a hospital corridor costs, consistently, and on the
+  one quiet run it read **72 fps avg / 55 1% low at medium**, comfortably over 60/50 — but that run
+  predates the racks and the stronger lights. **Somebody must re-read this on a quiet machine
+  before phase 7 signs the bar off**: `tools\pocketperf.ps1 -Kind chapel`, then the q1 rows of
+  `.godot\pocketperf.log`. The view to watch is "chapel: the whole nave", which is the designed
+  worst case, and the number to sanity-check first is the corridor baseline in the same table --
+  if that is not near 60, the run is measuring the machine and not the Chapel.
 
 **What had to change outside the Chapel, all of it additive.**
 - `PocketSpaces.LAYOUTS` + `script_for(kind)` replaced the two-way `Factory if ... else Restaurant`
