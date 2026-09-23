@@ -23,6 +23,9 @@ extends Node
 
 const Plan := preload("res://scripts/level/pockets/pocket_plan.gd")
 const Stub := preload("res://scripts/level/pockets/stub.gd")
+const NatatoriumScript := preload("res://scripts/level/pockets/natatorium.gd")
+const SonoScript := preload("res://scripts/monsters/sonographer_brain.gd")
+const LootTableScript := preload("res://scripts/economy/loot_table.gd")
 const PlayerScript := preload("res://scripts/player.gd")
 
 var main: Node3D
@@ -51,7 +54,7 @@ func _ready() -> void:
 	game = main.game
 	main.menu.hide_menu()
 	Net.start_solo("Bot")
-	for kind in ["factory", "restaurant"]:
+	for kind in Plan.KINDS:
 		if only != "" and only != kind:
 			continue
 		await _run_space(kind)
@@ -98,6 +101,8 @@ func _run_space(kind: String) -> void:
 	await _check_nav(kind, pk)
 	_ambient_noise_floor(kind, pk)
 	_wander_fenced(kind, pk)
+	if kind == "natatorium":
+		_water(kind, pk)
 	# Helpers: a downed bot to carry and a second bot holding supplies.
 	var carried := _make_bot(-101, "Carried")
 	var follower := _make_bot(-102, "Follower")
@@ -114,6 +119,68 @@ func _run_space(kind: String) -> void:
 	game._clear_monsters()
 	await _rebuild_next_shift(kind)
 	game._clear_monsters()
+
+
+# =========================================================================
+# POCKET_SPACES_2 phase 2: the Natatorium's water
+# =========================================================================
+
+## The water is the whole room, so what has to hold is the shape of the choice it offers, not just
+## that a rect exists: the pool is water, the deck beside it is not, the hospital is not, and a
+## footstep taken in the water is loud enough to be *certain* to a Sonographer where a dry one is
+## not -- including crouched, which is the one place the water overrides the rule that crouching is
+## silence. If any of that stops being true the shortcut stops costing anything.
+func _water(kind: String, pk) -> void:
+	var lay: Dictionary = pk.pocket.layout
+	var o: Vector2i = pk.pocket.origin
+	var r: Rect2i = NatatoriumScript.water_rect()
+	var w := func(t: Vector2, y := 0.0) -> Vector3:
+		return Vector3((float(o.x) + t.x) * C.TILE, y, (float(o.y) + t.y) * C.TILE)
+	var middle: Vector3 = w.call(Vector2(r.get_center()) + Vector2(0.5, 0.5))
+	var deck: Vector3 = w.call(Vector2(float(r.position.x) - 3.5, float(r.get_center().y)))
+	_check(pk.water_at(middle), "%s: the middle of the pool is water" % kind)
+	_check(not pk.water_at(deck), "%s: the deck three tiles off the edge is not" % kind)
+	_check(not pk.water_at(bot.global_position) and not pk.in_pocket(bot.global_position),
+		"%s: and neither is the hospital" % kind)
+	_check(pk.in_pocket(middle) and pk.in_pocket(deck), "%s: both of those are inside the pocket" % kind)
+	# The loudness, against the Sonographer's own numbers rather than against themselves.
+	var wet: Array = pk.water_footstep(middle, false, false)
+	var dry: Array = pk.water_footstep(deck, false, false)
+	_check(dry.is_empty(), "%s: a step on the deck uses the hospital's own footstep numbers" % kind)
+	_check(not wet.is_empty() and float(wet[0]) >= SonoScript.LOUD,
+		"%s: wading at a walk is past LOUD, so it is certain and not merely suspicious (%.2f vs %.2f)" % [kind, float(wet[0]) if not wet.is_empty() else 0.0, SonoScript.LOUD])
+	_check(not wet.is_empty() and float(wet[0]) > 0.25 * 3.0,
+		"%s: ... and worth more than three dry walks (%.2f)" % [kind, float(wet[0]) if not wet.is_empty() else 0.0])
+	var crouched: Array = pk.water_footstep(middle, false, true)
+	_check(not crouched.is_empty() and float(crouched[0]) > 0.25,
+		"%s: crouching in water is still louder than walking on tile, not silence (%.2f)" % [kind, float(crouched[0]) if not crouched.is_empty() else 0.0])
+	_check(not crouched.is_empty() and float(crouched[0]) < SonoScript.LOUD,
+		"%s: ... but it is the one way across that is not certain" % kind)
+	var sprint: Array = pk.water_footstep(middle, true, false)
+	_check(not sprint.is_empty() and float(sprint[0]) > float(wet[0]),
+		"%s: running through it is louder still (%.2f)" % [kind, float(sprint[0]) if not sprint.is_empty() else 0.0])
+	# The room declares no ambient floor, so none of that loudness is quietly refunded.
+	_check(is_equal_approx(pk.ambient_noise_at(middle), 0.0),
+		"%s: the room masks nothing, so the water's cost is real" % kind)
+	# The items the space contributes are readable as a set, not scattered through the layout.
+	var items: Array = NatatoriumScript.POCKET_ITEMS
+	_check(items.has("pool_chemical_drum") and items.has("lifeguard_whistle"),
+		"%s: POCKET_ITEMS names what the space contributes (%s)" % [kind, str(items)])
+	for k: String in items:
+		_check(LootTableScript.has(k), "%s: %s is a real loot kind" % [kind, k])
+	# The cabinet is never empty.
+	var cabinets := 0
+	var stocked := {}
+	for c in game.level_info.get("containers", []):
+		if String(c.get("type", "")) != "first_aid_cabinet":
+			continue
+		cabinets += 1
+		for it in game.world_items.values():
+			if is_instance_valid(it) and it.state == WorldItem.State.IN_CONTAINER and String(it.container_id) == String(c.id):
+				stocked[String(it.kind)] = true
+	_check(cabinets >= 1, "%s: the lifeguard stand has a first-aid cabinet (%d)" % [kind, cabinets])
+	_check(stocked.has("gauze") and stocked.has("tourniquet"),
+		"%s: and it is stocked with gauze and a tourniquet (%s)" % [kind, str(stocked.keys())])
 
 
 # =========================================================================
@@ -431,6 +498,8 @@ func _doors_in_place(kind: String, pk, tag: String) -> void:
 	var tiles: Array = []
 	if kind == "factory":
 		tiles = lay.doors
+	elif kind == "natatorium":
+		tiles = [lay.doors.lockers]
 	else:
 		tiles = [lay.doors.corridor, lay.doors.men, lay.doors.women] + lay.doors.kitchen
 	var missing := 0

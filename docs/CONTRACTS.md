@@ -890,12 +890,19 @@ zones: {grid, width, height, names}   # HospitalBuilder.zone_of(info, pos) -> wi
 
 ### Pocket spaces (pockets worker, docs/POCKET_SPACES.md)
 
-A map (each shift's wings) rolls 0-1 pocket space: **the Factory**
-or **the Restaurant**, built far from the hospital (world tile origin `PocketSpaces.ORIGINS`: factory
-(800, 0), restaurant (800, 500)) with 2-3 entrances into at least two different wings, deeper wings more
-likely. Code in `scripts/level/pockets/`: `pocket_plan.gd` (generation), `stub.gd` (an entrance, its frame
-and its pocket-side copy), `pocket_spaces.gd` (runtime, `game.pockets`), `pocket_common.gd`,
-`factory.gd`, `restaurant.gd`.
+A map (each shift's wings) rolls 0-1 pocket space: **the Factory**, **the Restaurant** or
+**the Natatorium**, built far from the hospital (world tile origin `PocketSpaces.ORIGINS`: factory
+(800, 0), restaurant (800, 500), natatorium (800, 1000)) with 2-3 entrances into at least two different
+wings, deeper wings more likely. Code in `scripts/level/pockets/`: `pocket_plan.gd` (generation),
+`stub.gd` (an entrance, its frame and its pocket-side copy), `pocket_spaces.gd` (runtime,
+`game.pockets`), `pocket_common.gd`, `factory.gd`, `restaurant.gd`, `natatorium.gd`.
+
+**Adding a kind** is two lines: its name in `PocketPlan.KINDS` and its layout script in
+`PocketSpaces.LAYOUTS`, which every builder, the warmup and the ambient-noise lookup read (there is no
+`if kind == ...` chain left). A layout script must expose `layout(stubs, seed)`, `prepare(lay, origin)`,
+`build_steps(...)`, `build(...)`, `doorways(lay)` and `door_entries(lay, origin)`, may declare
+`AMBIENT_NOISE_LEVEL`, and declares `POCKET_ITEMS`, the item kinds it contributes, as a set anything
+else can read without digging through the layout.
 
 **The roll** (POCKET_SPACES_2 phase 1) is not a flat chance. Every wing rolls
 `BASE_CHANCE + DEPTH_STEP * (depth - 1)` — 4%, 9%, 14% for the usual depths 1-3 — and the map takes the
@@ -910,8 +917,9 @@ the globals as `"px"` — a client rolling from a different pool would build a d
 PocketPlan.plan(st, gens, defs, seed) / PocketPlan.release(gens)
 PocketPlan.chance_for(defs) -> float   # the map's chance, from the wings' depths (BASE_CHANCE, DEPTH_STEP, MAX_CHANCE)
 PocketPlan.exclude_kind # static: the kind kept out of the next roll (host-owned, replicated as "px"); pool()
-PocketPlan.of(gen) -> {kind: "factory" | "restaurant", seed, stubs: [{id, wing, depth, zone, o: Vector2i, eu: Vector2i, ev: Vector2i, w, d, lights: [Vector2i]}]} or {}
-PocketPlan.force_kind   # static: "" roll, "none", "factory", "restaurant" (tools, dev); force_entrances
+PocketPlan.of(gen) -> {kind: one of PocketPlan.KINDS, seed, stubs: [{id, wing, depth, zone, o: Vector2i, eu: Vector2i, ev: Vector2i, w, d, lights: [Vector2i]}]} or {}
+PocketPlan.force_kind   # static: "" roll, "none", or a kind in KINDS (tools, dev); force_entrances
+PocketPlan.KINDS; PocketSpaces.LAYOUTS / script_of(kind) -> GDScript   # the kind list and its layout script
 PocketPlan.ZONE_STUB    # 10: the zone of stub tiles (HospitalBuilder.zone_of answers "")
 
 # Runtime, every machine
@@ -942,7 +950,33 @@ game.pockets.ambient_noise_at(pos) -> float   # POCKET_SPACES_2 phase 1: the noi
 game.pockets.mirror_points(points) -> [Vector3]            # Perception: bodies inside a stub seen in the other copy
 game.pockets.crossings -> [{what: "player"|"monster"|"item", id, seam, to_pocket, time}]   # this machine's moves
 game.pockets.crossing_enabled      # tools only
+
+# POCKET_SPACES_2 phase 2: the Natatorium's water (the only pocket with a mechanic of its own)
+game.pockets.water_at(pos) -> bool          # standing in the pool; false in every other space
+game.pockets.water_footstep(pos, sprinting, crouching) -> [loudness, seconds] or []   # [] = the hospital's
+                                   # own numbers. Host; game._tick_noise is the only caller. WATER_WALK 0.95,
+                                   # WATER_SPRINT 1.3, WATER_CROUCH 0.55 against a dry walk's 0.25 and
+                                   # sprint's 0.8, and crouching in water is NOT silence (dry crouching
+                                   # emits nothing at all). Player._in_water() picks the splash cue from
+                                   # the same query, on every machine, so a wading teammate is heard too.
+Natatorium.water_rect() -> Rect2i           # the pool in pocket-local tiles
+Natatorium.POCKET_ITEMS                     # ["pool_chemical_drum", "lifeguard_whistle"]
+game.stock_first_aid_cabinets()    # host, each shift before spawn_loot(): gauze in slot 0 and a tourniquet
+                                   # in slot 1 of every "first_aid_cabinet". The only container in the game
+                                   # with guaranteed contents; only the Natatorium builds one.
 ```
+
+**The Natatorium** is an Olympic pool that cannot fit in a one-story hospital. Its room kinds are
+`natatorium_deck`, `natatorium_pool` and `natatorium_lockers`. Crossing the water is the short way
+between two entrances and the dry deck is the long way, and the water is what makes that a choice: a
+footstep taken in it is worth 0.95 against a dry walk's 0.25. Read against `SonographerBrain` — reach is
+`loudness * HEAR_PER_LOUDNESS` (22 m) and `LOUD` (0.8) is the line between filling the suspicion meter
+and coming straight at the noise — wading at a walk carries ~21 m and is *certain*, sprinting carries
+~29 m, and crouching (0.55, ~12 m) is the only way across that is not certain while still being more than
+twice a dry walk. Its `AMBIENT_NOISE_LEVEL` is 0.0 on purpose: tile echo is what the room sounds like, not
+what it hides behind (the Laundromat is the space that masks), so the water's cost is never refunded.
+No new sound system is involved — these are the loudness values `emit_noise` already carries, chosen in
+the one place footstep loudness was already chosen.
 
 - **Per shift** (doors contract, `scripts/level/wing_loader.gd`): the plan is rolled with the wings, so
   every shift's wings may bring a different pocket, other entrances or none. `teardown_wings` (from the
@@ -987,7 +1021,8 @@ game.pockets.crossing_enabled      # tools only
   hospital, pocket, transform, mouth, opening, link}], nav_region}` (`{}` without a pocket); the pocket's
   `lights` (fixtures: node with a Bulb OmniLight3D), `containers`, `loose_anchors` (wing = the deepest
   connected wing, depth its depth; room kinds `factory_floor`, `factory_office`, `factory_catwalk`,
-  `restaurant`, `restaurant_kitchen`) and `monster_spawns` are appended to the hospital's lists.
+  `restaurant`, `restaurant_kitchen`, `natatorium_deck`, `natatorium_pool`, `natatorium_lockers`) and
+  `monster_spawns` are appended to the hospital's lists.
 - **Air**: inside a pocket, away from its openings, `game.pockets` blends the environment's depth fog,
   volumetric fog density and ambient light toward `PocketSpaces.AIR[kind]` and back.
 - **Mirrors**: players and monsters inside a stub are also drawn in the other copy (RenderingServer
