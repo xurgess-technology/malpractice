@@ -43,9 +43,25 @@ const ENTRIES := {
 		"ability": "",
 		"growth_site": "unknown",
 	},
+	# POCKETS 2 phase 6. It caps at tier 2 and needs no special case to do it: tier 3 is `harvested`,
+	# harvesting is a brain out of a strapped body, and this one is neither capturable nor
+	# huntable -- so the bit is never set and the page never opens past SCANNED. Same as the Night
+	# Nurse, for the same reason, which is why her entry reads like this one.
+	"onlooker": {
+		"name": "The Onlooker",
+		"height": 2.65,
+		"hunch": 0.0,
+		"behaviour": "Found only in the rooms that should not fit in the building. It appears at a distance, already facing you, and does not move. Given long enough it takes something out of you. Walking at it is the only thing that has ever made it leave.",
+		"senses": "Attention. Being looked at is what feeds it, which is the opposite of the Night Nurse in every way that matters.",
+		"threat": "It cannot be fought. It can be sent away.",
+		"doses": "None. It has never been sedated; there is nothing to sedate.",
+		"brain_site": "Unknown.",
+		"ability": "",
+		"growth_site": "unknown",
+	},
 }
 
-const ORDER := ["hive", "sonographer", "night_nurse"]
+const ORDER := ["hive", "sonographer", "night_nurse", "onlooker"]
 
 
 static func entry(kind: String) -> Dictionary:

@@ -252,7 +252,10 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	var mx := -1.0
 	# "sonographer" also builds its gel-drip particles, the glow shader its throat and wand share, the see-through
 	# pane of skin over its windpipe and the glossy gel copy of its skin material.
-	for kind in ["night_nurse", "hive", "sonographer"]:  # SWEEP 3 HOOK (monsters)
+	# POCKETS 2 phase 6: "onlooker" builds its unshaded shadow material and its emissive eyes, the
+	# first unshaded-plus-emission pair a shift draws. Without it the thing pops in with a hitch,
+	# and a hitch is a tell on a monster whose whole point is that it arrives in silence.
+	for kind in ["night_nurse", "hive", "sonographer", "onlooker"]:  # SWEEP 3 HOOK (monsters)
 		var model: Node3D = MonsterModel.new()
 		shelf.add_child(model)
 		model.setup(kind)

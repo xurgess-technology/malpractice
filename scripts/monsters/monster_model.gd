@@ -11,6 +11,7 @@ const HiveLook := preload("res://scripts/monsters/hive_look.gd")
 const NurseRig := preload("res://scripts/monsters/night_nurse_rig.gd")
 const HiveRig := preload("res://scripts/monsters/hive_rig.gd")
 const SonoRig := preload("res://scripts/monsters/sonographer_rig.gd")
+const OnlookerRig := preload("res://scripts/monsters/onlooker_rig.gd")
 
 const RIG_KEY := "patient/human"
 const LOOPING := ["idle", "walk", "sprint"]
@@ -50,6 +51,11 @@ func setup(monster_kind: String) -> void:
 		return
 	if kind == "sonographer" and SonoRig.build(self):
 		play("idle")
+		return
+	# POCKETS 2 phase 6: primitives, no skeleton and no clip, so no play() either -- it never takes
+	# a step, so there is nothing to animate. monster.gd routes this kind past the shaper entirely.
+	if kind == "onlooker":
+		OnlookerRig.build(self)
 		return
 	rig = Assets.spawn(RIG_KEY) if Assets.has(RIG_KEY) else null
 	if rig != null:

@@ -21,7 +21,10 @@ enum Mode { IDLE, WANDER, LISTEN, RUSH, SEARCH, STALK, STUNNED, RETREAT, SEDATED
 const SONOGRAPHER := "sonographer"
 const NIGHT_NURSE := "night_nurse"
 const HIVE := "hive"
-const KINDS := [HIVE, SONOGRAPHER, NIGHT_NURSE]
+## POCKETS 2 phase 6. It is NOT in `roster()` and never will be: it is the one kind the shift does
+## not hand out, spawned only by scripts/monsters/onlooker_watch.gd inside a pocket space.
+const ONLOOKER := "onlooker"
+const KINDS := [HIVE, SONOGRAPHER, NIGHT_NURSE, ONLOOKER]
 ## The Sonographer and the Night Nurse together.
 const MAX_MONSTERS := 5
 ## Hives have their own cap.
@@ -59,6 +62,8 @@ const Zones := preload("res://scripts/hospital_builder.gd")
 const NurseRig := preload("res://scripts/monsters/night_nurse_rig.gd")
 const HiveRig := preload("res://scripts/monsters/hive_rig.gd")
 const NurseGrab := preload("res://scripts/monsters/nurse_grab.gd")
+const OnlookerBrain := preload("res://scripts/monsters/onlooker_brain.gd")
+const OnlookerRig := preload("res://scripts/monsters/onlooker_rig.gd")
 
 var monster_id: int = 0
 var kind: String = SONOGRAPHER
@@ -91,6 +96,15 @@ var max_hp: int = 4
 var sedation_left: float = 0.0  ## host seconds; clients only know is_sedated()
 var dragged_by: int = 0         ## peer id dragging it (set by combat), 0 nobody
 var hit_count: int = 0          ## bumps on every take_hit; replicated so every machine flinches
+
+## POCKETS 2 phase 6, the Onlooker: is it there at all? It pops in and out rather than walking off,
+## and the *same node* does both, which is on purpose -- a monster that was freed and re-added every
+## time it hopped would hand out a new entity id per hop, and 0.10.26 is the bug where a reused id
+## leaves a client driving a stale node. One node, one id, for the whole encounter; `pr` on the wire
+## says whether it is standing there this second. `presence` is the pop-in ease, 0 gone to 1 there,
+## and is the only part of it a client works out for itself.
+var present: bool = false
+var presence: float = 0.0
 
 var agent: NavigationAgent3D
 var model: Node3D
@@ -182,6 +196,7 @@ static func display_name(monster_kind: String) -> String:
 	match monster_kind:
 		HIVE: return "Hive"
 		NIGHT_NURSE: return "Night Nurse"
+		ONLOOKER: return "Onlooker"
 	return "Sonographer"
 
 
@@ -218,6 +233,12 @@ func _build() -> void:
 			body_radius = 0.36
 			height = 1.75
 			brain = HiveBrain.new(self)
+		ONLOOKER:
+			damage = 1
+			knockback = 0.0
+			body_radius = 0.40
+			height = OnlookerRig.TALL
+			brain = OnlookerBrain.new(self)
 		_:
 			damage = 1
 			knockback = 9.0
@@ -316,8 +337,11 @@ func _apply_pin() -> bool:
 # fighting and capturing (host)
 # =========================================================================
 
+## The Onlooker joins the Night Nurse here: the saw, the needle and a shove all do nothing to it.
+## The counter is walking at it (onlooker_brain.gd BANISH_RANGE), and a weapon that also worked
+## would quietly replace that with the fight every other monster already is.
 func can_be_hurt() -> bool:
-	return kind != NIGHT_NURSE
+	return kind != NIGHT_NURSE and kind != ONLOOKER
 
 
 ## A blow from `source` ("saw:<player name>", "dev", ...) travelling along `dir`.
@@ -837,6 +861,9 @@ static func _spot_clear(space: PhysicsDirectSpaceState3D, p: Vector3) -> bool:
 # =========================================================================
 
 func _update_visual(delta: float) -> void:
+	if kind == ONLOOKER:
+		_onlooker_visual(delta)
+		return
 	var frozen := kind == NIGHT_NURSE and observed and grab_peer == 0
 	if grab_peer != 0:
 		grab_t += delta
@@ -1122,6 +1149,30 @@ func _nurse_visual(delta: float) -> void:
 		model.rig.position.y = NurseRig.WALK_LIFT * _walk_lift
 
 
+## POCKETS 2 phase 6. Every machine: the pop in and out, the sway, and the collider going with it.
+## There is no clip, no shaper and no skeleton -- see onlooker_rig.gd for why a thing that never
+## takes a step does not want a rig -- so this is the whole of its animation.
+##
+## A client eases `presence` from the replicated `pr` rather than being sent the curve, so a hop
+## costs one bool on the wire. While it is away the collider goes off with the body: an invisible
+## thing you can walk into is the worst possible outcome for a monster that pops out for 75 seconds.
+func _onlooker_visual(delta: float) -> void:
+	if game != null and not game.is_host():
+		presence = move_toward(presence, 1.0 if present else 0.0,
+			delta / (OnlookerBrain.FADE_IN if present else OnlookerBrain.FADE_OUT))
+	var solid := presence > 0.002
+	if _shape != null and _shape.disabled == solid:
+		_shape.disabled = not solid
+	if model == null:
+		return
+	model.visible = solid
+	var rg = model.rig
+	if rg != null and rg.has_method("set_presence"):
+		rg.set_presence(presence)
+		if solid:
+			rg.tick(delta)
+
+
 ## Dev room settings for the Night Nurse (dev_room.gd `nurse_settings()`): {ignore_watch, walk
 ## ("" | "follow" | "loop"), who, loop: Array of Vector3, speed}. Empty outside the dev room.
 func dev_nurse() -> Dictionary:
@@ -1143,6 +1194,11 @@ func _echo_from() -> Vector3:
 
 
 func _update_sound(delta: float) -> void:
+	if kind == ONLOOKER:
+		# POCKETS 2 phase 6: THE ONLOOKER IS SILENT. Not "quiet" and not "it has no cue yet" -- the
+		# whole rule is that the only tell is visual, so the fear is checking your own sightlines.
+		# This early return is the feature. Do not give it a footstep, a breath or a pop.
+		return
 	var viewer: Node = game.viewed_player() if game.has_method("viewed_player") else null
 	var near_viewer: bool = viewer == null or viewer.global_position.distance_to(global_position) < 30.0
 
@@ -1274,6 +1330,10 @@ func report() -> Dictionary:
 		"gp": grab_peer,   # the Night Nurse's grab: who she holds
 		# The Sonographer: the suspicion meter its neck shows, and the charge in throat then wand.
 		"ss": snappedf(sono_susp, 1.0 / 64.0), "sc": snappedf(sono_charge, 1.0 / 64.0),
+		# The Onlooker: is it standing there this second. One bool carries every hop, every banish
+		# and every cooldown -- the place it hops TO rides the ordinary `pos`, which clients already
+		# snap rather than lerp past 6 m (see _physics_process), so a hop arrives as a jump for free.
+		"pr": present,
 	}
 
 
@@ -1296,6 +1356,7 @@ func apply_remote(s: Dictionary) -> void:
 	hit_count = int(s.get("hc", hit_count))
 	sono_susp = float(s.get("ss", sono_susp))
 	sono_charge = float(s.get("sc", sono_charge))
+	present = bool(s.get("pr", present))
 	var gp := int(s.get("gp", 0))
 	if gp != grab_peer:
 		grab_peer = gp

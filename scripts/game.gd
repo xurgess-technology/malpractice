@@ -235,7 +235,11 @@ var trinkets: Node = null     # TRINKETS chunk B: what the six trinkets do (scri
 # POCKETS HOOK: pocket spaces (the Factory, the Restaurant), their seams and crossings.
 const PocketSpacesScript := preload("res://scripts/level/pockets/pocket_spaces.gd")
 const PocketPlanScript := preload("res://scripts/level/pockets/pocket_plan.gd")
+const OnlookerWatchScript := preload("res://scripts/monsters/onlooker_watch.gd")
 var pockets: Node = null
+## POCKETS 2 phase 6: rolls and owns the Onlooker, one per pocket space. Host decides; every
+## machine has the node.
+var onlooker_watch: Node = null
 ## POCKETS 2 phase 1, no repeats: the pocket kind this run has already seen. The host sets it when
 ## a shift ends, so the next shift's roll leaves that kind out, and sends it to clients with the
 ## globals ("px") — a client that rolled from a different pool would build a different hospital.
@@ -346,6 +350,12 @@ func _ready() -> void:
 	pockets.name = "Pockets"
 	add_child(pockets)
 	pockets.setup(self)
+	# POCKETS 2 phase 6: rolls the Onlooker once per pocket space and owns its lifetime. After
+	# Pockets, so the pocket it asks about is this frame's.
+	onlooker_watch = OnlookerWatchScript.new()
+	onlooker_watch.name = "OnlookerWatch"
+	add_child(onlooker_watch)
+	onlooker_watch.setup(self)
 	# DOORS HOOK: same path on every machine.
 	doors = DoorsScript.new()
 	doors.name = "Doors"
@@ -2503,6 +2513,17 @@ func _add_monster(kind: String, pos: Vector3) -> Node:
 	return m
 
 
+## POCKETS 2 phase 6. Host: a monster the shift's roster never hands out, added by whoever owns that
+## kind's own rule -- today only the Onlooker, added once per pocket space by
+## scripts/monsters/onlooker_watch.gd. It goes into the same `monsters` dictionary as everything
+## else, so it replicates, is cleared with the shift and is counted by the danger meter with no
+## special case anywhere, and its entity id is handed out by the same counter (never reused).
+func spawn_pocket_monster(kind: String, pos: Vector3) -> Node:
+	if not is_host():
+		return null
+	return _add_monster(kind, pos)
+
+
 ## Host (dev and tests): a Hive at `pos`. Lived on the brains node until brains were removed.
 func spawn_hive(pos: Vector3) -> Node:
 	if not is_host():
@@ -2866,6 +2887,9 @@ func _update_danger() -> void:
 		for m in monsters.values():
 			if m.has_method("is_sedated") and m.is_sedated():
 				continue   # sweep 3: an out-cold monster is no danger
+			if m.kind == MonsterScript.ONLOOKER and not bool(m.present):
+				continue   # POCKETS 2 phase 6: an Onlooker that has popped out is not in the room
+
 			nearest = minf(nearest, m.global_position.distance_to(view.global_position))
 		danger = clampf(1.0 - nearest / 14.0, 0.0, 1.0)
 	Audio.heartbeat(danger)
