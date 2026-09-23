@@ -5,6 +5,13 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.51**: Two more test blind spots closed, and the Onlooker's real hop finally watched on two machines 🔬
+    - Fixed: A pager test and a monster-spawn test were both standing outside the floor, so nothing they checked meant anything. On solid ground now.
+    - Note: The Onlooker had only ever been tested with its hop staged by hand. It's now been watched making its own real decision on a real second machine, landing where it's supposed to. Nothing changed about how it plays -- this closes the last real gap in how thoroughly it was checked.
+- **0.10.50**: Look at yourself in the mirror properly 🪞
+    - Fixed: The cosmetic menu wasn't a real camera -- it was the mirror's own reflection stretched to fill the screen, which is why it never filled a normal monitor and left black bars on both sides. It's a proper third-person camera now, full width, no bars.
+    - Fixed: A second player can no longer open the mirror menu while you're in it -- they'll see "Another Player is Using the Mirror" instead.
+    - Fixed: Two smaller bugs behind the scenes were fighting the menu every frame -- the game's own mouse-cursor logic kept trying to recapture it, and the ordinary walk-by mirror kept hiding your body out from under the new camera.
 - **0.10.49**: The Laundromat stops costing everyone else frame time 🧺
     - Fixed: Every washer and dryer had its own individual piece of collision geometry -- about 150 of them, roughly double any other pocket space -- and that cost real time every frame, everywhere in the hospital, whether anyone was near the Laundromat or not. They're merged into a few dozen now, the same way the Chapel's pews already were. Nothing changed to look at.
 - **0.10.48**: Every morgue tray is reachable now 🗄️
