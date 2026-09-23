@@ -2261,7 +2261,18 @@ func surgery_step_done(result: Dictionary, table_index: int = -1, operator_peer:
 		# 2026-09-18: used from the operator's hands (surgery_system.can_begin made sure they held it).
 		var p = players.get(operator_peer)
 		if p != null and p.has_method("consume_hand"):
-			p.consume_hand(String(step.item), uses)
+			# POCKETS 2 phase 3: spend what they actually held, which may be a substitute for the
+			# step's item (communion wine for anesthetic), and weaken the dose by that substitute's
+			# strength. The injection minigame is untouched: it reports the same sedation it always
+			# did and the substitute is applied to its result here.
+			var used_kind := Items.held_for_step(p, String(step.item), uses)
+			if used_kind == "":
+				used_kind = String(step.item)
+			p.consume_hand(used_kind, uses)
+			var strength := Items.anesthetic_strength(used_kind)
+			if strength < 1.0 and result.has("sedation"):
+				result = result.duplicate()
+				result["sedation"] = snappedf(float(result.sedation) * strength, 0.01)
 	var flags: Dictionary = c.get("flags", {})
 	flags.merge(result, true)
 	c.flags = flags

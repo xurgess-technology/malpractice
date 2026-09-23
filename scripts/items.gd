@@ -13,7 +13,43 @@ const CONTAINER_TYPES := {
 	"pegboard": {"name": "pegboard", "rooms": ["janitor_closet", "supply_closet", "morgue"]},
 }
 
-const SURGICAL := ["anesthetic", "gauze", "forceps", "tourniquet", "bone_saw"]
+const SURGICAL := ["anesthetic", "gauze", "forceps", "tourniquet", "bone_saw", "communion_wine"]
+
+## POCKETS 2 phase 3: what will do instead of a vial of anesthetic, and how much of a real dose it
+## carries. Anything in here satisfies a step that asks for "anesthetic" and re-doses a strapped
+## monster; the number multiplies what the dose ends up worth, so a substitute is a weak dose that
+## wears off sooner rather than a different mechanic. The Chapel's communion wine is the first;
+## phase 5's top-shelf tequila is meant to be the second, at the same strength.
+## This is deliberately the only place the substitution lives: the injection minigame itself is
+## untouched and does not know the difference.
+const ANESTHETIC_KINDS := {"anesthetic": 1.0, "communion_wine": 0.55}
+
+
+## Does holding `held` satisfy a procedure step that asks for `want`?
+static func step_accepts(want: String, held: String) -> bool:
+	if want == held:
+		return true
+	return ANESTHETIC_KINDS.has(want) and ANESTHETIC_KINDS.has(held)
+
+
+## The share of a real dose this kind delivers (1.0 for anything that is not a substitute).
+static func anesthetic_strength(kind: String) -> float:
+	return float(ANESTHETIC_KINDS.get(kind, 1.0))
+
+
+## The kind in `p`'s hands that satisfies a step asking for `want`: the selected stack when it does,
+## else any slot holding enough. "" when they have nothing that will do.
+static func held_for_step(p, want: String, need := 1) -> String:
+	if p == null or not ("slots" in p):
+		return ""
+	if p.has_method("selected_head"):
+		var h: int = p.selected_head()
+		if h >= 0 and h < p.slots.size() and step_accepts(want, String(p.slots[h].kind)) and int(p.slots[h].count) >= need:
+			return String(p.slots[h].kind)
+	for s in p.slots:
+		if step_accepts(want, String(s.kind)) and int(s.count) >= need:
+			return String(s.kind)
+	return ""
 
 const ITEMS := {
 	"anesthetic": {
@@ -28,6 +64,24 @@ const ITEMS := {
 		"real_use": "A general anesthetic puts a patient into a controlled, reversible unconsciousness so they feel nothing during surgery. The dose depends on body weight: too little and they can wake mid-procedure, too much and breathing and heart rate crash.",
 		"where": "Almost always in the medicine fridges of pharmacies, supply closets and labs. Now and then a vial or two left out on a counter or a bedside tray.",
 		"handling": "Consumable. Found in batches of 2 to 3. Glass: dropping the batch smashes some of it.",
+	},
+	# POCKETS 2 phase 3, the Chapel. An anesthetic substitute (ANESTHETIC_KINDS): it will put a
+	# patient or a strapped monster under, but weakly, so they stir sooner. One bottle, and glass.
+	"communion_wine": {
+		"name": "Communion wine",
+		"short": "Communion wine",
+		"surgical": true,
+		"consumable": true,
+		"batch": [1, 1],
+		"fragile": true,
+		"found": {"loose": 1.0},
+		"loose_surfaces": ["counter", "tray"],
+		# Only ever found in the Chapel (ItemSpawner._legal). An item with no `rooms` key is found
+		# anywhere, which is every other item in this table.
+		"rooms": {"chapel_sacristy": 1.0, "chapel_sanctuary": 1.0, "chapel_nave": 1.0, "chapel_aisle": 1.0},
+		"real_use": "Alcohol was the anesthetic before there were anesthetics, and it is a bad one: the dose that dulls pain is close to the dose that stops breathing, it wears off unevenly, and the patient can surface halfway through without ever being properly under.",
+		"where": "Nowhere in the hospital. There is a case of it in the chapel sacristy, and a bottle usually left out on the credence table.",
+		"handling": "Consumable. One bottle. Glass: dropping it is the end of it. Counts as anesthetic wherever a vial would, at a little over half the dose.",
 	},
 	"gauze": {
 		"name": "Gauze",

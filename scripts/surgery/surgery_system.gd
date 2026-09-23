@@ -182,7 +182,9 @@ func can_begin(player) -> String:
 	# 2026-09-18: the step's item has to be in your hands, selected (and enough of it).
 	var needed: int = maxi(1, int(s.get("uses", 0)))
 	var held: Dictionary = player.selected_stack() if player.has_method("selected_stack") else {}
-	if String(held.get("kind", "")) != String(s.item) or int(held.get("count", 0)) < needed:
+	# POCKETS 2 phase 3: a substitute in the selected slot counts (Items.step_accepts): the Chapel's
+	# communion wine will do wherever a vial of anesthetic would. Everything else is kind for kind.
+	if not Items.step_accepts(String(s.item), String(held.get("kind", ""))) or int(held.get("count", 0)) < needed:
 		if needed > 1:
 			return "Hold %d %s to do this." % [needed, Items.display_name(String(s.item))]
 		return "Hold %s to do this." % Items.display_name(String(s.item))

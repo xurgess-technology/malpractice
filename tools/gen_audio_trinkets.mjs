@@ -10,6 +10,8 @@
 //   trinkets_hammer_bonk    a rubber head on something that did not expect it
 //   trinkets_clip_on        the pulse oximeter's plastic jaws snapping shut, then its own beep
 //   trinkets_epipen         the spring, the click and the hiss of an auto-injector
+//   trinkets_candle_light   POCKETS 2 phase 3: a match struck, and a wick catching
+//   trinkets_candle_out     the same wick giving up: a small wet snuff and a breath of smoke
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -217,6 +219,56 @@ function epipen(name) {
   writeWav(name, highpass(lowpass(x, 7200), 240));
 }
 
+// The Chapel's votive candle. A match dragged along the strip, the head catching, then the wick
+// taking with a soft crackle that settles into a flame. Nothing musical: it is a small dry sound.
+function candleLight(name) {
+  const r = rngFor(name);
+  const n = Math.floor(SR * 0.70);
+  const x = new Float32Array(n);
+  const strike = Math.floor(SR * 0.02);
+  for (let i = 0; i < SR * 0.09 && strike + i < n; i++) {
+    const t = i / SR;
+    // The drag: broadband scrape, rough at the start and thinning out.
+    x[strike + i] += (r() * 2 - 1) * 0.55 * Math.exp(-t / 0.028) * (0.5 + 0.5 * Math.sin(TAU * 60 * t));
+  }
+  const cat = Math.floor(SR * 0.10);
+  for (let i = 0; i < SR * 0.06 && cat + i < n; i++) {
+    // The head going up: a short puff with a little body to it.
+    x[cat + i] += (r() * 2 - 1) * 0.7 * Math.exp(-i / (SR * 0.012));
+  }
+  const wick = Math.floor(SR * 0.18);
+  for (let i = 0; wick + i < n; i++) {
+    const t = i / SR;
+    const env = Math.min(1, t / 0.05) * Math.exp(-t / 0.30);
+    x[wick + i] += (r() * 2 - 1) * 0.22 * env;
+    if (r() < 0.0012) {
+      for (let k = 0; k < SR * 0.004 && wick + i + k < n; k++) {
+        x[wick + i + k] += (r() * 2 - 1) * 0.30 * Math.exp(-k / (SR * 0.0012)) * env;  // a crackle
+      }
+    }
+  }
+  writeWav(name, highpass(lowpass(x, 6800), 300));
+}
+
+// Two minutes later. A wet little snuff as the flame drowns in its own wax, then the smoke.
+function candleOut(name) {
+  const r = rngFor(name);
+  const n = Math.floor(SR * 0.55);
+  const x = new Float32Array(n);
+  for (let i = 0; i < SR * 0.05; i++) {
+    const t = i / SR;
+    // The snuff itself: low, damp, gone almost at once.
+    x[i] += (r() * 2 - 1) * 0.8 * Math.exp(-t / 0.010);
+    x[i] += Math.sin(TAU * 180 * t) * 0.25 * Math.exp(-t / 0.014);
+  }
+  const smoke = Math.floor(SR * 0.06);
+  for (let i = 0; smoke + i < n; i++) {
+    const t = i / SR;
+    x[smoke + i] += (r() * 2 - 1) * 0.16 * Math.min(1, t / 0.04) * Math.exp(-t / 0.16);
+  }
+  writeWav(name, highpass(lowpass(x, 3400), 150));
+}
+
 fs.mkdirSync(OUT, { recursive: true });
 phoneRing('trinkets_phone_ring');
 phonePick('trinkets_phone_pick');
@@ -226,3 +278,5 @@ heartbeat('trinkets_heartbeat');
 hammerBonk('trinkets_hammer_bonk');
 clipOn('trinkets_clip_on');
 epipen('trinkets_epipen');
+candleLight('trinkets_candle_light');
+candleOut('trinkets_candle_out');

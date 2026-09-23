@@ -303,13 +303,16 @@ func redose(p, table_index: int) -> float:
 	if slot < 0:
 		return 0.0
 	var st: Dictionary = p.slots[slot]
+	# POCKETS 2 phase 3: a substitute tops the monster up by less than a real vial would, so it
+	# comes round sooner. Everything after this is the dose path exactly as it was.
+	var strength := Items.anesthetic_strength(String(st.kind))
 	st["count"] = int(st.get("count", 0)) - 1
 	if int(st.count) <= 0:
 		p.clear_slot(slot)
 	var id := int(c.get("id", -1))
 	var n := int(c.get("doses", 0))
 	var s := sedation(c)
-	var ns := minf(1.0, s + dose_amount(n))
+	var ns := minf(1.0, s + dose_amount(n) * strength)
 	_sed[id] = ns
 	c["doses"] = n + 1
 	var flags: Dictionary = c.get("flags", {})
@@ -324,16 +327,17 @@ func redose(p, table_index: int) -> float:
 	return ns - s
 
 
-## The hand slot p would re-dose from: the selected stack when it is anesthetic, else any.
+## The hand slot p would re-dose from: the selected stack when it holds anesthetic or something
+## that will do instead (Items.ANESTHETIC_KINDS: the Chapel's communion wine), else any slot.
 func _anesthetic_slot(p) -> int:
 	if p == null or not ("slots" in p):
 		return -1
 	if p.has_method("selected_head"):
 		var h: int = p.selected_head()
-		if h >= 0 and h < p.slots.size() and String(p.slots[h].kind) == "anesthetic" and int(p.slots[h].count) > 0:
+		if h >= 0 and h < p.slots.size() and Items.ANESTHETIC_KINDS.has(String(p.slots[h].kind)) and int(p.slots[h].count) > 0:
 			return h
 	for i in p.slots.size():
-		if String(p.slots[i].kind) == "anesthetic" and int(p.slots[i].count) > 0:
+		if Items.ANESTHETIC_KINDS.has(String(p.slots[i].kind)) and int(p.slots[i].count) > 0:
 			return i
 	return -1
 

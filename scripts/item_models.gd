@@ -95,6 +95,7 @@ static func make(kind: String, count: int = 1) -> Node3D:
 	root.name = "Model_%s" % kind
 	match kind:
 		"anesthetic": _vials(root, clampi(count, 1, 6))
+		"communion_wine": _wine_bottle(root)
 		"gauze": _gauze(root, clampi(count, 1, 6))
 		"forceps": _forceps(root)
 		"tourniquet": _tourniquet(root)
@@ -179,6 +180,7 @@ static func footprint(kind: String) -> Vector3:
 			return (asset_transform(kind) * mesh.get_aabb()).size
 	match kind:
 		"anesthetic": return Vector3(0.14, 0.09, 0.08)
+		"communion_wine": return Vector3(0.08, 0.25, 0.08)
 		"gauze": return Vector3(0.22, 0.1, 0.12)
 		"forceps": return Vector3(0.2, 0.03, 0.08)
 		"tourniquet": return Vector3(0.28, 0.05, 0.1)
@@ -534,6 +536,18 @@ static func _add(root: Node3D, n: Node3D, pos: Vector3, rot_deg := Vector3.ZERO)
 	n.rotation_degrees = rot_deg
 	root.add_child(n)
 	return n
+
+
+## POCKETS 2 phase 3: a dark green bottle of communion wine, foil still on the neck.
+static func _wine_bottle(root: Node3D) -> void:
+	var glass := _mat(Color(0.06, 0.13, 0.07), 0.2)
+	var foil := _mat(Color(0.48, 0.10, 0.11), 0.45, 0.4)
+	var label := _mat(Color(0.88, 0.84, 0.72), 0.9)
+	_add(root, _cyl(0.037, 0.145, glass, 14), Vector3(0, 0.0725, 0))
+	_add(root, _cyl(0.030, 0.035, glass, 14), Vector3(0, 0.160, 0))
+	_add(root, _cyl(0.014, 0.075, glass, 12), Vector3(0, 0.205, 0))
+	_add(root, _cyl(0.0155, 0.040, foil, 12), Vector3(0, 0.225, 0))
+	_add(root, _cyl(0.0375, 0.062, label, 14), Vector3(0, 0.068, 0))
 
 
 static func _vials(root: Node3D, n: int) -> void:

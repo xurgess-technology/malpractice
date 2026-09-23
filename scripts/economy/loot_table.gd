@@ -47,6 +47,15 @@ const LOOT := {
 		"rooms": {"radiology": 0.7, "patient_room": 0.14, "supply_closet": 0.14, "lab": 0.14, "*": 0.017},
 		"surfaces": ["counter", "gurney", "floor"], "containers": {},
 	},
+	# POCKETS 2 phase 3, the Chapel. Gold-watch tier: a heavy silver-gilt alms dish, and whatever the
+	# congregation that never came put in it. The room weights are the Chapel's own kinds, so it is
+	# a thing you find in there rather than a thing that turns up in a supply closet.
+	"collection_plate": {
+		"name": "Collection plate", "short": "Collection plates", "value": [45, 115], "tier": 3,
+		"rooms": {"chapel_sanctuary": 3.5, "chapel_sacristy": 2.2, "chapel_nave": 1.4, "chapel_aisle": 1.0,
+				"office": 0.2, "waiting_room": 0.25, "*": 0.05},
+		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.3},
+	},
 	# ---- trinkets: they sell, but each also does one thing (a later chunk). Rarer than plain loot.
 	"desk_phone": {
 		"name": "Desk phone", "short": "Desk phones", "value": [12, 25], "tier": 0, "trinket": true, "trinket_weight": 3.0,
@@ -77,6 +86,14 @@ const LOOT := {
 		"name": "Pulse oximeter", "short": "Pulse oximeters", "value": [25, 45], "tier": 1, "trinket": true, "trinket_weight": 1.2,
 		"rooms": {"patient_room": 0.072, "nurse_station": 0.096, "supply_closet": 0.036, "lab": 0.048, "morgue": 0.036, "*": 0.006},
 		"surfaces": ["counter", "tray"], "containers": {"station_drawers": 0.5, "trauma_bag": 0.3},
+	},
+	# POCKETS 2 phase 3, the Chapel. A placeable light: set it down and the Night Nurse counts as
+	# watched inside its radius with nobody looking at her, until it burns out about two minutes
+	# later. One use, because lighting it is the use (scripts/trinkets/trinkets.gd).
+	"votive_candle": {
+		"name": "Votive candle", "short": "Votive candles", "value": [9, 18], "tier": 0, "trinket": true, "trinket_weight": 2.4,
+		"rooms": {"chapel_aisle": 6.0, "chapel_nave": 3.0, "chapel_sanctuary": 3.0, "chapel_sacristy": 2.0, "*": 0.08},
+		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.2},
 	},
 	# GRAFTING part one (scripts/grafting/eyes.gd): taken out of a strapped Hive, or a surgeon's own
 	# eye swapped out; never found. They spoil outside a vat (Eyes.spoil_factor).
