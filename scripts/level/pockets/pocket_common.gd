@@ -647,6 +647,9 @@ static func container(parent: Node3D, out: Dictionary, origin: Vector2i, tile: V
 		"pegboard":
 			node = HB.PegboardScript.create(id0)
 			list = [node]
+		"first_aid_cabinet":
+			node = HB.FirstAidCabinetScript.create(id0)
+			list = [node]
 	if node == null:
 		return
 	node.transform = xf
