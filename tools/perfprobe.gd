@@ -25,6 +25,12 @@ var _orscreen := false
 var _models := false
 var _abilities := false   # the two abilities (--abilities)
 var _pockets := false  # POCKETS: --pockets, every pocket space against the corridor baseline
+## POCKETS 2 phase 4: --pocket=<kind>, ONE space, forced before the first session is built and never
+## rebuilt. `--pockets` restarts the session once per kind, and doing that in a windowed run trips a
+## Godot renderer bug ("BUG, indexing did not unpair geometries from light", docs/KNOWN_ISSUES.md)
+## and dies with signal 11 before it measures anything -- on `main` as much as on any branch, so it
+## is not any one space's doing. This mode exists so a new space can still be measured honestly.
+var _one_pocket := ""
 var _doors := false    # DOORS HOOK
 var _hands := false    # HANDS HOOK
 var _humans := false   # HUMAN HOOK
@@ -48,6 +54,7 @@ func _ready() -> void:
 			"models": _models = true
 			"abilities": _abilities = true
 			"pockets": _pockets = true   # POCKETS
+			"pocket": _one_pocket = v    # POCKETS 2 phase 4: one space, no session restart
 			"doors": _doors = true
 			"hands": _hands = true
 			"humans": _humans = true
@@ -67,6 +74,10 @@ func _ready() -> void:
 	game = main.game
 	main.menu.hide_menu()
 	Net.start_solo("Probe")
+	# POCKETS 2 phase 4: force the space before the map is generated; the pocket is rolled with the
+	# wings, so this has to happen before start_session and not after it.
+	if _one_pocket != "":
+		(load("res://scripts/level/pockets/pocket_plan.gd") as GDScript).set("force_kind", _one_pocket)
 	game.start_session(_seed)
 	if _shift > 1:
 		game.start_lobby(_seed, _shift)
@@ -105,6 +116,9 @@ func _ready() -> void:
 		return
 	if _abilities:
 		await _run_abilities()
+		return
+	if _one_pocket != "":
+		await _run_one_pocket()   # POCKETS 2 phase 4
 		return
 	if _pockets:
 		await _run_pockets()   # POCKETS
@@ -305,6 +319,63 @@ func _measure(label: String, q: int) -> void:
 	}
 	_rows.append(row)
 	print("[perf] q%d %-30s avg %.0f fps, 1%% low %.0f fps, worst %.1f ms, draws %d" % [q, label, row.fps, row.low_fps, row.worst, draws])
+
+
+## POCKETS 2 phase 4: one space on the session that is already built, measured from its own views
+## plus the hospital corridor on the same map as a baseline. No start_session, so nothing is torn
+## down and the renderer bug that kills `--pockets` never gets its chance.
+func _run_one_pocket() -> void:
+	var Stub := preload("res://scripts/level/pockets/stub.gd")
+	game.begin_shift()
+	for i in 40:
+		await get_tree().process_frame
+	var pk = game.pockets
+	if pk != null and pk.busy:
+		pk.finish_now()
+	if pk == null or not pk.active():
+		print("[perf] no pocket was built for --pocket=%s" % _one_pocket)
+		return
+	var kind: String = String(pk.pocket.kind)
+	var o := Vector3(Vector2i(pk.pocket.origin).x * C.TILE, 0.0, Vector2i(pk.pocket.origin).y * C.TILE)
+	var w := func(t: Vector2, y := 0.0) -> Vector3:
+		return o + Vector3(t.x * C.TILE, y, t.y * C.TILE)
+	var s: Dictionary = pk.seams[0]
+	var views: Array = [{"name": "%s map: hospital corridor" % kind, "setup": _corridor}]
+	for v in pocket_views(kind, w):
+		views.append(v)
+	views.append({"name": "%s: an entrance from inside" % kind, "setup": func(): _look(Stub.local_point(s.xp, float(s.w) - 1.0, -8.0), Stub.local_point(s.xp, float(s.w) - 1.0, 0.0, C.EYE_H))})
+	views.append({"name": "%s: seam, hospital side" % kind, "setup": func(): _look(Stub.local_point(s.xh, 1.0, float(s.d) - 1.0), Stub.local_point(s.xh, float(s.w), float(s.d) - 1.0, C.EYE_H))})
+	views.append({"name": "%s: seam, pocket side" % kind, "setup": func(): _look(Stub.local_point(s.xp, float(s.w) - 1.0, float(s.d) - 1.0), Stub.local_point(s.xp, 0.0, float(s.d) - 1.0, C.EYE_H))})
+	for q in _qualities:
+		main.set_quality(q, false)
+		for v in views:
+			await v.setup.call()
+			await _measure(v.name, q)
+	print("[perf] ============================================================================")
+	print("[perf] %-34s q  avg fps  1%%low fps  worst ms  phys ms  proc ms  draws  nodes" % "scenario")
+	for r in _rows:
+		print("[perf] %-34s %d  %7.0f  %9.0f  %8.1f  %7.2f  %7.2f  %5d  %5d" % [r.name, r.q, r.fps, r.low_fps, r.worst, r.phys, r.proc, r.draws, r.nodes])
+	get_tree().quit(0)
+
+
+## POCKETS: the inside-the-space views of one kind, shared by --pockets and --pocket=<kind>.
+func pocket_views(kind: String, w: Callable) -> Array:
+	var views: Array = []
+	if kind == "factory":
+		views.append({"name": "factory: hall, corner to corner", "setup": func(): _look(w.call(Vector2(13, 13)), w.call(Vector2(70, 52), C.EYE_H))})
+		views.append({"name": "factory: down a production line", "setup": func(): _look(w.call(Vector2(14, 27)), w.call(Vector2(70, 23), C.EYE_H))})
+		views.append({"name": "factory: from the catwalk", "setup": func(): _look(w.call(Vector2(40, 12), 6.0), w.call(Vector2(40, 45), 1.0))})
+	elif kind == "laundromat":
+		# POCKETS 2 phase 4: the worst of it is the long axis, where every washer island and both
+		# dryer banks are in shot at once, under a ceiling full of fluorescent tubes.
+		views.append({"name": "laundromat: the length of the room", "setup": func(): _look(w.call(Vector2(12.5, 18.5)), w.call(Vector2(48, 18), C.EYE_H))})
+		views.append({"name": "laundromat: corner to corner", "setup": func(): _look(w.call(Vector2(12, 12)), w.call(Vector2(48, 25), C.EYE_H))})
+		views.append({"name": "laundromat: down an aisle", "setup": func(): _look(w.call(Vector2(13, 18.5)), w.call(Vector2(48, 20.5), 1.2))})
+	else:
+		views.append({"name": "restaurant: dining room", "setup": func(): _look(w.call(Vector2(12.5, 25.5)), w.call(Vector2(38, 12), C.EYE_H))})
+		views.append({"name": "restaurant: bar", "setup": func(): _look(w.call(Vector2(33, 23)), w.call(Vector2(41, 13), C.EYE_H))})
+		views.append({"name": "restaurant: kitchen", "setup": func(): _look(w.call(Vector2(26, 29.5)), w.call(Vector2(44, 33), C.EYE_H))})
+	return views
 
 
 ## POCKETS: each space forced onto the run's hospital, measured from a few views, with the

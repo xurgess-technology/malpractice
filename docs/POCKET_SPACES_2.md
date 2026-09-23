@@ -186,6 +186,52 @@ a real Sonographer 4 m from a real walking player, once inside and
 once out in the hospital, asking the brain what it heard. Inside:
 nothing. Outside: the footsteps.
 
+### Perf, measured
+Phase 1 skipped `tools/perfprobe` deliberately and said phases 2-4 must
+run it. Run, on the Radeon 890M, medium (`--quality=1`), 180 frames a
+view, in a **windowed** 1600x900 run that never took focus
+(`tools/perfprobe.ps1`, new: the same never-activate WMI trick as
+`mirrorshot.ps1` / `vatshot.ps1`; there was no launcher for perfprobe
+before, and a headless run renders nothing so its numbers are worthless).
+
+| view | avg fps | 1% low | worst ms | draws |
+| --- | --- | --- | --- | --- |
+| that map's hospital corridor | 49 | 36 | 30.1 | 435 |
+| laundromat: the length of the room | 51 | 39 | 26.8 | 367 |
+| laundromat: corner to corner | 47 | 37 | 31.0 | 387 |
+| laundromat: down an aisle | 45 | 35 | 30.4 | 379 |
+| laundromat: an entrance from inside | 47 | 38 | 30.0 | 190 |
+| laundromat: seam, hospital side | 41 | 30 | 42.7 | 187 |
+| laundromat: seam, pocket side | 41 | 30 | 37.1 | 124 |
+
+**Read it against the corridor on the same map, not against 60/50.**
+The Laundromat's own views (45-51 avg, 35-39 low) sit at or above the
+hospital corridor of the very map they are in (49 / 36), so the room
+costs no more to look at than the hospital does — which is the thing a
+new space has to be true of.
+
+The **absolute bar (60 fps, 1% lows above 50) is not met on this machine
+in a windowed run by the hospital either**: the plain baseline sweep on
+this branch gives "corridor, long sightline" 48 fps / 27 low and "lobby
+clock-in room" 31 / 17. That is a pre-existing condition of the project
+at this resolution, not something this space introduced, and it wants
+its own look — flagged, not fixed here.
+
+For scale, the same probe on the **Factory**, which has shipped since the
+first sweep: 27-39 fps avg and **14-30** 1% lows, with its map's own
+hospital corridor at 32 / 15. The Laundromat is a good deal cheaper than
+the pocket space the bar was originally written against.
+
+**`perfprobe --pockets` crashes, on `main` as much as here.** It restarts
+the session once per kind, and in a windowed run that trips the Godot
+renderer bug docs/KNOWN_ISSUES.md already records ("BUG, indexing did not
+unpair geometries from light") and dies with signal 11 after warmup,
+before it measures anything. Verified by running it on a detached
+checkout of `main` (3b30969): same crash, same place. So this phase added
+**`--pocket=<kind>`**: one space, forced before the first session is
+built and never rebuilt, which is how the numbers above were taken. See
+docs/FAILING_TESTS.md.
+
 ### The three items
 `Laundromat.ITEM_KINDS` declares the set (see "the item set" below).
 All three give the `laundromat` / `laundromat_back` room kinds a weight
