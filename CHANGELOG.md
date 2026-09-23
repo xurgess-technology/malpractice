@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.43**: The performance sweep can measure the pocket spaces again 📊
+    - Fixed: `perfprobe --pockets` crashed before measuring a single thing, and had done for as long as there were pocket spaces to measure. It now runs one process per space and prints one table for all six. Nothing you can see in game -- this is the tool that tells us whether the new rooms run well.
 - **0.10.42**: The paramedics open the doors before they walk through them 🚪
     - Fixed: The OR doors used to still be shut when the front of the gurney was already through them. They opened -- just late, about a second after the medic pulling the gurney had walked through a solid door. They now stand open before anyone reaches them.
 - **0.10.41**: Something in the pocket spaces is watching you 👁
