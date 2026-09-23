@@ -32,6 +32,7 @@ const GAME_HOW := {
 ## Handwritten margin notes. Items without an entry get notes derived from their data.
 const ITEM_NOTES := {
 	"anesthetic": ["dose by WEIGHT. %s", "don't drop the vials"],
+	"syringe": ["load it BEFORE you're stood over them", "standard dose only. big patients need more"],
 	"gauze": ["amputation eats %s rolls. bring spares"],
 	"forceps": ["DON'T touch the sides!!"],
 	"tourniquet": ["ABOVE the line. above."],
