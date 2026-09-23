@@ -1081,8 +1081,8 @@ static func _mirror(game: Game) -> void:
 	place(game, game._floor_at(mp + out * dist), glass - Vector3(0.0, 0.3, 0.0))
 	clear_hands(game)
 	game.local_player().selected = 0
-	game.say("Walk right up to the glass -- the reflection stays lit. Aim and press E to cycle your "
-			+ "scrubs and your skin, E again to come back.", 10.0)
+	game.say("Walk right up to the glass and press E: a real camera turns to face you, full screen, "
+			+ "no black bars. Cycle your scrubs and your skin, E or Esc to come back.", 10.0)
 ## DOWNED (2026-09-22 playtest): a teammate bleeding on the floor of the OR, a free table beside you
 ## and two suture kits on the floor by it. Hands empty, hold E on them to hoist them over your
 ## shoulder, carry them to the table and press E to lay them down, pick a kit up and stitch them.

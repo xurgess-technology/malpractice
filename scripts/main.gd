@@ -678,6 +678,7 @@ func _update_mouse() -> void:
 \
 		or (game.economy != null and game.economy.fax_ui_open()) \
 		or game.surgery_wants_mouse() \
+		or game.mirror_menu_open() \
 		or (dev_panel != null and dev_panel.is_open()) \
 		or (char_sheet != null and char_sheet.open)  # TAB SHEET: the cursor is how you hover a slot
 	var want := Input.MOUSE_MODE_VISIBLE if free else Input.MOUSE_MODE_CAPTURED
@@ -710,6 +711,10 @@ func _process(_delta: float) -> void:
 	_invite_button.visible = game.paused and Net.backend == "steam" and game.phase != Game.Phase.MENU
 	# While operating, the surgery view's camera wins; otherwise whoever we are watching.
 	var surgery_cam: Camera3D = game.surgery_camera() if game.phase != Game.Phase.MENU else null  # downed hook: either table
+	# CUSTOMIZATION: the mirror menu's own third-person camera, while it's open on this machine.
+	var mirror_cam: Camera3D = game.mirror_camera() if game.phase != Game.Phase.MENU else null
+	if mirror_cam != null:
+		surgery_cam = mirror_cam
 	# Hive Eyes renders through the Hive's eyes.
 	var hive_cam: Camera3D = game.abilities.camera() if game.phase != Game.Phase.MENU and game.abilities != null else null
 	if hive_cam != null:

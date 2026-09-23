@@ -73,9 +73,11 @@ var _turn := 0
 var _self_on := false
 ## light_rooms.gd's grid, kept for the mirror lamps' cull masks (setup).
 var _grid := {}
-## CUSTOMIZATION (scripts/personnel/mirror_menu.gd): while the mirror menu is up it drives the big
-## mirror itself -- it wants the picture every frame and the local body shown, whatever the camera
-## happens to be pointing at -- so the usual per-frame budgeting stands aside.
+## CUSTOMIZATION (scripts/personnel/mirror_menu.gd): while the menu is open on this machine it owns
+## `set_mirror_self` itself -- its own third-person camera needs the local body shown regardless of
+## what this loop would otherwise decide from whichever camera happens to be current (which, while
+## the menu is up, is the menu's own camera, not this mirror's) -- so the usual per-frame
+## self-visibility and render-budget management here stands aside rather than fighting it.
 var menu_hold := false
 
 
@@ -256,21 +258,6 @@ func big_mirror() -> Dictionary:
 		if mr.big:
 			return {"root": mr.root, "viewport": mr.viewport, "size": mr.size}
 	return {}
-
-
-## CUSTOMIZATION: draw the big mirror this frame from `eye`, with the local body shown, ignoring the
-## render budget. Used by the mirror menu, which shows that picture full screen.
-func render_for_menu(eye: Vector3) -> void:
-	var mr: Mirror = null
-	for m in _mirrors:
-		if m.big:
-			mr = m
-	if mr == null:
-		return
-	var main := get_viewport().get_camera_3d()
-	var base: int = main.cull_mask if main != null else 0xFFFFF
-	_set_self(true)
-	_render(mr, eye, (base & ~HIDE_FROM_MIRRORS) | LightRooms.SELF, SubViewport.UPDATE_ALWAYS)
 
 
 ## In front of the glass, near enough, and some part of the glass on screen.

@@ -38,6 +38,12 @@ var names: Dictionary = {}
 ## Replicated exactly like `names`: a client tells the host, the host tells everybody the whole
 ## table, so a late joiner learns what everyone already looks like in one message.
 var looks: Dictionary = {}
+## CUSTOMIZATION: the mirror lock (scripts/personnel/mirror_menu.gd) -- the peer id currently at
+## the big mirror, or 0 when it's free. Host-authoritative and a single flag rather than a
+## dictionary: mirrors.gd's _add_menu_aim runs once, for the level's one "mirror" spot, so only
+## one surgeon can ever be at it.
+var mirror_user: int = 0
+signal mirror_user_changed
 ## The name this machine introduces itself with. Survives reset(); set it before join().
 var local_name: String = "Surgeon"
 ## The look this machine introduces itself with. Survives reset(); set it before join().
@@ -189,6 +195,72 @@ func set_my_look(packed: int) -> void:
 		_tell_look.rpc_id(HOST_ID, local_look)
 
 
+## CUSTOMIZATION: ask to use the mirror. Host-authoritative, so two players pressing E on the same
+## frame can't both get in: on the host this resolves at once; a client's own open() does not
+## actually open until mirror_user_changed reports it as the new holder (see mirror_menu.gd).
+func claim_mirror() -> void:
+	if solo or not active:
+		mirror_user = my_id()
+		mirror_user_changed.emit()
+		return
+	if multiplayer.is_server():
+		_claim_mirror_host(HOST_ID)
+	else:
+		_request_mirror.rpc_id(HOST_ID)
+
+
+## CUSTOMIZATION: give the mirror up. A no-op unless this machine is the one actually holding it.
+func release_mirror() -> void:
+	if solo or not active:
+		if mirror_user == my_id():
+			mirror_user = 0
+			mirror_user_changed.emit()
+		return
+	if multiplayer.is_server():
+		_release_mirror_host(HOST_ID)
+	else:
+		_tell_mirror_released.rpc_id(HOST_ID)
+
+
+func _claim_mirror_host(id: int) -> void:
+	if mirror_user != 0 and mirror_user != id:
+		return   # already taken -- the asker's own open() just never confirms
+	# Idempotent: `id` re-asking for a mirror it already holds (a stale local _open, a resent
+	# request) still gets its confirmation rather than being silently ignored.
+	if mirror_user != id:
+		mirror_user = id
+		_send_mirror_user.rpc(mirror_user)
+	mirror_user_changed.emit()
+
+
+func _release_mirror_host(id: int) -> void:
+	if mirror_user != id:
+		return
+	mirror_user = 0
+	mirror_user_changed.emit()
+	_send_mirror_user.rpc(mirror_user)
+
+
+@rpc("any_peer", "reliable")
+func _request_mirror() -> void:
+	if not multiplayer.is_server():
+		return
+	_claim_mirror_host(multiplayer.get_remote_sender_id())
+
+
+@rpc("any_peer", "reliable")
+func _tell_mirror_released() -> void:
+	if not multiplayer.is_server():
+		return
+	_release_mirror_host(multiplayer.get_remote_sender_id())
+
+
+@rpc("authority", "reliable", "call_remote")
+func _send_mirror_user(id: int) -> void:
+	mirror_user = id
+	mirror_user_changed.emit()
+
+
 ## Solo play: no peer at all, everything runs locally.
 func start_solo(player_name: String) -> void:
 	reset()
@@ -267,6 +339,9 @@ func reset() -> void:
 	multiplayer.multiplayer_peer = null
 	names.clear()
 	looks.clear()
+	if mirror_user != 0:
+		mirror_user = 0
+		mirror_user_changed.emit()
 	active = false
 	solo = false
 	backend = "solo"
@@ -493,6 +568,9 @@ func _on_peer_disconnected(id: int) -> void:
 	if multiplayer.is_server():
 		_send_roster.rpc(names)
 		_send_looks.rpc(looks)
+		# CUSTOMIZATION: alt-F4 out of the mirror menu must not leave it locked forever.
+		if mirror_user == id:
+			_release_mirror_host(id)
 
 
 func _on_connected() -> void:
