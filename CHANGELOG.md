@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.46**: A monster that gets stuck in the floor can get itself out 🦶
+    - Fixed: A monster could end up standing a thousandth of a millimetre inside the floor, where the physics engine reported it blocked in every direction at once -- so it walked on the spot, forever, in the middle of an open corridor. It now notices it hasn't moved, steps up and out, and carries on. The Night Nurse was the one this kept happening to.
 - **0.10.45**: Two items stop sharing a drawer, and syringes come in the packs they promise 💉
     - Fixed: Roughly one shift in five had two items planned into the same spot -- one inside the other in a drawer. The supply planner didn't know about the items scattered before it ran.
     - Fixed: Syringes were spawning in packs of 1 when everything that describes them, the database page included, says 2 to 3. **This raises syringes from 3-6 a shift to 6-9 -- worth a look, Zach, in case the old number was the intent.**
