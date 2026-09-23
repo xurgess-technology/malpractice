@@ -365,9 +365,14 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
   fallback ward): the first clear 2.3 x 1.1 m spot 2.7-3.4 m from the OR table. On the hospital
   and the dev room the level's own entry is used; a level table is detected by a downward ray
   (a top between 0.5 and 1.4 m) and no model is added.
-- **Suture kits skip `ItemSpawner.plan`**: `game.spawn_suture_kits()` places three stacks of 1-2 in
-  random legal containers (trauma bags, nurse station drawers, drawer units), not spread by wing
-  depth, and not topped up by the softlock guard.
+- **Suture kits skip `ItemSpawner.plan`** -- by design, and now measured. `game.spawn_suture_kits()`
+  goes through `ItemSpawner.loose_supply_plan` (`LOOSE_SUPPLY`): three stacks of 1-2 in legal
+  containers (trauma bags, nurse station drawers, drawer units), one per building unit, never in a
+  safe room, not spread by wing depth. Over 300 seeds that is always at least 3 kits in 3 places
+  against a gunshot case's need of 1, and always at least one of them past `FAR_M`, so it clears
+  the case plan's own supply bar on everything but the number of places (3, not
+  `CONSUMABLE_STACKS[0]` = 6). The softlock guard **does** top them up: `_live_requirements` counts
+  the closing step and `shortfall_plan` restores any kind. `tools/spawncheck.gd` checks this path.
 - **`tools/mapcheck.gd` reports seed 112** (a morgue tray anchor 3.3 m off the navmesh); the same
   on `main` before the pod removal.
 
