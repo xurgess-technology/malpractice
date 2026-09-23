@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.54**: A performance pass across the whole game 📉
+    - Fixed: The Restaurant's kitchen counters had the same collision-shape problem the Laundromat's washers had -- one collider per tile instead of one per run. Smaller scale, still measurably faster.
+    - Note: Checked every pocket space and every piece of hospital furniture for the same mistake. Nothing else was found. The ordinary hospital rooms clear the performance bar everywhere except two already-known, already-documented spots tied to an unexplained host stutter -- not new, not caused by anything here.
 - **0.10.53**: Force a pocket space, and step straight up to its seam 🚪
     - Added: The dev panel can now guarantee any pocket space (or a random one) exists in the level, and drop you right at its seam, one tile back from crossing through -- no more hunting a generated map for one, or hoping a seed happens to roll one.
     - Fixed: A host forcing a pocket and a client generating their own copy of the map could disagree about which one existed. They now always match.
