@@ -41,6 +41,13 @@ func run(gs: Node, pocket_kind: String) -> void:
 	var o := Vector3(Vector2i(p.origin).x * C.TILE, 0.0, Vector2i(p.origin).y * C.TILE)
 	var w := func(t: Vector2, y := 0.0) -> Vector3:
 		return o + Vector3(t.x * C.TILE, y, t.y * C.TILE)
+	# STAND IN THE ROOM BEFORE PHOTOGRAPHING IT (POCKETS 2 phase 7). The space's own air is blended
+	# in from where the camera stands, and the FIRST shot of a run was coming out in the hospital's
+	# air: one run of `--pocket=chapel` produced a nave washed out cyan-green with the vault lit up,
+	# and the identical pose a run later produced the cathedral. Nothing was wrong with the room --
+	# the shot was simply taken before its air arrived. Ninety frames deep inside it first.
+	_pose(p.spawn, p.spawn + Vector3.FORWARD * 4.0)
+	await _settle(90)
 	if kind == "factory":
 		bot.set_flashlight(false)
 		await _shot("p_factory_1_hall", w.call(Vector2(14, 50)), w.call(Vector2(60, 16), 6.0))
@@ -169,8 +176,15 @@ func _onlooker_shot(w: Callable) -> void:
 	bot.set_flashlight(false)
 	_pose(w.call(Vector2(14, 50)), w.call(Vector2(60, 16), 1.6))
 	game.onlooker_watch.rearm()
-	await _settle(int((Watch.SETTLE + 0.6) * 60.0))
-	var o: Node = game.onlooker_watch.current()
+	# Wait on the watcher rather than on a frame count: SETTLE is a second of PHYSICS time and this
+	# loop counts process frames, which at 120 fps runs out first. (That is why the first version
+	# of this printed "the watcher put none in the factory".)
+	var o: Node = null
+	for _i in 600:
+		await _settle(1)
+		o = game.onlooker_watch.current()
+		if o != null:
+			break
 	if o == null:
 		print("[gameshot] onlooker: the watcher put none in the factory")
 		Watch.force = was
@@ -273,7 +287,12 @@ func _grab(name: String, from: Vector3, at: Vector3, settle := 40) -> Image:
 	var img := shot.get_viewport().get_texture().get_image()
 	var path := "%s/%s%s.png" % [OUT_DIR, name, tag]
 	img.save_png(ProjectSettings.globalize_path(path))
-	print("[gameshot] wrote ", path)
+	# The space's own air (PocketSpaces.AIR) is blended in by WHERE THE CAMERA STANDS: 0 within a
+	# few metres of a seam opening, 1 by 14 m in. So a wide shot taken from just inside an entrance
+	# draws the whole room in the HOSPITAL's air, which whites the Chapel's nave out and leaves the
+	# Laundromat dark. That is not the room being wrong, and it cost phase 7 an hour to be sure of,
+	# so the factor is printed with every shot now. POCKETS 2 phase 7.
+	print("[gameshot] wrote %s (air %.2f)" % [path, game.pockets.air_factor(bot.global_position)])
 	return img
 
 
