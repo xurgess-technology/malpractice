@@ -429,6 +429,15 @@ func _human_clip(delta: float, act: Dictionary) -> void:
 		if player.carrying != 0 or player.dragging_monster >= 0 or (not act.is_empty() and int(act.ph) == WindupScript.WINDUP):
 			want = "slow"
 			rate = 1.45
+		elif player.crouching:
+			# CROUCH POSE: a crouch walk is the Walk clip slowed to the crouch's own speed, with
+			# body_poser.gd's squat layered over it -- the legs keep stepping, because that squat is
+			# a bone delta rather than a pose that pins them. Jog at rate 1 would skate: the body
+			# covers CROUCH_SPEED over the floor while the feet step out 3.40 m/s of clip.
+			# This sits inside the `moving` branch, already below `down` above, so prone (which also
+			# reads as crouching -- see player.gd) keeps its crawl and never reaches here.
+			want = "slow"
+			rate = C.CROUCH_SPEED / 1.4
 		else:
 			want = "run" if player.sprinting else "walk"
 	if ic != _interact_seen:
