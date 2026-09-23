@@ -260,29 +260,44 @@ func _shot(tag: String, glass: Vector3, out: Vector3, dist: float, variant := ""
 const CAM_VARIANTS := ["near_small", "near_big", "persp", "no_offset"]
 
 
-## Drive the big mirror ourselves for a few real frames, re-posing it exactly as mirrors.gd does and
-## then applying the variant's change to the camera, so the SubViewport actually renders with it.
-## menu_hold stops mirrors.gd from posing the camera back underneath us.
+## Drive the big mirror ourselves for a few real frames, re-posing it exactly as mirrors.gd's own
+## `_render` does and then applying the variant's change to the camera, so the SubViewport actually
+## renders with it. menu_hold stops mirrors.gd from posing the camera back underneath us.
+##
+## PLAYTEST 2026-09-23 (camera rework): this used to pose the camera via `mirrors.render_for_menu`,
+## which the mirror menu no longer needs and mirrors.gd no longer has (it now uses a real Camera3D
+## of its own, not this reflection camera). These variants are testing the ordinary WALK-BY
+## reflection camera's off-axis frustum, which mirrors.gd still has and still poses every frame the
+## same way -- only the convenient hook for holding it still across several frames is gone. `_pose`
+## below reimplements that one posing step (`mirrors.gd` `_render`'s own maths) against the public
+## BigMirror node and BIG_GLASS/HIDE_FROM_MIRRORS constants, so this file doesn't need a method
+## back on mirrors.gd that nothing else would ever call.
 func _hold_camera(variant: String) -> void:
 	var mirrors := _mirrors_node()
 	if mirrors == null:
 		return
+	var root: Node3D = null
+	var vp: SubViewport = null
 	var cam: Camera3D = null
 	for g in mirrors.get_children():
 		if String(g.name) != "BigMirror":
 			continue
+		root = g
 		for c in g.get_children():
 			if c is SubViewport:
+				vp = c
 				for cc in c.get_children():
 					if cc is Camera3D:
 						cam = cc
-	if cam == null:
+	if root == null or vp == null or cam == null:
+		print("[mirrorshot] --variants: couldn't find the big mirror's own camera; nothing to hold")
 		return
 	mirrors.set("menu_hold", true)
+	me.set_mirror_self(true)
 	for i in 12:
 		var eye: Vector3 = me.global_position + Vector3.UP * C.EYE_H
-		mirrors.call("render_for_menu", eye)
-		# render_for_menu has just posed the camera; change it, then let the frame draw.
+		_pose(root, vp, cam, eye)
+		# _pose has just posed the camera; change it, then let the frame draw.
 		if variant == "persp":
 			# An ordinary symmetric perspective camera from the same place, with the near plane left
 			# exactly where mirrors.gd put it -- on the glass. That is the only thing that isolates
@@ -307,6 +322,27 @@ func _hold_camera(variant: String) -> void:
 		await get_tree().process_frame
 	# menu_hold stays on through the capture: force_draw() does not run _process, so the camera keeps
 	# what we just gave it. _shot's cleanup hands the mirror back to mirrors.gd for the next shot.
+
+
+## Reflect `eye` across the glass and fit the camera's frustum to it -- exactly mirrors.gd's own
+## `_render`, reimplemented here against public state (BigMirror's own transform, BIG_GLASS,
+## HIDE_FROM_MIRRORS) rather than mirrors.gd's private `Mirror` objects.
+func _pose(root: Node3D, vp: SubViewport, cam: Camera3D, eye: Vector3) -> void:
+	var xf := root.global_transform
+	var n := xf.basis.z.normalized()
+	var up := xf.basis.y.normalized()
+	var right := xf.basis.x.normalized()
+	var p := xf.origin
+	var d := (eye - p).dot(n)
+	var ref := eye - n * (2.0 * d)
+	cam.global_transform = Transform3D(Basis(-right, up, -n), ref)
+	var to_glass := p - ref
+	var size: Vector2 = MirrorsScript.BIG_GLASS
+	cam.set_frustum(size.y, Vector2(to_glass.dot(-right), to_glass.dot(up)), maxf(0.02, d), 60.0)
+	var main_cam := get_viewport().get_camera_3d()
+	var base: int = main_cam.cull_mask if main_cam != null else 0xFFFFF
+	cam.cull_mask = (base & ~MirrorsScript.HIDE_FROM_MIRRORS) | LightRooms.SELF
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 
 
 ## Experiments that need to exist for a while before the shot (a new node is not registered with the
