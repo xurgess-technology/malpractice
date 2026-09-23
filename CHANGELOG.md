@@ -5,6 +5,11 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.47**: The pocket spaces, checked over 🔎
+    - Fixed: The performance sweep was reading its first measurement before the machine had finished building the level, which made whatever it measured first look terrible. That's where the "a corridor runs at 30" figure came from -- the same corridor reads 100 once it settles. Several numbers written down over the last two days were measuring the warm-up, not the game.
+    - Fixed: The screenshot tool took its first picture from inside the hospital's air, which is why the chapel once photographed as a washed-out grey box and then as a cathedral from the same spot a run later.
+    - Fixed: The test that proves the Night Nurse freezes in candlelight was proving nothing -- it used a nurse that had been told to stand still, in a room with no floor, and never checked that she starts moving again when the candle dies. She now measurably doesn't move while it burns, and walks 7.3 m when it goes out.
+    - Note: **The Laundromat is the one space that isn't comfortably fast.** It costs about twice the processing of the others, everywhere on its map, and nobody has found out why yet.
 - **0.10.46**: A monster that gets stuck in the floor can get itself out 🦶
     - Fixed: A monster could end up standing a thousandth of a millimetre inside the floor, where the physics engine reported it blocked in every direction at once -- so it walked on the spot, forever, in the middle of an open corridor. It now notices it hasn't moved, steps up and out, and carries on. The Night Nurse was the one this kept happening to.
 - **0.10.45**: Two items stop sharing a drawer, and syringes come in the packs they promise 💉
