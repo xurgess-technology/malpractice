@@ -110,6 +110,15 @@ How to run things is at the bottom of this file.
   same set passed every check, so the ordering effect is not perfectly deterministic — the cause
   still looks like leftover state rather than position as such. **Alone, the Chapel is green**:
   `--only=chapel` passes 102 checks with her following in **9.2 s, 3.9 m**.
+- **2026-09-23, `pockets-bleed`: a second check now shows the same behaviour, and it is not the
+  Night Nurse's.** One run failed `laundromat seam 0 ... the follower crossed exactly once` — a
+  *different* check from the two this section names — and it behaves exactly like 1f: it moves
+  between runs and `--only=laundromat` is green (111 checks). The next run of the same tree failed
+  6 of 670, all of them the ordinary Night Nurse checks at the familiar 1444.3 / 1965.8 / 2600.3 m.
+  **Nobody has re-run plain `main` to prove this one pre-existing**, so it is recorded as a lead and
+  not yet folded into 1f proper. If it is the same leftover state, then whatever `_run_space`
+  fails to tear down is something *both* followers read — which would be a bigger clue than
+  anything above, because it stops being a fact about her.
   **If you are changing Night Nurse behaviour, run your space alone before concluding anything.**
   The Chapel's votive candle makes her count as watched inside its radius (it is in
   `Perception.observed_any`, above the early-out), which is exactly the sort of change that would

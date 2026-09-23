@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.40**: The hospital knows what's behind the door 🩸
+    - Added: Things from a pocket space now turn up in the hospital rooms near its entrance, as if they'd been carried out and dropped. Find a grease bucket in a ward and there's a factory somewhere close.
+    - Note: It reaches about three rooms out from each seam, which is six to nine rooms of a hospital.
+    - Note: This does not make you richer. A bled item replaces something that would have spawned anyway, so a shift still holds the same fifteen to twenty stacks it always did -- what changes is where a thing is and what it tells you, not how much there is.
 - **0.10.39**: The factory and the restaurant have things worth taking now 📟
     - Added: A pair of restaurant pagers. Press yours and your friend's buzzes in their pocket -- only they hear it, anywhere in the hospital. Put one down somewhere and press the other, and it rattles on the floor loud enough to be worth walking over to. Sell either one and the pair is just two pagers.
     - Added: In the factory, a spool of copper wire, a foreman's clipboard with every name crossed off, and a bucket of grease that doesn't do anything yet.
