@@ -337,6 +337,26 @@ func _dev_room() -> void:
 	await _seconds(0.5)
 	_check(_body_top(bot) > stand_top * 0.9, "back up, the rig stands to full height again (%.2f m)" % _body_top(bot))
 
+	# ---- going prone of your own accord lies the body down too (Zach, 2026-09-22)
+	# The same branch as the downed case above (`down` in body_hands._human_clip is
+	# `downed or ... or prone`), and it hid for the same reason: the clip name says "Crawl" the
+	# instant you press crouch twice, bug or no bug, so only the skeleton tells you whether the
+	# blend actually ran. Voluntary prone was previously covered by reasoning alone.
+	bot.bot_move = Vector2.ZERO
+	bot.bot_prone = true
+	await _seconds(0.5)   # prone on the spot: never a step of crawling
+	var prone_top := _body_top(bot)
+	_check(bot.prone and not bot.downed and bot.alive, "the bot went prone on its own feet, not downed")
+	_check(not bot.moving, "it went prone standing still and never crawled")
+	_check(prone_top < stand_top * 0.6, "prone on the spot, the body lies down instead of standing (%.2f m, standing %.2f m)" % [prone_top, stand_top])
+	# THE ORDERING TRAP: `crouching` is true while prone too (player.gd's comment at `prone`), so any
+	# crouch branch added to _human_clip must lose to the prone one. If this check ever reads a
+	# crouch's height instead of a crawl's, the prone pose has been stolen by the crouch.
+	_check(bot.crouching, "prone also reads as crouching (so the prone branch must win)")
+	bot.bot_prone = false
+	await _seconds(0.6)
+	_check(not bot.prone and _body_top(bot) > stand_top * 0.9, "standing back up from prone reaches full height again (%.2f m)" % _body_top(bot))
+
 	# ---- the carry pose lets go once they are stitched up (playtest 2026-09-22)
 	# A dev dummy is a target dummy with no rig, so this leg uses the bot: it wears the rigged human
 	# body, whose crawl, carry and lying poses are animation clips. Stopping those clips freezes the
