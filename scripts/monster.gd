@@ -1170,7 +1170,10 @@ func _onlooker_visual(delta: float) -> void:
 	if rg != null and rg.has_method("set_presence"):
 		rg.set_presence(presence)
 		if solid:
-			rg.tick(delta)
+			# Where THIS machine is watching from, for the eye halo's size. Every machine works it
+			# out from its own camera, so nothing about it crosses the wire.
+			var viewer: Node = game.viewed_player() if game != null and game.has_method("viewed_player") else null
+			rg.tick(delta, viewer.global_position + Vector3.UP * C.EYE_H if viewer != null else Vector3.INF)
 
 
 ## Dev room settings for the Night Nurse (dev_room.gd `nurse_settings()`): {ignore_watch, walk

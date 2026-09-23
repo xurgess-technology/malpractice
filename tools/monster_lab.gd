@@ -1556,6 +1556,13 @@ func _run_shots() -> void:
 		["sono_echo_fan", _shot_sono_echo.bind(true)],
 		["sono_echo_imaged", _shot_sono_echo.bind(false)],
 		["sono_echo_neck", _shot_sono_suspicion],
+		# POCKETS 2 phase 6, the Onlooker. The distances are the point: it is a monster you only
+		# ever meet a long way off, so the shot that matters is the 30 m one, and what it has to
+		# answer is whether you can tell it is there at all.
+		["onlooker_30m_dark", _shot_onlooker.bind(30.0, false, false)],
+		["onlooker_12m_dark", _shot_onlooker.bind(12.0, false, false)],
+		["onlooker_4m_torch", _shot_onlooker.bind(4.0, true, false)],
+		["onlooker_lit_room", _shot_onlooker.bind(10.0, false, true)],
 	]
 	for s in list:
 		if only != "" and not only.split(",").has(s[0]):
@@ -1669,6 +1676,25 @@ func _shot_nurse(dist: float) -> void:
 	place_player(pos + Vector3(dist, 0, -0.3), pos + Vector3.UP * (1.5 if dist > 2.0 else 1.9), true)
 	await wait(0.35)
 	_pose(n, pos, -PI * 0.5 + 0.15, Modes.Mode.WANDER, false, 0.0, {"ob": true})
+
+
+## POCKETS 2 phase 6. Posed through apply_remote like every other shot here (the runner sets
+## game.host = false), which means `pr` on the wire is what makes it appear -- so these shots are
+## also the only place the client half of the pop-in is looked at rather than asserted.
+##
+## `lights` turns the corridor's fixtures on: an unshaded body is meant to read as the same hole in
+## the world under any light in the game, and a lit room is where that claim could fail.
+func _shot_onlooker(dist: float, flashlight: bool, lights: bool) -> void:
+	if dist_override > 0.0:
+		dist = dist_override
+	if lights:
+		set_all_lights(true)
+	var pos := cor(50.0)
+	var o: Node = spawn("onlooker", pos, PI * 0.5)
+	# Facing the player, who stands back down the corridor at -X.
+	_pose(o, pos, PI * 0.5, Modes.Mode.STALK, false, 0.0, {"pr": true})
+	# Eye to eye: aim at its head, which is where the only bright thing on it is.
+	place_player(pos + Vector3(-dist, 0.0, 0.0), pos + Vector3.UP * 2.45, flashlight)
 
 
 func _shot_nurse_door() -> void:
