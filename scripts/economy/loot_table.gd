@@ -102,6 +102,63 @@ const LOOT := {
 		"rooms": {"natatorium_deck": 2.0, "natatorium_lockers": 1.2},
 		"surfaces": ["counter", "tray"], "containers": {"drawer_unit": 0.5, "trauma_bag": 0.4, "first_aid_cabinet": 0.5},
 	},
+	# POCKETS 2 phase 5 (docs/POCKET_SPACES_2.md): items for the two spaces that had none of their
+	# own. Same rule as the Natatorium's -- every kind here names only its own space's room kinds and
+	# none of them lists "*", so none of it exists in the hospital proper. The Factory's rooms are
+	# `factory_floor`, `factory_office` and `factory_catwalk`; the Restaurant's are `restaurant`,
+	# `restaurant_kitchen` and `restaurant_restroom`.
+	#
+	# GREASE BUCKET is deliberately plain loot and not a trinket yet. The design is a slip patch you
+	# slather on the floor, and that needs monsters and players to have a slide/knockdown state,
+	# which the game does not have. Shipping it in Trinkets.KINDS with nothing behind the click would
+	# eat the shove and do nothing, so it spawns and sells now and becomes a trinket the day those
+	# states land: add it to KINDS and ONE_USE, set "trinket": true and a trinket_weight here, and
+	# write _use_grease. Tracked in docs/POCKET_SPACES_2.md phase 5.
+	"grease_bucket": {
+		"name": "Grease bucket", "short": "Grease buckets", "value": [15, 28], "tier": 0,
+		"rooms": {"factory_floor": 2.2, "factory_catwalk": 1.1, "factory_office": 0.4},
+		"surfaces": ["floor", "counter"], "containers": {},
+	},
+	"copper_wire_spool": {
+		"name": "Copper wire spool", "short": "Copper wire spools", "value": [55, 95], "tier": 2, "bulky": true,
+		"rooms": {"factory_floor": 2.4, "factory_catwalk": 0.9},
+		"surfaces": ["floor", "counter"], "containers": {},
+	},
+	"foremans_clipboard": {
+		"name": "Foreman's clipboard", "short": "Foremen's clipboards", "value": [10, 20], "tier": 0,
+		"rooms": {"factory_office": 3.0, "factory_floor": 0.7, "factory_catwalk": 0.5},
+		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.35},
+	},
+	# ... and the Restaurant's. Same rule: only `restaurant`, `restaurant_kitchen` and
+	# `restaurant_restroom`, and never "*".
+	"cast_iron_molcajete": {
+		"name": "Cast iron molcajete", "short": "Cast iron molcajetes", "value": [50, 120], "tier": 3, "bulky": true,
+		"rooms": {"restaurant_kitchen": 2.6, "restaurant": 0.7},
+		"surfaces": ["counter", "floor"], "containers": {},
+	},
+	# RESTAURANT PAGERS. `restaurant_pagers` is what spawns: the base station with both pagers still
+	# sitting in it. Using it lifts the pair out, and what you are left holding is two
+	# `restaurant_pager` stacks that know about each other (Trinkets.PAIR_MARK, carried in the stack's
+	# `x` so the binding survives being dropped, thrown, shelved or scattered on death).
+	#
+	# A single pager therefore never spawns -- its `rooms` is empty, the way the grafted eyes' is --
+	# it only ever comes out of a station. And a pager whose partner has stopped existing (sold,
+	# burnt, left behind at the end of a shift) is worth listing on its own, because it is then plain
+	# loot: half the money and no trick.
+	"restaurant_pagers": {
+		"name": "Restaurant pagers", "short": "Sets of restaurant pagers", "value": [28, 48], "tier": 1,
+		"trinket": true, "trinket_weight": 1.6, "max_per_shift": 1,
+		"rooms": {"restaurant": 2.4, "restaurant_kitchen": 1.0},
+		"surfaces": ["counter"], "containers": {"drawer_unit": 0.3},
+	},
+	# TEQUILA, TOP SHELF is NOT here. It is an anesthetic substitute, so it lives in Items.ITEMS
+	# beside the Chapel's communion wine (Items.ANESTHETIC_KINDS), fenced to the Restaurant by the
+	# same `rooms` key the wine uses. A substitute has to be surgical and consumable and satisfy a
+	# procedure step, which is the supply table's job and not this one's.
+	"restaurant_pager": {
+		"name": "Restaurant pager", "short": "Restaurant pagers", "value": [14, 24], "tier": 1, "trinket": true,
+		"rooms": {}, "surfaces": [], "containers": {},
+	},
 	# ---- POCKETS 2 phase 4: the Laundromat's own three. None of them lists a "*" weight, so they are
 	# found in that space and nowhere else (docs/POCKET_SPACES_2.md; Laundromat.POCKET_ITEMS is the
 	# same set, declared where the space is).

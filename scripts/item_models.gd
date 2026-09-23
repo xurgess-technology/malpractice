@@ -97,6 +97,7 @@ static func make(kind: String, count: int = 1) -> Node3D:
 		"anesthetic": _vials(root, clampi(count, 1, 6))
 		"syringe": _syringes(root, clampi(count, 1, 6))   # SYRINGE DRAW
 		"communion_wine": _wine_bottle(root)
+		"tequila": _tequila_bottle(root)
 		"gauze": _gauze(root, clampi(count, 1, 6))
 		"forceps": _forceps(root)
 		"tourniquet": _tourniquet(root)
@@ -183,6 +184,7 @@ static func footprint(kind: String) -> Vector3:
 		"anesthetic": return Vector3(0.14, 0.09, 0.08)
 		"syringe": return Vector3(0.17, 0.04, 0.09)
 		"communion_wine": return Vector3(0.08, 0.25, 0.08)
+		"tequila": return Vector3(0.08, 0.25, 0.08)
 		"gauze": return Vector3(0.22, 0.1, 0.12)
 		"forceps": return Vector3(0.2, 0.03, 0.08)
 		"tourniquet": return Vector3(0.28, 0.05, 0.1)
@@ -546,6 +548,22 @@ static func _wine_bottle(root: Node3D) -> void:
 	var foil := _mat(Color(0.48, 0.10, 0.11), 0.45, 0.4)
 	var label := _mat(Color(0.88, 0.84, 0.72), 0.9)
 	_add(root, _cyl(0.037, 0.145, glass, 14), Vector3(0, 0.0725, 0))
+	_add(root, _cyl(0.030, 0.035, glass, 14), Vector3(0, 0.160, 0))
+	_add(root, _cyl(0.014, 0.075, glass, 12), Vector3(0, 0.205, 0))
+	_add(root, _cyl(0.0155, 0.040, foil, 12), Vector3(0, 0.225, 0))
+	_add(root, _cyl(0.0375, 0.062, label, 14), Vector3(0, 0.068, 0))
+
+
+## POCKETS 2 phase 5: the Restaurant's tequila. Built to the wine bottle's proportions on purpose --
+## they are the same item found in two different impossible rooms -- but clear glass with the spirit
+## standing in it and a gold capsule, so the two are told apart at a glance in a dark hand.
+static func _tequila_bottle(root: Node3D) -> void:
+	var glass := _mat(Color(0.86, 0.90, 0.86), 0.12)
+	var spirit := _mat(Color(0.84, 0.72, 0.36), 0.2)
+	var foil := _mat(Color(0.78, 0.66, 0.24), 0.3, 0.9)
+	var label := _mat(Color(0.93, 0.89, 0.76), 0.9)
+	_add(root, _cyl(0.037, 0.145, glass, 14), Vector3(0, 0.0725, 0))
+	_add(root, _cyl(0.032, 0.100, spirit, 14), Vector3(0, 0.055, 0))     # what is left in it
 	_add(root, _cyl(0.030, 0.035, glass, 14), Vector3(0, 0.160, 0))
 	_add(root, _cyl(0.014, 0.075, glass, 12), Vector3(0, 0.205, 0))
 	_add(root, _cyl(0.0155, 0.040, foil, 12), Vector3(0, 0.225, 0))

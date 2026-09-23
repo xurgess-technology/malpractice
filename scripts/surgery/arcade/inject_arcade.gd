@@ -1170,6 +1170,9 @@ func _complete() -> void:
 	if absf(err) <= band:
 		sedation = 1.0 + (r - 1.0) * in_band_k
 	sedation = clampf(sedation, 0.0, 2.0)
+	# POCKETS 2 phases 3 and 5: an anesthetic substitute is weaker than anesthetic, and that is
+	# applied to this result in game.gd, NOT here. This minigame reports the sedation it always did
+	# and does not know what was in the barrel -- see Items.ANESTHETIC_KINDS.
 	var dose_pts := 0.0
 	if absf(err) > band:
 		dose_pts = minf(pts_dose_max, (absf(err) - band) * pts_dose_slope)

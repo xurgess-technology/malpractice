@@ -242,7 +242,10 @@ func _loot_spawn() -> void:
 	_check(kinds.size() >= 5, "several loot kinds turned up (%d)" % kinds.size())
 	_check(no_value == 0, "every loot stack has a value")
 	_check(in_container_bulky == 0, "no bulky loot inside a container")
-	_check(LootTable.LOOT.size() >= 13 and LootTable.LOOT.size() <= 25, "the loot table has 13 to 25 kinds (%d)" % LootTable.LOOT.size())
+	# The ceiling is a "did someone paste the old table back in" guard, not a design limit, and it
+	# has to move as spaces are added: POCKETS 2 gave five pocket spaces two or three kinds each.
+	_check(LootTable.LOOT.size() >= 13 and LootTable.LOOT.size() <= 34,
+		"the loot table has 13 to 34 kinds (%d)" % LootTable.LOOT.size())
 	var a := LootSpawner.plan(seed_value, game.shift, game.level_info, {})
 	var b := LootSpawner.plan(seed_value, game.shift, game.level_info, {})
 	_check(str(a) == str(b) and not a.is_empty(), "the loot plan is deterministic from the seed")

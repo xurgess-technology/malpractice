@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.39**: The factory and the restaurant have things worth taking now 📟
+    - Added: A pair of restaurant pagers. Press yours and your friend's buzzes in their pocket -- only they hear it, anywhere in the hospital. Put one down somewhere and press the other, and it rattles on the floor loud enough to be worth walking over to. Sell either one and the pair is just two pagers.
+    - Added: In the factory, a spool of copper wire, a foreman's clipboard with every name crossed off, and a bucket of grease that doesn't do anything yet.
+    - Added: In the restaurant, a bottle of top-shelf tequila that works as an anesthetic if you're desperate, and a cast iron molcajete that is worth a surprising amount and weighs what you'd expect.
 - **0.10.38**: A cathedral, behind a door in a one-storey hospital ⛪
     - Added: The Chapel. A nave thirty-three metres long under a twenty-four metre vault, arcades and side aisles, pews for three hundred, an altar at the end. Every votive candle is lit. Nobody lit them.
     - Added: Votive candles you can take and place. Inside the light of one, the Night Nurse counts as watched -- she freezes with nobody looking at her at all. It burns about two minutes and gutters out, and lighting it is the whole of its use.

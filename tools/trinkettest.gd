@@ -102,6 +102,100 @@ func _run() -> void:
 	await _whistle()
 	await _softener()
 	await _candle()
+	await _pagers()
+
+
+# =========================================================================
+# POCKETS 2 phase 5: the restaurant pagers, from the Restaurant
+# =========================================================================
+
+## The pair is the item, so what is worth checking is not that a click does something, but that the
+## RIGHT pager goes off, in the right one of its two ways, and that a pager whose partner has
+## stopped existing quietly stops being a trinket at all.
+##
+## The two ways are the whole design: a pager in a hand buzzes that person and makes NO noise event
+## (only its holder is meant to know), while a pager on the floor rattles out loud and the monsters
+## hear it. Those two facts are checked against each other here, because either one alone would
+## pass with the pager doing the wrong thing.
+func _pagers() -> void:
+	_stand(o + Vector3(14.0, 0, 18.0))
+	_give("restaurant_pagers", 1, 40)
+	# --- taking the pair off the station
+	await _use()
+	_check(String(tk.last_result.get("what", "")) == "pagers_out",
+		"the station gives up its pair (%s)" % str(tk.last_result))
+	var held: Dictionary = me.selected_stack()
+	var floor_pager: Node = _nearest_item("restaurant_pager")
+	_check(String(held.get("kind", "")) == "restaurant_pager", "one pager ends up in your hands")
+	_check(floor_pager != null, "and the other on the floor")
+	if floor_pager == null:
+		return
+	var mark := TrinketsScript.pair_id(held)
+	_check(mark != "" and String(floor_pager.x) == mark,
+		"both wear the same pair mark (%s / %s)" % [mark, String(floor_pager.x)])
+	_check(int(held.get("v", 0)) + int(floor_pager.value) == 40,
+		"the station's value is split between them, not minted (%d + %d)"
+			% [int(held.get("v", 0)), int(floor_pager.value)])
+	# --- the one on the floor rattles out loud, and that is a noise monsters can hear
+	var iid := int(floor_pager.item_id)
+	var rattles0: int = tk.rattle_count(iid)
+	await _use()
+	_check(String(tk.last_result.get("what", "")) == "pager_rattle",
+		"pressing yours rattles the one on the floor (%s)" % str(tk.last_result))
+	_check(tk.rattle_count(iid) == (rattles0 + 1) % 64, "its rattle counter went up exactly once")
+	var loud := _noise_near(floor_pager.global_position, "pager", 3.0)
+	_check(loud >= TrinketsScript.PAGER_NOISE - 0.01,
+		"the rattle is a real noise event where it lies (%.2f)" % loud)
+	_check(loud >= SonoScript.LOUD,
+		"and loud enough that a Sonographer comes rather than wonders (LOUD %.2f)" % SonoScript.LOUD)
+	# --- the cooldown
+	tk.last_result = {}
+	me.bot_use += 1
+	await _frames(6)
+	_check(String(tk.last_result.get("what", "")) != "pager_rattle",
+		"a second press inside the cooldown does nothing (%s)" % str(tk.last_result))
+	# --- a pager in somebody's hands buzzes THEM, silently
+	var mate := _pager_mate(mark, int(floor_pager.value))
+	game.world_items.erase(iid)
+	floor_pager.queue_free()
+	await _frames(2)
+	if mate != null:
+		await _seconds(TrinketsScript.PAGER_COOLDOWN + 0.1)
+		var mine0: int = tk.buzz_count(int(me.peer_id))
+		var theirs0: int = tk.buzz_count(int(mate.peer_id))
+		await _use()
+		_check(String(tk.last_result.get("what", "")) == "pager_buzz",
+			"with the partner in a teammate's hands it buzzes instead (%s)" % str(tk.last_result))
+		_check(tk.buzz_count(int(mate.peer_id)) == (theirs0 + 1) % 64, "their buzz counter went up")
+		_check(tk.buzz_count(int(me.peer_id)) == mine0,
+			"and the presser's did not: a pager buzzes the OTHER one")
+		_check(_noise_near(mate.global_position, "pager", 4.0) <= 0.0,
+			"a buzz in a hand makes no noise event at all: only its holder is meant to know")
+		mate.slots = Player.empty_slots()
+	# --- break the pair and what is left is plain loot
+	await _frames(4)
+	_check(not tk.local_try_use(me),
+		"a pager whose partner is gone refuses the click, so it falls through to a shove")
+	_check(tk.use_prompt(me) == "", "and offers no prompt: it is plain loot now")
+	# The host guards it a second time, for the ways `use()` can be reached that are not this
+	# machine's click -- a client's RPC, or game.player_used. Called directly, because a click here
+	# now correctly never gets this far: local_try_use turns it into a shove before the host hears.
+	tk.last_result = {}
+	tk.use(me)
+	_check(String(tk.last_result.get("what", "")) == "pager_alone",
+		"and the host refuses it too, however the use arrives (%s)" % str(tk.last_result))
+
+
+## A second player holding the other pager. Null when this run is solo, in which case the buzz half
+## of the test is skipped rather than faked -- a buzz needs somebody to buzz.
+func _pager_mate(mark: String, value: int) -> Node:
+	for q in game.players.values():
+		if q != null and is_instance_valid(q) and q != me:
+			q.slots = Player.empty_slots()
+			q.slots[0] = {"kind": "restaurant_pager", "count": 1, "v": value, "x": mark}
+			q.selected = 0
+			return q
+	return null
 
 
 # =========================================================================

@@ -16,16 +16,16 @@ const CONTAINER_TYPES := {
 	"first_aid_cabinet": {"name": "first-aid cabinet", "rooms": []},
 }
 
-const SURGICAL := ["anesthetic", "gauze", "forceps", "tourniquet", "bone_saw", "communion_wine"]
+const SURGICAL := ["anesthetic", "gauze", "forceps", "tourniquet", "bone_saw", "communion_wine", "tequila"]
 
 ## POCKETS 2 phase 3: what will do instead of a vial of anesthetic, and how much of a real dose it
 ## carries. Anything in here satisfies a step that asks for "anesthetic" and re-doses a strapped
 ## monster; the number multiplies what the dose ends up worth, so a substitute is a weak dose that
 ## wears off sooner rather than a different mechanic. The Chapel's communion wine is the first;
-## phase 5's top-shelf tequila is meant to be the second, at the same strength.
+## phase 5's top-shelf tequila is meant to be the second, at the same strength -- and it is, below.
 ## This is deliberately the only place the substitution lives: the injection minigame itself is
 ## untouched and does not know the difference.
-const ANESTHETIC_KINDS := {"anesthetic": 1.0, "communion_wine": 0.55}
+const ANESTHETIC_KINDS := {"anesthetic": 1.0, "communion_wine": 0.55, "tequila": 0.55}
 
 
 ## Does holding `held` satisfy a procedure step that asks for `want`?
@@ -84,6 +84,25 @@ const ITEMS := {
 		"rooms": {"chapel_sacristy": 1.0, "chapel_sanctuary": 1.0, "chapel_nave": 1.0, "chapel_aisle": 1.0},
 		"real_use": "Alcohol was the anesthetic before there were anesthetics, and it is a bad one: the dose that dulls pain is close to the dose that stops breathing, it wears off unevenly, and the patient can surface halfway through without ever being properly under.",
 		"where": "Nowhere in the hospital. There is a case of it in the chapel sacristy, and a bottle usually left out on the credence table.",
+		"handling": "Consumable. One bottle. Glass: dropping it is the end of it. Counts as anesthetic wherever a vial would, at a little over half the dose.",
+	},
+	# POCKETS 2 phase 5, the Restaurant. The second anesthetic substitute, and deliberately built as
+	# the Chapel's wine was rather than beside it: same ANESTHETIC_KINDS entry, same strength, same
+	# `rooms` fence (ItemSpawner._legal), same batch of one. The two are the same idea found in two
+	# different impossible rooms, so they should be the same code.
+	"tequila": {
+		"name": "Tequila, top shelf",
+		"short": "Bottles of tequila",
+		"surgical": true,
+		"consumable": true,
+		"batch": [1, 1],
+		"fragile": true,
+		"found": {"loose": 1.0},
+		"loose_surfaces": ["counter", "tray"],
+		# Only ever found in the Restaurant, the way the wine is only ever found in the Chapel.
+		"rooms": {"restaurant": 1.0, "restaurant_kitchen": 1.0},
+		"real_use": "Spirits were what surgeons had before anesthesia, and they were never good at it: enough to dull a patient is close to enough to stop them breathing, it takes hold unevenly, and they can come up again halfway through with the wound still open.",
+		"where": "Nowhere in the hospital. There is a bottle behind the bar of a restaurant that should not be there, and sometimes one left out on a table.",
 		"handling": "Consumable. One bottle. Glass: dropping it is the end of it. Counts as anesthetic wherever a vial would, at a little over half the dose.",
 	},
 	"gauze": {
