@@ -24,10 +24,13 @@ const Plan := preload("res://scripts/level/pockets/pocket_plan.gd")
 const Stub := preload("res://scripts/level/pockets/stub.gd")
 const Factory := preload("res://scripts/level/pockets/factory.gd")
 const Restaurant := preload("res://scripts/level/pockets/restaurant.gd")
+const Laundromat := preload("res://scripts/level/pockets/laundromat.gd")
 const Common := preload("res://scripts/level/pockets/pocket_common.gd")
 
 ## World tile of each pocket's local tile (0, 0): far outside any hospital (maps are ~110 m).
-const ORIGINS := {"factory": Vector2i(800, 0), "restaurant": Vector2i(800, 500)}
+## One 500-tile band per space, in the order the phases added them, so a new kind takes the next
+## band and never has to be checked against the others.
+const ORIGINS := {"factory": Vector2i(800, 0), "restaurant": Vector2i(800, 500), "laundromat": Vector2i(800, 2000)}
 ## A remote body that jumps further than this between snapshots is moved, not interpolated.
 const SNAP_DISTANCE := 6.0
 ## Noises within this many metres of a seam (on its own side) are also heard on the other side.
@@ -61,6 +64,15 @@ var _steps: Array = []
 var _step_i := 0
 ## Detached nodes of the last pocket, freed a few at a time (post-order: leaves first).
 var _trash: Array = []
+
+
+## The layout script of a kind. One `match` arm per space, so adding a kind is one line here, one in
+## PocketPlan.KINDS, one in ORIGINS and one in ambient_noise_of.
+static func layout_script(kind: String) -> GDScript:
+	match kind:
+		"restaurant": return Restaurant
+		"laundromat": return Laundromat
+	return Factory
 
 
 func setup(g: Node) -> void:
@@ -329,10 +341,10 @@ func build_kind(kind: String, info: Dictionary, parent: Node3D, pocket_seed: int
 
 ## Data only (a worker thread): the layout, the surface arrays, the navigation mesh.
 static func prepare(kind: String, stubs: Array, pocket_seed: int) -> Dictionary:
-	var layout_script: GDScript = Factory if kind == "factory" else Restaurant
+	var lscript: GDScript = layout_script(kind)
 	var origin: Vector2i = ORIGINS.get(kind, Vector2i(800, 0))
-	var lay: Dictionary = layout_script.layout(stubs, pocket_seed)
-	var interior: Dictionary = layout_script.prepare(lay, origin)
+	var lay: Dictionary = lscript.layout(stubs, pocket_seed)
+	var interior: Dictionary = lscript.prepare(lay, origin)
 	return {"kind": kind, "origin": origin, "lay": lay, "interior": interior, "nav": Common.bake_nav(interior.nav_faces)}
 
 
@@ -349,7 +361,7 @@ static func build_into(kind: String, stubs: Array, pocket_seed: int, map_seed: i
 static func build_steps(prep: Dictionary, stubs: Array, map_seed: int, hospital_lights: Array,
 		info: Dictionary, parent: Node3D, out_seams: Array, links: bool, result: Dictionary) -> Array:
 	var kind: String = prep.kind
-	var layout_script: GDScript = Factory if kind == "factory" else Restaurant
+	var lscript: GDScript = layout_script(kind)
 	var origin: Vector2i = prep.origin
 	var lay: Dictionary = prep.lay
 	var out := {"lights": [], "containers": [], "loose_anchors": [], "monster_spawns": [], "nav_faces": PackedVector3Array()}
@@ -373,11 +385,11 @@ static func build_steps(prep: Dictionary, stubs: Array, map_seed: int, hospital_
 		root.add_child(interior)
 		root.add_child(copies)
 		parent.add_child(root)
-		return layout_script.build_steps(lay, origin, out, interior, prep.interior))
+		return lscript.build_steps(lay, origin, out, interior, prep.interior))
 	# Doors in the pocket's own doorways (scripts/doors), under the interior so they share its layer.
 	var doors: Array = []
 	steps.append(func():
-		for d in layout_script.door_entries(lay, origin):
+		for d in lscript.door_entries(lay, origin):
 			d["wing"] = wing
 			d["depth"] = depth
 			var node: Node3D = Common.HB.DoorsScript.create(d)
@@ -437,7 +449,7 @@ static func build_steps(prep: Dictionary, stubs: Array, map_seed: int, hospital_
 	return steps
 
 
-## Warmup (scripts/warmup.gd): both spaces' meshes and materials, shrunk in front of the camera for
+## Warmup (scripts/warmup.gd): every space's meshes and materials, shrunk in front of the camera for
 ## a few frames so nothing compiles the first time a pocket comes into view. No lights, colliders,
 ## occluders or containers (they would act in the world while kept alive).
 static func warm(parent: Node3D) -> void:
@@ -445,8 +457,8 @@ static func warm(parent: Node3D) -> void:
 		{"id": 0, "wing": "", "depth": 1, "o": Vector2i(0, 0), "eu": Vector2i(1, 0), "ev": Vector2i(0, 1), "w": 10, "d": 6, "lights": []},
 		{"id": 1, "wing": "", "depth": 1, "o": Vector2i(0, 20), "eu": Vector2i(-1, 0), "ev": Vector2i(0, 1), "w": 12, "d": 5, "lights": []},
 	]
-	var x := -1.2
-	for script: GDScript in [Factory, Restaurant]:
+	var x := -1.6
+	for script: GDScript in [Factory, Restaurant, Laundromat]:
 		var lay: Dictionary = script.layout(fake, 1)
 		var out := {"lights": [], "containers": [], "loose_anchors": [], "monster_spawns": [], "nav_faces": PackedVector3Array(), "wing": "", "depth": 1}
 		var root: Node3D = script.build(lay, Vector2i.ZERO, out)
@@ -462,7 +474,7 @@ static func warm(parent: Node3D) -> void:
 		root.scale = Vector3.ONE * 0.012
 		root.position = Vector3(x, -0.4, -0.6)
 		parent.add_child(root)
-		x += 1.1
+		x += 0.85
 	var copy := Stub.build_copy(fake[0], 1, [])
 	for n in copy.node.find_children("*", "CollisionObject3D", true, false) + copy.node.find_children("*", "OccluderInstance3D", true, false) \
 			+ copy.node.find_children("*", "Light3D", true, false):
@@ -533,9 +545,9 @@ func ambient_noise_at(p: Vector3) -> float:
 	return ambient_noise_of(space_of(p))
 
 
-## The optional `AMBIENT_NOISE_LEVEL` a pocket's layout script declares, or 0.0. Declaring it is how
-## a new space (docs/POCKET_SPACES_2.md phase 4, the Laundromat) gets a noise floor; the Factory and
-## the Restaurant both declare 0.0, which is the same as not declaring it at all.
+## The optional `AMBIENT_NOISE_LEVEL` a pocket's layout script declares, or 0.0. The Laundromat
+## (docs/POCKET_SPACES_2.md phase 4) declares 0.30, enough to swallow a walking footstep whole; the
+## Factory and the Restaurant both declare 0.0, which is the same as not declaring it at all.
 ## Cached: `get_script_constant_map()` builds a dictionary every call, and `_hear` asks once per
 ## sound-hunting monster per tick.
 static var _ambient_cache := {}
@@ -547,6 +559,7 @@ static func ambient_noise_of(kind: String) -> float:
 	match kind:
 		"factory": s = Factory
 		"restaurant": s = Restaurant
+		"laundromat": s = Laundromat
 	var v := 0.0 if s == null else float(s.get_script_constant_map().get("AMBIENT_NOISE_LEVEL", 0.0))
 	_ambient_cache[kind] = v
 	return v
@@ -721,6 +734,10 @@ const AIR := {
 			"ambient_light_energy": 0.13, "ambient_light_color": Color(0.26, 0.55, 0.44)},
 	"restaurant": {"fog_depth_begin": 16.0, "fog_depth_end": 60.0, "fog_density": 0.35, "volumetric_fog_density": 0.016,
 			"ambient_light_energy": 0.3, "ambient_light_color": Color(0.62, 0.46, 0.34)},
+	# The Laundromat hides nothing: flat fluorescent light to the far wall, almost no fog, and the
+	# faint blue-white bounce of a room lit entirely by tubes.
+	"laundromat": {"fog_depth_begin": 26.0, "fog_depth_end": 80.0, "fog_density": 0.12, "volumetric_fog_density": 0.008,
+			"ambient_light_energy": 0.55, "ambient_light_color": Color(0.70, 0.78, 0.86)},
 }
 var _air_base := {}
 var _air_env: Environment = null
