@@ -41,6 +41,12 @@ const SETUPS := {
 	# hand and a Sonographer already hunting you, in a room where it cannot hear you walk.
 	"laundromat": {"seed": 4242, "pocket": "laundromat", "stage": "_laundromat"},
 	"chapel": {"seed": 4242, "pocket": "chapel", "stage": "_chapel"},
+	# POCKETS 2 phase 6 (docs/POCKET_SPACES_2.md): the Onlooker, in the Natatorium because its 72 m
+	# hall is the longest sightline in the game. Stand at one end and it will be at the other.
+	# `onlooker_chapel` is the same thing down the Chapel's 33 m nave, where the piers give it
+	# things to stand behind.
+	"onlooker": {"seed": 4242, "pocket": "natatorium", "stage": "_onlooker"},
+	"onlooker_chapel": {"seed": 4242, "pocket": "chapel", "stage": "_onlooker"},
 	"items": {"seed": 1, "stage": "_items"},
 	# GRAFTING chunk C (docs/GRAFTING.md): strapped to a table with a loaded vat on its stand, as
 	# Dr. Botsworth, ready to operate. `graft_back` is the same with the graft already done.
@@ -1228,6 +1234,47 @@ static func _chapel(game: Game) -> void:
 	game._clear_monsters()
 	await game.get_tree().physics_frame
 	game._add_monster("night_nurse", game._floor_at(w.call(Vector2(mid, float(Ch.SANCTUARY_Y) - 6.0))))
+
+
+## POCKETS 2 phase 6 (docs/POCKET_SPACES_2.md): the Onlooker. You are standing in a pocket space
+## with nothing in your hands and nothing to do, which is the point: the whole review is *look
+## around*.
+##
+## What to look for, in the order it happens. It is already in the room, a long way off, facing
+## you, and it never comes closer. Turn your back on it and it is not gone -- within about nine
+## seconds it has moved into whatever you are looking at now. Keep ignoring it and it starts taking
+## hearts, faster the longer you leave it. The saw, the needle and a shove do nothing at all. The
+## only thing that works is running straight at it, and then it is gone for over a minute. Walking
+## out through a seam ends it too.
+##
+## It is SILENT throughout. If you hear anything from it, that is a bug.
+##
+## The roll is forced on, so it is always there; in a real shift it is a coin flip per pocket.
+static func _onlooker(game: Game) -> void:
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	var pk = game.pockets
+	if pk == null or not pk.active():
+		print("[review] onlooker: no pocket was built")
+		return
+	game._clear_monsters()
+	# Nothing else in the room: the Onlooker is the only thing to look at, and a Hive shuffling
+	# about behind you would give away the one monster that never makes a sound.
+	game.dev.request("monsters_off", {"on": true})
+	# Stand where the room is longest, facing down it.
+	var centre: Vector3 = pk.pocket.spawn
+	var dir := open_direction(game, centre + Vector3.UP * 1.5, 60.0)
+	place(game, centre, centre + dir * 30.0 + Vector3.UP * 1.6)
+	give(game, "bone_saw", 1, 0)   # so the "it does nothing" half can actually be tried
+	# Force the roll on for this pocket and let the watcher place it.
+	preload("res://scripts/monsters/onlooker_watch.gd").force = "on"
+	if game.onlooker_watch != null:
+		game.onlooker_watch.rearm()
+	await game.get_tree().physics_frame
 
 
 ## POCKETS 2 phase 4 (docs/POCKET_SPACES_2.md): the Laundromat. You start well inside the room with

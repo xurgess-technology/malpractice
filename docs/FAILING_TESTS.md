@@ -64,7 +64,7 @@ How to run things is at the bottom of this file.
 ## 1f. pockettest: the Night Nurse follows you through a seam
 
 - **Command:** `godot --headless --path . --fixed-fps 60 tools/pockettest.tscn`
-- **Result:** `FAILED 2 of 180 checks`:
+- **Result (as first found; see the 2026-09-23 note below -- it is now 4 of 547):** `FAILED 2 of 180 checks`:
   `restaurant: the Night Nurse followed the player through the seam (60.0 s, 1444.3 m away)` and
   `restaurant: she crossed exactly once`.
 - **Found 2026-09-22** during the strapping fix, and **confirmed identical on plain `main`** at
@@ -110,6 +110,14 @@ How to run things is at the bottom of this file.
   same set passed every check, so the ordering effect is not perfectly deterministic — the cause
   still looks like leftover state rather than position as such. **Alone, the Chapel is green**:
   `--only=chapel` passes 102 checks with her following in **9.2 s, 3.9 m**.
+- **2026-09-23, `pockets-onlooker`: the headline count above is out of date -- it is 4, not 2.**
+  With all five spaces on this tree the run is **FAILED 4 of 547**, two spaces failing both their
+  Night Nurse checks, and which two moves from run to run (`restaurant` + `natatorium` in one run,
+  `restaurant` + `laundromat` in another). Measured deliberately: phase 6 adds 70 Onlooker checks
+  and the run becomes **4 of 617**, so the same tree with the new section commented out fails **4 of
+  547** -- the same four. Nothing in phase 6 touches her, and the point of recording it is that the
+  next person should expect **4**, not be alarmed by it, and not spend the time I nearly did
+  proving their own change innocent.
   **If you are changing Night Nurse behaviour, run your space alone before concluding anything.**
   The Chapel's votive candle makes her count as watched inside its radius (it is in
   `Perception.observed_any`, above the early-out), which is exactly the sort of change that would

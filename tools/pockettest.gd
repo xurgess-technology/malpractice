@@ -12,6 +12,9 @@ extends Node
 ##     offset from the seam, its speed and heading; the carried body stays on the shoulder; the
 ##     supplies stay in hand; everyone ends up on the far side
 ##   - a Night Nurse follows a player from the hospital into the pocket through a seam
+##   - the Onlooker (POCKET_SPACES_2 phase 6): the watcher puts one in the pocket, it finds
+##     somewhere in this space at least MIN_DIST off and inside the bot's own view, it hops to
+##     another such place, it makes no noise at all, and walking out through a seam ends it
 ##   - a Sonographer in the pocket hears a player on the hospital side of a seam and comes through
 ##   - a loose item dropped past a seam lands in the other copy
 ##   - noise near a seam is heard on the other side; nothing past a seam is reachable

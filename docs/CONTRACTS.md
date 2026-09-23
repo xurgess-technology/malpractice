@@ -456,7 +456,7 @@ stitches, should too):
 `enum State { WANDER, CHASE, STUNNED }`, fields `monster_id`, `kind`, `state`, `damage`,
 `knockback`, `calm`, `moving`, and methods `alert_to(pos)`, `shoved(dir)`,
 `recoil_after_hit()`, `report() -> Dictionary`, `apply_remote(d)`.
-Kinds: `"sonographer"` and `"night_nurse"`.
+Kinds: `"sonographer"`, `"night_nurse"`, `"hive"` and `"onlooker"` (`Monster.KINDS`).
 
 Game-side API for monsters:
 
@@ -479,6 +479,62 @@ Game-side API for monsters:
 Noise the game already emits on the host: footsteps (walk 0.25, sprint 0.8), containers 0.5,
 pickups 0.15, drops 0.4, breaking glass 0.9, shoves 0.6, surgery monitors 0.6 while someone
 operates.
+
+### The Onlooker (POCKET_SPACES_2 phase 6)
+
+`Monster.ONLOOKER` `"onlooker"`, a fourth kind in `Monster.KINDS`. The fourth sense rule is
+ATTENTION, and it is the inverse of the Night Nurse: you get rid of it by going toward it.
+
+**It is never in `roster()`.** The shift does not hand it out. `scripts/monsters/onlooker_watch.gd`
+(`game.onlooker_watch`, a child of Game on every machine, host-only behaviour) rolls `SPAWN_CHANCE`
+**once per pocket space** and, if it wins, adds exactly one through
+`game.spawn_pocket_monster(kind, pos)`. One per pocket ever: nothing re-rolls, whatever else frees
+the monster. `OnlookerWatch.force` (`""` / `"on"` / `"off"`) overrides the roll, for tools, tests
+and the dev panel.
+
+**Replication is the ordinary entity path and nothing else.** It lives in `game.monsters`, reports
+through `report()` and arrives through `apply_remote()` like every other monster. The one added
+field is `"pr"` -> `Monster.present`: is it standing there this second. The place it hops TO rides
+the ordinary `pos`, which clients already snap rather than interpolate past 6 m, so a hop arrives
+as a jump for free. `Monster.presence` (0 gone, 1 there) is the pop-in ease and is the only part a
+client works out for itself. **The same node and the same entity id live for the whole
+encounter** -- it toggles `present` rather than being freed and re-added per hop, because an id
+handed out twice is the 0.10.26 bug where a client keeps driving a stale node.
+
+`scripts/monsters/onlooker_brain.gd`, host side:
+
+- **Whose view.** It **marks one player** for the encounter: the one inside the pocket with the
+  longest clear ray out of their own eyes (`_sightline`), ties broken on peer id. Placement, hops,
+  the stare and the hearts are all that one player's view and nobody else's.
+- Other players **see** it (it is an ordinary monster) and **can banish** it -- anyone closing to
+  `BANISH_RANGE` sends it away, not just the mark -- but it never hurts anybody but the mark.
+- A mark who leaves the space hands the stare to a teammate still inside; with nobody left, the
+  encounter ends after `LEAVE_GRACE`. That test lives in `think()` rather than in the standing
+  branch, so a banished Onlooker in its cooldown still notices everyone leaving.
+- **It never wanders.** It calls neither `nav_move` nor `random_nav_point`, so it never reaches
+  `game.monster_may_wander_to`. It is not exempt by accident: placement runs the same predicate the
+  fence does (`pockets.space_of(point)` must be this pocket, `phantom_at` must be empty).
+- **Placement samples down the mark's heading**, not uniformly over the pocket's rect: a frustum is
+  a thin wedge of a big room, and uniform sampling could miss it repeatedly in the Natatorium. A
+  quarter of the candidates stay uniform as a fallback. Visibility is frustum plus a raycast and
+  **deliberately not `Perception.observed_any`**, because that requires the point to be *lit* and
+  this monster's eyes are their own light.
+- Immune to everything: `can_be_hurt()` is false, it is not capturable, `shoved` and
+  `recoil_after_hit` are no-ops.
+- **Silent.** `Monster._update_sound` returns immediately for this kind. That early return is the
+  mechanic, not an omission -- the tell is purely visual.
+
+Knobs (all on the brain unless noted): `SPAWN_CHANCE` (watch, 0.5), `GRACE` 9.0 s before the first
+heart, `TICK_FIRST` 7.0 / `TICK_RAMP` 0.7 / `TICK_MIN` 2.0 for the ramp, `BANISH_RANGE` 6.0 m,
+`HOP_INTERVAL` 9.0 +/- `HOP_JITTER` 2.0, `VANISH_COOLDOWN` 75 s, `MIN_DIST` 14 m /
+`PREFER_DIST` 26 m, `LEAVE_GRACE` 2.0 s.
+
+`scripts/monsters/onlooker_rig.gd` is the body: primitives, no skeleton, no AnimationPlayer and no
+clip, because it never takes a step. Unshaded near-black so it is the same silhouette under every
+light in the game, with two emissive eyes and a dim emissive ball around them that **fades in with
+distance** (nothing inside 6 m, full by 22 m) so it stays legible at the range it is always met at
+without swallowing the head up close. The database entry caps at tier 2 with no special case: tier
+3 is `harvested`, and there is nothing here to harvest.
 
 ### Monsters, sweep 3 (monsters worker): the Hive, fighting and capturing
 
