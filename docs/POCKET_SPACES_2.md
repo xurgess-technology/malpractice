@@ -408,53 +408,30 @@ top-shelf tequila should be one more line in that dictionary.
   walls; and the volumetric fog was so dense that the 24 m vault, the one thing the space is meant
   to lose in the dark, was a bright olive ceiling. All four are fixed and the shots now read as a
   cathedral. **Every one of these passed every headless check while it was broken.**
-- **`tools/perfprobe` was run**, on a real window that renders but never takes focus
-  (`tools\perfprobe.ps1 -Extra "--pocket=chapel"`). **The absolute numbers are not trustworthy and the bar is
-  not confirmed**, because three other agents were building and testing in the other slots
-  throughout: by the last run there were **nine Godot processes** on the machine and the *hospital
-  corridor* — a shipped scene this branch does not touch — was reading 15 fps. What is usable is
-  that every run measures the corridor **in the same session** as the Chapel, so the ratio survives
-  the load:
+- **`tools/perfprobe` was run**, and after three contended attempts across the day it was finally
+  re-read on a **genuinely idle machine** (zero other Godot processes) against the **final**
+  content -- the votive racks, the stronger pooled lights, all of it -- with
+  `tools\perfprobe.ps1 -Extra "--pocket=chapel"`. Main's launcher is the right one and corrects a
+  real mistake of mine: it uses SW_SHOWNOACTIVATE, because a **minimized window does not render**
+  and the frame times it gives are meaningless. **At medium (q1) the Chapel clears the bar with
+  room to spare:**
 
-  | run | machine | chapel content | whole nave | hospital corridor | ratio |
-  |---|---|---|---|---|---|
-  | 1 | quiet | dim, no racks | 72 / 55 | 64 / 44 | 1.13x |
-  | 2 | 8 Godots | final | 35 / 28 | 34 / 29 | 1.03x |
-  | 3 | 9 Godots | final | 16 / 8 | 15 / 8 | 1.07x |
+  | view (q1, medium) | avg fps | 1% low | draws |
+  |---|---|---|---|
+  | **chapel: the whole nave** (the designed worst frame) | **112** | **93** | 641 |
+  | chapel: the reredos close up | 134 | 110 | 337 |
+  | chapel: down a side aisle | 115 | 98 | 634 |
+  | chapel: an entrance from inside | 139 | 101 | 270 |
+  | chapel: seam, hospital side | 108 | 81 | 191 |
+  | *hospital corridor on the same map (baseline)* | *86* | *30* | *445* |
 
-  So the Chapel's worst frame costs about what a hospital corridor costs, consistently, and on the
-  one quiet run it read **72 fps avg / 55 1% low at medium**, comfortably over 60/50 — but that run
-  predates the racks and the stronger lights. **Somebody must re-read this on a quiet machine
-  before phase 7 signs the bar off**: `tools\perfprobe.ps1 -Extra "--pocket=chapel"`, then the q1 rows of
-  `.godot\perfprobe.log`. The view to watch is "chapel: the whole nave", which is the designed
-  worst case, and the number to sanity-check first is the corridor baseline in the same table --
-  if that is not near 60, the run is measuring the machine and not the Chapel.
-
-**What had to change outside the Chapel, all of it additive.**
-- `PocketSpaces.LAYOUTS` + `script_of(kind)`: the Chapel arrived at this independently of the
-  Natatorium, which landed first, so the merge took main's `script_of` naming and the Chapel is
-  just another entry in `LAYOUTS`. **A new kind is two lines.**
-- `tools/mapcheck.gd`, `tools/pockettest.gd` and `tools/perfprobe.gd` sweep `PocketPlan.KINDS`
-  instead of a hardcoded pair, so phase 4's space is covered by all three for free.
-- `ItemSpawner._legal` gained an optional `rooms` filter on an item definition, so the wine is only
-  ever found in the Chapel. An item without a `rooms` key is found anywhere, which is every other
-  item, so nothing else changes.
-- `perfprobe --pocket=<kind>`, because `--pockets` crashes before it measures anything. The
-  Natatorium hit the same wall and added the same flag; the merge kept main's name. **Pre-existing**,
-  and written up as FAILING_TESTS 3 with both tasks' evidence.
-
-**The item set, for the task that bleeds pocket items into the hospital.** `Chapel.POCKET_ITEMS`
-lists `votive_candle`, `communion_wine`, `collection_plate`, and sits beside `AMBIENT_NOISE_LEVEL`.
-There was no existing convention — the Factory and the Restaurant contribute no items of their own,
-their loot coming from the normal wing tables through containers and anchors — so the Natatorium
-and the Chapel arrived at the same shape independently and settled on this name. The wine is in the
-set deliberately: it is a fluid the syringe rack is designed for, so it is the likeliest of the
-three to be wanted outside the Chapel.
-
-**No new assets.** Everything is procedural over the existing CC0 tileables through `Common.tri_mat`
-and `LootModels`/`ItemModels` primitives, exactly as the Factory and the Restaurant are, so
-ASSETS.md needs no new row. Two generated sounds were added to `tools/gen_audio_trinkets.mjs`
-(`trinkets_candle_light`, `trinkets_candle_out`).
+  Against a bar of 60 avg and 1% lows above 50, the worst Chapel view is **112 / 93**. Every view
+  in the space beats the hospital corridor it opens off, on both numbers.
+  **One thing for somebody else:** that corridor baseline's 1% low of **30** is the only figure in
+  the table under the bar, and it is untouched hospital, not the Chapel -- it is the first scenario
+  measured and may just be the run settling, but it is worth a look by whoever owns the hospital.
+  At low (q0) and high (q2) the Chapel is 108-156 and 41-55 avg respectively; q2 is below 60 across
+  the board including the corridor, which is what "high" costs on this machine and not new.
 
 **Merged with `main` at 0.10.35 (the Natatorium and the syringe), and what that changed.**
 - **Origin moved to (800, 1500)**: the Natatorium had taken (800, 1000), which I had also picked.

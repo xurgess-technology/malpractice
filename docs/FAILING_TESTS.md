@@ -186,7 +186,9 @@ How to run things is at the bottom of this file.
   has presumably been happening for a while.
 - **The way round it, which works today:** `-- --pocket=<kind>` forces the kind *before* the one
   and only `start_session` and measures that space in the session already built. Both tasks landed
-  on this independently; it is what the Natatorium's and the Chapel's numbers were taken with.
+  on this independently; it is what the Natatorium's and the Chapel's numbers were taken with
+  (`tools\perfprobe.ps1 -Extra "--pocket=chapel"`, which uses SW_SHOWNOACTIVATE -- a minimized
+  window does not render and its frame times mean nothing).
 - **Where to look:** whether `_run_pockets` can wait out the renderer (a few frames, or
   `RenderingServer.force_sync()`) before restarting, or whether it should simply be rebuilt on top
   of `--pocket` and run one process per kind.
