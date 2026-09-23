@@ -28,6 +28,7 @@ const NatatoriumScript := preload("res://scripts/level/pockets/natatorium.gd")
 const SonoScript := preload("res://scripts/monsters/sonographer_brain.gd")
 const LootTableScript := preload("res://scripts/economy/loot_table.gd")
 const PlayerScript := preload("res://scripts/player.gd")
+const PocketBleedScript := preload("res://scripts/economy/pocket_bleed.gd")
 
 var main: Node3D
 var game: Game
@@ -55,6 +56,7 @@ func _ready() -> void:
 	game = main.game
 	main.menu.hide_menu()
 	Net.start_solo("Bot")
+	_pocket_item_checks()
 	for kind in Plan.KINDS:
 		if only != "" and only != kind:
 			continue
@@ -719,3 +721,35 @@ func _finish() -> void:
 		for f in _failures:
 			_say("  " + f)
 		get_tree().quit(1)
+
+
+## POCKETS 2, the bleed. Each space declares what it holds as POCKET_ITEMS beside its layout, and
+## LootTable says the same thing again with a per-kind `pocket` field, because the loot planner runs
+## in `-s` tools that must not load the pocket runtime. The two must not drift apart.
+func _pocket_item_checks() -> void:
+	_check(PocketBleedScript.MOUTH_TILES == Stub.CORRIDOR,
+		"the bleed measures a seam's mouth the same way the stub builds it (%d / %d)"
+			% [PocketBleedScript.MOUTH_TILES, Stub.CORRIDOR])
+	var declared := {
+		"factory": preload("res://scripts/level/pockets/factory.gd"),
+		"restaurant": preload("res://scripts/level/pockets/restaurant.gd"),
+		"natatorium": preload("res://scripts/level/pockets/natatorium.gd"),
+		"chapel": preload("res://scripts/level/pockets/chapel.gd"),
+		"laundromat": preload("res://scripts/level/pockets/laundromat.gd"),
+	}
+	for space in Plan.KINDS:
+		var script: GDScript = declared[space]
+		var items: Array = []
+		for k in script.POCKET_ITEMS:
+			items.append(String(k))
+		items.sort()
+		# communion_wine is a surgical kind (Items.SURGICAL, room-restricted in ItemSpawner._legal),
+		# not loot, so it is in the Chapel's POCKET_ITEMS but never in the loot table and never bleeds.
+		var loot: Array = []
+		for k in items:
+			if LootTableScript.has(k):
+				loot.append(k)
+		_check(LootTableScript.pocket_kinds(space) == loot,
+			"%s: the loot table names the same items the space does (%s)" % [space, str(loot)])
+		for k in LootTableScript.bleeding_kinds(space):
+			_check(loot.has(k), "%s: %s may only bleed if the space actually holds it" % [space, k])

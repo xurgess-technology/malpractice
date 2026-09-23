@@ -17,6 +17,11 @@ const Stub := preload("res://scripts/level/pockets/stub.gd")
 ## so it has no floor and monsters hear here exactly what they hear in the hospital.
 const AMBIENT_NOISE_LEVEL := 0.0
 
+## POCKETS 2: the loot kinds this space contributes, beside AMBIENT_NOISE_LEVEL as every other
+## space declares them. The Factory holds no loot of its own -- it is empty and that is the point, so it also bleeds nothing into the hospital
+## around its entrances (scripts/economy/pocket_bleed.gd).
+const POCKET_ITEMS := []
+
 const T := 1.5
 const M := 10
 const RW := 60

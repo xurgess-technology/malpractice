@@ -964,7 +964,9 @@ pocket-side copy), `pocket_spaces.gd` (runtime, `game.pockets`), `pocket_common.
 wants its own air. A layout script must expose `layout(stubs, seed)`, `prepare(lay, origin)`,
 `build_steps(...)`, `build(...)`, `doorways(lay)` and `door_entries(lay, origin)`, may declare
 `AMBIENT_NOISE_LEVEL`, and declares `POCKET_ITEMS`, the item kinds it contributes, as a set anything
-else can read without digging through the layout. Re-run `tools/pocketrate.gd` after any of it.
+else can read without digging through the layout (`[]` for a space that contributes none — the
+Factory and the Restaurant). Every loot kind in it also needs `pocket` and `may_bleed` in
+`LootTable.LOOT`, which `tools/pockettest.gd` checks against `POCKET_ITEMS`. Re-run `tools/pocketrate.gd` after any of it.
 
 **The Laundromat** (`laundromat.gd`, POCKET_SPACES_2 phase 4) is one mechanic:
 `AMBIENT_NOISE_LEVEL = 0.30`, above `Game.FOOTSTEP_LOUDNESS` (0.25), so a walking player makes no
@@ -982,6 +984,37 @@ rack or candle stand**, of which `SHADOW_BUDGET` (2) cast shadows, and the sanct
 first so the altar can never go dark. Its `POCKET_ITEMS` are `["votive_candle", "communion_wine",
 "collection_plate"]`, weighted for the `chapel_nave` / `chapel_aisle` / `chapel_sanctuary` /
 `chapel_sacristy` room kinds with **no `"*"` weight**, the same rule the other spaces follow.
+
+**The bleed** (`scripts/economy/pocket_bleed.gd`). A pocket's own loot still never *rolls* in the
+hospital — no `"*"` room weight, and `LootSpawner._can_place` refuses it — but on a shift that
+actually has a pocket, one or two planned stacks near one of its entrances are swapped for that
+space's items, so the rooms around a seam show a trace of what is through it before you find it.
+
+- **Where the seam is.** A stub's leg 1 opens onto a wing hallway at its two mouth tiles
+  (stub-local `(u, -1)`, i.e. `o + eu * u - ev` in hospital tiles). From each mouth `seam_rooms`
+  walks the hallway outward over open tiles that belong to no room, and takes the first
+  `ROOM_RADIUS` (3) rooms it touches: rooms passed, not metres crossed. With 2-3 entrances that is
+  6-9 rooms of the hospital.
+- **It comes out of the budget.** `LootSpawner._bleed` runs last, on a plan that already exists, and
+  only ever *replaces* a stack — like for like, a trinket for a trinket — so a shift still holds
+  `LOOT_PER_SHIFT` stacks and `TRINKETS_PER_SHIFT` trinkets. If the victim stack is already near a
+  seam it changes kind in place; otherwise the stack moves to a free spot near a seam. A bled entry
+  carries `bled: true`.
+- **Per kind.** `LootTable.LOOT` gained `pocket` (which space a kind belongs to, the same set as the
+  layout's `POCKET_ITEMS`) and `may_bleed`. `warm_scrubs` is `may_bleed: false` on purpose: it is a
+  permanent cosmetics unlock and finding one in a corridor devalues the space it belongs to. The
+  Chapel's `communion_wine` is not loot at all (`Items.SURGICAL`, room-restricted in
+  `ItemSpawner._legal`) and is untouched by this.
+- **Every machine agrees**, because it is a pure function of `level_info` — which is built from the
+  replicated seed and the replicated pocket kind (`"px"`) — rolled on the loot plan's own stream
+  after everything else, so it perturbs nothing before it.
+
+```gdscript
+PocketBleed.pocket_kind(info) -> String        # "" on a shift with no pocket: it bleeds nothing
+PocketBleed.seam_rooms(info) -> {room id: true}
+PocketBleed.seam_tiles(info) -> {y * width + x: true}   # those rooms' tiles, their walls included
+LootTable.pocket_kinds(space) / bleeding_kinds(space) -> Array
+```
 
 `tools/mapcheck.gd`, `tools/pockettest.gd`, `tools/pocketrate.gd` and `tools/perfprobe.gd` all
 sweep `KINDS` rather than a hardcoded list, so a new space is covered by all four for free.

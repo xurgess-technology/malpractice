@@ -14,6 +14,11 @@ const Stub := preload("res://scripts/level/pockets/stub.gd")
 ## cold and the room is waiting — so it has no floor and hearing is unchanged.
 const AMBIENT_NOISE_LEVEL := 0.0
 
+## POCKETS 2: the loot kinds this space contributes, beside AMBIENT_NOISE_LEVEL as every other
+## space declares them. The Restaurant holds no loot of its own; it is set for guests, not stocked, so it also bleeds nothing into the hospital
+## around its entrances (scripts/economy/pocket_bleed.gd).
+const POCKET_ITEMS := []
+
 const T := 1.5
 const M := 10
 const W := 34
