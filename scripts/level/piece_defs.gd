@@ -12,6 +12,9 @@ extends RefCounted
 ##   size    Vector3(width X, height Y, depth Z) in metres
 ##   block   true when the piece fills the tiles under it (generator connectivity and markers)
 ##   collide false for things you can walk through or that sit on other furniture
+##   collide_h the collider's height when it is shorter than the piece: a counter with open
+##           shelving above it collides only up to the counter top, so things standing on the
+##           counter are reachable instead of sealed inside the piece's box
 ##   mount   wall-mounted, bottom edge height in metres
 ##   anchors [[Vector3 local offset, surface]] where a loose item may rest; surface is one of
 ##           "counter", "tray", "gurney" (the builder adds "floor" spots itself)
@@ -130,7 +133,9 @@ const P := {
 	"lab_microscope": {"size": Vector3(1.5, 2.3, 0.75), "block": true},
 	"lab_analyzer": {"size": Vector3(1.5, 2.3, 0.75), "block": true},
 	"lab_specimens": {"size": Vector3(1.5, 2.3, 0.75), "block": true},
-	"lab_vat_bench": {"size": Vector3(1.5, 2.3, 0.75), "block": true},   # GRAFTING part one: three vat spots, jars of heads
+	# GRAFTING part one: three vat spots, jars of heads. The collider stops at the counter top: the
+	# vats stand on that counter, and a 2.3 m box would bury them where no aim ray could ever reach.
+	"lab_vat_bench": {"size": Vector3(1.5, 2.3, 0.75), "block": true, "collide_h": 0.92},
 	"lab_sink": {"size": Vector3(1.5, 2.3, 0.75), "block": true},
 	# The square of counter where two lab runs meet in a corner (the OR, 2026-09-18). Claims no tile:
 	# the stations either side already hold them.
@@ -187,6 +192,14 @@ static func exists(kind: String) -> bool:
 
 static func size(kind: String) -> Vector3:
 	return P.get(kind, {}).get("size", Vector3.ONE)
+
+
+## How tall the piece's box collider is. Normally its full height, but a piece whose upper half is
+## open shelving says `collide_h` and gets a collider only that tall, so what stands on the counter
+## underneath is out in the open air where an aim ray can reach it (GRAFTING: the vat bench).
+static func collide_height(kind: String) -> float:
+	var d: Dictionary = P.get(kind, {})
+	return float(d.get("collide_h", size(kind).y))
 
 
 static func blocks(kind: String) -> bool:

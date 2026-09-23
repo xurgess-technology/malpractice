@@ -948,7 +948,10 @@ static func _prep_furniture(gen: Dictionary, p: Dictionary) -> void:
 		var support := Rect2()
 		var support_top := -1.0
 		if _solid_piece(gen, kind, p2, float(e.yaw)):
+			# A piece with open shelving over a counter collides only up to the counter top
+			# (Defs.collide_height), so what stands on that counter can be seen and reached.
 			var s := Defs.size(kind)
+			s.y = Defs.collide_height(kind)
 			var fp := Defs.footprint_rect(kind, p2, float(e.yaw))
 			var tiles := Defs.blocked_tiles(kind, p2, float(e.yaw))
 			if Defs.blocks(kind) and not tiles.is_empty():
