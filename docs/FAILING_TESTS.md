@@ -190,6 +190,42 @@ wrong way was not.
   was reading only `SURGICAL` and is fixed here: `shift_loop.missing_supplies()`, so the objective
   line now actually says `BRING TO THE OR SHELF: Suture kit x1` instead of going quiet.
 
+**Section 2, mapcheck's morgue tray, went the same way on 2026-09-23 and has been removed
+(`fix-morgue-trays`).** `mapcheck` is clean now: 300 seeds x 8 builds with the default round-robin
+pockets, and separately `--seeds=8 --builds=8` with `--build_pocket=none` and
+`--build_pocket=factory` (the two flag combinations that used to fail on different seeds) -- seeds
+38 and 112 both build with **0 out of reach**.
+
+- **It was two pieces sealing a wall off, not the anchor or the navmesh bake.** Dumping
+  `gen.rows`/`gen.blocked` for seed 112's failing tray directly showed the mechanism:
+  `scripts/level/room_furnish.gd`'s `_morgue()` puts the instrument cart at a fixed offset from the
+  autopsy table (`tables[0] + 1.1, D * 0.5 + 0.9`) with no clearance check, and `scrub_sink` goes
+  flush against the room's side wall right after it. On a small morgue (this one 5x4 tiles) both
+  footprints straddle a tile boundary wide enough that between them they filled **every** tile of
+  the interior row against that wall -- the cart in two columns, the sink in the other two of a
+  4-wide room. The tray anchor sits on the cart, so it landed in the middle of that sealed strip;
+  the nearest open floor was two tiles over and one tile in, `sqrt(5) * 1.5 m` = **3.35 m**,
+  matching the reported gap exactly. Nothing was wrong with the navmesh bake
+  (`scripts/hospital_builder.gd`'s `bake_nav`, which correctly cuts furniture-blocked tiles from the
+  source geometry before baking) or with mapcheck's own reachability search -- the floor genuinely
+  wasn't there to stand on.
+- **`room_connected()` doesn't catch this.** Every blocking piece already checks that the room's
+  open tiles stay reachable from its door (`Frame.put`, `level_state.room_connected`), but that's a
+  flood-fill over open tiles: it says nothing about whether a piece that's still standing (the cart)
+  has an open tile *next to it*. Two pieces placed independently, each individually legal on its
+  own, can wall a third one in without either overlapping it.
+- **The fix:** `Frame` gets `put_reachable()`, which backs a blocking piece back out if none of the
+  tiles touching its footprint are open floor once it lands (`_has_open_approach()`). `_morgue()`
+  now places `scrub_sink` before the cart, so the cart's own tries see the room as it will actually
+  end up, and gives the cart a short list of fallback offsets instead of the one fixed spot, trying
+  each with `put_reachable()` until one leaves it reachable.
+- **What the next person should know.** `put_reachable()` and `_has_open_approach()` are general
+  (any blocking piece with something worth reaching can use them) but only the morgue's cart calls
+  them so far. If a mapcheck anchor turns up unreachable in another room kind, this is the shape to
+  look for first. Separately, and unrelated to this bug: `mapcheck.gd`'s pocket-forced sweeps can
+  report `navigation map never synchronised` on one seed under a loaded machine -- a timing flake,
+  confirmed here on seed 8 with `--build_pocket=factory` (fails in an 8-seed batch, passes alone).
+
 How to run things is at the bottom of this file.
 
 ---
@@ -271,27 +307,6 @@ number is quoted in docs/POCKET_SPACES_2.md and somebody will meet it again.
   untouched hospital views (`chapel map: hospital corridor` 90/33, `factory: seam, hospital side`
   102/24) as readily as on anything new. That looks like **1j** below seen from the rendering side,
   and it is the thing actually worth chasing.
-
-## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
-
-- **Command:** `godot --headless --path . -s tools/mapcheck.gd`
-- **Result:** exit 1, with
-  - `seed 38: 1 containers / anchors out of reach, e.g. anchor 92 (tray, morgue) at (134.9, 0.96, 29.8), nav 3.35 m away`
-  - `seed 112: 1 containers / anchors out of reach, e.g. anchor 38 (tray, morgue) at (31.7, 0.96, 59.1), nav 2.60 m away`
-- **Effect:** one morgue tray on those seeds can't be reached by the bot's navigation, so loot or
-  supplies on it may be unreachable in that shift.
-- **Already noted** in docs/KNOWN_ISSUES.md (search for "morgue tray"): seed 112 has been reported
-  before, and seed 149 has too; seed 38 is new as of 2026-09-17.
-- **Where to look:** morgue furnishing in `scripts/level/room_furnish.gd` (where tray anchors are
-  placed against walls or equipment) versus the navmesh bake around them.
-- **The seed numbers are not the bug — don't chase a new one.** Which seeds trip this depends on
-  whether that seed's map got a pocket, because the entrance stubs reserve room slots and the whole
-  wing lays out differently. Shown on 2026-09-22 with mapcheck's own flag, nothing else changed:
-  `--seeds=8 --builds=8 --build_pocket=none` fails seeds **3 and 4**, and the same command with a
-  pocket fails seeds **1 and 3**. Same bug, same ~2.6-3.3 m, different seeds.
-- So a change that alters how often pockets appear moves this list. POCKET_SPACES_2 phase 1
-  (`pockets-phase1`) did exactly that, and the full run there reports **seeds 1, 38 and 112** —
-  seed 1 being the pre-existing bug landing on one more seed, not a new fault.
 
 ---
 
