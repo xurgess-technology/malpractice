@@ -180,6 +180,24 @@ static func _block(g: Dictionary, r: Rect2i) -> void:
 				g.nav[Common.idx(g, x, y)] = 1
 
 
+## Contiguous runs of an (unsorted) tile-coordinate list, as inclusive [v0, v1] pairs. Same helper
+## as laundromat.gd's `_runs` (docs/FAILING_TESTS.md, fix-laundromat-perf): a doorway gap or a
+## missing tile (a container already standing there) breaks a run; everything else along one wall
+## collapses into one collider instead of one per counter tile.
+static func _runs(xs: Array) -> Array:
+	var sx: Array = xs.duplicate()
+	sx.sort()
+	var runs: Array = []
+	var i := 0
+	while i < sx.size():
+		var j := i
+		while j + 1 < sx.size() and int(sx[j + 1]) == int(sx[j]) + 1:
+			j += 1
+		runs.append([int(sx[i]), int(sx[j])])
+		i = j + 1
+	return runs
+
+
 # =========================================================================
 # build
 # =========================================================================
@@ -644,6 +662,11 @@ static func _kitchen(root: Node3D, props: Common.Props, body: StaticBody3D, lay:
 	var taken := {}
 	for ct in lay.containers:
 		taken[ct.tile] = true
+	# One StaticBody3D collider per counter tile (~20 of them along the two kitchen walls) is the
+	# same per-tile-bank shape the Laundromat's washers and dryers had before fix-laundromat-perf
+	# (docs/FAILING_TESTS.md): the counters are a fitted run against the wall, so their collision is
+	# now one box per contiguous run instead of one per tile. Meshes and anchors stay per-tile.
+	var rows := {}   # "wallx,wally,fixed" -> {"wall": Vector2i, "fixed": int, "vs": Array[int]}
 	for c in lay.counters:
 		var t: Vector2i = c.tile
 		if taken.has(t):
@@ -653,8 +676,27 @@ static func _kitchen(root: Node3D, props: Common.Props, body: StaticBody3D, lay:
 		var off := Vector3(wall.x, 0, wall.y) * (T * 0.5 - 0.35)
 		var size := Vector3(T if wall.x == 0 else 0.7, 0.92, 0.7 if wall.x == 0 else T)
 		mb.box("s", steel, Transform3D(Basis(), p + off + Vector3(0, 0.46, 0)), size)
-		Common.collider(body, Transform3D(Basis(), p + off + Vector3(0, 0.46, 0)), size)
 		Common.anchor(out, p + off + Vector3(0, 0.925, 0), atan2(float(wall.x), float(wall.y)), "counter", "restaurant_kitchen")
+		var fixed: int = t.y if wall.x == 0 else t.x
+		var v: int = t.x if wall.x == 0 else t.y
+		var key := "%d,%d,%d" % [wall.x, wall.y, fixed]
+		if not rows.has(key):
+			rows[key] = {"wall": wall, "fixed": fixed, "vs": []}
+		(rows[key].vs as Array).append(v)
+	for key in rows.keys():
+		var row: Dictionary = rows[key]
+		var wall: Vector2i = row.wall
+		var fixed: int = row.fixed
+		for run in _runs(row.vs):
+			var v0: int = run[0]
+			var v1: int = run[1]
+			var cv := (float(v0) + float(v1 + 1)) * 0.5
+			var t2 := Vector2(cv, float(fixed) + 0.5) if wall.x == 0 else Vector2(float(fixed) + 0.5, cv)
+			var p: Vector3 = world.call(t2)
+			var off := Vector3(wall.x, 0, wall.y) * (T * 0.5 - 0.35)
+			var length := float(v1 - v0 + 1) * T - 0.02
+			var size := Vector3(length if wall.x == 0 else 0.7, 0.92, 0.7 if wall.x == 0 else length)
+			Common.collider(body, Transform3D(Basis(), p + off + Vector3(0, 0.46, 0)), size)
 	# Stove and hood.
 	var st: Rect2i = lay.stove
 	var sa: Vector3 = world.call(Vector2(st.position) + Vector2(0, 0.5))
