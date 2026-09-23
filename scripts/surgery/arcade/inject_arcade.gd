@@ -427,9 +427,17 @@ func build_game() -> void:
 	# and nothing below this line behaves any differently than it did before the rack existed.
 	var rk = ctx.get("rack", [])
 	rack = (rk as Array).duplicate(true) if rk is Array else []
+	# --rack3 (reviews and lab shots): a full rack whether or not the fluids exist as items yet.
+	# COMMUNION WINE and TEQUILA are docs/POCKET_SPACES_2.md phases still in flight, so today a real
+	# player can only ever carry one fluid and the rack would never draw wider than one vial.
+	if "--rack3" in OS.get_cmdline_user_args():
+		rack = [{"kind": "anesthetic"}, {"kind": "communion_wine"}, {"kind": "tequila"}]
 	if rack.size() > 3:
 		rack.resize(3)
 	rack_sel = 0
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--racksel="):   # reviews and lab shots: open under that vial
+			rack_sel = clampi(int(a.trim_prefix("--racksel=")), 0, maxi(0, rack.size() - 1))
 	rack_vials.clear()
 	for i in rack.size():
 		rack_vials.append(vial_start)
@@ -1316,6 +1324,7 @@ func paint_game(c: CanvasItem) -> void:
 	_prof_mark("grime", t0)
 	if _warm:
 		# Warmup: one of everything, so nothing draws for the first time mid-step.
+		_paint_syringe(c, false)   # SYRINGE DRAW: with the vials, which `true` below skips
 		_paint_syringe(c, true)
 		_paint_inject(c)
 		ink.warm(c)
@@ -1671,6 +1680,11 @@ func _paint_meter(c: CanvasItem) -> void:
 ## one draws nothing new.
 func warm_all() -> void:
 	_warm = true
+	# SYRINGE DRAW: a full rack, so the three vials, their labels and the "empty" line are all
+	# drawn once here and never for the first time in front of a player (CLAUDE.md, warmup).
+	rack = [{"kind": "anesthetic"}, {"kind": "communion_wine"}, {"kind": "tequila"}]
+	rack_vials = [vial_start, vial_start, 0.0]
+	rack_sel = 0
 	if shell != null:
 		shell.mistake("MISS!", shell.area.get_center(), true, 0)
 	vis = 1.0
