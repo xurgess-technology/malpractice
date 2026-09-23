@@ -68,6 +68,9 @@ const LOOT_BLURBS := {
 	"heart_monitor": "A bedside heart monitor. Takes both hands.",
 	"defibrillator": "A portable defibrillator. Takes both hands.",
 	"ultrasound": "A portable ultrasound. The best find in the wings.",
+	"quarter_bucket": "A mop bucket of quarters, from a coin slot nobody empties. A hard throw scatters a handful, and they land loud.",
+	"warm_scrubs": "A folded set of scrubs, still warm. Somebody will want the pattern.",
+	"fabric_softener": "A jug of fabric softener. Sells, and it has a trick.",
 	"eye_hive": "The eyeball of a strapped Hive. It clouds over and spoils in a minute or two unless it goes in a vat.",
 	"eye_surgeon": "A surgeon's own eyeball, labelled with whose it is. It spoils outside a vat, too.",
 }

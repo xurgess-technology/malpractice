@@ -28,12 +28,13 @@ extends Node
 const MonsterScript := preload("res://scripts/monster.gd")
 const LootTable := preload("res://scripts/economy/loot_table.gd")
 
-## The six. Anything else falls through to combat.use (the saw and the needle).
-const KINDS := ["desk_phone", "laptop", "defibrillator", "pulse_oximeter", "reflex_hammer", "epipen"]
+## The seven. Anything else falls through to combat.use (the saw and the needle).
+const KINDS := ["desk_phone", "laptop", "defibrillator", "pulse_oximeter", "reflex_hammer", "epipen",
+		"fabric_softener"]
 ## Spent once and never again. The phone, the hammer and the pulse oximeter keep working.
-const ONE_USE := ["laptop", "defibrillator", "epipen"]
+const ONE_USE := ["laptop", "defibrillator", "epipen", "fabric_softener"]
 ## What a spent one-use trinket sells for: scrap, not nothing.
-const SCRAP := {"laptop": 8, "defibrillator": 15, "epipen": 3}
+const SCRAP := {"laptop": 8, "defibrillator": 15, "epipen": 3, "fabric_softener": 4}
 ## The mark a spent trinket carries through a drop (WorldItem.x).
 const USED_MARK := "used"
 ## The shortest gap the host accepts between one player's trinket uses.
@@ -87,6 +88,12 @@ const EPI_COLLAPSE := 3.0
 
 var game: Node = null
 ## Host: the break roll for the pull-out ring. Tests seed it.
+# --- POCKETS 2 phase 4: the fabric softener jug (the Laundromat)
+## How long a swig keeps your footsteps quiet.
+const QUIET_SECONDS := 60.0
+## How much of the step sound you still hear yourself while it lasts, in decibels off the usual.
+const QUIET_STEP_DB := -12.0
+
 var rng := RandomNumberGenerator.new()
 ## Host: what the last use did, for tests: {what: "...", kind: ..., id: ...}.
 var last_result: Dictionary = {}
@@ -97,6 +104,7 @@ var _hand_rings: Dictionary = {} ## peer id -> world_time the ring in their hand
 var _maps: Dictionary = {}       ## peer id -> world_time the laptop map goes dark
 var _tagged: Dictionary = {}     ## monster id -> the peer id whose pulse oximeter is on it
 var _epi: Dictionary = {}        ## peer id -> world_time the sprint boost ends
+var _quiet: Dictionary = {}      ## peer id -> world_time their quiet footsteps run out
 var _spins: Dictionary = {}      ## peer id -> how many times the reflex hammer has turned them (mod 64)
 var _swings: Dictionary = {}     ## peer id -> how many reflex-hammer swings they have thrown (mod 64)
 
@@ -212,6 +220,7 @@ func use(p) -> void:
 		"pulse_oximeter": _use_pulse_ox(p, head)
 		"reflex_hammer": _use_hammer(p, head)
 		"epipen": _use_epipen(p, head)
+		"fabric_softener": _use_fabric_softener(p, head)
 
 
 ## Every machine (Player._update_aim, a few Hz): the crosshair line while holding a trinket that
@@ -231,6 +240,8 @@ func use_prompt(p) -> String:
 		"epipen":
 			var q := _downed_or_standing_mate(p, EPI_REACH, EPI_CONE_DEG, false)
 			return "[Click] Jab %s" % (q.player_name if q != null else "yourself")
+		"fabric_softener":
+			return "[Click] Drink the fabric softener"
 		"defibrillator":
 			var d := _downed_mate(p)
 			if d == null:
@@ -655,6 +666,32 @@ func jab_epipen(q) -> void:
 	game._sound("trinkets_epipen", q.global_position + Vector3.UP * 1.1)
 
 
+## POCKETS 2 phase 4: drink the jug. For QUIET_SECONDS your footsteps make no noise event at all —
+## the same nothing a crouching player makes (game.gd `_tick_noise`) — except that you keep walking
+## and sprinting at full speed. It is the crouch multiplier, not a second quiet mode, so a monster
+## that cannot hear a crouching player cannot hear you either.
+func _use_fabric_softener(p, head: int) -> void:
+	spend(p, head)
+	drink_softener(p)
+	last_result = {"what": "quiet", "id": int(p.peer_id)}
+	game.tell(p, "It coats your throat. Your feet stop making any sound at all.", 3.5)
+
+
+## Host: the quiet starts on `q` (tests call it directly).
+func drink_softener(q) -> void:
+	if q == null or not is_instance_valid(q) or game == null or not game.is_host():
+		return
+	_quiet[int(q.peer_id)] = float(game.world_time) + QUIET_SECONDS
+	game._sound("trinkets_softener", q.global_position + Vector3.UP * 1.3)
+
+
+## Every machine: whether this player's steps are making no noise right now.
+func quiet_steps(p) -> bool:
+	if p == null or game == null:
+		return false
+	return float(_quiet.get(int(p.peer_id), 0.0)) > float(game.world_time)
+
+
 ## Every machine: how much faster this player sprints right now (1.0 normally).
 func sprint_mult(p) -> float:
 	if p == null or game == null:
@@ -736,6 +773,14 @@ func _host_tick(delta: float) -> void:
 		game._broadcast("stun", {"id": int(peer), "t": EPI_COLLAPSE})
 		game._sound("downed_fall", p3.global_position)
 		game.tell(p3, "That is the adrenaline gone.", 3.0)
+	# The fabric softener wearing off: your feet come back.
+	for peer in _quiet.keys():
+		if now < float(_quiet[peer]):
+			continue
+		_quiet.erase(peer)
+		var p4 = game.players.get(int(peer))
+		if p4 != null and is_instance_valid(p4) and p4.alive:
+			game.tell(p4, "You can hear your own footsteps again.", 3.0)
 	# A tagged monster that stopped existing without going through kill_monster.
 	for mid in _tagged.keys():
 		var m = game.monsters.get(int(mid))
@@ -806,6 +851,7 @@ func _apply_boosts() -> void:
 		if p == null or not is_instance_valid(p):
 			continue
 		p.sprint_mult = sprint_mult(p)
+		p.silent_steps = quiet_steps(p)
 
 
 # =============================================================================== networking
@@ -822,6 +868,8 @@ func net_state() -> Dictionary:
 		s["tg"] = _tagged.duplicate()
 	if not _epi.is_empty():
 		s["ep"] = _snapped(_epi)
+	if not _quiet.is_empty():
+		s["qt"] = _snapped(_quiet)
 	if not _spins.is_empty():
 		s["sp"] = _spins.duplicate()
 	if not _swings.is_empty():
@@ -844,6 +892,7 @@ func apply_net_state(s: Dictionary) -> void:
 	_maps = _ints((s.get("mp", {}) as Dictionary))
 	_tagged = _ints((s.get("tg", {}) as Dictionary))
 	_epi = _ints((s.get("ep", {}) as Dictionary))
+	_quiet = _ints((s.get("qt", {}) as Dictionary))
 	_spins = _ints((s.get("sp", {}) as Dictionary))
 	_swings = _ints((s.get("sw", {}) as Dictionary))
 
@@ -870,6 +919,7 @@ func on_reset() -> void:
 	_tagged.clear()
 	_tag_value.clear()
 	_epi.clear()
+	_quiet.clear()
 	_collapse.clear()
 	_sel_seen.clear()
 	_hammer_cd.clear()

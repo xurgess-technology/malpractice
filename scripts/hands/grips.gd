@@ -40,6 +40,13 @@ const GRIPS := {
 	# EpiPen: cap at -X, needle end +X, held like the reflex hammer.
 	"epipen": {"pos": Vector3(-0.03, 0.016, 0.0), "fwd": Vector3(1, 0, 0), "up": Vector3(0, -1, 0), "style": "fist"},
 	"pill_bottle": {"bundle": 3},
+	# POCKETS 2 phase 4 (the Laundromat). The bucket hangs from its bail in a closed hand, so the
+	# palm sits at the top of the wire rather than at the base of the pail.
+	"quarter_bucket": {"pos": Vector3(0.0, 0.245, 0.0), "fwd": Vector3(1, 0, 0), "up": Vector3(0, 1, 0), "style": "fist"},
+	# The jug is carried by the grip moulded into the back of the bottle.
+	"fabric_softener": {"pos": Vector3(0.0, 0.155, -0.068), "fwd": Vector3(0, 0, -1), "up": Vector3(0, 1, 0), "style": "fist"},
+	# A folded stack lies flat across an open palm.
+	"warm_scrubs": {"pos": Vector3(0.0, 0.02, 0.0), "fwd": Vector3(0, 0, -1), "up": Vector3(0, 1, 0), "style": "palm"},
 }
 
 

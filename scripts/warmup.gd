@@ -29,6 +29,7 @@ const DoorScript := preload("res://scripts/doors/door.gd")  # DOORS HOOK
 const DoorModels := preload("res://scripts/doors/door_models.gd")  # DOORS HOOK
 const HospitalBuilderScript := preload("res://scripts/hospital_builder.gd")  # DOORS HOOK
 const HumanModelScript := preload("res://scripts/human/human_model.gd")  # HUMAN HOOK
+const CustomizationScript := preload("res://scripts/personnel/customization.gd")  # CUSTOMIZATION
 const TerminalModelScript := preload("res://scripts/database/terminal_model.gd")  # HUB REDESIGN
 const SonoEchoScript := preload("res://scripts/monsters/sono_echo.gd")  # the Sonographer's echo fan and flash
 
@@ -211,9 +212,16 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	_report(progress, "patients", Procedures.human_patients().size())
 	# HUMAN HOOK: every Blender surgeon a player can wear (their maps, the tinted cloth shader), posed
 	# by the idle clip, so a teammate joining does not hitch.
+	var surgeon_i := 0
 	for v in HumanModelScript.SURGEONS:
 		var hb: Node3D = HumanModelScript.spawn(v, C.PLAYER_COLORS[1])
 		if hb != null:
+			# CUSTOMIZATION / POCKETS 2 phase 4: walk the cloth shader's pattern branches while we
+			# are warming bodies anyway (gingham, the Laundromat's unlock, is the newest of them),
+			# so the first surgeon to turn up wearing one does not compile it in front of you.
+			CustomizationScript.apply(hb, {"outfit": 0, "skin": 0,
+					"pattern": surgeon_i % CustomizationScript.PATTERNS.size(), "pattern_colour": 0})
+			surgeon_i += 1
 			shelf.add_child(hb)
 			hb.position = Vector3(bx, -0.3, -0.8)
 			hb.scale = Vector3.ONE * 0.5

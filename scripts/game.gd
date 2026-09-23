@@ -1584,6 +1584,24 @@ func drop_selected(p: Node, charge: float = 0.0) -> void:
 			p.slots[head].count = left
 		_sound("thud", from.origin)
 		return
+	# POCKETS 2 phase 4 (the Laundromat): a charged throw flings one handful of quarters out of the
+	# bucket and keeps the bucket; a tap sets the whole bucket down like anything else. The handful
+	# is spent either way — it bursts where it lands (world_item.gd) and the noise is over there.
+	if String(s.kind) == "quarter_bucket" and charge > 0.02 and int(s.count) > 0:
+		var handful := _spawn_item("quarter_bucket", 1, from, WorldItem.State.LOOSE)
+		handful.value = 0
+		handful.set_meta("quarters_thrown", true)
+		handful.toss(from, vel)
+		var was_n: int = int(s.count)
+		var left_q: int = was_n - 1
+		if left_q <= 0:
+			p.clear_slot(head)
+		else:
+			p.slots[head].count = left_q
+			# The bucket is worth what is still in it.
+			p.slots[head]["v"] = int(round(float(int(s.get("v", 0))) * float(left_q) / float(maxi(1, was_n))))
+		_sound("thud", from.origin)
+		return
 	var it := _spawn_item(s.kind, s.count, from, WorldItem.State.LOOSE)
 	it.value = int(s.get("v", 0))
 	it.bt = float(s.get("bt", -1000000.0))   # GRAFTING: the eye spoil clock
@@ -2349,7 +2367,9 @@ func _tick_noise(delta: float) -> void:
 	for p in alive_players():
 		# SWEEP 4A HOOK (controls): a crouching player's footsteps make no sound and no noise event
 		# at all (not just quieter): the Sonographer can't hear a crouching player walk.
-		if not p.moving or bool(p.get("crouching")):
+		# POCKETS 2 phase 4: a fabric softener jug buys the same nothing for a minute, at full speed
+		# (scripts/trinkets/trinkets.gd pushes `silent_steps`). It is this multiplier, reused.
+		if not p.moving or bool(p.get("crouching")) or bool(p.get("silent_steps")):
 			_footstep_acc[p.peer_id] = 0.0
 			continue
 		var acc: float = float(_footstep_acc.get(p.peer_id, 0.0)) + delta
@@ -3690,6 +3710,25 @@ func eat_pill(p: Node) -> void:
 	else:
 		p.slots[head].count = left
 	_pill_hit_player(p, p)
+
+
+# ---------------------------------------------------------------------------
+# POCKETS 2 phase 4 (the Laundromat): a thrown handful of quarters.
+
+## How loud a scattered handful is. It has to beat the Laundromat's own ambient noise floor (0.30,
+## Laundromat.AMBIENT_NOISE_LEVEL) by enough to still be worth throwing in the room it is found in:
+## masked to 0.60 it carries 13 m in there, and the full 0.9 carries 20 m out in the hospital.
+const QUARTER_NOISE := 0.9
+
+
+## Host, called by a thrown handful the moment it lands (world_item.gd). The coins burst across the
+## floor: a loud noise event exactly there, which is what makes this a directional noisemaker rather
+## than something that gives away where the thrower is standing.
+func quarters_scatter(at: Vector3) -> void:
+	if not is_host():
+		return
+	emit_noise(at, QUARTER_NOISE, "quarters")
+	_sound("quarters_scatter", at)
 
 
 # ---------------------------------------------------------------------------

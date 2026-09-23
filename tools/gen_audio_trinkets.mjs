@@ -10,6 +10,7 @@
 //   trinkets_hammer_bonk    a rubber head on something that did not expect it
 //   trinkets_clip_on        the pulse oximeter's plastic jaws snapping shut, then its own beep
 //   trinkets_epipen         the spring, the click and the hiss of an auto-injector
+//   trinkets_softener       POCKETS 2 phase 4: a cap cracking, then long thick glugs of syrup
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -217,6 +218,48 @@ function epipen(name) {
   writeWav(name, highpass(lowpass(x, 7200), 240));
 }
 
+// POCKETS 2 phase 4 (the Laundromat): the fabric softener jug. The cap cracks off its ring, then
+// somebody drinks a thick blue liquid straight from the bottle: slow, resonant glugs with the neck
+// gulping air back in between them, and a swallow at the end.
+function softener(name) {
+  const r = rngFor(name);
+  const n = Math.floor(SR * 1.9);
+  const x = new Float32Array(n);
+  // The cap twisting off: a ratchet of small plastic cracks.
+  for (let k = 0; k < 7; k++) {
+    const at = Math.floor(SR * (0.01 + k * 0.016));
+    for (let i = 0; i < SR * 0.01 && at + i < n; i++) {
+      x[at + i] += (r() * 2 - 1) * Math.exp(-i / (SR * 0.0016)) * (0.34 + r() * 0.16);
+    }
+  }
+  // Four glugs. Each is a short pitched blob (the bottle's air column, falling as it empties)
+  // with a wet noise burst on its front.
+  const glugs = [0.30, 0.61, 0.93, 1.27];
+  for (let g = 0; g < glugs.length; g++) {
+    const at = Math.floor(SR * glugs[g]);
+    const f0 = 196 - g * 17;
+    for (let i = 0; i < SR * 0.22 && at + i < n; i++) {
+      const t = i / SR;
+      const env = Math.min(1, t / 0.006) * Math.exp(-t / 0.055);
+      const f = f0 * (1 - 0.22 * t / 0.22);
+      x[at + i] += Math.sin(TAU * f * t) * 0.85 * env;
+      x[at + i] += Math.sin(TAU * f * 2 * t) * 0.22 * env;
+      x[at + i] += (r() * 2 - 1) * 0.30 * Math.exp(-t / 0.014);
+    }
+  }
+  // The swallow: a low wet click and a breath.
+  const sw = Math.floor(SR * 1.56);
+  for (let i = 0; i < SR * 0.05 && sw + i < n; i++) {
+    x[sw + i] += (r() * 2 - 1) * Math.exp(-i / (SR * 0.006)) * 0.5;
+    x[sw + i] += Math.sin(TAU * 128 * i / SR) * 0.4 * Math.exp(-i / (SR * 0.02));
+  }
+  for (let i = 0; sw + Math.floor(SR * 0.08) + i < n; i++) {
+    const t = i / SR;
+    x[sw + Math.floor(SR * 0.08) + i] += (r() * 2 - 1) * 0.12 * Math.min(1, t / 0.03) * Math.exp(-t / 0.14);
+  }
+  writeWav(name, lowpass(x, 3400));
+}
+
 fs.mkdirSync(OUT, { recursive: true });
 phoneRing('trinkets_phone_ring');
 phonePick('trinkets_phone_pick');
@@ -226,3 +269,4 @@ heartbeat('trinkets_heartbeat');
 hammerBonk('trinkets_hammer_bonk');
 clipOn('trinkets_clip_on');
 epipen('trinkets_epipen');
+softener('trinkets_softener');

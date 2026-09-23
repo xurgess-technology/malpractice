@@ -78,6 +78,26 @@ const LOOT := {
 		"rooms": {"patient_room": 0.072, "nurse_station": 0.096, "supply_closet": 0.036, "lab": 0.048, "morgue": 0.036, "*": 0.006},
 		"surfaces": ["counter", "tray"], "containers": {"station_drawers": 0.5, "trauma_bag": 0.3},
 	},
+	# ---- POCKETS 2 phase 4: the Laundromat's own three. None of them lists a "*" weight, so they are
+	# found in that space and nowhere else (docs/POCKET_SPACES_2.md; Laundromat.ITEM_KINDS is the
+	# same set, declared where the space is).
+	"quarter_bucket": {
+		"name": "Bucket of quarters", "short": "Buckets of quarters", "value": [10, 18], "tier": 1,
+		"stack": true, "batch": [3, 5],
+		"rooms": {"laundromat": 3.2, "laundromat_back": 1.1},
+		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.4, "station_drawers": 0.4},
+	},
+	"warm_scrubs": {
+		"name": "Warm scrubs", "short": "Warm scrubs", "value": [20, 38], "tier": 1,
+		"rooms": {"laundromat": 2.6, "laundromat_back": 2.2},
+		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.5, "station_drawers": 0.3},
+	},
+	"fabric_softener": {
+		"name": "Fabric softener", "short": "Fabric softener jugs", "value": [14, 26], "tier": 0,
+		"trinket": true, "trinket_weight": 1.8,
+		"rooms": {"laundromat": 2.4, "laundromat_back": 1.6},
+		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.35},
+	},
 	# GRAFTING part one (scripts/grafting/eyes.gd): taken out of a strapped Hive, or a surgeon's own
 	# eye swapped out; never found. They spoil outside a vat (Eyes.spoil_factor).
 	"eye_hive": {
