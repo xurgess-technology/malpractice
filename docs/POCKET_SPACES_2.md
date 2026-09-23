@@ -123,7 +123,7 @@ through a seam (a chase steers at the quarry, not at a wander goal).
   retuned — the rate is how often *a* pocket appears, not which one.
   Re-run `tools/pocketrate.gd` anyway.
 
-## Phase 2 — the Natatorium
+## Phase 2 — the Natatorium — DONE 2026-09-22, branch `pockets-natatorium`
 An indoor Olympic pool that can't fit in a one-story hospital.
 Underwater lights on, still water, lane ropes, tile echo. Crossing
 the water is the shortcut but loud (big footstep noise while in
@@ -134,6 +134,206 @@ water); the dry deck is the long quiet way.
   plumbing, no wall-vision).
 - LIFEGUARD STAND FIRST-AID CABINET: container with a guaranteed
   gauze + tourniquet spawn.
+
+### What was built
+`scripts/level/pockets/natatorium.gd`. A 72 x 46 m hall under a 9.5 m
+ceiling: a 51 x 25.5 m pool (an actual Olympic footprint) with seven
+tiles of deck all round, ten lanes of rope, backstroke flags at both
+ends, ten starting blocks, three rows of bleachers down the west wall,
+two lifeguard stands, a chemical store hugging the south-east walls, and
+a locker room through a door in the south wall. Origin (800, 1000).
+
+**The water is the room.** It is not a swimming system and not a volume:
+the pool tiles are the same floor plane as the deck, the surface is one
+still translucent plane 0.34 m above it, and you wade. `water_rect()` is
+the pool in local tiles and `PocketSpaces.water_at(pos)` is the query.
+
+### The one number that matters
+Crossing the pool is the short way between two entrances and the deck is
+the long way; the water is what makes that a *choice* rather than a free
+shortcut. **The loudness was picked against the Sonographer's own maths,
+not against itself**: reach is `loudness * HEAR_PER_LOUDNESS` (22 m), and
+`LOUD` (0.8) is the line between filling the suspicion meter and dropping
+everything to come at the noise.
+
+| | loudness | reach | what it means |
+| --- | --- | --- | --- |
+| dry walk | 0.25 | 5.5 m | only ever suspicious |
+| dry sprint | 0.8 | 17.6 m | certain |
+| dry crouch | — | — | no noise event at all |
+| **wading, walk** | **0.95** | **~21 m** | **certain** |
+| **wading, sprint** | **1.3** | **~29 m** | louder than the Echo shriek |
+| **wading, crouch** | **0.55** | **~12 m** | suspicious, never certain |
+
+So the deck is free and slow, wading is fast and gets you found, and
+crouch-wading is the negotiated middle — still more than twice a dry
+walk, and, unlike dry crouching, **not silence**. You cannot sneak
+through water; you can only be quieter about not sneaking. That last row
+is the only place in the game where crouching does not buy silence, and
+it is deliberate: `game._tick_noise`'s crouch early-out now yields to the
+water, and `Player._in_water()` picks a splash cue at both footstep-audio
+sites so the player can hear what they are spending.
+
+**No new system.** These are the loudness values `emit_noise` already
+carries, decided in the one place footstep loudness was already decided
+(`game.gd:_tick_noise`, which held them as inline literals). Phase 1's
+note said to confirm how footstep loudness is emitted before designing
+around it; it is emitted host-side, once, there.
+
+`AMBIENT_NOISE_LEVEL = 0.0`, as phase 1's notes suggested. Tile echo is
+what the room sounds like, not what it hides behind — the Laundromat is
+the space that masks — so the water's cost is real rather than quietly
+refunded by the room it is paid in.
+
+### The items
+- **POOL CHEMICAL DRUM** — plain loot, `bulky`, $45-80. The grip table
+  already gives bulky loot a two-handed hold, so it needed no entry.
+- **LIFEGUARD WHISTLE** — built as one of the existing trinkets rather
+  than invented beside them: in `Trinkets.KINDS` and `ONE_USE`, spent in
+  one blow, greyed and cracked, $3 of scrap. One blast at **1.4** — above
+  Echo's 1.2, because a whistle is one use and the Echo is not. It is
+  **Echo's attraction and nothing else**: a plain `emit_noise` plus the
+  `alert_to` loop for the deaf Hive, and *no* `ab_echo` event, which is
+  where Echo's wall-vision actually lives (`abilities.gd:_echo` emits
+  both; the two were already fully decoupled). The Night Nurse ignores
+  it, because `Monster.alert_to` only forwards to brains that have it and
+  hers does not — she is not a monster you can call.
+- **FIRST-AID CABINET** — a new container type and **the only container
+  in the game with guaranteed contents**. `game.stock_first_aid_cabinets()`
+  runs each shift before `spawn_loot()` and puts gauze in slot 0 and a
+  tourniquet in slot 1, so finding the pocket always pays for the walk to
+  the stand. Slot 2 is left to the ordinary spawners, which is where a
+  whistle sometimes turns up beside them. It has no rooms in
+  `Items.CONTAINER_TYPES`, so nothing ever furnishes a wing with one.
+
+Both loot kinds name only the Natatorium's room kinds
+(`natatorium_deck`, `natatorium_pool`, `natatorium_lockers`) and neither
+lists `"*"`, so they exist nowhere else in the hospital.
+
+### POCKET_ITEMS — the convention for the bleed-out follow-up
+A layout script declares `POCKET_ITEMS`, the item kinds that space
+contributes, as a `const` set. **No such convention existed** — the
+Factory and the Restaurant contribute no items of their own, so there was
+nothing to follow. This is the smallest thing that works, it sits next to
+`AMBIENT_NOISE_LEVEL` (the other per-space declaration phase 1 added),
+and phases 3 and 4 and the follow-up should match it:
+
+    const POCKET_ITEMS := ["pool_chemical_drum", "lifeguard_whistle"]
+
+### Adding a kind is now two lines
+`PocketPlan.KINDS` and the new `PocketSpaces.LAYOUTS`, which every
+builder, the warmup and the ambient-noise lookup read. The
+`Factory if kind == "factory" else Restaurant` pairs are gone from
+`pocket_spaces.gd` and `mapcheck.gd`; `mapcheck`, `looptest`, `pockettest`
+and the dev panel work off `KINDS` instead of naming kinds. **Phases 3
+and 4 will meet this file at merge** — the changes there are additive
+(one dict entry, one origin, one AIR entry each).
+
+### What phase 2 was tested with
+- **`tools/pocketrate.gd`** — re-run as phase 1 asked, even though the
+  curve is per-wing. **23.9% of 2000 shifts** (500 seeds x 4), every
+  individual shift inside 20-30%, exit 0. That is the *same* figure phase
+  1 measured for the identical sweep, which is the evidence that adding a
+  third kind does not move the rate. No-repeats still clean: 384 pockets
+  rolled with a kind excluded, 0 were the excluded kind.
+- **`tools/mapcheck.gd`** — 40 seeds forcing the natatorium, 4 built:
+  **100% pocket nav coverage, every entrance walks out through its seam,
+  nothing stranded**, and only the pre-existing morgue-tray failure
+  (FAILING_TESTS 2) left. It earned its keep: it caught a solid row
+  between the hall and the locker room, and randomly-placed drums that
+  could fence off the south-east deck corner. The drums now hug the walls
+  in lines (a line pressed against a wall cannot enclose anything) with
+  the corner tile always taken, since that is the one tile two such lines
+  can strand.
+- **`tools/pockettest.tscn`** — **328 checks**, up from 208, with the
+  natatorium in the kind list and a new water section: the pool is water
+  and the deck three tiles off it is not, a deck step uses the hospital's
+  own numbers, wading is past `LOUD`, crouch-wading is louder than a dry
+  walk but not certain, sprinting is louder still, the room masks nothing,
+  `POCKET_ITEMS` names two real loot kinds, and the cabinet is stocked
+  with gauze and a tourniquet. The only failures are the Night Nurse
+  check, **FAILING_TESTS 1f** — and phase 2 pinned down what it actually
+  is. It is **not** the coin flip 1f called it: **only the space that runs
+  first passes it, and every space after that fails**. Reverse the order
+  and the natatorium passes while the Factory and the Restaurant fail. Each
+  passes alone. A third space is what made that visible, and 1f now says
+  so; it is state left behind by the previous space's shift rebuild, not
+  the seam, the distance or any one room. Not phase 2's, and phase 7
+  should not be surprised by it.
+- **`tools/trinkettest.tscn`** — **PASS, 0 failures**, with a whistle
+  section of nine checks: the blast is a real noise event at 1.4, past
+  `LOUD`, the near Hive is drawn and one past `WHISTLE_RANGE` is not, the
+  Night Nurse is untouched, nothing is revealed through a wall, it is
+  spent in one use, and it burns for scrap.
+- **`tools/perfprobe`** — run, as phase 1 said phases 2-4 must. Numbers
+  below.
+
+### The perf numbers, and why they are relative
+
+**Read the caveat before the table.** Two other agents (phases 3 and 4) were running Godot on this
+machine throughout. The size of that is not a guess: the *same* `hospital corridor` scenario measured
+**90 fps avg / 58 low** on an idle machine and **24-31 fps** minutes later while they were building.
+No absolute number taken in that window can be held against the 60 fps / 50 low bar, and neither the
+Factory nor the hospital's own neutral area clears it in that window either.
+
+So phase 2 measured what contention cannot fake: **the Natatorium and the Factory, back to back,
+minutes apart, under the same load** (`--quality=1 --frames=180`, 1600x900, Radeon 890M).
+
+| view | avg fps | 1% low | worst ms | draws |
+| --- | --- | --- | --- | --- |
+| **Factory**: map's hospital corridor | 24 | 14 | 73.2 | 436 |
+| **Factory**: hall, corner to corner | 22 | 11 | 109.1 | 356 |
+| **Factory**: down a production line | 25 | 14 | 77.7 | 500 |
+| **Factory**: an entrance from inside | 31 | 17 | 68.5 | 145 |
+| **Factory**: seam, hospital side | 22 | 12 | 97.4 | 193 |
+| **Natatorium**: map's hospital corridor | 31 | 21 | 52.2 | 447 |
+| **Natatorium**: down the length of the pool | 28 | 21 | 50.1 | 305 |
+| **Natatorium**: across the water, lights on | 23 | 20 | 52.6 | 285 |
+| **Natatorium**: standing in the pool, looking up | 27 | 21 | 51.2 | 155 |
+| **Natatorium**: corner to corner over the bleachers | 27 | 20 | 50.3 | 325 |
+| **Natatorium**: an entrance from inside | 34 | 24 | 45.1 | 189 |
+| **Natatorium**: seam, hospital side | 34 | 24 | 43.0 | 187 |
+
+**The Natatorium is not a regression against the heaviest space we already ship.** It matches or beats
+the Factory on every comparable view, its **1% lows are half again better** (20-24 against 11-17),
+its worst frames are tighter (43-53 ms against 68-109 ms) and it draws less (155-325 against 145-500).
+The water plane is one mesh, the ropes, flags, trusses and drums are MultiMesh, and only 5 of its 32
+lights cast shadows. The view someone will actually stand in most — in the water, looking along it —
+is among its cheapest.
+
+For reference, the **uncontended** baseline run (`--quality=1`, no pocket) on the same build:
+lobby 74/51, corridor 90/58, pharmacy 93/60, OR 71/60, OR seal close-up 81/65, operating 114/73,
+crematorium 54/30, neutral area 44/31, lot facing the fog 58/36. The last three are under the bar on
+this machine at this resolution on `main` as well; that is not phase 2's.
+
+**Someone should re-run this on a quiet machine before trusting an absolute number.**
+
+### Two pre-existing things perfprobe hit, neither phase 2's
+1. **`perfprobe --pockets` never prints a row on this machine.** It restarts the session once per kind
+   and dies in the renderer ("BUG, indexing did not unpair geometries from light", then signal 11).
+   Proved not to be the new space: with the natatorium taken out of `PocketPlan.KINDS` and
+   `PocketSpaces.LAYOUTS` entirely — the pocket set identical to `main`'s — it crashes in the same
+   place with a byte-identical log. Phase 2 therefore added **`--pocket=<kind>`**, which forces the
+   kind before the first and only `start_session` and prints its table. (That path still hits the same
+   renderer bug on the way out, *after* the numbers are printed, for the Factory as well as for the
+   Natatorium.)
+2. **`perfprobe` in a GUI window on the `main` checkout** floods `main.gd:673` and `main.gd:707` with
+   Nil-property script errors every frame — a 110 MB log and not one measurement. It does not do this
+   in a slot, so it is something about that checkout's settings rather than the code, but it is worth
+   someone's eye.
+
+### A note on running perfprobe without stealing focus
+`tools/perfprobe.ps1` (new) starts it with **SW_SHOWNOACTIVATE (4)**, not
+the shot tools' SW_SHOWMINNOACTIVE (7): a minimized window does not
+render, and the whole point is honest frame times. The window is drawn
+but never activated, so it cannot take the keyboard.
+
+It is **not** moved offscreen. `--position 6000,6000` looked like the
+tidy answer and is not — a fully offscreen window's swapchain dies
+partway through the run on this Radeon ("Vulkan device was lost", TDR)
+and the probe crashes before printing a number. **That reproduces on
+`main`**, so it is the offscreen window and not the scenario. The window
+is left where it lands and closed when the numbers are in.
 
 ## Phase 3 — the Chapel
 A hospital chapel that is somehow a cathedral: pews for three
@@ -239,10 +439,10 @@ the session once per kind, and in a windowed run that trips the Godot
 renderer bug docs/KNOWN_ISSUES.md already records ("BUG, indexing did not
 unpair geometries from light") and dies with signal 11 after warmup,
 before it measures anything. Verified by running it on a detached
-checkout of `main` (3b30969): same crash, same place. So this phase added
-**`--pocket=<kind>`**: one space, forced before the first session is
-built and never rebuilt, which is how the numbers above were taken. See
-docs/FAILING_TESTS.md 1g.
+checkout of `main` (3b30969): same crash, same place. **`--pocket=<kind>`**
+— one space, forced before the first session is built and never rebuilt —
+is the way round it, and phases 2 and 4 arrived at it independently; the
+merge kept phase 2's version. See docs/FAILING_TESTS.md 1l.
 
 ### The three items
 `Laundromat.POCKET_ITEMS` declares the set (see "the item set" below).
@@ -299,7 +499,7 @@ and the bleed-out task finds one shape everywhere.
 Warm scrubs is in the set, but whether a permanent cosmetic unlock
 *should* bleed into a corridor is the follow-up's call, not this one's.
 
-### One shared-file fix, which phases 2 and 3 also need
+### One shared-file fix, which the Natatorium needed too
 `LootSpawner._draw_trinkets` drew the shift's 3-5 trinkets from every
 trinket kind, knowing nothing about the level. A pocket-only trinket
 has no `"*"` room weight, so on a shift without its space the draw
@@ -307,8 +507,17 @@ burned one of those few slots, and the swap pass at the end of `plan()`
 then parachuted it into a hospital room it must never appear in. The
 draw now only offers kinds the level has a positive-weight, fitting
 location for (`_can_place`). Every hospital kind has a `"*"` weight, so
-this is a no-op for everything that existed. **The Natatorium's whistle
-and the Chapel's candle need exactly this**, so expect to meet here.
+this is a no-op for everything that existed.
+
+**This was live on `main`.** The Natatorium's `lifeguard_whistle` has the
+same shape — natatorium room weights, no `"*"` — so from 0.10.35 until
+this merge, a whistle could be drawn on a shift with no Natatorium and
+placed in a hospital room. The Chapel's votive candle will want the same
+thing. Two other things the merge caught in the same family: `loottest`
+had never been told about the Natatorium's two kinds, so it was failing
+its "every kind is a kept kind" check on `main`; and its pocket-only
+assertions are now driven by a `POCKET_ONLY` table of kind -> its space's
+room kinds, so a new space's items are checked the day they are added.
 
 ## Phase 5 — items for the existing spaces
 Factory:

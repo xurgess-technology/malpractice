@@ -10,6 +10,8 @@
 //   trinkets_hammer_bonk    a rubber head on something that did not expect it
 //   trinkets_clip_on        the pulse oximeter's plastic jaws snapping shut, then its own beep
 //   trinkets_epipen         the spring, the click and the hiss of an auto-injector
+//   trinkets_whistle        one long pea-whistle blast: two close tones beating, the pea warbling
+//                           over them, and a tiled room ringing after it (POCKETS 2, the Natatorium)
 //   trinkets_softener       POCKETS 2 phase 4: a cap cracking, then long thick glugs of syrup
 import fs from 'node:fs';
 import path from 'node:path';
@@ -218,6 +220,40 @@ function epipen(name) {
   writeWav(name, highpass(lowpass(x, 7200), 240));
 }
 
+// POCKETS 2 phase 2: the lifeguard whistle. A pea whistle is two slightly detuned tones beating
+// against each other with the pea chattering across them, and this one is blown in a natatorium,
+// so it is followed by a long bright tail. It is the loudest trinket in the game because it is the
+// loudest thing the monsters hear (Trinkets.WHISTLE_NOISE).
+function whistle(name) {
+  const r = rngFor(name);
+  const n = Math.floor(SR * 1.5);
+  const x = new Float32Array(n);
+  const body = 0.62;          // the blast itself; the rest is the room
+  const f0 = 2350, f1 = 2412; // the two tones, ~60 Hz apart: that is the beat you hear
+  let ph0 = 0, ph1 = 0, peaPh = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    // Attack, hold, and a quick release as the breath runs out.
+    let env = Math.min(1, t / 0.022) * (t < body ? 1 : Math.exp(-(t - body) / 0.05));
+    if (t > body + 0.2) env = 0;
+    if (env <= 0) continue;
+    // The pea: a fast warble across both tones, plus the chatter it makes rattling round the chamber.
+    peaPh += TAU * 26 / SR;
+    const warble = 1 + Math.sin(peaPh) * 0.018 + (r() * 2 - 1) * 0.004;
+    ph0 += TAU * f0 * warble / SR;
+    ph1 += TAU * f1 * warble / SR;
+    let v = Math.sin(ph0) * 0.5 + Math.sin(ph1) * 0.45;
+    v += Math.sin(ph0 * 2) * 0.12 + Math.sin(ph1 * 3) * 0.05;   // the shrillness
+    v += (r() * 2 - 1) * 0.10;                                   // breath through the mouthpiece
+    x[i] += v * env * 0.85;
+  }
+  // The room: a handful of bright late reflections off wet tile, well after the blast stops.
+  const src = x.slice();
+  for (const [delay, gain] of [[0.037, 0.30], [0.071, 0.22], [0.119, 0.16], [0.181, 0.11], [0.262, 0.07], [0.36, 0.045]]) {
+    const d = Math.floor(SR * delay);
+    for (let i = 0; i + d < n; i++) x[i + d] += src[i] * gain;
+  }
+  writeWav(name, highpass(lowpass(x, 11000), 700));
 // POCKETS 2 phase 4 (the Laundromat): the fabric softener jug. The cap cracks off its ring, then
 // somebody drinks a thick blue liquid straight from the bottle: slow, resonant glugs with the neck
 // gulping air back in between them, and a swallow at the end.
@@ -269,4 +305,5 @@ heartbeat('trinkets_heartbeat');
 hammerBonk('trinkets_hammer_bonk');
 clipOn('trinkets_clip_on');
 epipen('trinkets_epipen');
+whistle('trinkets_whistle');
 softener('trinkets_softener');

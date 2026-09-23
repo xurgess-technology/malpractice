@@ -82,6 +82,19 @@ How to run things is at the bottom of this file.
   the fence now refuses those, so she is far likelier to still be nearby when the bot crosses.
   Whoever picks this up should look at `_vanish()` in `scripts/monsters/night_nurse_brain.gd` and at
   how `_nurse_follows` in `tools/pockettest.gd` stages her, rather than at the seam.
+- **2026-09-22, `pockets-natatorium`: it is not a coin flip. It is the run order.** Phase 2 added a
+  third space, which made the pattern visible: **only the space that runs FIRST passes this check;
+  every space after it fails.** Measured, with the natatorium third (`KINDS` order) and then with the
+  order reversed in `_ready`:
+  - factory, restaurant, **natatorium** -> factory ok, restaurant ok, **natatorium FAILS** (60.0 s,
+    1965.8 m)
+  - **natatorium**, restaurant, factory -> **natatorium ok** (9.2 s, 3.9 m), restaurant FAILS
+    (60.0 s, 1444.3 m), factory FAILS (60.0 s, 1235.7 m)
+  Each space passes on its own (`--only=<kind>` is green for all three), and the distances reported
+  are just each pocket's own origin, so they say nothing. This rules out the space, the seam, the
+  layout and the distance, and points squarely at **state left behind by the previous space's run** —
+  `_run_space` tears a shift down and starts another, and something the Night Nurse depends on does
+  not survive that. Start at what `_nurse_follows` assumes about a freshly rebuilt shift.
 
 ## 1g. nettest `pockets`: client 1 never carries client 2 into the pocket
 
@@ -115,23 +128,33 @@ How to run things is at the bottom of this file.
   that depends on a short-lived state being sampled at 20 Hz is vulnerable to them, so this is worth
   its own look before the next netcode feature leans on snapshot timing.
 
-## 1g. perfprobe --pockets crashes before it measures anything (signal 11)
+## 1k. spawncheck: 600 suture_kit failures
+
+- **Found 2026-09-22** by the `syringe-draw` task, which generalised the loose-supply spawner and
+  wanted a clean baseline. **Confirmed identical on clean `main`**, so it is pre-existing and not
+  that branch's doing. It had never been written down.
+- Nobody has looked at the cause. Worth knowing that `suture_kit` is the newest of the loose
+  supplies -- SUTURE! (0.10.4) added the closing step that needs it, and 0.10.33 generalised the
+  spawner that places it -- so if this turns out to date from either, it is young.
+
+## 1l. perfprobe --pockets crashes before it measures anything (signal 11)
 
 - **Command:** `tools\perfprobe.ps1 -Extra "--pockets"` (or the same flags on `perfprobe.tscn` in
   any windowed run).
 - **Result:** a burst of `ERROR: BUG, indexing did not unpair geometries from light` from
   `renderer_scene_cull.cpp`, then `CrashHandlerException: Program crashed with signal 11`, straight
   after `[warmup] built and drew everything once`. Not one scenario row is printed.
-- **Not ours, and not any one pocket space.** Verified on 2026-09-22 by running it on a detached
-  checkout of **`main` (3b30969)**, with `tools/perfprobe.ps1` the only file brought over: identical
-  crash, identical place. It fails the same way with and without the Laundromat.
+- **Not ours, and not any one pocket space.** Found independently by POCKET_SPACES_2 phase 2 and
+  phase 4. Phase 4 verified it on 2026-09-22 on a detached checkout of **`main` (3b30969)** with
+  only `tools/perfprobe.ps1` brought over: identical crash, identical place, with no Laundromat in
+  the tree at all. Phase 2 saw the same with the Natatorium taken back out of `PocketPlan.KINDS`.
 - **Why:** `_run_pockets` calls `game.start_session()` once per kind, tearing down and rebuilding a
   whole level with all its lights. docs/KNOWN_ISSUES.md already records that renderer error as a
-  Godot bug seen in windowed runs ("Seen during this work and not ours"); doing it repeatedly turns
-  it from an error into a crash.
-- **The way round, for measuring one space:** `--pocket=<kind>` (POCKET_SPACES_2 phase 4) forces the
-  kind before the first session is built and never restarts it, so nothing is torn down. That is how
-  the Laundromat's numbers in docs/POCKET_SPACES_2.md were taken.
+  Godot bug seen in windowed runs ("Seen during this work and not ours"); doing it once per kind
+  turns it from an error into a crash.
+- **The way round, for measuring one space:** `--pocket=<kind>` forces the kind before the first
+  session is built and never restarts it, so nothing is torn down. Both phases arrived at it; it is
+  how every pocket space's numbers in docs/POCKET_SPACES_2.md were taken.
 - **Where to look:** `tools/perfprobe.gd` `_run_pockets`, and whatever frees lights in
   `game._clear_level` / `WingLoader` ahead of a `start_session`.
 
@@ -165,6 +188,15 @@ How to run things is at the bottom of this file.
 The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe`
 (the `.exe` in that path is a folder). From Git Bash, run from the project root.
 
+- **A headless run starts from `Settings.DEFAULTS`, not from this machine's settings.** Every
+  `tools/*test.tscn`, nettest's child processes and windows opened onto a scene in `res://tools/`
+  boot on the defaults and never read or write `user://settings.cfg`, so a test measures the code
+  rather than whoever owns the machine. (Slots seed their save folder from Zach's, which says
+  `camera="shoulder"`; that read his view preference into four separate tests in one day.) Nothing
+  to opt into and nothing to restore -- a run that crashes leaves the saved settings alone, because
+  they were never opened. A test that genuinely wants settings behaviour calls
+  `Settings.use_path("user://mytest_settings.cfg")` on a scratch file of its own, as
+  `tools/settingstest.gd` and `tools/carrycamtest.gd` do. See `_machine_run` in `scripts/settings.gd`.
 - Import first after pulling or adding assets: `godot --headless --path . --import`
 - **Always add `--fixed-fps 60`** to headless test scenes (about 12x faster).
 - **Run headless tests one at a time per checkout.** Parallel runs in the same directory segfault.

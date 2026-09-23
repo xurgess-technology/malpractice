@@ -22,6 +22,8 @@ static func build(root: Node3D, kind: String, count: int) -> void:
 		"heart_monitor": _heart_monitor(root)
 		"defibrillator": _defibrillator(root)
 		"ultrasound": _ultrasound(root)
+		"pool_chemical_drum": _pool_drum(root)
+		"lifeguard_whistle": _whistle(root)
 		# POCKETS 2 phase 4: the Laundromat's three.
 		"quarter_bucket": _quarter_bucket(root, clampi(count, 1, 5))
 		"warm_scrubs": _warm_scrubs(root)
@@ -71,6 +73,8 @@ static func footprint(kind: String) -> Vector3:
 		"heart_monitor": return Vector3(0.38, 0.34, 0.2)
 		"defibrillator": return Vector3(0.36, 0.2, 0.28)
 		"ultrasound": return Vector3(0.42, 0.34, 0.32)
+		"pool_chemical_drum": return Vector3(0.42, 0.62, 0.42)
+		"lifeguard_whistle": return Vector3(0.1, 0.04, 0.05)
 		"quarter_bucket": return Vector3(0.22, 0.2, 0.22)
 		"warm_scrubs": return Vector3(0.28, 0.13, 0.22)
 		"fabric_softener": return Vector3(0.17, 0.26, 0.12)
@@ -352,6 +356,36 @@ static func dark_probe() -> StandardMaterial3D:
 	return _m("us_probe", Color(0.2, 0.21, 0.23), 0.5)
 
 
+# POCKETS 2 phase 2: the Natatorium's two loot kinds.
+
+## A sealed drum of pool chemicals: blue plastic, white lid, two rolling ribs and a hazard label.
+## Bulky, so it takes both hands and never goes in a container.
+static func _pool_drum(root: Node3D) -> void:
+	var blue := _m("drum_blue", Color(0.11, 0.30, 0.60), 0.5)
+	var lid := _m("drum_lid", Color(0.84, 0.85, 0.83), 0.45, 0.15)
+	_add(root, _cyl(0.2, 0.56, blue, 16), Vector3(0, 0.28, 0))
+	for y in [0.16, 0.42]:
+		_add(root, _cyl(0.212, 0.035, lid, 16), Vector3(0, y, 0))
+	_add(root, _cyl(0.205, 0.03, lid, 16), Vector3(0, 0.573, 0))
+	_add(root, _cyl(0.05, 0.02, _m("drum_cap", Color(0.72, 0.16, 0.10), 0.4), 10), Vector3(0.1, 0.594, 0))
+	# The hazard diamond on the side.
+	var label := _m("drum_label", Color(0.93, 0.90, 0.80), 0.8)
+	_add(root, _box(Vector3(0.16, 0.16, 0.004), label), Vector3(0, 0.30, 0.201), Vector3(0, 0, 45))
+	_add(root, _box(Vector3(0.1, 0.1, 0.004), _m("drum_hazard", Color(0.88, 0.62, 0.06), 0.7)), Vector3(0, 0.30, 0.204), Vector3(0, 0, 45))
+
+
+## A lifeguard's whistle on its lanyard: a chrome barrel with the pea chamber and a mouthpiece,
+## and a loop of red cord it hangs from.
+static func _whistle(root: Node3D) -> void:
+	var chrome := _m("whistle_chrome", Color(0.80, 0.82, 0.85), 0.2, 0.95)
+	var cord := _m("whistle_cord", Color(0.72, 0.10, 0.10), 0.9)
+	_add(root, _cyl(0.017, 0.045, chrome, 12), Vector3(0.0, 0.017, 0), Vector3(0, 0, 90))
+	_add(root, _box(Vector3(0.038, 0.014, 0.016), chrome), Vector3(-0.038, 0.014, 0))
+	_add(root, _cyl(0.007, 0.012, chrome, 8), Vector3(0.0, 0.033, 0))
+	_add(root, _cyl(0.004, 0.012, chrome, 8), Vector3(0.026, 0.02, 0), Vector3(0, 0, 90))
+	# The lanyard, coiled beside it.
+	for i in 3:
+		_add(root, _cyl(0.018, 0.004, cord, 10, 0.018), Vector3(0.036 + i * 0.002, 0.004 + i * 0.004, 0.0))
 # ---------------------------------------------------------------------------
 # POCKETS 2 phase 4: the Laundromat (docs/POCKET_SPACES_2.md)
 

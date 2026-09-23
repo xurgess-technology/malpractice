@@ -452,6 +452,14 @@ var hands: Node3D
 var game: Node = null
 
 
+## POCKETS 2 phase 2: standing in the Natatorium's pool. Every machine can answer this — the pocket
+## is built on all of them — so a wading teammate splashes on your screen too, not only on the host's.
+func _in_water() -> bool:
+	if game == null or game.get("pockets") == null:
+		return false
+	return bool(game.pockets.water_at(global_position))
+
+
 ## SPRINT-DIVE HOOK: in the air in a dive: this machine's own dive, or the replicated bit for others.
 func dive_in_air() -> bool:
 	return (diving and _dive_airborne) or _remote_dive_air
@@ -1221,13 +1229,18 @@ func _local_step(delta: float) -> void:
 
 	# Footsteps (a crawl makes none). SWEEP 4A HOOK (controls): crouching makes no sound at all,
 	# on top of emit_noise() never firing for a crouching player (game.gd's _tick_noise).
-	if moving and is_on_floor() and not downed and not crouching:
+	# POCKETS 2 phase 2: wading through the Natatorium's pool is heard even crouched, because the
+	# monsters hear it even crouched (game.gd's _tick_noise). The splash is how you know that.
+	var wading := _in_water()
+	if moving and is_on_floor() and not downed and (not crouching or wading):
 		_step_accum += delta * (3.0 if sprinting else 1.9)
 		if _step_accum >= 1.0:
 			_step_accum = 0.0
 			# POCKETS 2 phase 4: a fabric-softener drinker still hears their own steps, faintly, so
 			# they can tell it is still working. Nobody else hears a thing: the noise event is gone.
-			Audio.play("step", global_position, -4.0 + (-12.0 if silent_steps else 0.0), 0.12)
+			# Wading is exempt, the same way it is exempt from crouching (game.gd `_tick_noise`).
+			var step_db: float = -1.0 if wading else (-4.0 + (-12.0 if silent_steps else 0.0))
+			Audio.play("step_water" if wading else "step", global_position, step_db, 0.12)
 
 	if is_local:
 		_check_cosmetic_unlock()
@@ -1308,11 +1321,12 @@ func _remote_step(delta: float) -> void:
 	head.rotation.x = lerpf(head.rotation.x, -0.95 if hive_view else _pitch, k)   # head droops
 	if _hive_glaze != null:
 		_hive_glaze.visible = hive_view   # SWEEP 4A HOOK (Hive Eyes, chunk 4): glazed eyes for teammates
-	if moving and not downed and not crouching:
+	var wading := _in_water()   # POCKETS 2 phase 2: a teammate crossing the pool is loud from here too
+	if moving and not downed and (not crouching or wading):
 		_step_accum += delta * (3.0 if sprinting else 1.9)
 		if _step_accum >= 1.0:
 			_step_accum = 0.0
-			Audio.play("step", global_position, -8.0, 0.12)
+			Audio.play("step_water" if wading else "step", global_position, -5.0 if wading else -8.0, 0.12)
 
 
 ## Downed hook: carried or lying on the player table. Every machine puts the body where the carrier
@@ -1489,6 +1503,14 @@ func _update_aim() -> void:
 		if vp != "":
 			aim_id = "vat_hand"
 			aim_prompt = vp
+			aim_hold = 0.0
+	# SYRINGE DRAW: aimed at nothing with a syringe in hand, E opens the draw wherever you stand.
+	# The first minigame that happens outside the OR (docs/ANESTHETIC_INJECTION_SPEC.md 9).
+	if aim_id == "" and alive and not downed and not operating and game != null and game.get("syringe_stations") != null:
+		var sp: String = game.syringe_stations.hand_prompt(self)
+		if sp != "":
+			aim_id = "syringe_hand"
+			aim_prompt = sp
 			aim_hold = 0.0
 	# HANDS HOOK: holding the needle and aiming at a monster in its stun window: "Jab it" (a few Hz).
 	if aim_prompt == "" and alive and not downed and game != null and game.combat != null and game.combat.has_method("jab_prompt") \

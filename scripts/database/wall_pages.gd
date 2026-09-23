@@ -47,6 +47,7 @@ const PROCEDURE_TEXT := {
 
 const SURGERY_TEXT := {
 	"anesthetic": ["Puts the patient under so they don't feel a thing. Too little and they wake up mid-surgery.", "Found in medicine fridges. Glass: dropping it breaks some."],
+	"syringe": ["Load one from a vial anywhere in the hospital and the dose is ready before you reach the table.", "Found in fridges and drawer units. Spent once the dose is in a patient."],
 	"gauze": ["Rolls of dressing that pack wounds and soak up bleeding.", "Found in nurse station drawers."],
 	"forceps": ["Long tongs for pulling out bullets, and seating a graft.", "Found in steel drawer units. Kept after use."],
 	"tourniquet": ["A strap that cuts off the blood to a limb before you saw.", "Found in trauma bags. Kept after use."],
@@ -65,6 +66,9 @@ const LOOT_BLURBS := {
 	"desk_phone": "A desk phone, ripped off its cord.",
 	"laptop": "A hospital laptop. Fragile.",
 	"gold_watch": "A patient's gold watch, still ticking.",
+	# POCKETS 2 phase 2: the Natatorium.
+	"pool_chemical_drum": "A sealed drum of pool chemicals. Nobody ordered it and nobody opened it. Takes both hands.",
+	"lifeguard_whistle": "A lifeguard's whistle on a red lanyard. Blow it once and every monster within thirty metres comes to look at you. There is no second blast.",
 	"heart_monitor": "A bedside heart monitor. Takes both hands.",
 	"defibrillator": "A portable defibrillator. Takes both hands.",
 	"ultrasound": "A portable ultrasound. The best find in the wings.",
@@ -87,6 +91,9 @@ static func entries(section: String, view: Dictionary) -> Array:
 				out.append({"key": kind, "title": String(MonsterPages.entry(kind).get("name", kind)), "known": _tier(view, kind) >= 2})
 		"procedures":
 			for id in ProceduresDB.AILMENTS.keys():
+				# SYRINGE DRAW: loading a syringe is an action, not a procedure.
+				if bool(ProceduresDB.AILMENTS[id].get("handheld", false)):
+					continue
 				out.append({"key": id, "title": String(ProceduresDB.AILMENTS[id].get("name", id)), "known": true})
 		"surgery":
 			for kind in Pages.item_order():

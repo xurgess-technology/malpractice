@@ -108,6 +108,16 @@
       "category": "loot",
       "glow": null
     },
+    "pool_chemical_drum": {
+      "name": "Pool chemical drum",
+      "category": "loot",
+      "glow": null
+    },
+    "lifeguard_whistle": {
+      "name": "Lifeguard whistle",
+      "category": "trinket",
+      "glow": null
+    },
     "ultrasound": {
       "name": "Portable ultrasound",
       "category": "loot",

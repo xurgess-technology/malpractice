@@ -78,6 +78,20 @@ const LOOT := {
 		"rooms": {"patient_room": 0.072, "nurse_station": 0.096, "supply_closet": 0.036, "lab": 0.048, "morgue": 0.036, "*": 0.006},
 		"surfaces": ["counter", "tray"], "containers": {"station_drawers": 0.5, "trauma_bag": 0.3},
 	},
+	# POCKETS 2 phase 2 (docs/POCKET_SPACES_2.md, the Natatorium). Both kinds live only in the pocket:
+	# their room weights name the Natatorium's own room kinds and nothing else, and neither lists "*",
+	# so they never turn up in the hospital proper. The layout script's POCKET_ITEMS is the same set,
+	# declared where anything that wants to know what a space contributes can read it.
+	"pool_chemical_drum": {
+		"name": "Pool chemical drum", "short": "Pool chemical drums", "value": [45, 80], "tier": 1, "bulky": true,
+		"rooms": {"natatorium_deck": 2.4, "natatorium_lockers": 0.9},
+		"surfaces": ["floor", "counter"], "containers": {},
+	},
+	"lifeguard_whistle": {
+		"name": "Lifeguard whistle", "short": "Lifeguard whistles", "value": [10, 20], "tier": 0, "trinket": true, "trinket_weight": 2.0,
+		"rooms": {"natatorium_deck": 2.0, "natatorium_lockers": 1.2},
+		"surfaces": ["counter", "tray"], "containers": {"drawer_unit": 0.5, "trauma_bag": 0.4, "first_aid_cabinet": 0.5},
+	},
 	# ---- POCKETS 2 phase 4: the Laundromat's own three. None of them lists a "*" weight, so they are
 	# found in that space and nowhere else (docs/POCKET_SPACES_2.md; Laundromat.POCKET_ITEMS is the
 	# same set, declared where the space is).

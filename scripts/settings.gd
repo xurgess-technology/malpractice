@@ -16,6 +16,11 @@ extends Node
 ##   carry_camera   "shoulder" or "first_person" while carrying or dragging (scripts/camera/carry_camera.gd)
 ##   sprint_mode    "toggle" (press to start/stop sprinting) or "hold" (scripts/player.gd)
 ##
+## **A machine run starts from DEFAULTS.** Headless runs (every test scene, nettest) and windows
+## opened onto a scene in `res://tools/` never read or write the player's settings.cfg: they boot
+## on the defaults above, so a test measures the code and not whoever owns the machine. See
+## `_machine_run()` for why, and for how a test that really wants settings opts out.
+##
 ## This node applies what is global itself (audio buses, window mode). Scene-specific
 ## settings are applied by whoever owns the thing: main.gd (quality, brightness) and
 ## player.gd (sensitivity, fov) read get_value() when they are built and listen to `changed`.
@@ -102,11 +107,18 @@ const REVIEW_VOLUME := 0.1
 ## Slider drags would otherwise write the file every frame.
 const SAVE_DELAY := 0.4
 
+## Where a machine run's settings go instead of the player's file. Nothing ever reads it: a
+## machine run starts from DEFAULTS in memory, and this is only somewhere for a stray save to
+## land. One file for the whole slot, since nobody loads it back.
+const MACHINE_PATH := "user://settings_machine.cfg"
+
 ## Where the file lives. Tests point this elsewhere through use_path() so they never touch
 ## the player's real settings.
 var path := PATH
 ## Where a first run looks for the old quality preset (tests point this elsewhere too).
 var legacy_path := LEGACY_PREFS
+## True when this process is a machine run, not somebody playing (see _machine_run).
+var machine_run := false
 
 var _values: Dictionary = {}
 var _save_timer := -1.0
@@ -115,7 +127,17 @@ var _volume_trim := -2.0   # worked out once from the command line, below (-1 me
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_load()
+	machine_run = _machine_run()
+	if machine_run:
+		# A test starts from a known state, not from whoever owns this machine. Don't read the
+		# player's file at all, and send any save somewhere harmless.
+		path = MACHINE_PATH
+		legacy_path = ""
+		for key in DEFAULTS.keys():
+			_values[key] = DEFAULTS[key]
+		print("[settings] machine run: starting from DEFAULTS, %s untouched (use_path() to opt out)" % PATH)
+	else:
+		_load()
 	apply_all()
 
 
@@ -174,7 +196,8 @@ func save_now() -> void:
 		push_warning("Settings: could not save %s (%s)" % [path, error_string(err)])
 
 
-## Test seam: switch to another file and load it (missing file means defaults), then apply.
+## Test seam, and the opt-out from the machine-run defaults (see `_machine_run`): switch to
+## another file and load it (missing file means defaults), then apply.
 ## Emits `changed` for every key so live listeners pick the loaded values up.
 func use_path(p: String) -> void:
 	path = p
@@ -337,6 +360,35 @@ func _apply_window_mode() -> void:
 					want = Vector2i(usable.size.x * 0.85, usable.size.y * 0.85)
 				DisplayServer.window_set_size(want)
 				DisplayServer.window_set_position(usable.position + (usable.size - want) / 2)
+
+
+## Is this process a machine run rather than somebody playing?
+##
+## Every headless run is one (all of `tools/*test.tscn`, nettest's child processes, `--import`),
+## and so is any window opened straight onto a scene in `res://tools/` -- the labs and the
+## screenshot tools. A review window is Zach playing, so it is not one whatever scene it opens.
+##
+## This is why a headless test does not read the machine's settings. Each work slot seeds its
+## save folder from Zach's own, which say camera="shoulder", so before this a test whose
+## behaviour touched a setting was testing his preference: devtest's free camera, doortest's
+## aiming and a vat-pickup probe all failed that way in one day. Tests used to pin the setting
+## by hand and put it back at the end, which did nothing for a run that crashed in between.
+##
+## **Writing a test that needs real settings behaviour?** Call `use_path()` on a scratch file of
+## your own (`user://mytest_settings.cfg`): that loads and saves normally, so you get the whole
+## thing (migration, persistence, reload) without going near the player's file.
+## `tools/settingstest.gd` is the example.
+func _machine_run() -> bool:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--review="):   # Zach's own window: his settings (scripts/review.gd)
+			return false
+	if DisplayServer.get_name() == "headless":
+		return true
+	for a in OS.get_cmdline_args():
+		var arg := a.replace("\\", "/")
+		if arg.ends_with(".tscn") and arg.get_base_dir().get_file() == "tools":
+			return true
+	return false
 
 
 ## Test tools and screenshot runs choose their own window; only the real game (launched

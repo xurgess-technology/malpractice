@@ -57,6 +57,9 @@ const SCENARIOS := [
 	{"name": "trinkets", "scenario": "trinkets", "clients": 2, "timeout": 400},
 	# POCKETS: a client, a carried client and an item through a seam into the Factory.
 	{"name": "pockets", "scenario": "pockets", "clients": 2, "timeout": 300, "extra": ["--pocket=factory"]},
+	# SYRINGE DRAW: both clients load a syringe in a corridor AT THE SAME TIME, which is the thing a
+	# table could never do, and each sees the other's draw running beside their own.
+	{"name": "syringe_draw", "scenario": "syringe_draw", "clients": 2, "timeout": 300},
 	# DOORS: gates locked and unlocking, E on a door, a late joiner, the next shift's wings.
 	{"name": "doors", "scenario": "doors", "clients": 2, "timeout": 400, "start_after": {2: "[marker] doors_open"}},
 	# Terminal redesign, chunk 4: the break room screen shared, sign-in with a client's own database.

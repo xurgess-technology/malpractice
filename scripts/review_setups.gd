@@ -33,6 +33,13 @@ const MirrorsScript := preload("res://scripts/personnel/mirrors.gd")
 
 const SETUPS := {
 	"icons": {"seed": 4242, "stage": "_icons"},
+	# POCKETS 2 phase 2 (docs/POCKET_SPACES_2.md): standing on the Natatorium's deck at the water's
+	# edge, a lifeguard whistle and a pool chemical drum to hand, the stocked first-aid cabinet on the
+	# lifeguard stand behind you. Walk the pool and walk the deck and listen to the difference.
+	"natatorium": {"seed": 4242, "pocket": "natatorium", "stage": "_natatorium"},
+	# POCKETS 2 phase 4 (docs/POCKET_SPACES_2.md): inside the Laundromat with its three items in
+	# hand and a Sonographer already hunting you, in a room where it cannot hear you walk.
+	"laundromat": {"seed": 4242, "pocket": "laundromat", "stage": "_laundromat"},
 	"items": {"seed": 1, "stage": "_items"},
 	# GRAFTING chunk C (docs/GRAFTING.md): strapped to a table with a loaded vat on its stand, as
 	# Dr. Botsworth, ready to operate. `graft_back` is the same with the graft already done.
@@ -57,6 +64,13 @@ const SETUPS := {
 	# gunshot wound. `--patient=seal` puts the seal on the table instead of Bob; `--stick` opens on
 	# STICK! with the dose already drawn, so the aim is all there is to try.
 	"sedate": {"seed": 4242, "stage": "_sedate"},
+	# SYRINGE DRAW: the new syringe item -- three in hand, vials to load them from, some on the floor.
+	"syringe": {"seed": 4242, "stage": "_syringe"},
+	# SYRINGE DRAW (docs/ANESTHETIC_INJECTION_SPEC.md 9): standing in a corridor with a syringe and
+	# a vial and a patient waiting on a table. Press E where you stand to load it, then carry it
+	# over and operate: the step opens on STICK! instead of DRAW!. `--open` starts with the draw
+	# already up (the smoke look uses it, since a screenshot cannot press E).
+	"syringe_draw": {"seed": 4242, "stage": "_syringe_draw"},
 	# 2026-09-21 (docs/ARCADE_SURGERY.md 5.2): DODGE!, a gunshot wound at the bullet step, sedated, and
 	# you already operating. `--undersedated` makes the patient squirm; `--patient=seal` swaps in the seal.
 	"dodge": {"seed": 4242, "stage": "_dodge"},
@@ -101,22 +115,7 @@ const SETUPS := {
 	# at your feet. The vats have always been ordinary bulky items; their bench's collider used to
 	# bury them, so E never saw them at all.
 	"vats": {"seed": 4242, "stage": "_vats"},
-	# POCKETS 2 phase 4 (docs/POCKET_SPACES_2.md): standing in the Laundromat with its three items
-	# in hand and a Sonographer already hunting you in the room. The point is that it cannot hear
-	# you walk in here: walk at it, then walk back out through a seam and listen to it find you.
-	"laundromat": {"seed": 4242, "stage": "_laundromat", "pocket": "laundromat"},
 }
-
-
-## Anything a setup needs doing before the map is generated (scripts/main.gd calls it first thing).
-## POCKETS: a setup may name the pocket kind it wants; the pocket is rolled with the wings, so it
-## cannot be forced after the session starts. Clients build their own copy of the map, so a joining
-## window of a -Count 2 set has to force the same kind or it builds a different hospital.
-## Setups that ask for nothing leave everything alone.
-static func before_session(name: String) -> void:
-	var kind := String((SETUPS.get(name, {}) as Dictionary).get("pocket", ""))
-	if kind != "":
-		(load("res://scripts/level/pockets/pocket_plan.gd") as GDScript).set("force_kind", kind)
 
 
 ## The setup name asked for on the command line ("" for none).
@@ -193,6 +192,15 @@ static func seed_of(setup: String) -> int:
 
 
 ## Run the setup's stage function (the shift has begun and the world has settled).
+## POCKETS 2 phase 2: anything a setup needs done BEFORE the session generates. A setup asks for a
+## pocket space with `"pocket": "natatorium"` in its entry; the kind has to be forced before the map
+## is rolled, so main.gd calls this just before it starts the session. Harmless for every other setup.
+static func before_session(setup: String) -> void:
+	var kind := String((SETUPS.get(setup, {}) as Dictionary).get("pocket", ""))
+	if kind != "":
+		preload("res://scripts/level/pockets/pocket_plan.gd").force_kind = kind
+
+
 static func stage(setup: String, game: Game) -> void:
 	if not exists(setup):
 		return
@@ -431,6 +439,46 @@ static func _arcade_eyes(game: Game) -> void:
 ## the barrel because it weighs more. `--stick` skips DRAW! and FLICK! and opens straight on STICK!,
 ## dose drawn and no bubbles, for when only the aim is being looked at. E steps back from the table,
 ## E again starts over where you were.
+## SYRINGE DRAW: syringes in hand with the fluid to load them from, plus a few lying loose and a
+## stack on the shelf. For looking at the new item -- the model in the hand and on the floor, the
+## icon in the bar, and what the terminal says about it.
+static func _syringe(game: Game) -> void:
+	clear_hands(game)
+	give(game, "syringe", 3)
+	give(game, "anesthetic", 3)
+	game.local_player().selected = 0
+	game.stock_storage("syringe", 3)
+	var here: Vector3 = game.local_player().global_position
+	floor_item(game, "syringe", here + Vector3(1.0, 0.0, -1.4), 2)
+	floor_item(game, "syringe", here + Vector3(-0.9, 0.0, -1.6), 1)
+	floor_item(game, "anesthetic", here + Vector3(0.1, 0.0, -1.9), 3)
+
+
+## SYRINGE DRAW: the whole trip. A patient waits on a table; you stand a few paces off it with a
+## syringe selected and a vial in the other hand. E loads the syringe where you stand (the first
+## minigame that happens outside the OR), and walking it over opens the sedate step on STICK!.
+static func _syringe_draw(game: Game) -> void:
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	game.add_case({"patient_id": "bob", "ailment_id": "gunshot", "table": table, "state": "on_table"})
+	var t: Vector3 = game.table_position(table)
+	# A few paces back from the table, facing it: there is nothing to aim at from here, which is
+	# exactly the state the draw is offered in.
+	place(game, t + Vector3(0.0, 0.0, 3.2), t + Vector3(0.0, 1.05, 0.0))
+	clear_hands(game)
+	give(game, "syringe", 3)
+	give(game, "anesthetic", 2)
+	give(game, "tourniquet", 1)
+	game.local_player().selected = 0
+	game.stock_storage("syringe", 3)
+	var tree := game.get_tree()
+	for i in 6:
+		await tree.physics_frame
+	if "--open" in OS.get_cmdline_user_args() and game.syringe_stations != null:
+		game.syringe_stations.hand_open(game.local_player())
+
+
 static func _sedate(game: Game) -> void:
 	var pid := "bob"
 	for a in OS.get_cmdline_user_args():
@@ -696,11 +744,10 @@ static func _trinkets(game: Game) -> void:
 	give(game, "reflex_hammer", 1, 20)
 	p.selected = 0
 	p.flashlight_on = true
-	# POCKETS 2 phase 4: the fabric softener jug joins the row (the Laundromat's trinket).
-	var row := ["desk_phone", "laptop", "epipen", "defibrillator", "fabric_softener"]
-	var value := [20, 80, 30, 120, 22]
+	var row := ["desk_phone", "laptop", "epipen", "defibrillator"]
+	var value := [20, 80, 30, 120]
 	for i in row.size():
-		floor_item(game, row[i], base + out * 2.4 + side * (float(i) - 2.0) * 0.7, 1, value[i])
+		floor_item(game, row[i], base + out * 2.4 + side * (float(i) - 1.5) * 0.7, 1, value[i])
 	await tree.physics_frame
 	# A Hive, out in front. It starts idle and, once it spots you, it will come -- but `calm` means
 	# it cannot land a hit for the first half minute, so you get to look at the phone and the laptop
@@ -1115,6 +1162,39 @@ static func _vats(game: Game) -> void:
 	await tree.physics_frame
 	floor_item(game, "eye_hive", game._floor_at(at + out * 1.6), 1, 100)
 	game.say("E takes a vat off the bench (both hands). With the eye selected, E puts it in instead; V takes it back out.", 10.0)
+
+
+# ---------------------------------------------------------------------------
+# POCKETS 2 phase 2: the Natatorium (docs/POCKET_SPACES_2.md)
+
+## On the deck at the water's edge, looking down the length of the pool, with the whistle and a drum
+## in hand. The thing to test is the choice the room exists for: walk across the water, walk round on
+## the deck, and hear how different those two are -- then decide whether the shortcut is worth it.
+static func _natatorium(game: Game) -> void:
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	var pk = game.pockets
+	if pk == null or not pk.active():
+		print("[review] natatorium: no pocket was built")
+		return
+	var o: Vector2i = pk.pocket.origin
+	var w := func(t: Vector2, y := 0.0) -> Vector3:
+		return Vector3((float(o.x) + t.x) * C.TILE, y, (float(o.y) + t.y) * C.TILE)
+	var Nat := preload("res://scripts/level/pockets/natatorium.gd")
+	var r: Rect2i = Nat.water_rect()
+	# On the deck at the short end, looking down all fifty metres of it.
+	place(game, w.call(Vector2(float(r.position.x) - 2.5, float(r.get_center().y))),
+			w.call(Vector2(float(r.end.x), float(r.get_center().y)), 1.4))
+	give(game, "lifeguard_whistle", 1, 15)
+	give(game, "pool_chemical_drum", 1, 60)
+	# One Sonographer, well away across the water, so there is something to be heard by.
+	game._clear_monsters()
+	await game.get_tree().physics_frame
+	game._add_monster("sonographer", game._floor_at(w.call(Vector2(float(r.end.x) + 3.0, float(r.get_center().y)))))
 
 
 ## POCKETS 2 phase 4 (docs/POCKET_SPACES_2.md): the Laundromat. You start well inside the room with

@@ -12,7 +12,7 @@ extends RefCounted
 ## mesh leaves them out: nobody should path into the half of the stub that only exists to be seen).
 ##
 ## The plan lands in `gen.spots.pocket`:
-##   {kind: "factory" | "restaurant", seed: int, stubs: [{id, wing, depth, zone, o: Vector2i,
+##   {kind: one of KINDS, seed: int, stubs: [{id, wing, depth, zone, o: Vector2i,
 ##    eu: Vector2i, ev: Vector2i, w: int, d: int, lights: [Vector2i]}]}
 ## `o` is the hospital tile of stub-local tile (0, 0): the slot tile beside the front wall at leg 1's
 ## end; `eu` runs along the slot toward leg 3, `ev` away from the hallway.
@@ -21,7 +21,7 @@ const S := preload("res://scripts/level/level_state.gd")
 const Rng := preload("res://scripts/level/rng.gd")
 const StubScript := preload("res://scripts/level/pockets/stub.gd")
 
-const KINDS := ["factory", "restaurant", "laundromat"]
+const KINDS := ["factory", "restaurant", "natatorium", "laundromat"]
 ## Zone id of stub tiles (wings are 2..5, outdoor 9).
 const ZONE_STUB := 10
 
@@ -39,7 +39,7 @@ const MIN_ENTRANCES := 2
 const MAX_ENTRANCES := 3
 const MAX_W := 14
 
-## Tools and the dev room: "" rolls normally, "none" never, a kind from KINDS always that one.
+## Tools and the dev room: "" rolls normally, "none" never, a name in KINDS always that one.
 static var force_kind := ""
 ## Tools: how many entrances a forced pocket wants (0 = roll 2-3).
 static var force_entrances := 0
