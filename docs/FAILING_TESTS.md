@@ -115,6 +115,31 @@ How to run things is at the bottom of this file.
   that depends on a short-lived state being sampled at 20 Hz is vulnerable to them, so this is worth
   its own look before the next netcode feature leans on snapshot timing.
 
+## 3. perfprobe --pockets crashes after the warmup, before it measures anything
+
+- **Command:** `godot --path . tools/perfprobe.tscn -- --pockets` (a real window; `tools/pocketperf.ps1`
+  runs it minimized and never activated)
+- **Result:** twelve `BUG, indexing did not unpair geometries from light` errors from
+  `renderer_scene_cull.cpp`, then `CrashHandlerException: Program crashed with signal 11`. The log
+  stops at the warmup line and **not one scenario is measured**.
+- **Found 2026-09-22** by the POCKET_SPACES_2 phase 3 task, and **confirmed pre-existing**: the same
+  crash, the same twelve errors, the same 67-line log with the Chapel taken back out of
+  `PocketSpaces.LAYOUTS` and perfprobe's kind loop pinned to the old `["none", "factory",
+  "restaurant"]`. It is not the third space's doing.
+- **Where the fault is.** `perfprobe._run_pockets()` calls `game.start_session()` again, once per
+  kind, and the first of those restarts lands immediately after the one-time warmup. Tearing that
+  down while the renderer still holds the warmup shelf's light-geometry pairings is what trips the
+  engine bug. Plain `perfprobe` (one session, no restart) completes all 27 scenarios on the same
+  machine and only crashes **at exit**, after the summary table has printed, which is harmless and
+  has presumably been happening for a while.
+- **The way round it, which works today:** `-- --pocketkind=<kind>` forces the kind *before* the one
+  and only `start_session` and measures that space in the session that is already up. Added by the
+  same task; it is what the Chapel's numbers were taken with.
+- **Where to look:** whether `_run_pockets` can wait out the renderer (a few frames, or
+  `RenderingServer.force_sync()`) before restarting, or whether it should simply be rebuilt on top
+  of `--pocketkind` and run one process per kind.
+
+
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
 
 - **Command:** `godot --headless --path . -s tools/mapcheck.gd`

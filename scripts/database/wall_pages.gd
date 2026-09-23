@@ -47,6 +47,7 @@ const PROCEDURE_TEXT := {
 
 const SURGERY_TEXT := {
 	"anesthetic": ["Puts the patient under so they don't feel a thing. Too little and they wake up mid-surgery.", "Found in medicine fridges. Glass: dropping it breaks some."],
+	"communion_wine": ["Does the job of anesthetic, badly: a little over half the dose, so they stir sooner. Works on a patient or a strapped monster.", "Not in the hospital. There is a case of it in the chapel."],
 	"gauze": ["Rolls of dressing that pack wounds and soak up bleeding.", "Found in nurse station drawers."],
 	"forceps": ["Long tongs for pulling out bullets, and seating a graft.", "Found in steel drawer units. Kept after use."],
 	"tourniquet": ["A strap that cuts off the blood to a limb before you saw.", "Found in trauma bags. Kept after use."],
@@ -68,6 +69,8 @@ const LOOT_BLURBS := {
 	"heart_monitor": "A bedside heart monitor. Takes both hands.",
 	"defibrillator": "A portable defibrillator. Takes both hands.",
 	"ultrasound": "A portable ultrasound. The best find in the wings.",
+	"collection_plate": "A silver-gilt alms dish from the chapel, with what was left in it.",
+	"votive_candle": "A chapel candle in red glass. Set it down and the Night Nurse stands still inside the light, watched by nobody. About two minutes.",
 	"eye_hive": "The eyeball of a strapped Hive. It clouds over and spoils in a minute or two unless it goes in a vat.",
 	"eye_surgeon": "A surgeon's own eyeball, labelled with whose it is. It spoils outside a vat, too.",
 }

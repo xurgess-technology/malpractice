@@ -146,6 +146,93 @@ lit them. Candlelight is the room's light.
   shorter sedation, stirs sooner. Patients and strapped monsters.
 - COLLECTION PLATE: loot, gold-watch tier.
 
+### Phase 3 — DONE 2026-09-22, branch `pockets-chapel`
+
+**The space.** `scripts/level/pockets/chapel.gd`. A nave 33 m long under a vault 24 m up that
+nothing ever lights, two arcades of stone piers with pointed arches between them, side aisles
+ceiled much lower (9 m) so the nave reads tall, thirty-two rows of pews, a sanctuary with an altar
+and a reredos of votive tiers, and a sacristy behind the one hinged door. Origin (800, 1000).
+
+**Candlelight is the room's light, and here is how it is paid for.** Every flame in the building is
+emissive geometry in a MultiMesh — about 350 votive cups and tapers — and costs no light at all.
+Illumination comes from `LIGHT_BUDGET` (26) real `OmniLight3D`s, pooled one per votive rack and one
+per candle stand rather than one per flame, of which `SHADOW_BUDGET` (2) cast shadows, which is the
+shape the Factory's high bays already had. A build uses 19 of the 26. The sanctuary is built
+**before** the racks and the stands precisely so it draws on that budget first and the altar can
+never be the thing that goes dark. The lights are real and not the emissive trick 0.10.25 found in
+the mirrors, because they have to be: the Night Nurse's rule asks whether a point is **lit**, and
+`Perception.fixture_lit` walks `level_info.lights` looking for an `OmniLight3D` named `Bulb`.
+
+**The votive candle satisfies the existing predicate, it does not copy it.** The check lives in
+`Perception.observed_any`, ahead of the frustum work **and ahead of the "is anybody alive to look"
+early-out** — that ordering is the whole feature, since the point is that a candle watches with
+nobody there. Because it is in the predicate rather than in `night_nurse_brain.gd`, it holds
+everywhere the predicate is asked, including her own `_vanish()`, which will now not choose a
+hiding place inside somebody's candle. Lighting a candle **is** its use: it goes into the world
+already spent and worth `SCRAP`, so one candle buys exactly one safe zone in exactly one place and
+there is no carrying a lit one to a better spot. It burns `CANDLE_SECONDS` (120) and gutters over
+the last twelve, so the thing a player sees when their safe zone dies is the light jumping and
+sinking, then `trinkets_candle_out`.
+
+**Communion wine** is `Items.ANESTHETIC_KINDS`, a dictionary of kind -> share of a real dose (wine
+0.55). `surgery_system.can_begin` accepts a substitute, the consume spends what was actually held,
+and the strength multiplies the sedation the arcade already reported; the strapped-monster re-dose
+gets the same factor. **The injection minigame is untouched and does not know the difference** —
+that was deliberate, because the syringe/fluid-rack work is happening in parallel. Phase 5's
+top-shelf tequila should be one more line in that dictionary.
+
+**Collection plate** is gold-watch tier (3) loot weighted to the Chapel's own room kinds.
+
+**Measured, not reasoned.**
+- `tools/pocketrate.gd`, 500 seeds x 4 shifts with three kinds: **23.9%**, in the 20-30% band,
+  exit 0. Evenly split (factory 149 / chapel 168 / restaurant 161), every individual shift in band,
+  **0 rolls that wanted a pocket and found no room**, and the no-repeat exclusion still perfect
+  (384 rolled with a kind excluded, 0 were it). Adding a kind does not move the rate, as phase 1
+  predicted: the curve is how often *a* pocket appears, not which one.
+- `tools/mapcheck.gd --build_pocket=chapel`: **100% pocket navigation coverage**, every entrance
+  walked out through its own seam, nothing unreachable and nothing resting on air. Only the
+  pre-existing morgue-tray failures remain (FAILING_TESTS 2).
+- `tools/pockettest.tscn`: **PASS, 310 checks** (208 before; the Chapel adds 102). Seams, links,
+  the noise floor and the wander fence all pass for it.
+- `tools/trinkettest.tscn`: **PASS**, with eleven new candle checks — including *she is frozen,
+  observed with the room empty*, that a step outside the radius ends it, and that burning out ends
+  it too.
+- **`tools/perfprobe` was run**, on a real window, minimized and never activated
+  (`tools/pocketperf.ps1`). At **medium (q1)** every Chapel view holds the bar: the whole nave from
+  the narthex, which is the designed worst frame (every rack, every stand, both arcades, all the
+  pews and the reredos at once), is **72 fps avg / 55 1% low**; the reredos close up 109/80, a side
+  aisle 97/79, an entrance from inside 122/105, the seam from the pocket side 79/77. The one
+  marginal number is the seam from the **hospital** side at 73/50, sitting exactly on the 1% low
+  bar. The hospital-corridor baseline on the same map read 64/44 in this run against ~61/55 in a
+  plain run, so the machine was noisy by then and the 50 should be re-read on a quiet one.
+
+**What had to change outside the Chapel, all of it additive.**
+- `PocketSpaces.LAYOUTS` + `script_for(kind)` replaced the two-way `Factory if ... else Restaurant`
+  ternaries (three of them) and the hardcoded `warm()` pair. **A fourth kind is now one line.**
+- `tools/mapcheck.gd`, `tools/pockettest.gd` and `tools/perfprobe.gd` sweep `PocketPlan.KINDS`
+  instead of a hardcoded pair, so phase 4's space is covered by all three for free.
+- `ItemSpawner._legal` gained an optional `rooms` filter on an item definition, so the wine is only
+  ever found in the Chapel. An item without a `rooms` key is found anywhere, which is every other
+  item, so nothing else changes.
+- `perfprobe --pocketkind=<kind>`, because `--pockets` crashes before it measures anything. That is
+  **pre-existing** and now written up as FAILING_TESTS 3.
+
+**The item set, for the task that bleeds pocket items into the hospital.** `Chapel.ITEM_KINDS`
+lists `votive_candle`, `communion_wine`, `collection_plate`. There was no existing convention — the
+Factory and the Restaurant contribute no items of their own, their loot coming from the normal wing
+tables through containers and anchors — so this is the smallest one that works and the other new
+spaces should copy the name.
+
+**No new assets.** Everything is procedural over the existing CC0 tileables through `Common.tri_mat`
+and `LootModels`/`ItemModels` primitives, exactly as the Factory and the Restaurant are, so
+ASSETS.md needs no new row. Two generated sounds were added to `tools/gen_audio_trinkets.mjs`
+(`trinkets_candle_light`, `trinkets_candle_out`).
+
+**Unsure / for whoever merges.** The three sedation touch points (`surgery_system.can_begin`,
+`game.surgery_step_done`, `dissection._anesthetic_slot`/`redose`) are the likeliest merge conflict
+with the syringe-rack task, which is moving DRAW!/FLICK! out of the OR. Nothing here restructures
+the injection, but the lines are close together.
+
 ## Phase 4 — the Laundromat
 Coin-op, fluorescent, every machine running with nothing inside.
 ambient_noise_level tuned so the drone genuinely masks footsteps

@@ -890,18 +890,25 @@ zones: {grid, width, height, names}   # HospitalBuilder.zone_of(info, pos) -> wi
 
 ### Pocket spaces (pockets worker, docs/POCKET_SPACES.md)
 
-A map (each shift's wings) rolls 0-1 pocket space: **the Factory**
-or **the Restaurant**, built far from the hospital (world tile origin `PocketSpaces.ORIGINS`: factory
-(800, 0), restaurant (800, 500)) with 2-3 entrances into at least two different wings, deeper wings more
-likely. Code in `scripts/level/pockets/`: `pocket_plan.gd` (generation), `stub.gd` (an entrance, its frame
-and its pocket-side copy), `pocket_spaces.gd` (runtime, `game.pockets`), `pocket_common.gd`,
-`factory.gd`, `restaurant.gd`.
+A map (each shift's wings) rolls 0-1 pocket space: **the Factory**, **the Restaurant** or
+**the Chapel**, built far from the hospital (world tile origin `PocketSpaces.ORIGINS`: factory
+(800, 0), restaurant (800, 500), chapel (800, 1000)) with 2-3 entrances into at least two different
+wings, deeper wings more likely. Code in `scripts/level/pockets/`: `pocket_plan.gd` (generation),
+`stub.gd` (an entrance, its frame and its pocket-side copy), `pocket_spaces.gd` (runtime,
+`game.pockets`), `pocket_common.gd`, `factory.gd`, `restaurant.gd`, `chapel.gd`.
+
+**Adding a kind** is four lines and no new call sites: the layout script, an entry in
+`PocketSpaces.LAYOUTS` (kind -> script, which `PocketSpaces.script_for` answers and every caller now
+goes through), an `ORIGINS` origin and an `AIR` entry. `PocketPlan.KINDS` carries the name, and
+`tools/mapcheck.gd`, `tools/pockettest.gd`, `tools/pocketrate.gd` and `tools/perfprobe.gd` all sweep
+`KINDS` rather than a hardcoded list.
 
 **The roll** (POCKET_SPACES_2 phase 1) is not a flat chance. Every wing rolls
 `BASE_CHANCE + DEPTH_STEP * (depth - 1)` — 4%, 9%, 14% for the usual depths 1-3 — and the map takes the
 chance that at least one of them lands, capped at `MAX_CHANCE`. Measured over 300 seeds x 4 shifts with
 `tools/pocketrate.gd`: **24.5% of shifts get a pocket**, against the 20-30% docs/POCKET_SPACES.md asks
-for. **No repeats**: the host keeps the kind the run last saw in `game.pocket_seen_kind`, sets
+for; re-measured over 500 seeds x 4 shifts with three kinds, **23.9%**, evenly split between them.
+Adding a kind does not move the rate, because the curve is how often *a* pocket appears and not which. **No repeats**: the host keeps the kind the run last saw in `game.pocket_seen_kind`, sets
 `PocketPlan.exclude_kind` from it before the next shift's wings are generated, and sends it to clients in
 the globals as `"px"` — a client rolling from a different pool would build a different hospital.
 
@@ -910,8 +917,9 @@ the globals as `"px"` — a client rolling from a different pool would build a d
 PocketPlan.plan(st, gens, defs, seed) / PocketPlan.release(gens)
 PocketPlan.chance_for(defs) -> float   # the map's chance, from the wings' depths (BASE_CHANCE, DEPTH_STEP, MAX_CHANCE)
 PocketPlan.exclude_kind # static: the kind kept out of the next roll (host-owned, replicated as "px"); pool()
-PocketPlan.of(gen) -> {kind: "factory" | "restaurant", seed, stubs: [{id, wing, depth, zone, o: Vector2i, eu: Vector2i, ev: Vector2i, w, d, lights: [Vector2i]}]} or {}
-PocketPlan.force_kind   # static: "" roll, "none", "factory", "restaurant" (tools, dev); force_entrances
+PocketPlan.of(gen) -> {kind: a PocketPlan.KINDS name, seed, stubs: [{id, wing, depth, zone, o: Vector2i, eu: Vector2i, ev: Vector2i, w, d, lights: [Vector2i]}]} or {}
+PocketPlan.force_kind   # static: "" roll, "none", or a KINDS name (tools, dev); force_entrances
+PocketSpaces.script_for(kind) -> GDScript   # the layout script of a kind (LAYOUTS); Factory for an unknown one
 PocketPlan.ZONE_STUB    # 10: the zone of stub tiles (HospitalBuilder.zone_of answers "")
 
 # Runtime, every machine

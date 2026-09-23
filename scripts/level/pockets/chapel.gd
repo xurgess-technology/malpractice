@@ -95,7 +95,12 @@ const SACRISTY := Rect2i(M + 2, M + 40, 5, 4)         # x 12..16, y 50..53
 const SACRISTY_DOOR := Vector2i(M + 4, M + 39)        # x 14, y 49, opening north
 
 ## Real lights. The Factory runs 23 omnis with at most 2 shadowed; the Chapel holds the same shape.
-const LIGHT_BUDGET := 26
+## They are POOLED -- one per rack or stand, not one per flame -- so they have to be strong and
+## long-reaching to stand in for the dozen or more candles each of them represents. The first pass
+## used a candle's own literal brightness (energy 1.5, range 7.5) and the result was a black
+## building with a few orange dots in it: the flames read, and nothing they were supposed to be
+## lighting did. A pooled light is a bank of candles, not a candle.
+const LIGHT_BUDGET := 28
 const SHADOW_BUDGET := 2
 
 
@@ -169,22 +174,30 @@ static func layout(stubs: Array, seed: int) -> Dictionary:
 	for y in range(INTERIOR.position.y + 4, INTERIOR.end.y - 6, 7):
 		for pair in [[AISLE_W.position.x, Vector2i(-1, 0)], [AISLE_E.end.x - 1, Vector2i(1, 0)]]:
 			var t := Vector2i(int(pair[0]), y)
-			if not _free(g, Rect2i(t, Vector2i.ONE).grow(1)):
+			# The tile only, not grown: a votive rack stands AGAINST the outer wall, and growing the
+			# test by one reached into that wall and quietly refused every rack in the building.
+			if not _free(g, Rect2i(t, Vector2i.ONE)):
 				continue
 			racks.append({"tile": t, "wall": pair[1]})
 			_block(g, Rect2i(t, Vector2i.ONE))
 
-	# Standing candle stands beside the piers, out on the nave floor.
+	# Standing candle stands in pairs down the nave: one either side of the processional aisle in
+	# every cross aisle, and a pair in the narthex. A cathedral only reads as a cathedral if there
+	# is light the whole length of it -- the first pass hung the lights on the outer aisle walls
+	# only, and from the narthex the nave was a black tunnel with one orange dot at the far end.
 	var stands: Array = []
-	for i in piers.size():
-		var p: Vector2i = piers[i]
-		if i % 3 != 0:
-			continue
-		var t := Vector2i(p.x + (1 if p.x == PIER_X_W else -1), p.y)
-		if not _free(g, Rect2i(t, Vector2i.ONE)):
-			continue
-		stands.append(t)
-		_block(g, Rect2i(t, Vector2i.ONE))
+	var stand_rows: Array = [NARTHEX_END - 2]
+	var cy := NARTHEX_END + 1 + PEW_ROWS + (CROSS_ROWS / 2)
+	while cy < SANCTUARY_Y - 1:
+		stand_rows.append(cy)
+		cy += PEW_ROWS + CROSS_ROWS
+	for row: int in stand_rows:
+		for sx in [MID_AISLE.position.x - 1, MID_AISLE.end.x]:
+			var t := Vector2i(sx, row)
+			if not _free(g, Rect2i(t, Vector2i.ONE)):
+				continue
+			stands.append(t)
+			_block(g, Rect2i(t, Vector2i.ONE))
 
 	# The sanctuary: an altar on the centre line, a credence table beside it, a reredos of candles
 	# against the end wall behind.
@@ -519,7 +532,7 @@ static func _build_racks(root: Node3D, props: Common.Props, lay: Dictionary, wor
 			for i in 7:
 				var local := Vector3(-0.36 + i * 0.12, 0.65 + k * 0.13, 0.30 - k * 0.15)
 				props.add(votive, Transform3D(Basis(), xf * local), 0.0, false)
-		_add_light(lights, out, t, at + Vector3(0, 1.0, 0) - Vector3(wall.x, 0, wall.y) * 0.4, 1.5, 7.5)
+		_add_light(lights, out, t, at + Vector3(0, 1.0, 0) - Vector3(wall.x, 0, wall.y) * 0.4, 4.5, 16.0)
 
 
 ## Standing candle stands out on the nave floor beside the arcade piers.
@@ -539,7 +552,7 @@ static func _build_stands(root: Node3D, props: Common.Props, lay: Dictionary, wo
 		for i in 6:
 			var ang := TAU * i / 6.0
 			props.add(taper, Transform3D(Basis(), at + Vector3(cos(ang) * 0.21, 1.25, sin(ang) * 0.21)), 0.0, false)
-		_add_light(lights, out, t, at + Vector3(0, 1.75, 0), 1.3, 7.0)
+		_add_light(lights, out, t, at + Vector3(0, 1.85, 0), 5.5, 19.0)
 
 
 ## The node every real light in the Chapel hangs under, made by whichever builder needs it first.
@@ -561,11 +574,13 @@ static func _add_light(parent: Node3D, out: Dictionary, tile: Vector2i, pos: Vec
 		return
 	out["chapel_lights"] = placed + 1
 	var shadow := placed < SHADOW_BUDGET
-	var node := Common.omni(parent, pos, energy, rng, Color(1.0, 0.68, 0.34), 1.3, shadow, 1.4)
+	# Attenuation 1.0, not the 1.4 this started at: a pooled light stands in for a whole bank of
+	# candles, and a steep falloff made every one of them a dot with nothing lit around it.
+	var node := Common.omni(parent, pos, energy, rng, Color(1.0, 0.68, 0.34), 0.6, shadow, 1.0)
 	var bulb: OmniLight3D = node.get_node("Bulb")
 	bulb.distance_fade_enabled = true
-	bulb.distance_fade_begin = 34.0
-	bulb.distance_fade_length = 10.0
+	bulb.distance_fade_begin = 58.0
+	bulb.distance_fade_length = 16.0
 	# Candles are never steady. The flicker is the same deterministic waveform the hospital's
 	# failing fixtures use, run gently so it reads as a draught rather than a dying tube.
 	bulb.set_meta("mode", 1)
@@ -622,8 +637,8 @@ static func _build_sanctuary(root: Node3D, body: StaticBody3D, props: Common.Pro
 	mi.mesh = mb.commit()
 	root.add_child(mi)
 	# The sanctuary draws on the light budget first, so it can never leave the altar dark.
-	_add_light(lights, out, lay.reredos, rr + Vector3(0, 1.9, -0.4), 2.1, 11.0)
-	_add_light(lights, out, lay.altar, al + Vector3(0, 1.5, 0), 1.6, 9.0)
+	_add_light(lights, out, lay.reredos, rr + Vector3(0, 1.9, -0.4), 7.0, 26.0)
+	_add_light(lights, out, lay.altar, al + Vector3(0, 1.5, 0), 5.0, 18.0)
 
 
 # =========================================================================
@@ -652,4 +667,4 @@ static func _build_sacristy(root: Node3D, body: StaticBody3D, props: Common.Prop
 	root.add_child(mi)
 	# The one candle in here, on the bench: the sacristy has no window and no fixture either.
 	props.add(_taper_mesh(), Transform3D(Basis(), bp + Vector3(0.75, 0.82, 0)), 0.0, false)
-	_add_light(_candlelight(root), out, SACRISTY.position, bp + Vector3(0.75, 1.15, 0), 0.9, 4.5)
+	_add_light(_candlelight(root), out, SACRISTY.position, bp + Vector3(0.75, 1.15, 0), 2.5, 8.0)

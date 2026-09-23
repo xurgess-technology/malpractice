@@ -1,5 +1,5 @@
 extends RefCounted
-## POCKETS: gameshot's pocket space shots (tools/gameshot.gd --pocket=factory|restaurant).
+## POCKETS: gameshot's pocket space shots (tools/gameshot.gd --pocket=<a PocketPlan.KINDS name>).
 ##
 ##   godot --path . tools/gameshot.tscn --resolution 1280x720 -- --pocket=factory [--seed=N]
 ##
@@ -50,6 +50,18 @@ func run(gs: Node, pocket_kind: String) -> void:
 		await _shot("p_factory_4_up", w.call(Vector2(36, 32)), w.call(Vector2(40, 30), 20.0))
 		await _shot("p_factory_5_offices", w.call(Vector2(24, 42)), w.call(Vector2(26, 49), 1.5))
 		await _shot("p_factory_7_office_door", w.call(Vector2(27.5, 45.0)), w.call(Vector2(25.5, 48.5), 1.2))
+	elif kind == "chapel":
+		# Candlelight is the room's light, so the flashlight stays off for the wide shots: with it
+		# on you are looking at a torch beam, not at a chapel.
+		bot.set_flashlight(false)
+		await _shot("p_chapel_1_nave", w.call(Vector2(21.5, 13.0)), w.call(Vector2(21.5, 52.0), 1.6))
+		await _shot("p_chapel_2_reredos", w.call(Vector2(21.5, 47.0)), w.call(Vector2(21.5, 54.0), 2.0))
+		await _shot("p_chapel_3_aisle", w.call(Vector2(13.0, 14.0)), w.call(Vector2(13.0, 50.0), 1.6))
+		await _shot("p_chapel_4_rack", w.call(Vector2(13.0, 21.0)), w.call(Vector2(11.5, 22.0), 1.2))
+		await _shot("p_chapel_5_up", w.call(Vector2(21.5, 30.0)), w.call(Vector2(21.5, 34.0), 22.0))
+		bot.set_flashlight(true)
+		await _shot("p_chapel_6_pews", w.call(Vector2(21.5, 26.0)), w.call(Vector2(18.0, 24.0), 1.0))
+		await _shot("p_chapel_7_sacristy_door", w.call(Vector2(19.0, 46.0)), w.call(Vector2(14.5, 49.0), 1.2))
 	else:
 		await _shot("p_restaurant_1_dining", w.call(Vector2(12.5, 25.5)), w.call(Vector2(34, 12), 1.0))
 		await _shot("p_restaurant_2_host", w.call(Vector2(28, 22)), w.call(Vector2(28, 11), 1.6))

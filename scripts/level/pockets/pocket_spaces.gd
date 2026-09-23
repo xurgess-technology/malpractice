@@ -732,9 +732,12 @@ const AIR := {
 	"restaurant": {"fog_depth_begin": 16.0, "fog_depth_end": 60.0, "fog_density": 0.35, "volumetric_fog_density": 0.016,
 			"ambient_light_energy": 0.3, "ambient_light_color": Color(0.62, 0.46, 0.34)},
 	# The Chapel's ambient is almost nothing on purpose: what you can see, a candle is showing you.
-	# The volumetric density is the highest of the three so every flame throws a visible cone.
-	"chapel": {"fog_depth_begin": 12.0, "fog_depth_end": 70.0, "fog_density": 0.4, "volumetric_fog_density": 0.035,
-			"ambient_light_energy": 0.06, "ambient_light_color": Color(0.36, 0.22, 0.12)},
+	# The volumetric density is deliberately LOW, lower than the Factory's. The nave is 24 m to its
+	# ceiling and the candles sit at waist height, so a dense volumetric filled that whole upper
+	# volume with lit haze and turned the vault -- the one thing the space is supposed to lose in
+	# the dark -- into a bright olive wall. Thin fog keeps the glow down where the candles are.
+	"chapel": {"fog_depth_begin": 14.0, "fog_depth_end": 72.0, "fog_density": 0.22, "volumetric_fog_density": 0.012,
+			"ambient_light_energy": 0.08, "ambient_light_color": Color(0.40, 0.24, 0.13)},
 }
 var _air_base := {}
 var _air_env: Environment = null
