@@ -97,6 +97,10 @@ const SETUPS := {
 	# TRINKETS chunk B (docs/ITEMS_AND_ICONS.md): all six in hand, a Hive to tag and bonk, and a
 	# teammate lying down for the defibrillator.
 	"trinkets": {"seed": 4242, "stage": "_trinkets"},
+	# GRAFTING (2026-09-22): standing at the lab wall's vat bench with empty hands and a loose eye
+	# at your feet. The vats have always been ordinary bulky items; their bench's collider used to
+	# bury them, so E never saw them at all.
+	"vats": {"seed": 4242, "stage": "_vats"},
 }
 
 
@@ -1073,3 +1077,25 @@ static func _minimap(game: Game) -> void:
 	game.say("Walk out into a wing. The hub is already on the map; the wards fill in as you go into them.", 10.0)
 	print("[review] minimap: %d rooms, %d lit at the start" % [
 			int(game.minimap.room_count), int(game.minimap.seen_rooms.count(0xFF))])
+
+
+## GRAFTING (2026-09-22): the lab wall's vat bench, standing where you would stand to take one.
+## The three vats are the ordinary bulky `specimen_vat` and always have been -- what stopped E was
+## the bench, whose collider ran the piece's full 2.3 m of shelving and so swallowed its own counter
+## top, sealing the vats inside a solid box no aim ray could get past. The bench now collides only
+## up to the counter (PieceDefs "collide_h"), which is what puts them back out in the open.
+static func _vats(game: Game) -> void:
+	var tree := game.get_tree()
+	game._clear_monsters()
+	await tree.physics_frame
+	var vats: Node = game.vats
+	if vats == null or vats.spots.is_empty():
+		game.say("No vat spots on this level.", 6.0)
+		return
+	var at: Vector3 = vats.spots[mini(1, vats.spots.size() - 1)].position
+	var out := open_direction(game, at + Vector3.UP * 0.3, 2.5)
+	clear_hands(game)
+	place(game, game._floor_at(at + out * 1.1), at + Vector3.UP * 0.12)
+	await tree.physics_frame
+	floor_item(game, "eye_hive", game._floor_at(at + out * 1.6), 1, 100)
+	game.say("E takes a vat off the bench (both hands). With the eye selected, E puts it in instead; V takes it back out.", 10.0)
