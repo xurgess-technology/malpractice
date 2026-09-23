@@ -3729,6 +3729,32 @@ func surgery_wants_mouse() -> bool:
 		or (syringe_stations != null and syringe_stations.wants_mouse())   # SYRINGE DRAW
 
 
+## CUSTOMIZATION: mirror_menu.gd lives under the level's Mirrors node (built by mirrors.gd, per
+## level) rather than as a child of Game like surgery/abilities are, so it's found rather than
+## owned; cached the same way mirror_menu.gd itself caches its own Mirrors lookup.
+var _mirror_menu_node: Node = null
+
+func _mirror_menu() -> Node:
+	if _mirror_menu_node == null or not is_instance_valid(_mirror_menu_node):
+		_mirror_menu_node = level.find_child("MirrorMenu", true, false) if level != null and is_instance_valid(level) else null
+	return _mirror_menu_node
+
+
+## CUSTOMIZATION: one camera and mouse decision for the mirror menu, read by main.gd exactly like
+## surgery_camera() above.
+func mirror_camera() -> Camera3D:
+	var mm := _mirror_menu()
+	return mm.active_camera() as Camera3D if mm != null and mm.has_method("active_camera") else null
+
+
+## CUSTOMIZATION: is the mirror menu open on this machine right now. main.gd's _update_mouse()
+## reads this the same way it reads surgery_wants_mouse() -- "one place decides the mouse" (its own
+## comment), so this menu's own Input.set_mouse_mode call doesn't have to fight it back every frame.
+func mirror_menu_open() -> bool:
+	var mm := _mirror_menu()
+	return mm != null and bool(mm.get("_open"))
+
+
 func surgery_local_exit() -> void:
 	if surgery != null and surgery.wants_mouse():
 		surgery.local_operator_exit()
