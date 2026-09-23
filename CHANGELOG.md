@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.33**: Syringes are a thing you carry
+    - Added: Syringes, found loose around the hospital in twos and threes. A syringe remembers what's in it, so a loaded one is a loaded one wherever you take it.
+    - Note: The groundwork for drawing a dose outside the OR. The part where you actually open it in a corridor and pick your fluid comes next; the operating table works exactly as it did.
 - **0.10.32**: You can pick the specimen vats up off the lab bench
     - Fixed: The lab's vats were sitting *inside* their own bench. The bench is solid all the way up to the jars on its top shelf, so anything standing on the counter was buried in it -- you could see the vats and never touch them. Counters with open shelving now only collide up to the counter, which also means you can reach and throw things over one.
 - **0.10.31**: Pocket spaces are rare again, and monsters stay out of them
