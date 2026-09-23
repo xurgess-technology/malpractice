@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.53**: Force a pocket space, and step straight up to its seam 🚪
+    - Added: The dev panel can now guarantee any pocket space (or a random one) exists in the level, and drop you right at its seam, one tile back from crossing through -- no more hunting a generated map for one, or hoping a seed happens to roll one.
+    - Fixed: A host forcing a pocket and a client generating their own copy of the map could disagree about which one existed. They now always match.
+    - Changed: The dev panel's old "Pocket spaces" section, which built an isolated space with no hospital entrance at all, is gone -- the new one does everything it did and actually has a door out.
 - **0.10.52**: The dev room is gone; the dev panel is tabs now 🧰
     - Changed: The hidden dev room -- reached through a locked closet door -- is gone. Everything it did happens out in the open now.
     - Changed: The dev panel (F1) is organized into tabs by what you're trying to do -- You, World, Go to, Spawn, Shift, Surgery, Database -- instead of one long list that grew by accretion. Every control does exactly what it did before; only where it lives changed.
