@@ -88,6 +88,17 @@ static func layout(stubs: Array, seed: int) -> Dictionary:
 		if c.type != "trauma_bag" and c.type != "pegboard":
 			_block(g, Rect2i(c.tile, Vector2i.ONE))
 		Common.reserve(g, Rect2i(c.tile, Vector2i.ONE))
+	# The floor in front of the two back-room doorways stays clear. The dryer bank runs the length of
+	# the south wall, and a bank standing across a doorway walls the whole back of the building off:
+	# tools/mapcheck.gd caught exactly that (72 unreachable tiles and a door opening onto a blocked
+	# tile, on every seed) once it started walking this space.
+	for d: Vector2i in [doors.utility, doors.office]:
+		Common.reserve(g, Rect2i(d.x - 1, MAIN.end.y - 3, 3, 3))
+	# The back rooms' fixed furniture, so nothing paths through the trough sink, the water heater or
+	# the desk. They are built in _back_rooms; these are the tiles they stand on.
+	_block(g, Rect2i(UTILITY.position.x, UTILITY.get_center().y - 1, 1, 2))          # the trough sink
+	_block(g, Rect2i(UTILITY.end.x - 1, UTILITY.end.y - 1, 1, 1))                    # the water heater
+	_block(g, Rect2i(OFFICE.get_center().x, OFFICE.get_center().y, 1, 1))            # the desk
 	# The change machine keeps its piece of the north wall.
 	var change := Vector2i(MAIN.position.x + 2, MAIN.position.y)
 	_block(g, Rect2i(change, Vector2i.ONE))
@@ -331,35 +342,42 @@ static func _acoustic_tex() -> Texture2D:
 
 # ---- machines ---------------------------------------------------------------
 
-## One front-load washer, origin on the floor at the tile centre, door facing +Z.
+## A PAIR of front-load washers filling one tile, origin on the floor at the tile centre, doors
+## facing +Z. One machine per 1.5 m tile left a gap between every two of them, which reads as a row
+## of separate cabinets; a laundromat's machines are bolted side by side in an unbroken bank.
 static func _washer_mesh(enamel: Material, chrome: Material, dark: Material) -> Mesh:
 	return Common.cached_mesh("laun_washer", func():
 		var mb := Common.MeshBuilder.new()
 		var glass := Common.mat("laun_glass", Color(0.16, 0.20, 0.22), 0.08, 0.2)
 		var lamp := Common.mat("laun_lamp_on", Color(0.6, 0.9, 0.7), 0.3, 0.0, Color(0.35, 1.0, 0.55), 3.0)
-		mb.box("e", enamel, Transform3D(Basis(), Vector3(0, 0.43, 0)), Vector3(0.68, 0.86, 0.70))
-		# The door: a chrome ring around dark glass, set into the front.
-		mb.cylinder("c", chrome, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0.44, 0.345)), 0.21, 0.04, 18)
-		mb.cylinder("g", glass, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0.44, 0.362)), 0.165, 0.012, 18)
-		# Control panel, coin slide and the little green light that says it is running.
-		mb.box("d", dark, Transform3D(Basis(), Vector3(0, 0.80, 0.352)), Vector3(0.62, 0.11, 0.015))
-		mb.box("c", chrome, Transform3D(Basis(), Vector3(0.20, 0.80, 0.362)), Vector3(0.14, 0.05, 0.02))
-		mb.cylinder("l", lamp, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(-0.22, 0.80, 0.363)), 0.017, 0.01, 8)
+		for sx in [-0.365, 0.365]:
+			mb.box("e", enamel, Transform3D(Basis(), Vector3(sx, 0.43, 0)), Vector3(0.71, 0.86, 0.70))
+			# The door: a chrome ring around dark glass, set into the front.
+			mb.cylinder("c", chrome, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(sx, 0.44, 0.345)), 0.21, 0.04, 16)
+			mb.cylinder("g", glass, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(sx, 0.44, 0.362)), 0.165, 0.012, 16)
+			# Control panel, coin slide and the little green light that says it is running.
+			mb.box("d", dark, Transform3D(Basis(), Vector3(sx, 0.80, 0.352)), Vector3(0.64, 0.11, 0.015))
+			mb.box("c", chrome, Transform3D(Basis(), Vector3(sx + 0.21, 0.80, 0.362)), Vector3(0.13, 0.05, 0.02))
+			mb.cylinder("l", lamp, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(sx - 0.23, 0.80, 0.363)), 0.017, 0.01, 8)
 		return mb.commit())
 
 
-## A stacked pair of dryers against a wall, origin on the floor at the tile centre, doors facing +Z.
+## Four dryers filling one tile against a wall -- two columns of two, stacked -- origin on the floor
+## at the tile centre, doors facing +Z. Same reason as the washers: a bank, not a row of cabinets.
 static func _dryer_mesh(enamel: Material, chrome: Material, dark: Material) -> Mesh:
 	return Common.cached_mesh("laun_dryer", func():
 		var mb := Common.MeshBuilder.new()
 		var glass := Common.mat("laun_glass", Color(0.16, 0.20, 0.22), 0.08, 0.2)
 		var lamp := Common.mat("laun_lamp_on", Color(0.6, 0.9, 0.7), 0.3, 0.0, Color(0.35, 1.0, 0.55), 3.0)
-		mb.box("e", enamel, Transform3D(Basis(), Vector3(0, 0.90, 0)), Vector3(0.74, 1.80, 0.72))
-		for yy in [0.50, 1.32]:
-			mb.cylinder("c", chrome, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, yy, 0.355)), 0.23, 0.04, 18)
-			mb.cylinder("g", glass, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, yy, 0.372)), 0.185, 0.012, 18)
-			mb.box("d", dark, Transform3D(Basis(), Vector3(0, yy + 0.32, 0.362)), Vector3(0.66, 0.10, 0.015))
-			mb.cylinder("l", lamp, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(-0.24, yy + 0.32, 0.373)), 0.017, 0.01, 8)
+		mb.box("e", enamel, Transform3D(Basis(), Vector3(0, 0.90, 0)), Vector3(1.48, 1.80, 0.72))
+		for sx in [-0.37, 0.37]:
+			for yy in [0.50, 1.32]:
+				mb.cylinder("c", chrome, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(sx, yy, 0.365)), 0.23, 0.04, 16)
+				mb.cylinder("g", glass, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(sx, yy, 0.382)), 0.185, 0.012, 16)
+				mb.box("d", dark, Transform3D(Basis(), Vector3(sx, yy + 0.32, 0.372)), Vector3(0.68, 0.10, 0.015))
+				mb.cylinder("l", lamp, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(sx - 0.25, yy + 0.32, 0.383)), 0.017, 0.01, 8)
+			# The seam between the two columns.
+			mb.box("d", dark, Transform3D(Basis(), Vector3(0.0, 0.90, 0.362)), Vector3(0.02, 1.76, 0.01))
 		return mb.commit())
 
 
@@ -372,7 +390,7 @@ static func _washers(props: Common.Props, body: StaticBody3D, lay: Dictionary, w
 		var yaw: float = 0.0 if bool(e.flip) else PI
 		var b := Basis(Vector3.UP, yaw)
 		props.add(mesh, Transform3D(b, p), 40.0)
-		Common.collider(body, Transform3D(b, p + Vector3(0, 0.43, 0)), Vector3(0.7, 0.9, 0.72))
+		Common.collider(body, Transform3D(b, p + Vector3(0, 0.43, 0)), Vector3(1.48, 0.9, 0.72))
 		# The tops of the island are where people put things down.
 		Common.anchor(out, p + Vector3(0.0, 0.88, 0.0), yaw, "counter", "laundromat")
 
@@ -388,7 +406,7 @@ static func _dryers(props: Common.Props, body: StaticBody3D, lay: Dictionary, wo
 		var b := Basis(Vector3.UP, yaw)
 		var at := p + Vector3(wall.x, 0, wall.y) * (T * 0.5 - 0.37)
 		props.add(mesh, Transform3D(b, at), 44.0)
-		Common.collider(body, Transform3D(b, at + Vector3(0, 0.9, 0)), Vector3(0.76, 1.8, 0.74))
+		Common.collider(body, Transform3D(b, at + Vector3(0, 0.9, 0)), Vector3(1.5, 1.8, 0.74))
 
 
 static func _tables(props: Common.Props, body: StaticBody3D, lay: Dictionary, world: Callable,
