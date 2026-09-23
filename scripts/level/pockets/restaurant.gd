@@ -14,6 +14,15 @@ const Stub := preload("res://scripts/level/pockets/stub.gd")
 ## cold and the room is waiting — so it has no floor and hearing is unchanged.
 const AMBIENT_NOISE_LEVEL := 0.0
 
+## POCKETS 2: the item kinds this space contributes, as a set anything else can read without digging
+## through the layout below. The follow-up task that bleeds a pocket's items into the hospital rooms
+## near its entrances reads this; so does anything that wants to know what a space is worth.
+##
+## This is what SPAWNS here. `restaurant_pager` is deliberately absent: a single pager is never
+## placed on the map, it only ever comes out of a `restaurant_pagers` station, so a task that seeds
+## hospital rooms from this list must not scatter half-pairs about.
+const POCKET_ITEMS := ["cast_iron_molcajete", "restaurant_pagers", "tequila"]
+
 const T := 1.5
 const M := 10
 const W := 34

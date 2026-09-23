@@ -182,6 +182,41 @@
       "name": "Fabric softener",
       "category": "trinket",
       "glow": null
+    },
+    "grease_bucket": {
+      "name": "Grease bucket",
+      "category": "loot",
+      "glow": null
+    },
+    "copper_wire_spool": {
+      "name": "Copper wire spool",
+      "category": "loot",
+      "glow": null
+    },
+    "foremans_clipboard": {
+      "name": "Foreman's clipboard",
+      "category": "loot",
+      "glow": null
+    },
+    "cast_iron_molcajete": {
+      "name": "Cast iron molcajete",
+      "category": "loot",
+      "glow": null
+    },
+    "tequila": {
+      "name": "Tequila, top shelf",
+      "category": "surgery",
+      "glow": null
+    },
+    "restaurant_pagers": {
+      "name": "Restaurant pagers",
+      "category": "trinket",
+      "glow": null
+    },
+    "restaurant_pager": {
+      "name": "Restaurant pager",
+      "category": "trinket",
+      "glow": null
     }
   }
 }
