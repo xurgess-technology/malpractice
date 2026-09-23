@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.32**: You can pick the specimen vats up off the lab bench
+    - Fixed: The lab's vats were sitting *inside* their own bench. The bench is solid all the way up to the jars on its top shelf, so anything standing on the counter was buried in it -- you could see the vats and never touch them. Counters with open shelving now only collide up to the counter, which also means you can reach and throw things over one.
 - **0.10.31**: Pocket spaces are rare again, and monsters stay out of them
     - Changed: A pocket space turned up in nearly half of all shifts, which is not what "you found something that shouldn't be here" is supposed to feel like. Now it's about a quarter, and the deeper the wing the likelier it is.
     - Changed: You won't get the same one twice in a row.
