@@ -1312,6 +1312,23 @@ static func _bleed(game: Game) -> void:
 		return
 	var at: Vector3 = found.global_position
 	print("[review] bleed: a %s in the hospital at %v" % [found.kind, at])
-	# Two and a half metres back from it, at the height you would actually notice it from.
-	var back := open_direction(game, at, 3.0) * 2.5
-	place(game, game._floor_at(at + back), at)
+	# Somewhere that can actually see it: the first of the four axes, at the first distance, whose
+	# eye line reaches the thing without a wall or a pillar in the way. "Most open direction" is not
+	# enough on its own -- it happily puts you round the corner from what you came to look at.
+	var look := at + Vector3.UP * 0.35
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	var spot := game._floor_at(at + Vector3.BACK * 1.5)
+	for d in [Vector3.BACK, Vector3.FORWARD, Vector3.LEFT, Vector3.RIGHT]:
+		var clear := false
+		for dist in [2.6, 2.0, 1.5]:
+			var try_at := game._floor_at(at + d * dist)
+			var q := PhysicsRayQueryParameters3D.create(try_at + Vector3.UP * 1.6, look)
+			q.collision_mask = C.L_WORLD
+			if space.intersect_ray(q).is_empty():
+				spot = try_at
+				clear = true
+				break
+		if clear:
+			break
+	place(game, spot, look)
+	print("[review] bleed: standing at %v, %.1f m from it" % [spot, spot.distance_to(at)])
