@@ -49,6 +49,7 @@ const SURGERY_TEXT := {
 	"anesthetic": ["Puts the patient under so they don't feel a thing. Too little and they wake up mid-surgery.", "Found in medicine fridges. Glass: dropping it breaks some."],
 	"syringe": ["Load one from a vial anywhere in the hospital and the dose is ready before you reach the table.", "Found in fridges and drawer units. Spent once the dose is in a patient."],
 	"communion_wine": ["Does the job of anesthetic, badly: a little over half the dose, so they stir sooner. Works on a patient or a strapped monster, and a syringe drawn from it is just as weak.", "Not in the hospital. There is a case of it in the chapel."],
+	"tequila": ["The other thing that will do instead of anesthetic, and no better at it: a little over half the dose, so they stir sooner. A syringe drawn from it is just as weak.", "Not in the hospital. There is a bottle behind the bar of a restaurant that should not be there."],
 	"gauze": ["Rolls of dressing that pack wounds and soak up bleeding.", "Found in nurse station drawers."],
 	"forceps": ["Long tongs for pulling out bullets, and seating a graft.", "Found in steel drawer units. Kept after use."],
 	"tourniquet": ["A strap that cuts off the blood to a limb before you saw.", "Found in trauma bags. Kept after use."],
@@ -85,7 +86,6 @@ const LOOT_BLURBS := {
 	"eye_hive": "The eyeball of a strapped Hive. It clouds over and spoils in a minute or two unless it goes in a vat.",
 	# POCKETS 2 phase 5: the Restaurant.
 	"cast_iron_molcajete": "A basalt mortar the size of a football, pestle and all. It weighs what a rock weighs, and it is worth what the office watches are worth.",
-	"tequila": "Top shelf, barely touched. A syringe will draw from it, and it works — but it is not anesthetic, and a patient under it does not lie as still or as long.",
 	"restaurant_pagers": "The station from a restaurant's front desk with two pagers still docked in it. Take them out and they stay bound to each other.",
 	"restaurant_pager": "One of a bound pair. Press it and the other one goes off — quietly, if somebody is holding it; out loud on the floor, if they are not. On its own it is just a pager.",
 	"eye_surgeon": "A surgeon's own eyeball, labelled with whose it is. It spoils outside a vat, too.",
@@ -103,14 +103,11 @@ const TAG_TEXT := {
 	"lure": "LURE — makes a noise somewhere you are not standing.",
 }
 
-## Item kind -> the tags it carries.
-##
-## The bucket of quarters from the Laundromat (POCKET_SPACES_2 phase 4) is the third member of this
-## family and is being built in parallel with this phase. It was NOT on `main` when phase 5 landed,
-## so its kind name is deliberately not guessed at here: whoever merges the Laundromat adds the one
-## line for it rather than phase 5 shipping a tag on a kind that may not exist.
+## Item kind -> the tags it carries. All three lures are here now: the whistle, the quarters and a
+## planted pager, from three different pocket spaces built by three different phases.
 const ITEM_TAGS := {
-	"lifeguard_whistle": ["lure"],    # the Natatorium (phase 2)
+	"lifeguard_whistle": ["lure"],    # the Natatorium (phase 2): one blast, and they all come
+	"quarter_bucket": ["lure"],       # the Laundromat (phase 4): a thrown handful lands loud
 	"restaurant_pager": ["lure"],     # the Restaurant (phase 5): a planted pager, not the station
 }
 

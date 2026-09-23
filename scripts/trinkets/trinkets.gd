@@ -237,7 +237,12 @@ func local_try_use(p) -> bool:
 	# A pager whose partner is gone is plain loot and nothing else, so the click must fall through
 	# to the shove rather than being swallowed by a trinket that has no trick left. Checked on the
 	# clicking machine because that is where the click is spent; the host checks again in _use_pager.
-	if String(p.selected_stack().kind) == "restaurant_pager" and not _is_paired(p.selected_stack()):
+	#
+	# It asks whether a partner still EXISTS, not merely whether this pager still wears a pair mark.
+	# The mark survives its twin being sold, burnt or left behind -- that is the point of keeping it
+	# in `x` -- so a mark-only test says "paired" forever and quietly eats the shove. Same question
+	# use_prompt asks, so the prompt and the click can never disagree.
+	if String(p.selected_stack().kind) == "restaurant_pager" and not has_partner(p):
 		return false
 	# The swing plays here the moment you click, so a melee swing feels like one even on a client
 	# waiting on the host's answer. The host's `sw` counter arrives a moment later and _tick_swings
@@ -792,6 +797,18 @@ static func pair_id(s: Dictionary) -> String:
 	return x if x.begins_with(PAIR_MARK) else ""
 
 
+## Every machine: how many times the pager in this peer's hands has buzzed (mod 64). Only the
+## machine where that peer is local ever renders one; this is the number it renders from, and what
+## a test reads to prove the RIGHT pager went off.
+func buzz_count(peer_id: int) -> int:
+	return int(_buzz.get(peer_id, 0))
+
+
+## Every machine: how many times the pager lying on the floor as this world item has rattled.
+func rattle_count(item_id: int) -> int:
+	return int(_rattle.get(item_id, 0))
+
+
 ## Everything in the world wearing `mark`, as [{where, peer?, head?, item?}]. `skip_head` and
 ## `skip_peer` leave out the pager doing the asking, so a pager never finds itself.
 func _pair_members(mark: String, skip_peer: int, skip_head: int) -> Array:
@@ -821,6 +838,18 @@ func _pair_members(mark: String, skip_peer: int, skip_head: int) -> Array:
 func _partner_where(s: Dictionary, p) -> String:
 	var found := _pair_members(pair_id(s), int(p.peer_id), p.selected_head())
 	return String(found[0].where) if not found.is_empty() else ""
+
+
+## Every machine: does the pager `p` has selected still have a twin anywhere in the world? This is
+## the one question that decides whether a pager is a trinket or plain loot, and both the crosshair
+## prompt and the click ask it, so they cannot disagree.
+func has_partner(p) -> bool:
+	if p == null or not is_instance_valid(p):
+		return false
+	var s: Dictionary = p.selected_stack()
+	if String(s.get("kind", "")) != "restaurant_pager":
+		return false
+	return _partner_where(s, p) != ""
 
 
 ## Host: lift the two pagers off the station. One ends up in your hands and one on the floor at your

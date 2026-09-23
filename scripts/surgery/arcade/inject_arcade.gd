@@ -1170,14 +1170,9 @@ func _complete() -> void:
 	if absf(err) <= band:
 		sedation = 1.0 + (r - 1.0) * in_band_k
 	sedation = clampf(sedation, 0.0, 2.0)
-	# POCKETS 2 phase 5: an anesthetic substitute is weaker than anesthetic. Applied here, to the
-	# finished sedation, and nowhere else: the aiming, the band, the bubbles and the scoring are all
-	# unchanged, so the game you play is identical and only what it buys you is smaller. The dose was
-	# drawn from `loaded_fluid` when the syringe came pre-loaded (the barrel remembers what is in it),
-	# otherwise from whatever the rack is pointing at.
-	var pre: Dictionary = _loaded()
-	var drawn_from := String(pre.get("fluid", "")) if not pre.is_empty() else rack_kind()
-	sedation *= Syringes.potency(drawn_from)
+	# POCKETS 2 phases 3 and 5: an anesthetic substitute is weaker than anesthetic, and that is
+	# applied to this result in game.gd, NOT here. This minigame reports the sedation it always did
+	# and does not know what was in the barrel -- see Items.ANESTHETIC_KINDS.
 	var dose_pts := 0.0
 	if absf(err) > band:
 		dose_pts = minf(pts_dose_max, (absf(err) - band) * pts_dose_slope)

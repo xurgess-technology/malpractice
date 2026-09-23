@@ -1346,12 +1346,21 @@ game.economy.request_order({kind: sets})      # this machine's player orders (ho
 game.economy.open_fax_ui() / .fax_ui          # the order form (scripts/economy/fax_order_ui.gd)
 ```
 
-### Anesthetic substitutes (POCKET_SPACES_2 phase 3)
+### Anesthetic substitutes (POCKET_SPACES_2 phases 3 and 5)
 
-`Items.ANESTHETIC_KINDS` is `kind -> share of a real dose`: `anesthetic` 1.0, `communion_wine` 0.55.
-Anything in it satisfies a procedure step that asks for `"anesthetic"` and re-doses a strapped
-monster, at that share of the dose, so a substitute is a **weak dose that wears off sooner** rather
-than a separate mechanic. Phase 5's top-shelf tequila is meant to be one more line in it.
+`Items.ANESTHETIC_KINDS` is `kind -> share of a real dose`: `anesthetic` 1.0, `communion_wine` 0.55
+and, since phase 5, `tequila` 0.55. Anything in it satisfies a procedure step that asks for
+`"anesthetic"` and re-doses a strapped monster, at that share of the dose, so a substitute is a
+**weak dose that wears off sooner** rather than a separate mechanic.
+
+Both substitutes are built the same way on purpose, and a third should copy them: an entry in
+`Items.ITEMS` (**not** the loot table) with `surgical` and `consumable` set, `batch` `[1, 1]`,
+`fragile`, and a **`rooms` key naming only its own pocket's room kinds**, which `ItemSpawner._legal`
+enforces — an item with no `rooms` is found anywhere, so that key is the whole fence. Both are also
+in `Syringes.FLUIDS`, so the fluid rack offers them with no change to the rack. Phase 5 briefly had
+a *second, parallel* mechanism (a potency table in `syringes.gd`, multiplied inside the injection
+minigame); it was removed when phase 3 merged, because two of them would have weakened a substitute
+twice over. `syringes.gd` deliberately knows nothing about strength.
 
 ```gdscript
 Items.step_accepts(want, held) -> bool     # held satisfies a step asking for want
@@ -1419,11 +1428,14 @@ spent for everyone. The furnace needs no change: it pays `s.v`.
 `ri` ringing world item ids, `rh` peers with a phone ringing in hand, `mp` peers with a live laptop
 map, `tg` `{monster id: the peer whose pulse oximeter is on it}`, `ep` peers with an EpiPen boost —
 each mapping to the `world_time` it ends — plus two counters, `sp` `{peer: forced turns}` and
-`sw` `{peer: reflex-hammer swings}`, both mod 64. Every machine plays the rings and the heartbeats
+`sw` `{peer: reflex-hammer swings}`, both mod 64, plus (phase 4/3) `qt` quieted peers and `cd`
+burning candles, and (phase 5) two more counters: `pb` `{peer: pager buzzes}` and
+`pr` `{world item id: pager rattles}`, both mod 64. Every machine plays the rings and the heartbeats
 itself from that plus the monster's replicated `md` (mode), so no sound crosses the wire, and it
 runs the swings and the turns off the counters, so no animation does either. A counter rather than
 an event because it cannot be lost or repeated by a dropped packet; a machine seeing one for the
-first time just remembers where it is, so a late joiner neither swings nor spins on arrival.
+first time just remembers where it is, so a late joiner neither swings nor spins nor buzzes on
+arrival.
 
 **Per trinket** (the constants are the tuning; the brief's numbers are their defaults):
 
@@ -1473,11 +1485,33 @@ first time just remembers where it is, so a late joiner neither swings nor spins
   new **`Player.sprint_mult`** each physics frame, and `player.gd` multiplies `C.SPRINT_SPEED` by it
   and holds `stamina` at 1 while it is above 1. When `EPI_SECONDS` run out the host sets
   `p.stun = EPI_COLLAPSE` and broadcasts the existing `"stun"` event.
+- **Restaurant pagers** (POCKET_SPACES_2 phase 5). Two kinds: `restaurant_pagers` is the base
+  station, which is what spawns, and `restaurant_pager` is one out of it. Using the station clears
+  its slot, puts one pager in your hands and drops the other at your feet, splitting the station's
+  value between them so nothing is minted or burnt.
+  **The pair lives in the stack's `x`** — `PAIR_MARK` + a run-unique number — the same field that
+  carries `USED_MARK` and a grafted eye's owner, chosen because `x` already survives drop, throw,
+  shelve, death-scatter and pickup and is already replicated with the world item. `_pair_members`
+  scans every player's slots and every world item for that mark.
+  **Breaking the pair is emergent, not a sell hook.** A pager asks at press time whether anything
+  still wears its mark; nothing does → no crosshair prompt and `local_try_use` returns **false**, so
+  the click falls through to a shove and it is plain loot. One rule covers selling, burning and
+  being left behind in a shift rebuild.
+  **The private buzz.** Pressing one raises `tk.pb` for the peer holding the *other*. Every machine
+  receives it and each decides for itself whether to render it, which is true only where that peer
+  is the **local** player: `Audio.play("trinkets_pager_buzz")` with **no position** (the 2D path, so
+  it is in their ears and cannot be overheard) plus `CameraFX.add_shake(PAGER_SHAKE, ...)`. Privacy
+  is enforced at the render, not the delivery — a counter was chosen over `game._event.rpc_id` for
+  the reason above: a comms device that silently drops a message is broken.
+  **A planted pager is the opposite** and reuses the desk phone's plumbing: `tk.pr` by world item
+  id, rendered **positionally by every machine**, with the host emitting `PAGER_NOISE` (0.85, under
+  the phone's 0.95 but over the Sonographer's `LOUD`) and hand-alerting deaf Hives within
+  `PAGER_HIVE_RANGE`. `PAGER_COOLDOWN` is per player, host-side.
 
 **Sounds:** `tools/gen_audio_trinkets.mjs` writes `audio/sfx/trinkets_*.wav`
 (`phone_ring`, `phone_pick`, `laptop_open`, `defib_zap`, `heartbeat`, `hammer_bonk`, `clip_on`,
-`epipen`). **Tests:** `tools/trinkettest.tscn` (headless, all six) and the nettest scenario
-`trinkets`.
+`epipen`, `whistle`, `softener`, `candle_light`, `candle_out`, `pager_buzz`, `pager_rattle`).
+**Tests:** `tools/trinkettest.tscn` (headless, every kind) and the nettest scenario `trinkets`.
 
 ### The pharmacy and the crematorium furnace (pharmacy worker, sweep 4A chunk 3; HUB REDESIGN, 2026-09-15)
 

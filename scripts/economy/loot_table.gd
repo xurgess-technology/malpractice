@@ -151,17 +151,10 @@ const LOOT := {
 		"rooms": {"restaurant": 2.4, "restaurant_kitchen": 1.0},
 		"surfaces": ["counter"], "containers": {"drawer_unit": 0.3},
 	},
-	# TEQUILA, TOP SHELF. Loot that is also a fluid: `Syringes.FLUIDS` has listed `tequila` since the
-	# rack was built (0.10.34), waiting for something to actually carry. This is that something, so
-	# the rack needed no change at all -- it populates itself from what you are holding.
-	# `consumable` is what lets a syringe spend it, and the batch is 1 because the spec says so: one
-	# bottle, one draw, and it is gone. The weak dose lives in Syringes.FLUID_POTENCY, not here.
-	"tequila": {
-		"name": "Tequila, top shelf", "short": "Bottles of tequila", "value": [35, 60], "tier": 2,
-		"consumable": true, "fragile": true, "batch": [1, 1],
-		"rooms": {"restaurant": 2.2, "restaurant_kitchen": 1.1},
-		"surfaces": ["counter"], "containers": {},
-	},
+	# TEQUILA, TOP SHELF is NOT here. It is an anesthetic substitute, so it lives in Items.ITEMS
+	# beside the Chapel's communion wine (Items.ANESTHETIC_KINDS), fenced to the Restaurant by the
+	# same `rooms` key the wine uses. A substitute has to be surgical and consumable and satisfy a
+	# procedure step, which is the supply table's job and not this one's.
 	"restaurant_pager": {
 		"name": "Restaurant pager", "short": "Restaurant pagers", "value": [14, 24], "tier": 1, "trinket": true,
 		"rooms": {}, "surfaces": [], "containers": {},
@@ -239,10 +232,7 @@ static func def(kind: String) -> Dictionary:
 	var out := d.duplicate()
 	out["loot"] = true
 	out["surgical"] = false
-	# Loot is not consumed by default, and almost none of it ever is. POCKETS 2 phase 5 made the one
-	# exception: an anesthetic substitute is loot you find in a pocket AND a fluid a syringe draws
-	# out of, so it has to be spendable like a vial. Opt in per kind rather than by kind name.
-	out["consumable"] = bool(d.get("consumable", false))
+	out["consumable"] = false
 	out["fragile"] = bool(d.get("fragile", false))
 	out["bulky"] = bool(d.get("bulky", false))
 	out["stack"] = bool(d.get("stack", false))

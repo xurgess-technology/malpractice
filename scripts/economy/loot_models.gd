@@ -28,7 +28,6 @@ static func build(root: Node3D, kind: String, count: int) -> void:
 		"copper_wire_spool": _wire_spool(root)
 		"foremans_clipboard": _clipboard(root)
 		"cast_iron_molcajete": _molcajete(root)
-		"tequila": _tequila(root)
 		"restaurant_pagers": _pager_station(root)
 		"restaurant_pager": _pager(root)
 		# POCKETS 2 phase 4: the Laundromat's three.
@@ -85,7 +84,6 @@ static func footprint(kind: String) -> Vector3:
 		"pool_chemical_drum": return Vector3(0.42, 0.62, 0.42)
 		"lifeguard_whistle": return Vector3(0.1, 0.04, 0.05)
 		"cast_iron_molcajete": return Vector3(0.3, 0.2, 0.3)
-		"tequila": return Vector3(0.1, 0.3, 0.1)
 		"restaurant_pagers": return Vector3(0.26, 0.12, 0.2)
 		"restaurant_pager": return Vector3(0.12, 0.035, 0.12)
 		"grease_bucket": return Vector3(0.28, 0.32, 0.28)
@@ -506,21 +504,6 @@ static func _molcajete(root: Node3D) -> void:
 	_add(root, _cyl(0.028, 0.1, stone, 10, 0.036), Vector3(0.04, 0.2, 0.02))
 
 
-## A tall bottle of top-shelf tequila: clear glass with the spirit standing in it, a long neck, a
-## foil-wrapped cork and a label. It reads as a bottle first and a drug second, which is the joke.
-static func _tequila(root: Node3D) -> void:
-	var glass := _m("tequila_glass", Color(0.86, 0.90, 0.86, 0.45), 0.12)
-	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	var spirit := _m("tequila_spirit", Color(0.84, 0.72, 0.36), 0.2)
-	var label := _m("tequila_label", Color(0.93, 0.89, 0.76), 0.85)
-	var foil := _m("tequila_foil", Color(0.78, 0.66, 0.24), 0.3, 0.9)
-	_add(root, _cyl(0.042, 0.19, glass, 14), Vector3(0, 0.095, 0))            # the body
-	_add(root, _cyl(0.037, 0.13, spirit, 14), Vector3(0, 0.068, 0))           # what is in it
-	_add(root, _cyl(0.042, 0.04, glass, 14, 0.018), Vector3(0, 0.21, 0))      # the shoulder
-	_add(root, _cyl(0.018, 0.05, glass, 12), Vector3(0, 0.255, 0))            # the neck
-	_add(root, _cyl(0.021, 0.028, foil, 12), Vector3(0, 0.288, 0))            # the capsule
-	_add(root, _cyl(0.0435, 0.075, label, 14), Vector3(0, 0.1, 0))            # the label
-	_add(root, _cyl(0.0445, 0.012, foil, 14), Vector3(0, 0.148, 0))           # the band above it
 
 
 ## The base station: a shallow tray with two charging wells, a pager sitting in each. This is what

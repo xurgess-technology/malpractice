@@ -641,12 +641,12 @@ its "every kind is a kept kind" check on `main`; and its pocket-only
 assertions are now driven by a `POCKET_ONLY` table of kind -> its space's
 room kinds, so a new space's items are checked the day they are added.
 
-## Phase 5 — items for the existing spaces — CODE DONE, TESTS UNFINISHED 2026-09-22, branch `pockets-phase5`
-**Stopped early on purpose**, by Zach's call, because four slots had been
-running Godot for hours and the machine had nothing left (an untouched
-hospital corridor was benchmarking at 15 fps). All six items are built and
-committed; what is missing is the test pass, not the work. **Read "What is
-left" at the end of this section before picking it up.**
+## Phase 5 — items for the existing spaces — DONE 2026-09-23, branch `pockets-phase5`
+Six items for the two spaces that had none of their own, plus the shared
+"lure" database tag. Built over two sittings: the first was stopped part-way
+for machine headroom, and the second merged `main` at 0.10.38 and finished the
+tests. **The merge changed one design decision — see "The tequila" — and the
+new pager test found a real bug in the pagers.**
 
 ### What was built
 Six items, three per space, plus one shared database tag.
@@ -669,10 +669,12 @@ Every kind names only its own space's room kinds and **none lists `"*"`**, so
 none of it can spawn in the hospital proper — the Natatorium's rule from
 phase 2, followed exactly.
 
-### POCKET_ITEMS: all four spaces now declare it
+### POCKET_ITEMS: all five spaces now declare it
 The Factory and the Restaurant had no items, so they had no list. They have
-one now, in the same place and shape as the Natatorium's, which is what the
-queued "items bleed out near the seam" task was waiting for:
+one now, in the same place and shape as the Natatorium's — and with the Chapel
+and the Laundromat having landed meanwhile, **all five spaces now declare it
+identically**, which is what the queued "items bleed out near the seam" task
+was waiting for. `pockettest` enforces the agreement (see below):
 
     const POCKET_ITEMS := ["grease_bucket", "copper_wire_spool", "foremans_clipboard"]
     const POCKET_ITEMS := ["cast_iron_molcajete", "restaurant_pagers", "tequila"]
@@ -728,39 +730,54 @@ Using the station puts one pager in your hands and drops the other at your
 feet, which is the item stating what it is for. The station's value is split
 between the two, so taking the pair out neither mints nor burns money.
 
-### The tequila, and the one number
-`Syringes.FLUIDS` has listed `tequila` since the rack landed in 0.10.34, and
-the rack populates itself from what you carry — so **the rack needed no change
-at all**. What was missing was something to carry. Tequila is a loot kind
-(room-weighted, which `Items.ITEMS` is not) with `consumable: true`; the only
-supporting change was letting `LootTable.def` honour a per-kind `consumable`
-flag instead of hard-coding `false`.
+### The tequila, and the decision the merge reversed
 
-The weak dose is **one multiply**, in `inject_arcade._complete`, on the
-finished sedation and nowhere else — the aiming, the band, the bubbles and the
-scoring are untouched, so the game you play is identical and only what it buys
-you is smaller. `Syringes.FLUID_POTENCY` is `0.7` for both alcohols.
+**This was built twice, and the second way is right.** Before the Chapel
+landed, tequila was a loot kind with its own weakness mechanism: a
+`FLUID_POTENCY` table in `syringes.gd`, multiplied into the sedation inside
+`inject_arcade._complete`. Then phase 3 merged, and it had solved the same
+problem in a different and better place: `Items.ANESTHETIC_KINDS`, applied
+once in `game.gd` where the step completes.
 
-**0.7 was chosen against an existing threshold, not for feel**: `SurgerySystem`
-stirs a patient whenever sedation is under **0.75**, and harder the further
-under. So a flawless shot of anesthetic is 1.0 and lies still; a flawless shot
-of tequila is 0.70 — *just* under the line, so it stirs, but only just, and a
-sloppy one falls away fast. That is exactly "shorter sedation, stirs sooner",
-riding plumbing that already existed. The same number is right for phase 3's
-communion wine, which the spec gives the identical rule.
+Keeping both would have **weakened a substitute twice over** (0.7 x 0.55), and
+the Chapel's placement is the better one anyway:
 
-### The "lure" tag, and the one line left open
+- It is applied where the dose is actually spent, so one line covers the
+  syringe route *and* the straight-from-the-bottle route.
+- It reads the fluid **before `spend_loaded` clears it**, which is what stops
+  loading a substitute into a barrel from laundering it into a full-strength
+  dose. The minigame-side version could not see that, because by then the
+  barrel just holds a number.
+- It keeps the promise phase 3 wrote down: *the injection minigame does not
+  know the difference*. Phase 5's version had quietly broken that.
+
+So phase 5's mechanism was **deleted**, and tequila became what communion wine
+is: an entry in `Items.ITEMS` (not the loot table) with `surgical`,
+`consumable`, `batch [1, 1]`, `fragile`, and a `rooms` key naming only the
+Restaurant's rooms, which `ItemSpawner._legal` enforces. Its strength is one
+line in `ANESTHETIC_KINDS`: **0.55, the same as the wine**, which is what phase
+3's own comment said phase 5 should be. It is in `Syringes.FLUIDS` too, so the
+fluid rack offers it with no change to the rack.
+
+Consequences worth knowing: tequila is a **supply, not loot** — teal rim, the
+`surgery` icon category, a `SURGERY_TEXT` database entry rather than a loot
+blurb, and it is absent from `loottest`'s `POCKET_ONLY` because that test walks
+the loot table. `LootTable.def` no longer needs the per-kind `consumable` flag
+phase 5 briefly added to it, and that was reverted too.
+
+### The "lure" tag — all three landed
 `wall_pages.gd` had no tag system, so phase 5 added a small one: `TAG_TEXT`,
 `ITEM_TAGS`, `tags_for()` and `kinds_tagged()`. A tagged item's database entry
 prints its tag line and **names the rest of the family**, so the lures read as
 one idea rather than three coincidences in three pocket spaces.
 
-`lure` is applied to the **lifeguard whistle** and the **planted pager**.
-**The bucket of quarters is NOT tagged**, because the Laundromat (phase 4) was
-still being built in parallel and was not on `main` — its kind name is
-deliberately not guessed at. **Whoever merges the Laundromat adds one line to
-`ITEM_TAGS` in `scripts/database/wall_pages.gd`.** That is the only
-cross-phase loose end.
+The first sitting could only tag two, because the Laundromat was being built in
+parallel and was not on `main`, so its kind name was deliberately not guessed
+at. **It turned out to be `quarter_bucket`, not `bucket_of_quarters`** — which
+is exactly why it was left blank rather than assumed. All three are tagged now:
+the **lifeguard whistle** (Natatorium), the **quarter bucket** (Laundromat) and
+a **planted pager** (Restaurant). No loose ends.
+
 
 ### The grease bucket TODO (unchanged, and still blocked)
 The slip patch needs a slide/knockdown state for monsters and players, which
@@ -770,54 +787,81 @@ and is plain loot. The day those states land: add it to `KINDS` and `ONE_USE`,
 set `"trinket": true` with a `trinket_weight` in `loot_table.gd`, and write
 `_use_grease`. The instructions are also written at the entry itself.
 
-### What phase 5 was tested with — INCOMPLETE
-- **`tools/mapcheck.gd`**, 12 seeds forcing the factory: **99.7% pocket nav,
-  every entrance walks out through its seam**, and the only failures are the
-  pre-existing morgue-tray ones (FAILING_TESTS 2) on **seeds 1 and 3** — which
-  is exactly the pair that section predicts for a pocket-forced run. Clean.
-- **`tools/trinkettest.tscn`**: **PASS, 0 failures**, run after the pagers
-  landed. Note this proves the pagers **parse, load and do not disturb the
-  other seven trinkets** — it does **not** yet exercise them, because no pager
-  section has been written (see below).
-- **`tools/pockettest.tscn`**: the **baseline before any change** was
-  **FAILED 4 of 328**, all four the known FAILING_TESTS **1f** Night Nurse
-  checks (restaurant and natatorium; the factory runs first and passes, which
-  is precisely 1f's run-order pattern). `--only=factory` after the Factory
-  items: **PASS, 104 checks**. **Not re-run after the Restaurant items.**
-- **`tools/perfprobe` was not run**, and deliberately. Phase 5 adds no
-  geometry, no lights and no materials to any space — it adds item kinds, whose
-  models are primitives built by the same code path as every other loot kind.
-  There is nothing here that can move a frame-time percentile. It would also
-  have been worthless: the machine was running four slots and an untouched
-  hospital corridor was measuring 15 fps, which is the contention phase 2 wrote
-  its whole caveat about.
+### The bug the new pager test found
+The pager section of `trinkettest` was written in the second sitting, and it
+immediately caught something real — not in the test, in the pagers.
+
+`use_prompt` asked the right question ("does a partner still exist anywhere?")
+but `local_try_use` asked a weaker one: does this stack still *wear* a pair
+mark. The mark survives its twin being sold, burnt or left behind — that is the
+whole point of keeping it in `x` — so a lone pager still answered "paired",
+swallowed the click, and never fell through to a shove. The prompt said it was
+plain loot while the click disagreed.
+
+Both now go through one `has_partner(p)`, so they cannot drift apart again. The
+claim in the first sitting's handoff that a lone pager "lets the click fall
+through to a shove" was, until this test ran, **not true**.
+
+### What phase 5 was tested with
+Every suite below was run on a quiet machine, after merging `main` at 0.10.38.
+
+- **`tools/trinkettest.tscn`** — **PASS, 0 failures**, including a new
+  **14-check pager section**: the station splits into two marked pagers whose
+  values sum to the station's and mint nothing; pressing one rattles the one on
+  the floor, once, as a real `pager` noise event at 0.85 (past the
+  Sonographer's `LOUD`); a second press inside the cooldown does nothing; a
+  pager in a teammate's hands raises **their** buzz counter and not the
+  presser's, and makes **no noise event at all**; and a pager whose partner is
+  gone refuses the click, offers no prompt, and is refused by the host too.
+  The buzz half needs a second player and is skipped rather than faked in a
+  solo run.
+- **`tools/pockettest.tscn`** — **4 of 649**, and the new `POCKET_ITEMS`
+  section is **102 checks, all passing**, across all five spaces. It checks
+  that every space declares a non-empty list; that every kind in it is real,
+  names somewhere to spawn, never lists `"*"`, and only names its own space's
+  rooms; that no two spaces claim the same kind; and, the other way round, that
+  any kind whose rooms are wholly one pocket's is *in* that pocket's list, so
+  the lists cannot silently drift. It reads both tables, because a pocket item
+  may be loot or a supply.
+  The 4 failures are **FAILING_TESTS 1f**, the Night Nurse, and they land on
+  the **natatorium and chapel** — the Factory and the Restaurant both pass.
+  That is 1f's known run-order behaviour: the identity of the failing space
+  moves, the failure does not.
+- **`tools/loottest.gd`** — **PASS, 204 checks**, with the five new loot kinds
+  added to `POCKET_ONLY`. It caught one thing: `restaurant_pager` was neither
+  "kept" nor exempt. Rather than name it, the exemption became the real rule —
+  a kind with **no `rooms` at all** is never placed by the spawner and cannot
+  be "findable", which already described the grafted eyes and now covers the
+  lone pager too.
+- **`tools/inventorytest.tscn`** — **PASS, 98 checks**, after raising the loot
+  table's size ceiling from 25 to 34. That bound is a "did someone paste the
+  old table back" guard, not a design limit, and five pocket spaces had grown
+  past it.
+- **`tools/syringetest.tscn`** — **PASS, 0 failures**. Run because
+  `inject_arcade`, `syringes.gd` and both item tables were touched.
+- **`tools/mapcheck.gd`**, full run — **3 failures, all the pre-existing morgue
+  tray** (FAILING_TESTS 2), on seeds **1, 38 and 112**, which is exactly the
+  set that section names for a run with pockets. Pocket nav 100%, every
+  entrance walks out through its seam.
+- **`tools/perfprobe` was not run**, deliberately. Phase 5 adds no geometry, no
+  lights and no materials to any space; it adds item kinds whose models are
+  primitives built by the same code path as every other item. There is nothing
+  here that can move a frame-time percentile.
 
 ### What is left
-1. **Run `pockettest` and compare against the 4/328 baseline above.** Phase 5
-   added a `_check_pocket_items()` section to `tools/pockettest.gd` that runs
-   once for all spaces: every space declares a non-empty `POCKET_ITEMS`, every
-   kind in it is a real loot kind whose `rooms` name only that space's own room
-   kinds and never `"*"`, no two spaces claim the same kind, and — the other
-   way round — any loot kind whose rooms are wholly one pocket's **must** be in
-   that pocket's list, so the lists cannot silently drift. **This has never
-   been executed.** It is new code and may well have bugs.
-2. **Write the pager section for `trinkettest.gd`.** Nothing yet exercises the
-   pairing. What it should check: the station splits into two marked pagers
-   whose values sum to the station's; pressing one raises the *other* peer's
-   `pb` and not the presser's; a dropped partner raises `pr` and emits a noise
-   at `PAGER_NOISE` instead; the cooldown refuses a second press inside
-   `PAGER_COOLDOWN`; a pager whose partner has been destroyed reports
-   `pager_alone` and `local_try_use` returns false; and the mark survives a
-   drop and a pickup. `last_result` is already populated for all of these.
-3. **A `syringetest` run**, since `inject_arcade` and `LootTable.def` were
-   touched. The potency multiply is one line, but it is on the path every
-   injection takes.
-4. **docs/CONTRACTS.md is NOT updated.** The Trinkets section (search
-   "### Trinkets") needs the pagers: the two new snapshot keys `pb` and `pr`,
-   `PAIR_MARK` in `x`, and the two new sounds. The syringe section needs
-   `FLUID_POTENCY`. This is the largest doc debt phase 5 leaves.
-5. **Nobody has looked at any of this in a running game.** No review window was
-   opened, so the icons, the models and the pager's shake are all unseen.
+Nothing blocking, but three things worth knowing:
+
+1. **Nobody has seen any of this in a running game.** No review window was
+   opened, so the six models, the icons and the pager's HUD shake are unseen.
+   The pager especially wants a two-window look: the buzz is meant to be
+   private, and the only way to confirm that is to watch both screens.
+2. **The buzz has not been tested over a real network**, only in-process. The
+   nettest `trinkets` scenario would be the place, and the thing to prove is
+   the one this design turns on: every machine receives `pb`, and only the
+   holder's machine renders it.
+3. **The grease bucket is still a TODO trinket**, unchanged and still blocked
+   on slide/knockdown states. It spawns and sells; `loot_table.gd` says exactly
+   what to do the day those land.
 
 ### The original brief
 Factory:
