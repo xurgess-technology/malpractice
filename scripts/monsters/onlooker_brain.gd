@@ -78,6 +78,10 @@ const MIN_DIST := 14.0
 const PREFER_DIST := 26.0
 ## Candidate points sampled per placement attempt.
 const TRIES := 40
+## Half-angle of the cone candidates are thrown down, radians. Comfortably inside a 70-degree
+## horizontal frustum, so a point generated here is usually already in view and the raycast is
+## doing the real work rather than the frustum test.
+const VIEW_CONE := 0.52
 ## The stare only counts while the mark can see it; looking away bleeds the meter back down at this
 ## share of the rate it built up. Looking away is worth something, but only until the next hop.
 const LOOK_AWAY_DECAY := 0.5
@@ -347,14 +351,38 @@ func _place(g: Node, pk, mark: Node) -> Vector3:
 	var rect: Rect2 = pk.pocket.get("rect", Rect2())
 	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
 		return Vector3.INF
+	var cam: Camera3D = mark.get("camera")
+	if cam == null or not cam.is_inside_tree():
+		return Vector3.INF
 	var map: RID = m.agent.get_navigation_map()
 	var map_ready := NavigationServer3D.map_get_iteration_id(map) > 0
 	var here: Vector3 = mark.global_position
+	var eye: Vector3 = cam.global_position
+	var fwd: Vector3 = -cam.global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
 	var best := Vector3.INF
 	var best_d := MIN_DIST
-	for _i in TRIES:
-		var q := Vector3(rect.position.x + rng.randf() * rect.size.x, here.y,
-			rect.position.y + rng.randf() * rect.size.y)
+	for i in TRIES:
+		# **Sample down the view, not over the room.** Scattering candidates uniformly across the
+		# whole rect and keeping the ones that happen to be visible sounds equivalent and is not:
+		# a frustum covers a thin wedge of a big room, so in the Natatorium's 72 x 46 m hall forty
+		# uniform samples could miss it three times running and the thing simply would not hop.
+		# pockettest caught exactly that. Throwing them down the heading instead means the sample
+		# is dense where the answer has to be, and the room's own shape (walls, the nav mesh, the
+		# visibility ray below) still decides which of them are real.
+		#
+		# The last quarter stays uniform, as a fallback for geometry a straight cone misses: a
+		# player facing a pillar a metre from their nose has a view that opens out around it.
+		var q: Vector3
+		if i < TRIES - TRIES / 4:
+			var dir: Vector3 = fwd.rotated(Vector3.UP, rng.randf_range(-VIEW_CONE, VIEW_CONE))
+			q = Vector3(eye.x, here.y, eye.z) + dir * rng.randf_range(MIN_DIST, PREFER_DIST * 1.6)
+			if not rect.has_point(Vector2(q.x, q.z)):
+				continue
+		else:
+			q = Vector3(rect.position.x + rng.randf() * rect.size.x, here.y,
+				rect.position.y + rng.randf() * rect.size.y)
 		if map_ready:
 			q = NavigationServer3D.map_get_closest_point(map, q)
 		var d := Vector2(q.x - here.x, q.z - here.z).length()
