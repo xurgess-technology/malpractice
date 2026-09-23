@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.42**: The paramedics open the doors before they walk through them 🚪
+    - Fixed: The OR doors used to still be shut when the front of the gurney was already through them. They opened -- just late, about a second after the medic pulling the gurney had walked through a solid door. They now stand open before anyone reaches them.
 - **0.10.41**: Something in the pocket spaces is watching you 👁
     - Added: The Onlooker. It picks one of you and stands at the far end of the room, facing them. It makes no sound and it never takes a step -- look away, look back, and it's somewhere else. Everyone can see it and anyone can drive it off by running at it, but it only ever wants the one it picked. If they leave through the seam, it picks someone else who stayed.
     - Note: Your heart goes faster the longer it has you, and it speeds up each time it moves. Nothing else in the game tells you where it is, so a teammate saying "behind you" is the whole of your warning.
