@@ -108,6 +108,43 @@ everything once`, and not one scenario row was ever measured. Reproduced here on
   kind by the rows it parsed, never by an exit code, so a crashing exit cannot fail a good run. Fixing
   that one is Godot's job, not ours.
 
+**Section 1g, nettest `pockets`, went the same way on 2026-09-23 and has been removed.** The scenario
+now passes: 44 s, 46 s and 46 s on three runs, with the host reporting "client 1 carried client 2 into
+the pocket" and client 2 confirming from inside its own body that it stayed there. It was neither the
+seam nor the carry, and the old entry's headline was wrong: **the carry started fine every time.**
+
+- **Which side dropped it: client 1, and not for a gameplay reason.** The old note said "carried 0,
+  client 2's body in pocket false" and concluded the carry never started. It does start. What client
+  1 actually reports most runs is `timed out after 60 s waiting for walking into the stub` — the
+  *second* walk in, the one with a teammate on its shoulder. Logging its position, velocity, slide
+  collisions and physics-frame count once a second through the whole scenario is what separated the
+  two: the player was at a healthy 2.04 m/s (walk speed x `CARRY_SPEED_K`), on the floor, with no
+  collision but the ground, and still covering **0.17 m per second of wall clock**. It was not being
+  blocked or snapped back. It was running at **5 physics frames a second**, against 130-160 fps for
+  the identical walk a few seconds earlier without the body.
+- **The cause is one display-server call per frame.** `Player._key_label` (scripts/player.gd) turns a
+  bound action into a prompt label through `DisplayServer.keyboard_get_keycode_from_physical`.
+  Headless has no keyboard layout, so that call fails and Godot prints an eight-line error **with a
+  GDScript backtrace** -- and `_update_aim_core` asks for the drop key on every frame you are
+  carrying someone ("Put them down  (Q)"), and only then. So picking a teammate up turns on a
+  per-frame error flood, the process spends its frame writing to a pipe, and the client collapses.
+  Nothing else in the game calls `_key_label`, which is why only the carrying half of this scenario
+  was ever slow.
+- **Fixed by remembering the label.** `_key_label` now caches physical keycode -> label in a static
+  dictionary, and in headless skips the layout translation entirely (the physical key *is* the
+  label). One lookup per distinct binding instead of one per frame; rebinding lands on a different
+  keycode and so a different entry. A run's `tools/nettest_logs/pockets_c1.log` now has **zero**
+  `Not supported by this display server` lines, against thousands.
+- **What the next person should know.** *Any* per-frame error on a headless nettest process is a
+  25-30x slowdown, not a cosmetic nuisance: `nettest_run.gd` only echoes `[net...]`, `[stats]` and
+  `SCRIPT ERROR` lines, so a flood like this is **invisible in the console** and only shows up in
+  `tools/nettest_logs/<scenario>_<role>.log`. Read that file before believing a nettest timeout is
+  about gameplay. The same flood was happening in the `downed` scenario, which carries too; it passed
+  only because its carry walk is 1.2 s long. And be careful profiling these: adding `print`s to find
+  the hot spot slowed every process to 7 fps and hid the difference between carrying and not.
+- **In the shipped game this was a slow prompt, not a stall.** With a real display server the call
+  succeeds and merely costs a layout lookup every frame while you carry; nobody would have seen it.
+
 How to run things is at the bottom of this file.
 
 ---
@@ -182,17 +219,6 @@ How to run things is at the bottom of this file.
   The Chapel's votive candle makes her count as watched inside its radius (it is in
   `Perception.observed_any`, above the early-out), which is exactly the sort of change that would
   otherwise get blamed for this.
-
-## 1g. nettest `pockets`: client 1 never carries client 2 into the pocket
-
-- **Command:** `-- --only=pockets`
-- **Result:** `FAIL` after 140 s: client 1 says `carried 0, client 2's body in pocket false`, and the
-  host and client 2 both time out after 120 s `waiting for client 1 to carry client 2 into the
-  pocket`. The carry never starts, so nothing about the seam itself is exercised.
-- **Found 2026-09-22** during the strapping fix, **confirmed on plain `main`** at `c933607` with the
-  identical message, and it reproduces every run (not a load flake). Never written down before.
-- Not to be confused with the headless `pockettest` scene (section 1f), which fails on something
-  else entirely (the Night Nurse).
 
 ## 1i. nettest `full_shift_lag` is a load flake
 
