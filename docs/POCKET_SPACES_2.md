@@ -252,9 +252,14 @@ and 4 will meet this file at merge** — the changes there are additive
   walk but not certain, sprinting is louder still, the room masks nothing,
   `POCKET_ITEMS` names two real loot kinds, and the cabinet is stocked
   with gauze and a tourniquet. The only failures are the Night Nurse
-  check, **FAILING_TESTS 1f**, which phase 1 turned into a coin flip: it
-  passed on a natatorium-only run and failed on the full run in the same
-  session. Not phase 2's.
+  check, **FAILING_TESTS 1f** — and phase 2 pinned down what it actually
+  is. It is **not** the coin flip 1f called it: **only the space that runs
+  first passes it, and every space after that fails**. Reverse the order
+  and the natatorium passes while the Factory and the Restaurant fail. Each
+  passes alone. A third space is what made that visible, and 1f now says
+  so; it is state left behind by the previous space's shift rebuild, not
+  the seam, the distance or any one room. Not phase 2's, and phase 7
+  should not be surprised by it.
 - **`tools/trinkettest.tscn`** — **PASS, 0 failures**, with a whistle
   section of nine checks: the blast is a real noise event at 1.4, past
   `LOUD`, the near Hive is drawn and one past `WHISTLE_RANGE` is not, the
