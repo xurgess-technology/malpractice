@@ -151,7 +151,9 @@ and at least one trauma bag on a hallway wall.
 
 ```gdscript
 # scripts/item_spawner.gd
-static func plan(seed: int, shift: int, ailment_id: String, info: Dictionary) -> Array
+static func plan(seed: int, shift: int, ailment_id: String, info: Dictionary, occupied := {}) -> Array
+static func loose_supply_plan(seed: int, shift: int, kind: String, info: Dictionary,
+		used: Dictionary) -> Array
 static func shortfall_plan(seed: int, need: Dictionary, have: Dictionary, info: Dictionary,
 		occupied: Dictionary, avoid: Array) -> Array
 # Each entry: {kind: String, count: int, container_id: String ("" when loose), slot: int, anchor: int}
@@ -166,7 +168,17 @@ spawns in `ItemSpawner.SAFE_ROOMS` (the entrance building's rooms and halls, the
 at least one needed item is far from the table; items the current ailment does not need also
 spawn as red herrings; spawn counts respect `Items` batch sizes; deterministic from the seed.
 Levels without `wing` on their containers and anchors count as one wing. The game instantiates
-`WorldItem`s from the plan. `tools/spawncheck.gd` checks all of it.
+`WorldItem`s from the plan.
+
+**A shift's supply is two plans, not one.** Before any case arrives, `game._populate_shift_world`
+scatters every `ItemSpawner.LOOSE_SUPPLY` kind through `loose_supply_plan`: `suture_kit` and
+`syringe`, three stacks each, one per building unit, in the containers the kind's `found` table
+allows, never in a `SAFE_ROOMS` room, stack sizes inside the `Items` batch. Those kinds are not in
+`Items.SURGICAL`, so the case plan never plans them -- but a case can still **need** one
+(`gunshot`'s closing step wants a suture kit), and then this scatter is its whole supply, with the
+weaker guarantee of three places rather than `CONSUMABLE_STACKS[0]`. The case plan is handed the
+scatter's spots as `occupied`, so the two never double-book a slot. `tools/spawncheck.gd` checks
+both plans and their totals together.
 
 ## World items (main session)
 

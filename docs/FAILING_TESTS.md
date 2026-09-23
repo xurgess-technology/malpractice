@@ -145,6 +145,51 @@ seam nor the carry, and the old entry's headline was wrong: **the carry started 
 - **In the shipped game this was a slow prompt, not a stall.** With a real display server the call
   succeeds and merely costs a layout lookup every frame while you carry; nobody would have seen it.
 
+**Section 1k, spawncheck's 600 `suture_kit` failures, went the same way on 2026-09-23 and has been
+removed.** `spawncheck` is now green: **300 seeds x 2 ailments, "OK - every rule held"**, against
+600 failures on `main` at `fca51db` (reproduced here first, same count, all of them `gunshot`).
+**It was a test-scope bug, and the product was fine** -- but the comment that sent everyone the
+wrong way was not.
+
+- **The old lead was right about the mechanism and wrong about the conclusion.** `suture_kit` is
+  indeed missing from `Items.SURGICAL`, which is the list `ItemSpawner.plan`'s needed/herring split
+  iterates, so the case plan never plans one. But `spawncheck` only ever looked at `plan()`, and a
+  shift's supply is **two plans**: `game._populate_shift_world` scatters three stacks of kits
+  (and of syringes) through what is now `ItemSpawner.loose_supply_plan`, before any case arrives.
+  spawncheck could not see the path that actually supplies the item it was failing on.
+- **Measured before changing anything, because the interesting question was whether a gunshot shift
+  can be uncompletable.** A probe replayed the real scatter against real levels for 300 seeds: all
+  three kits land in a legal container on **every** seed (never the floor fallback), in three
+  distinct building units, **never** in a `SAFE_ROOMS` room, never in a type `Items.found`
+  disallows, and at least one is past `FAR_M` on every seed (worst seed 29 at 26.4 m against a bar
+  of 24). Total kits per seed 3 to 6 against a need of 1, so `CONSUMABLE_MULT` is met on the worst
+  seed. The scarcest seed still had **86** legal spots to choose from. **No shift is uncompletable,
+  and no kit lands anywhere unreasonable.** `tools/playtest.tscn -- --god --seed=2` (a gunshot
+  shift) confirms it end to end: the bot found a kit in the wings, carried it in and closed the
+  wound, clocking out stable.
+- **The one guarantee the scatter does not meet is spread: 3 places, not `CONSUMABLE_STACKS[0]`
+  (6).** That is now written down rather than discovered, and spawncheck asserts the weaker bar for
+  a `LOOSE_SUPPLY` kind and the full one for a `SURGICAL` kind.
+- **Adding `suture_kit` to `SURGICAL` was the other candidate and would have cost more.** It is
+  read in six places -- `game.gd`'s `_level_info_usable` sizes `tool_spawns` against its length,
+  `database_pages.gd` orders the whole database by it, `dev_room.gd` already appends `suture_kit` by
+  hand and would have doubled it, and spawncheck's own slot-width check widens with it -- and it
+  would have left two supply paths for one item unless `spawn_suture_kits` were deleted, which is
+  the downed-teammate table's supply and must exist on amputation shifts too. The measurement said
+  the product was fine, so the test was the thing to fix.
+- **Two real bugs fell out of the measurement anyway**, both caught by the new checks rather than by
+  reasoning. The scatter hard-coded stacks of 1-2 instead of the kind's own `batch`, so syringes
+  spawned in packs of 1 while `Items` and the database page both promised 2 to 3. And `plan()` was
+  called with an empty `used` set, so on about a fifth of seeds the case plan put a stack into a
+  slot a kit or syringe already occupied -- two items inside each other in one drawer. `plan()` now
+  takes the spots already taken, and spawncheck fails on a double-booking (max 2 per seed before,
+  0 now).
+- **What the next person should know.** A supply kind can live outside `Items.SURGICAL` on purpose;
+  `ItemSpawner.LOOSE_SUPPLY` is the list of those, it is the single source for how many stacks each
+  gets, and anything checking "what a shift holds" must read both it and `SURGICAL`. One more place
+  was reading only `SURGICAL` and is fixed here: `shift_loop.missing_supplies()`, so the objective
+  line now actually says `BRING TO THE OR SHELF: Suture kit x1` instead of going quiet.
+
 How to run things is at the bottom of this file.
 
 ---
@@ -240,23 +285,6 @@ How to run things is at the bottom of this file.
 - **The stalls themselves were never explained**, and they are no longer anyone's known bug. Anything
   that depends on a short-lived state being sampled at 20 Hz is vulnerable to them, so this is worth
   its own look before the next netcode feature leans on snapshot timing.
-
-## 1k. spawncheck: 600 suture_kit failures
-
-- **Found 2026-09-22** by the `syringe-draw` task, which generalised the loose-supply spawner and
-  wanted a clean baseline. **Confirmed identical on clean `main`**, so it is pre-existing and not
-  that branch's doing. It had never been written down.
-- **Confirmed a second time, independently**, by the POCKET_SPACES_2 phase 3 task, which checked
-  out `main`'s `scripts/items.gd` and `scripts/item_spawner.gd` over its own branch and got the
-  same failure on every one of six seeds: `seed N gunshot: suture_kit totals 0, needs at least
-  3x 1` and `suture_kit is in only 0 places`.
-- Nobody has looked at the cause. Worth knowing that `suture_kit` is the newest of the loose
-  supplies -- SUTURE! (0.10.4) added the closing step that needs it, and 0.10.33 generalised the
-  spawner that places it -- so if this turns out to date from either, it is young.
-- **One lead worth trying first:** `suture_kit` is in `Items.ITEMS` with `"surgical": true` but is
-  **not** in `Items.SURGICAL`, and `Items.SURGICAL` is the list `ItemSpawner.plan`'s needed/herring
-  split actually iterates. It also declares `"found": {"trauma_bag": 0.4, "station_drawers": 0.35,
-  "drawer_unit": 0.25}` and no `"loose"`, so it can only ever appear inside a container.
 
 ---
 
