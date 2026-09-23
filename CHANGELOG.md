@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.37**: Crouching looks like crouching
+    - Fixed: A crouching teammate used to stand there at full height with a slight lean, which is not what crouching looks like. They now actually drop -- knees bent, feet planted, about a fifth shorter -- and crouch-walk at the right pace instead of jogging on the spot. Your own view is unchanged; this is what everyone else sees.
+    - Note: Worth seeing now that the pool exists, since wading across it at a crouch is the one crossing that isn't a dead giveaway.
 - **0.10.36**: A laundromat, running with nothing in it
     - Added: The Laundromat. Coin-op, fluorescent, every machine going, nothing inside any of them. The drone is loud enough to genuinely swallow your footsteps -- walk around in there and the Sonographer hears nothing at all. Sprint and it still hears you, just not well enough to come straight for you.
     - Added: A bucket of quarters worth throwing for the noise, a jug of fabric softener you can drink to walk quietly for a minute, and a set of warm scrubs that unlocks a new pattern at the mirror.
