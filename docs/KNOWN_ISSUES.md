@@ -639,9 +639,13 @@ left below is what still applies to the shared strapped-monster infrastructure.
   work at most 6.9 ms (Factory) / 8.1 ms (Restaurant) a frame, slowest step 3.3 ms, 54 / 21 ms on the
   thread, teardown 1.3 ms). One frame during the wings' part reaches 40-44 ms; `doortest -- --frames` on a
   map without a pocket shows the same (38 ms rebuilding, 36.5 ms with nothing rebuilding).
-- **mapcheck's morgue tray anchors**: builds of seeds 112 (with or without a pocket) and 149 (with its
-  forced Factory, which changes the wings' rooms) report one morgue tray anchor 2.6-3.4 m from the
-  navigation mesh. Not pocket geometry; a hospital furnishing issue that the pocket plan can expose.
+- **FIXED 2026-09-23 (`fix-morgue-trays`): mapcheck's morgue tray anchors.** Builds of seeds 112
+  (with or without a pocket), 149 (with its forced Factory) and 38 used to report one morgue tray
+  anchor 2.6-3.4 m from the navigation mesh. Not pocket geometry, and not the navmesh bake: on a
+  small morgue, `_morgue()`'s instrument cart and scrub sink could each land legally on their own
+  and still fill every tile of the wall row between them, sealing the cart's own tray anchor in with
+  nothing open beside it to stand on. See the removed section 2 note in docs/FAILING_TESTS.md for
+  the geometry and the fix (`Frame.put_reachable()` in `scripts/level/room_furnish.gd`).
 - **`mapcheck` takes about twice as long** (every seed is generated again with a pocket forced).
 - **The Restaurant is very warm-orange** under the game's teal/amber grade; the tables' tops and the booth
   wood read dark from a distance.

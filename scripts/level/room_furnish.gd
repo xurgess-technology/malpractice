@@ -161,6 +161,30 @@ class Frame extends RefCounted:
 			return false
 		return true
 
+	## True if at least one tile touching `kind`'s footprint at `pos`/`yaw` is open floor: some
+	## tile a bot can stand on to reach whatever the piece is carrying (its anchors, its front).
+	## `room_connected()` alone does not catch this -- it only asks whether the room's remaining
+	## open tiles still reach each other, not whether THIS piece still has one next to it, so two
+	## pieces placed independently can wall a third one's whole side in without either overlapping.
+	func _has_open_approach(kind: String, pos: Vector2, yaw: float) -> bool:
+		for t in Defs.blocked_tiles(kind, pos, yaw):
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				if st.open(t.x + d.x, t.y + d.y):
+					return true
+		return false
+
+	## Like put(), but for a blocking piece that carries something worth reaching (an anchor, an
+	## interact front): also backs it out if it lands with every neighbouring tile already filled.
+	func put_reachable(kind: String, u: float, v: float, fu: float, fv: float, extra := {}) -> bool:
+		if not put(kind, u, v, fu, fv, extra):
+			return false
+		if Defs.blocks(kind):
+			var e: Dictionary = st.furniture.back()
+			if not _has_open_approach(kind, e.pos, e.yaw):
+				st.pop_piece()
+				return false
+		return true
+
 	func back(kind: String, u: float, extra := {}) -> bool:
 		return put(kind, u, D - half(kind), 0, -1, extra)
 
@@ -467,8 +491,25 @@ static func _morgue(f: Frame) -> void:
 	tables = placed_u
 	f.container_any([[0, 1], [0, 2]], -1, 0, "drawer_unit")
 	f.container_any([[f.W - 1, 2], [f.W - 1, 3], [0, 3]], 1, 0, "pegboard")
-	f.put("instrument_cart", tables[0] + 1.1, f.D * 0.5 + 0.9, -1, 0)
+	# The sink claims its wall first: the cart's own tries (below) then see the room as it will
+	# actually end up, instead of picking a spot the sink is about to seal in from the other side.
 	f.right("scrub_sink", 1.0)
+	# The cart wants to stand beside the table, one step deeper into the room than it. On a small
+	# morgue that spot -- or the room's fallback for it -- can end up hemmed in by the table, the
+	# sink and the wall all at once: the tray then reads 2.6-3.35 m off the navigation mesh, because
+	# nothing was left standing next to it (docs/KNOWN_ISSUES.md, "mapcheck's morgue tray anchors").
+	# Try a short list of alternatives, each checked with put_reachable(), before giving up on the
+	# cart entirely.
+	var cart_tries: Array = [
+		[tables[0] + 1.1, f.D * 0.5 + 0.9], [tables[0] - 1.1, f.D * 0.5 + 0.9],
+		[tables[0] + 1.1, f.D * 0.5 - 0.6], [tables[0] - 1.1, f.D * 0.5 - 0.6],
+		[tables[0] + 1.4, f.D * 0.5], [tables[0] - 1.4, f.D * 0.5],
+	]
+	for t in cart_tries:
+		var cu: float = clampf(t[0], 0.8, f.W - 0.8)
+		var cv: float = clampf(t[1], 0.8, f.D - 0.8)
+		if f.put_reachable("instrument_cart", cu, cv, -1, 0):
+			break
 	f.mount_left("wall_clock", f.D - 1.0)
 
 
