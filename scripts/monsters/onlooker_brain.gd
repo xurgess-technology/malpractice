@@ -63,6 +63,12 @@ const BANISH_RANGE := 6.0
 ## Seconds it stays away after a banish, and after it fails to find anywhere to stand.
 const VANISH_COOLDOWN := 75.0
 const RETRY_SECONDS := 1.5
+## Seconds the space has to stay empty of living surgeons before the encounter is called over.
+## Not zero, and the reason is the seam rather than politeness: a player crossing one spends frames
+## in a stub copy that `space_of` does not call this space, and standing in an entrance's mouth can
+## read as outside too. Two seconds swallows all of that and is invisible to somebody who really
+## did walk out.
+const LEAVE_GRACE := 2.0
 ## Seconds between hops, randomised by HOP_JITTER either way.
 const HOP_INTERVAL := 9.0
 const HOP_JITTER := 2.0
@@ -97,6 +103,11 @@ var hop_left := 0.0
 var away_left := 0.0
 ## The space this encounter belongs to. Leaving it ends the encounter.
 var space := ""
+## Has it ever actually appeared? Before it has, an empty space is just a pocket nobody has walked
+## into yet and it waits; after, an empty space means everyone left and the encounter is over.
+var started := false
+## Seconds the space has been empty of living surgeons.
+var empty_for := 0.0
 ## Host-side lifetime flag: the watcher frees the monster once this is true.
 var finished := false
 
@@ -129,6 +140,17 @@ func think(delta: float) -> void:
 	if space == "":
 		space = String(pk.pocket.get("kind", ""))
 
+	# **Escaping through a seam ends the encounter**, and this is the one place that decides it,
+	# above the standing/away split on purpose. Deciding it inside `_standing` was wrong and the lab
+	# caught it: banish the thing, walk out during its seventy-five second cooldown, and nothing was
+	# running to notice you had gone -- it sat in the pocket for the rest of the shift waiting to
+	# come back for somebody who had left. It is the *space* emptying that ends it, not the monster
+	# happening to be looking when it does.
+	empty_for = 0.0 if _anyone_here(g, pk) else empty_for + delta
+	if started and empty_for >= LEAVE_GRACE:
+		_end()
+		return
+
 	if m.present:
 		_standing(g, pk, delta)
 	else:
@@ -147,10 +169,11 @@ func _standing(g: Node, pk, delta: float) -> void:
 	if mark == null:
 		_vanish(RETRY_SECONDS)
 		return
-	# Escaping through a seam ends the encounter, for good: the space the mark stands in is no
-	# longer the space this encounter was rolled for.
+	# The mark went out through a seam. That ends it *for them*, not necessarily at all: there is
+	# one Onlooker per pocket, so if a teammate is still in there it drops the mark, waits a beat
+	# and turns to whoever is left. With nobody left, the empty-space rule in `think` ends it.
 	if String(pk.space_of(mark.global_position)) != space:
-		_end()
+		_vanish(RETRY_SECONDS)
 		return
 
 	m.presence = minf(1.0, m.presence + delta / FADE_IN)
@@ -177,7 +200,11 @@ func _standing(g: Node, pk, delta: float) -> void:
 		if tick_left <= 0.0:
 			_eat(g, mark)
 	elif stare < GRACE:
-		tick_left = TICK_FIRST
+		# Below the line the clock is not just paused, it is at zero: the FIRST heart lands the
+		# moment the stare passes GRACE, and the ramp is the gap to the second one. "Grace, then a
+		# tick" reads as one number to a player; "grace, then a further seven seconds" reads as
+		# nothing happening.
+		tick_left = 0.0
 		ticks = 0
 
 	# The hop. It goes whether or not you are looking: that is what makes turning round useless.
@@ -188,9 +215,11 @@ func _standing(g: Node, pk, delta: float) -> void:
 
 ## One heart off the mark, then the next tick, shorter than the last.
 func _eat(g: Node, mark: Node) -> void:
+	# The gap to the NEXT one, measured from how many have already gone: 7.0, 4.9, 3.4, 2.4, then
+	# the TICK_MIN floor. The first heart itself is free, at the grace line (see `_standing`).
+	tick_left = maxf(TICK_MIN, TICK_FIRST * pow(TICK_RAMP, float(ticks)))
 	ticks += 1
 	hearts += 1
-	tick_left = maxf(TICK_MIN, TICK_FIRST * pow(TICK_RAMP, float(ticks)))
 	if g.has_method("damage_player"):
 		g.damage_player(mark, 1, "monster:onlooker")
 	elif g.has_method("monster_hit_player"):
@@ -225,6 +254,7 @@ func _try_appear(g: Node, pk) -> void:
 		placements_failed += 1
 		away_left = RETRY_SECONDS
 		return
+	started = true
 	mark_peer = int(mark.peer_id)
 	m.global_position = spot
 	m.velocity = Vector3.ZERO
@@ -268,6 +298,14 @@ func _mark(g: Node) -> Node:
 	if p == null or not is_instance_valid(p) or not p.alive or bool(p.get("downed")):
 		return null
 	return p
+
+
+## Is there any living surgeon left in this space at all?
+func _anyone_here(g: Node, pk) -> bool:
+	for p in g.alive_players():
+		if not bool(p.get("downed")) and String(pk.space_of(p.global_position)) == space:
+			return true
+	return false
 
 
 ## The player in the pocket with the most room in front of them. That is the one it can stand far
