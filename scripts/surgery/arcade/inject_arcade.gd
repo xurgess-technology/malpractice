@@ -292,10 +292,34 @@ func ink_unit() -> float:
 	return _u()
 
 
+## SYRINGE DRAW: the two halves of this game, and the one flag that decides which you get.
+##
+## THIS IS ONE GAME WITH TWO ENTRY POINTS, NOT TWO GAMES. Everything below -- the barrel, the band,
+## the bubbles, the veins, the costs, the scoring -- is shared. All that changes is where it starts
+## and where it stops:
+##   at the table, empty-handed (the original, and still the fallback)  DRAW! FLICK! STICK! PUSH!
+##   in a corridor, holding a syringe (ctx.draw_only)                   DRAW! FLICK!
+##   at the table, holding a syringe you already loaded (ctx.loaded)    STICK! PUSH!
+## Nothing is forked and nothing is duplicated: the OR path with an empty syringe is byte for byte
+## the game it was before this existed.
+
+## Corridor half: run DRAW! and FLICK! and stop, handing the barrel's level back to the syringe
+## instead of sticking anybody. Set by the syringe station (scripts/syringe/syringe_station.gd).
+func _draw_only() -> bool:
+	return bool(ctx.get("draw_only", false))
+
+
+## Table half: what the syringe in the operator's hand is already carrying (Syringes.unpack), or {}.
+## A loaded syringe skips DRAW! and FLICK! -- the drug is in the barrel, bubbles and all.
+func _loaded() -> Dictionary:
+	var d = ctx.get("loaded", {})
+	return d if d is Dictionary else {}
+
+
 ## --stick (reviews and lab shots) skips the first two stages and opens on STICK!, with the dose
 ## already drawn and no bubbles: the aim is the only thing being looked at.
 func _stick_only() -> bool:
-	return "--stick" in OS.get_cmdline_user_args()
+	return not _loaded().is_empty() or "--stick" in OS.get_cmdline_user_args()
 
 
 func card_word_for_start() -> String:
@@ -326,8 +350,17 @@ func build_game() -> void:
 	if "--inject-debug" in OS.get_cmdline_user_args():
 		debug_overlay = true
 	if _stick_only():
-		fluid = target
-		vial = maxf(0.0, vial - target)
+		# SYRINGE DRAW: a syringe loaded in a corridor brings the level it ACTUALLY reached, and the
+		# bubbles it was left with. `target` above was worked out from THIS patient, so a standard
+		# dose meets the real band here and is scored against it exactly as a dose drawn at the
+		# table would be -- that is the whole cost of pre-loading. --stick has no syringe, so it
+		# keeps its perfect dose and its clean barrel.
+		var load_d := _loaded()
+		fluid = float(load_d.get("level", target)) if not load_d.is_empty() else target
+		carried.clear()
+		for b in (load_d.get("bubbles", []) as Array):
+			carried.append(float(b))
+		vial = maxf(0.0, vial - fluid)
 		phase = Phase.INJECT
 		bubbles.clear()
 	_refresh_tq()
@@ -445,7 +478,10 @@ func keys() -> Array:
 		Phase.DRAW:
 			return [["Hold Space", "draw"], ["RMB / wheel", "put back"], ["Enter", "done"]]
 		Phase.DEBUBBLE:
-			return [["Click barrel", "flick"], ["Space", "purge"], ["Enter", "continue"]]
+			# SYRINGE DRAW: "continue" means "on to the patient" at the table and "cap it and go"
+			# in a corridor, so the corridor half says what it actually does.
+			return [["Click barrel", "flick"], ["Space", "purge"],
+				["Enter", "pocket it" if _draw_only() else "continue"]]
 		Phase.INJECT:
 			if locked:
 				return [["Hold Space", "push, gently"]]
@@ -698,12 +734,21 @@ func _purge() -> void:
 
 
 func _to_inject() -> void:
-	phase = Phase.INJECT
 	carried.clear()
 	for b in bubbles:
 		carried.append(snappedf(float(b[2]), 0.1))
 	bubbles.clear()
 	_shown.clear()
+	# SYRINGE DRAW: the corridor half stops here. The barrel is full and flicked; there is nobody to
+	# stick. What it reached goes back to the syringe as the result, and the station writes it into
+	# the item's `x`. No dose is scored and nothing is billed: you have not touched a patient yet,
+	# so there is no patient to hurt. The bill comes at the table.
+	if _draw_only():
+		phase = Phase.DONE
+		quality = snappedf(clampf(1.0 - float(carried.size()) * pts_bubble / 100.0, 0.05, 1.0), 0.01)
+		arcade_finish({"drawn": snappedf(fluid, 0.001), "bubbles": carried.duplicate()})
+		return
+	phase = Phase.INJECT
 	billed = 0
 	_need_release = false
 	_space_t = 0.0
@@ -1015,9 +1060,11 @@ func _update_progress() -> void:
 	var p := 0.0
 	match phase:
 		Phase.DRAW:
-			p = 0.3 * clampf(fluid / maxf(0.01, target), 0.0, 1.0)
+			# SYRINGE DRAW: the corridor half is only these two stages, so they fill the whole bar
+			# rather than the first third of one that stops short of the end.
+			p = (0.7 if _draw_only() else 0.3) * clampf(fluid / maxf(0.01, target), 0.0, 1.0)
 		Phase.DEBUBBLE:
-			p = 0.35
+			p = 0.8 if _draw_only() else 0.35
 		Phase.INJECT:
 			p = 0.45 if not locked else 0.55 + 0.43 * clampf(1.0 - fluid / maxf(0.0001, dose), 0.0, 1.0)
 		Phase.DONE:
