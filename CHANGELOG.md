@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.55**: The pool has a real bottom now 🏊
+    - Added: The Natatorium's pool actually has depth -- wade off the edge and you drop into a shallow basin, deep enough to feel real, shallow enough that the game's own small jump gets you back out. No ramp needed to get in; the edge is the way in.
 - **0.10.54**: A performance pass across the whole game 📉
     - Fixed: The Restaurant's kitchen counters had the same collision-shape problem the Laundromat's washers had -- one collider per tile instead of one per run. Smaller scale, still measurably faster.
     - Note: Checked every pocket space and every piece of hospital furniture for the same mistake. Nothing else was found. The ordinary hospital rooms clear the performance bar everywhere except two already-known, already-documented spots tied to an unexplained host stutter -- not new, not caused by anything here.
