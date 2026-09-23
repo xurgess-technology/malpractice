@@ -614,8 +614,16 @@ func _hammer() -> void:
 ## The spec sentence is "within its radius the Night Nurse counts as watched with no player
 ## looking", so that is what this checks: Percept.observed_any over her body, which is the same
 ## call her brain makes, with the player parked far away facing the other way.
+## **Mind the dev room's edges.** Probed on 2026-09-23 (POCKETS 2 phase 7): the floor runs to about
+## `o + (25, 0, 19)` and everything past that is open air. `_stand` puts the player at
+## `game._floor_at(pos)`, which returns the point itself when the probe misses, so a spot outside
+## that rectangle drops the player into the void -- silently, because every check in this file is a
+## question about positions and a falling player answers them just as well as a standing one. This
+## section used to stand at `o + (8, 0, 20)` and then at `o + (30, 0, 2)`, both outside it.
+## **Two other sections still do**: the ones standing at `o + (10, 0, 22)` and `o + (14, 0, 20)`.
+## They pass, and they were not touched here, but they are not standing on anything.
 func _candle() -> void:
-	_stand(o + Vector3(8.0, 0, 20.0), 0.0)
+	_stand(o + Vector3(8.0, 0, 16.0), 0.0)
 	await _frames(2)
 	_give("votive_candle", 1, 14)
 	await _use()
@@ -635,7 +643,9 @@ func _candle() -> void:
 	# nothing but the candle can possibly be doing the watching.
 	var nurse := await _monster("night_nurse", at)
 	nurse.global_position = game._floor_at(at + Vector3(1.0, 0, 0.0))
-	_stand(o + Vector3(30.0, 0, 2.0), PI)
+	# Far enough away and facing the other way -- and inside the floor rectangle above. 15.6 m off,
+	# three times the candle's radius, looking away from her.
+	_stand(o + Vector3(18.0, 0, 4.0), atan2(-10.0, 12.0))
 	await _frames(4)
 	var points := [nurse.global_position + Vector3.UP * 0.15, nurse.global_position + Vector3.UP * 1.3]
 	_check(Percept.observed_any(game, points), "a burning candle counts as watching her with nobody there")
@@ -653,11 +663,44 @@ func _candle() -> void:
 	nurse.global_position = game._floor_at(at + Vector3(1.0, 0, 0.0))
 	await _frames(3)
 	_check(Percept.observed_any(game, [nurse.global_position + Vector3.UP * 1.3]), "back inside, it watches her again")
+
+	# POCKETS 2 phase 7. Everything above asks the PREDICATE; the spec sentence is about her FEET
+	# ("frozen in a placed candle's radius; moves when it burns out"), and nothing here had ever
+	# watched her move. She is calmed to 999 s by the helper that spawns her, and a calm nurse
+	# stands still whether or not anybody is looking, so the freeze was being proved by a monster
+	# that had no intention of going anywhere. Wake her up and measure the distance she covers.
+	nurse.calm = 0.0
+	var frozen_at: Vector3 = nurse.global_position
+	await _seconds(1.5)
+	_check(nurse.global_position.distance_to(frozen_at) < 0.05,
+		"awake and unrestrained, she still does not take a step while it burns (%.3f m in 1.5 s)"
+			% nurse.global_position.distance_to(frozen_at))
+
+	# CUT THE FUSE RATHER THAN WAIT IT OUT (POCKETS 2 phase 7). This used to `await` the whole two
+	# minutes, and **everything after the wait was being checked in a world that had fallen apart**:
+	# at the far end of it the nurse was at y = -25.9 m and falling at 55 m/s, and the player was
+	# 133 km from her. So "she is unwatched once the flame is out" passed because there was nobody
+	# left anywhere near her to watch her, and the phase 7 check that she MOVES passed because she
+	# was in free fall. A 120-second await is not something a dev-room test survives.
+	# The fuse is world_time based, so moving its end is the same expiry through the same code.
+	tk._candles[lit] = float(game.world_time) + 1.0
 	await _seconds(tk.candle_left(lit) + 1.0)
 	_check(tk.candle_left(lit) <= 0.0, "the flame burns out on its own")
 	_check(not Percept.observed_any(game, [nurse.global_position + Vector3.UP * 1.3]),
 		"and she is unwatched the moment it does")
 	_check(not tk.lit_candles().has(lit), "the burnt-out candle stops counting")
+	# Her brain re-samples observation a few times a second (OBSERVE_FAR), so give it one sample.
+	nurse.calm = 0.0
+	await _seconds(0.8)
+	_check(not bool(nurse.observed), "her brain agrees she is unwatched once the flame is out")
+	var released_at: Vector3 = nurse.global_position
+	await _seconds(1.5)
+	# Measured flat and with her feet checked: a monster falling out of the world covers plenty of
+	# distance too, and that is exactly how the first version of this check passed (see above).
+	var walked := Vector2(nurse.global_position.x - released_at.x, nurse.global_position.z - released_at.z).length()
+	_check(absf(nurse.global_position.y - released_at.y) < 1.0,
+		"she is still standing on the floor (dy %.2f m)" % (nurse.global_position.y - released_at.y))
+	_check(walked > 1.0, "and she WALKS when it burns out (%.2f m across the floor in 1.5 s)" % walked)
 	game.kill_monster(nurse)
 	await _frames(2)
 

@@ -14,7 +14,12 @@ var main: Node3D
 var game: Game
 var bot: Player
 var _seed := 4242
-var _frames := 240
+## POCKETS 2 phase 7 raised this from 240. A "1% low" is the 99th percentile of this many frames,
+## so at 240 it was the third-worst frame of about two seconds -- one hitch decided it, and the same
+## view measured minutes apart swung between 24 and 105 (measured, three full sweeps, idle machine).
+## 600 is ten seconds, which is steadier. **Anything being published wants `--frames=1200`**: at
+## twenty seconds the same rows agree run to run, and what is left over is real.
+var _frames := 600
 var _shift := 1
 var _qualities := [1, 0, 2]
 var _rows: Array = []
@@ -145,6 +150,13 @@ func _ready() -> void:
 		{"name": "neutral area outside", "setup": _neutral},  # HOSPITAL HOOK: sweep 2 neutral area
 		{"name": "lot, facing the fog", "setup": _fog_lot},  # SWEEP 4A HOOK (fog lot, chunk 2)
 	]
+	# POCKETS 2 phase 7: the same discarded warm-up the pocket path takes -- see _run_one_pocket.
+	# The first scenario measured in a process is measured while the CPU is still finishing with the
+	# level, and reads roughly half what it reads once settled.
+	main.set_quality(_qualities[0], false)
+	await scenarios[0].setup.call()
+	await _measure("warm-up (discarded)", _qualities[0])
+	_rows.pop_back()
 	for q in _qualities:
 		main.set_quality(q, false)
 		for s in scenarios:
@@ -333,7 +345,21 @@ func _run_one_pocket(kind: String) -> void:
 	var pk = game.pockets
 	var views: Array
 	if kind == "none":
-		views = [{"name": "no pocket: hospital corridor", "setup": _corridor}]
+		# POCKETS 2 phase 7: the baseline used to be ONE view, which is too thin to compare five
+		# spaces against -- a single number cannot say whether the hospital or the space is the
+		# expensive thing, and it is measured first, when the run has not settled. So the bare
+		# hospital now gets the same shape of sweep the spaces get, and the corridor is measured
+		# **twice**: first (where FAILING_TESTS 1m saw a 1% low of 30) and again at the end, after
+		# four other views have warmed everything up. If the two corridor rows disagree, 1m is the
+		# run settling; if they agree, it is the corridor.
+		views = [
+			{"name": "no pocket: hospital corridor (first)", "setup": _corridor},
+			{"name": "no pocket: pharmacy, containers open", "setup": _containers},
+			{"name": "no pocket: OR, patient + stocked shelf", "setup": _or_view},
+			{"name": "no pocket: neutral area outside", "setup": _neutral},
+			{"name": "no pocket: lot, facing the fog", "setup": _fog_lot},
+			{"name": "no pocket: hospital corridor (repeat, settled)", "setup": _corridor},
+		]
 		pk = null
 	elif pk == null or not pk.active():
 		print("[perf] --pocket=%s: no pocket was built" % kind)
@@ -341,6 +367,22 @@ func _run_one_pocket(kind: String) -> void:
 		return
 	else:
 		views = _pocket_views(kind, pk)
+	# POCKETS 2 phase 7: THROW THE FIRST MEASUREMENT AWAY. The process is not settled when the first
+	# scenario runs -- measured, not assumed: the bare hospital's corridor read **60 avg / 22 1% low
+	# with 58 ms of PROCESS time a frame** as the first view and **127 / 100 with 5 ms** as the last,
+	# same camera, same map, same 475-odd draws. It is the CPU still finishing with the level, not
+	# the renderer, and every kind showed it (28-40 ms of proc on its first row).
+	#
+	# That matters beyond tidiness: every "map's hospital corridor" baseline published in
+	# docs/POCKET_SPACES_2.md is a first row, so every space was being compared against a warm-up
+	# artefact rather than against the hospital. FAILING_TESTS 1m ("a corridor's 1% low of 30") was
+	# this and nothing else.
+	#
+	# So one view is measured and the row dropped before anything is kept.
+	main.set_quality(_qualities[0], false)
+	await (views[0].setup as Callable).call()
+	await _measure("warm-up (discarded)", _qualities[0])
+	_rows.pop_back()
 	for q in _qualities:
 		main.set_quality(q, false)
 		for v in views:
