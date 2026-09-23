@@ -26,6 +26,7 @@ const DevControllerScript := preload("res://scripts/dev/dev_controller.gd")   # 
 const MonsterPages := preload("res://scripts/database/monster_pages.gd")
 const OFF := Color(1.0, 0.4, 0.35)
 const FreeCamScript := preload("res://scripts/dev/free_cam.gd")
+const PocketPlanScript := preload("res://scripts/level/pockets/pocket_plan.gd")   # POCKETS HOOK (dev force)
 
 var game: Node = null
 var main: Node = null
@@ -41,6 +42,7 @@ var _bot_rows := {}       # bot id -> {status: Label, order: OptionButton, item:
 var _dragging := {}
 var _places: Array = []      # [{name, pos}] for "Go to"
 var _places_level: Node = null
+var _seams_sig := ""         # POCKETS HOOK (dev force): rebuild the seam picker only when it changes
 var free_cam: Camera3D = null   # scripts/dev/free_cam.gd; local only, P swaps camera <-> surgeon
 
 
@@ -266,17 +268,28 @@ func _build_go_to(col: VBoxContainer) -> void:
 	_button(g1, "Go", func(): _go_place(places.selected))
 	_button(g1, "Start", func(): game.dev.pocket_go(false))
 
-	# ---- POCKETS HOOK: a pocket space beside the hospital, and a way in and out
+	# ---- POCKETS HOOK: force a real pocket into the hospital's own generation, and jump to its seam.
+	# Replaces the old bolted-on "test space with no hospital entrance" mechanism (2026-09-23,
+	# dev-force-pocket): this one is the ordinary hospital, generated the ordinary way, guaranteed to
+	# have the kind you ask for wired into it with a real seam you can walk through.
 	_section(col, "Pocket spaces")
 	var pk1 := _row(col)
-	_button(pk1, "Factory", func(): _req("pocket", {"kind": "factory"}))
-	_button(pk1, "Restaurant", func(): _req("pocket", {"kind": "restaurant"}))
-	_button(pk1, "Natatorium", func(): _req("pocket", {"kind": "natatorium"}))
-	_button(pk1, "Remove", func(): _req("pocket", {"kind": ""}))
+	var force_names := ["Off (normal odds)", "Random (forced)"] + PocketPlanScript.KINDS.map(func(k): return String(k).capitalize())
+	var force_opt := _option(pk1, force_names)
+	force_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_c["pocket_force"] = force_opt
+	_button(pk1, "Force & rebuild", func():
+		var i := force_opt.selected
+		var kind := "" if i <= 0 else ("random" if i == 1 else String(PocketPlanScript.KINDS[i - 2]))
+		_req("force_pocket", {"kind": kind}))
+	_c["pocket_status"] = _label(col, "", 12, DIM)
 	var pk2 := _row(col)
-	_button(pk2, "Go there", func(): game.dev.pocket_go(true))
-	_button(pk2, "Back to the start", func(): game.dev.pocket_go(false))
-	_label(col, "Builds the space beside the hospital for this session (no entrances to it).", 11, DIM)
+	var seam_opt := _option(pk2, [])
+	seam_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_c["pocket_seams"] = seam_opt
+	_button(pk2, "Go to seam", func(): _go_seam(seam_opt.selected))
+	_button(pk2, "Pocket centre", func(): game.dev.pocket_go(true))
+	_label(col, "Forces the next wing build (now, if the level already has wings) to include that kind, wired into the hospital with a real seam. Host-authoritative: a client's request goes to the host, like every other world change here. Rebuilding evicts anyone in the wings, same as Regenerate wings now.", 11, DIM)
 
 
 # ---- Spawn: items, monsters, the Night Nurse, bots and dummies -------------
@@ -552,6 +565,15 @@ func _go_place(i: int) -> void:
 	me.teleport(game._floor_at(at))
 
 
+## POCKETS HOOK (dev force): the local player steps up to seam `i` (you own your own position, so
+## this is local like _go_place, not a request to the host).
+func _go_seam(i: int) -> void:
+	if game == null or game.dev == null:
+		return
+	if not game.dev.go_seam(i):
+		game.say("No seam to go to (force a pocket and rebuild the wings first).", 3.0)
+
+
 func _set_quality(q: int) -> void:
 	var settings := get_node_or_null("/root/Settings")
 	if settings != null and settings.has_method("set_value"):
@@ -599,6 +621,7 @@ func _refresh() -> void:
 	var gfx := _c["gfx"] as OptionButton
 	if main != null and "quality" in main and gfx.selected != int(main.quality):
 		gfx.select(int(main.quality))
+	_refresh_pocket(dev)
 	(_c["monster_count"] as Label).text = "%d alive" % game.monsters.size()
 	(_c["money_label"] as Label).text = "Team money $%d. Pills $%d/bottle at the pharmacy." % [int(game.money), int(game.PILL_PRICE)]
 	# loop: every case, one line each.
@@ -621,6 +644,30 @@ func _shelf_text() -> String:
 		if n > 0:
 			parts.append("%s %d" % [Items.display_name(k), n])
 	return "empty" if parts.is_empty() else ", ".join(parts)
+
+
+## POCKETS HOOK (dev force): what's forced for the next build, and what's actually in this level now.
+func _refresh_pocket(dev: Node) -> void:
+	var force_opt := _c["pocket_force"] as OptionButton
+	var forced := String(PocketPlanScript.force_kind)
+	var want_i := 0 if forced == "" else maxi(0, PocketPlanScript.KINDS.find(forced) + 2)
+	if force_opt.selected != want_i:
+		force_opt.select(want_i)
+	var pk = game.get("pockets")
+	var seams: Array = pk.seams if pk != null else []
+	var here := ""
+	if pk != null and pk.active():
+		here = "This level's pocket: %s (%d seam%s)." % [String(pk.pocket.kind).capitalize(), seams.size(), "" if seams.size() == 1 else "s"]
+	else:
+		here = "This level has no pocket right now."
+	(_c["pocket_status"] as Label).text = ("Forcing: %s. " % forced.capitalize() if forced != "" else "") + here
+	var sig := str(seams.map(func(s): return [s.id, s.wing]))
+	if sig != _seams_sig:
+		_seams_sig = sig
+		var seam_opt := _c["pocket_seams"] as OptionButton
+		seam_opt.clear()
+		for s in seams:
+			seam_opt.add_item("Seam %d (wing %s)" % [int(s.id), String(s.wing)])
 
 
 func _refresh_bots(dev: Node) -> void:

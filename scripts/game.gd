@@ -4458,6 +4458,9 @@ func _global_fields() -> Dictionary:
 	# POCKETS 2 phase 1: the pocket kind kept out of this shift's roll, so a client's own copy of
 	# the map generator draws from the same pool the host did.
 	g["px"] = pocket_seen_kind
+	# POCKETS HOOK (dev force): the dev panel's forced kind, so a client's own map generator (a join,
+	# or the "wg" wing rebuild below) forces the same one instead of rolling on its own.
+	g["pf"] = PocketPlanScript.force_kind
 	g.merge(wall.net_fields())   # terminal redesign: the break room screen ("wt", "wu", "wd")
 	return g
 
@@ -4602,6 +4605,7 @@ func _repl_apply() -> void:
 	if not is_host():
 		pocket_seen_kind = String(g.get("px", ""))
 		PocketPlanScript.exclude_kind = pocket_seen_kind
+		PocketPlanScript.force_kind = String(g.get("pf", ""))   # POCKETS HOOK (dev force)
 	if phase == Phase.MENU:
 		wing_loader.next_generation = int(g.get("wg", -1))   # DOORS HOOK: build the host's wings
 		start_lobby(int(g.sd), int(g.sh))   # sets _cl_full

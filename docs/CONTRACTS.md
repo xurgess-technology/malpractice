@@ -1383,9 +1383,22 @@ eview.bat 2 "..." --dev`) opens with the panel a keypress away.
   `surgery_system`'s local-operator and report routing use, so the minigames run under your mouse).
   The bot's brain is skipped while you drive it and picks its order back up afterwards.
 - Sounds `dev_zap`, `dev_thump` from `tools/gen_audio_dev.mjs`.
-- **Pocket spaces** (2026-09-14): request `pocket {kind: "factory" | "restaurant" | ""}` builds that space
-  beside the hospital on every machine (`dv.pk`, `game.pockets.build_kind`); `dev.pocket_go(into)` moves the
-  local player to its spawn and back (panel "Go there" / "Back to the start").
+- **Pocket spaces, forced** (2026-09-23, dev-force-pocket, replaces the 2026-09-14 mechanism below):
+  request `force_pocket {kind: "" | "random" | one of PocketPlan.KINDS}` sets `PocketPlan.force_kind`
+  (host) and rebuilds the wings now (`game.wing_loader.regenerate`) if they already exist, else it
+  takes effect at the next build. A client's own map generator has to force the same kind or its
+  hospital would diverge from the host's: the global field `pf` (alongside the no-repeat `px`) carries
+  it, applied in `_repl_apply` before `start_lobby` or a `wg`-triggered `wing_loader.regenerate` runs.
+  `dev.go_seam(i)` (local, not a request -- you own your own position) steps the local player up to
+  `game.pockets.seams[i]`'s hospital side, one tile short of the seam itself so a crossing doesn't
+  fire on arrival. `reset_state` clears `PocketPlan.force_kind` when dev mode goes off.
+  `PocketSpaces.build_kind(kind, level_info, parent, seed)` (no hospital entrances; the 2026-09-14
+  dev room's own bare test space) is untouched and still callable, but nothing calls it any more --
+  the panel's old "Factory / Restaurant / Natatorium / Remove" buttons were built on it and are gone
+  with the dev room they were for. `dev.pocket_go(into)` (unchanged) still moves the local player to
+  `game.pockets.pocket.spawn` or back to the run's own start -- the panel's "Start" (in "Go to") and
+  the new section's "Pocket centre" both use it, and it works on a forced pocket exactly as it did on
+  the old bare one, since both set the same `game.pockets.pocket`.
 - **Night Nurse section** (2026-09-14): requests `nurse_ignore_watch {on}`, `nurse_walk {mode: "" |
   "follow" | "loop"}` (follow: the sender; loop: a 6 x 3.5 m rectangle round where the sender stands,
   long side along their facing, corners snapped to the navigation mesh) and `nurse_pace {i}`
