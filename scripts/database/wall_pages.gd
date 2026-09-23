@@ -35,6 +35,9 @@ const MONSTER_TEXT := {
 	"hive": ["Wanders the wings until it hears something. It can't see: running, dropping things and shoving give you away.", "About 2 doses of anesthetic put it under."],
 	"sonographer": ["A blind doctor with a wand for a hand. It clicks as it walks and hunts by sound: watch its neck, it grows as it gets suspicious.", "It takes about 3 doses to put it under."],
 	"night_nurse": ["She only moves when nobody is looking at her. Keep your eyes on her.", "Nobody knows what happens if she reaches you."],
+	# POCKETS 2 phase 6. The counter IS the entry: a player who does not know it will do the one
+	# thing that makes it worse, which is back away and keep watching.
+	"onlooker": ["A tall shadow with two bright eyes, a long way off in a room that should not fit in the building. It never comes closer. It moves by disappearing and standing somewhere else you happen to be looking.", "Do not back away and do not stare it out. Run at it."],
 }
 
 const PROCEDURE_TEXT := {

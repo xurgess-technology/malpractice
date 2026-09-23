@@ -159,6 +159,7 @@ func _run() -> void:
 		"downed": await _sc_downed()
 		"combat": await _sc_combat()
 		"monsters": await _sc_monsters()   # SWEEP 3 HOOK (monsters)
+		"onlooker": await _sc_onlooker()   # POCKETS 2 phase 6: a hop must JUMP on a client
 		"hit_feedback": await _sc_hit_feedback()   # HIT FEEDBACK: the red flash and the push
 		"sono": await _sc_sono()   # docs/SONOGRAPHER.md chunk B: the Sonographer's echo over the wire
 		"graft": await _sc_graft()   # GRAFTING chunk C
@@ -1906,6 +1907,120 @@ func _sc_monsters():
 ## The flattest horizontal direction out of `m` with clear floor space behind it, so a knockback
 ## test measures the knockback and not the nearest wall. Tries 16 directions at chest height and
 ## takes the one with the most room; Vector3.FORWARD if the world is not there to ask.
+## POCKETS 2 phase 6: **does a hop arrive as a jump on somebody else's machine?**
+##
+## This is the one thing no single-process test could answer, and it was wrong. `monster.gd`'s
+## remote lerp snaps a body that moves more than 6 m in one go, and the Onlooker's placement only
+## ever constrains distance to the *mark* -- so two placements landing within 6 m of each other made
+## the host teleport while every client watched it GLIDE across the floor. Invisible to whoever is
+## hosting, which is why 35 monster_lab checks and 70 pockettest checks all passed over it.
+##
+## The assertion is possible because of what this monster is: **it never takes a step**, ever. So on
+## a client every physics frame's displacement must be either nothing or one whole jump. A slide
+## shows up as a RUN of consecutive moving frames; a teleport is exactly one. The client counts the
+## longest such run and the test fails on two.
+##
+## The hops here are driven by hand at HOP_M metres -- deliberately under the 6 m heuristic, because
+## that is the case that was broken, and a hop long enough to trip the heuristic would pass with the
+## bug still in. The brain's own choice of where to stand is not what this checks; `tools/pockettest.gd`
+## `_onlooker` already does that in all five real spaces. Here the host's node has its physics
+## processing switched off so the brain cannot move it underneath the test, and the positions are
+## the test's own.
+const OL_HOPS := 4
+const OL_HOP_M := 4.0
+
+func _sc_onlooker():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		game._clear_monsters()
+		await _frames(2)
+		var p1: Player = game.players[_peer_of(1)]
+		var fwd: Vector3 = -p1.global_transform.basis.z
+		fwd.y = 0.0
+		fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
+		var at: Vector3 = _nav_point(p1.global_position + fwd * 12.0)
+		var o: Node = game.spawn_pocket_monster("onlooker", at)
+		if o == null:
+			return _end(false, "the host could not add an Onlooker")
+		# Hand-driven: no brain underneath the test. report() is unaffected -- the snapshot loop
+		# walks game.monsters, not the node's own _physics_process.
+		o.set_physics_process(false)
+		o.present = true
+		o.teleports = 1
+		await _frames(2)
+		_send("ol_start", {"id": o.monster_id})
+		if not await _until(func(): return _count_msgs("ol_ready") > 0 or _count_msgs("fail") > 0, 60.0, "the client to find the Onlooker"):
+			return
+		if _count_msgs("fail") > 0:
+			return
+		# Short hops, one at a time, with enough of a pause that a slide would have finished and be
+		# unmistakable in the client's frame trace.
+		var side := 1.0
+		for i in OL_HOPS:
+			await _wall_wait(1.2)
+			var step: Vector3 = (fwd.cross(Vector3.UP) * side + fwd * 0.35).normalized() * OL_HOP_M
+			o.global_position = _nav_point(o.global_position + step)
+			o.teleports += 1
+			side = -side
+		await _wall_wait(1.5)
+		_send("ol_done", {"n": o.teleports})
+		if not await _until(func(): return _count_msgs("ol_seen") > 0 or _count_msgs("fail") > 0, 60.0, "the client's verdict"):
+			return
+		if _count_msgs("fail") > 0:
+			return
+		var v: Dictionary = _msgs("ol_seen")[0].data
+		_say("the client saw %d teleports, longest run of moving frames %d (1 = it jumped)" % [int(v.get("seen", 0)), int(v.get("run", 0))])
+		await _finish_together("every Onlooker hop arrived as a jump on the client, none of them as a walk")
+		return
+
+	if not await _wait_shift_as_client():
+		return
+	if not await _until(func(): return _count_msgs("ol_start") > 0, 90.0, "the Onlooker test to start"):
+		return
+	var id: int = int(_msgs("ol_start")[0].data.id)
+	if not await _until(func(): return game.monsters.has(id) and is_instance_valid(game.monsters[id]), 30.0, "the Onlooker on my machine"):
+		return
+	var o: Node = game.monsters[id]
+	if String(o.kind) != "onlooker":
+		return _end(false, "monster %d is a %s on the client" % [id, String(o.kind)])
+	_send("ol_ready", {})
+	# Watch every physics frame until the host says it is done. It never walks, so any run of two
+	# consecutive moving frames is a slide and the bug is back.
+	var last: Vector3 = o.global_position
+	var seen_tp: int = int(o.teleports)
+	var run := 0
+	var worst := 0
+	var jumps := 0
+	var worst_at := Vector3.ZERO
+	while _count_msgs("ol_done") == 0:
+		await _frames(1)
+		if not is_instance_valid(o):
+			return _end(false, "the Onlooker vanished from the client mid-test")
+		var d: float = o.global_position.distance_to(last)
+		last = o.global_position
+		if d > 0.05:
+			run += 1
+			if run > worst:
+				worst = run
+				worst_at = o.global_position
+		else:
+			run = 0
+		if int(o.teleports) != seen_tp:
+			seen_tp = int(o.teleports)
+			jumps += 1
+	if worst > 1:
+		# Tell the host before going, so it fails in seconds rather than sitting out the scenario
+		# timeout waiting for a verdict that is never coming.
+		_send("fail", {})
+		return _end(false, "the Onlooker SLID on the client: %d consecutive moving frames near %s (a teleport is 1)" % [worst, str(worst_at)])
+	if jumps < OL_HOPS:
+		return _end(false, "the client saw only %d of %d teleports" % [jumps, OL_HOPS])
+	_say("watched %d hops of %.0f m each: longest run of moving frames %d" % [jumps, OL_HOP_M, worst])
+	_send("ol_seen", {"seen": jumps, "run": worst})
+	await _finish_together("saw every hop land as a single-frame jump")
+
+
 func _clear_push_dir(m: Node) -> Vector3:
 	var world: World3D = game.get_viewport().world_3d if game.is_inside_tree() else null
 	if world == null:

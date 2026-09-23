@@ -999,7 +999,7 @@ Restaurant:
 Database: tag whistle, quarters and a planted pager with one shared
 "lure" tag so they read as a family.
 
-## Phase 6 — the pocket monster (working name: the Onlooker)
+## Phase 6 — the Onlooker — DONE 2026-09-23, branch `pockets-onlooker`
 The fourth sense rule. Hive = eyes, Sonographer = ears, Night Nurse
 = being watched. The Onlooker = ATTENTION: it feeds on being seen
 and ignored. It is the inverse of the Night Nurse — you get rid of
@@ -1033,6 +1033,186 @@ it by going TOWARD it.
   relocation into view, banish by approach, tick after the grace
   period, and seam escape. Bot-walk each pocket with it enabled.
 
+### What was built
+
+Four files and a handful of hooks. `scripts/monsters/onlooker_brain.gd` is the rule,
+`scripts/monsters/onlooker_rig.gd` is the body, `scripts/monsters/onlooker_watch.gd` decides whether
+a pocket has one at all, and `Monster.ONLOOKER` is a fourth kind so that everything else --
+replication, the danger meter, the shift clear, the database, warmup -- gets it for free.
+
+**Whose view it places into, which was the hard part.** The spec says "always placed directly in a
+player's view" and does not say whose, which in a co-op game with four surgeons facing four ways is
+the whole design problem. It **marks one player** for the encounter: the one inside the pocket with
+the most room in front of them (the longest clear ray out of their own eyes), ties broken on peer
+id. Everything -- where it pops in, where it hops, whether the stare counts, whose hearts it eats --
+is that player's view and nobody else's, which turns an unsolvable four-way problem into the
+one-player problem the spec actually describes.
+
+The other players are not spectators, and the four ways they are involved were each chosen rather
+than fallen into:
+- they **see** it, because it is an ordinary replicated monster. Your teammate across the
+  Natatorium sees the thing standing behind you and can say so.
+- they **can banish** it. Anyone closing to `BANISH_RANGE` sends it away, not only the mark.
+  Running at the thing staring at your teammate is the co-op play the aggression counter is for.
+- they **cannot be hurt** by it. The tick only ever lands on the mark.
+- a mark who goes out through a seam while a teammate stays hands the stare over rather than ending
+  the encounter. There is one Onlooker per pocket, so it turns to whoever is left.
+
+**"Far" means at least `MIN_DIST` (14 m), preferring the farthest candidate, stopping once
+something is past `PREFER_DIST` (26 m).** In a room with a fixed size it takes what it can get, and
+if there is nothing -- you are facing a wall a metre away -- it simply does not appear and tries
+again shortly. That silence is correct: there is nowhere in your view for it to be.
+
+**How it replicates.** The ordinary entity path and nothing else. It lives in `game.monsters` and
+rides `report()` / `apply_remote()`. Two added wire fields: `"pr"` -> `Monster.present` (is it
+standing there this second) and `"tp"` -> `Monster.teleports` (how many times the host has put it
+somewhere). `presence` (the pop-in ease) is the only part a client works out for itself.
+
+**`tp` exists because I got this wrong, and the first draft of this document said so confidently.**
+It claimed a hop arrives as a jump for free, because `monster.gd`'s remote lerp already snaps a body
+that moves more than 6 m in one go. That heuristic is real but it measures displacement **from where
+the client currently has it**, and `_place` only ever constrains distance to the *mark* (14-26 m),
+never to where it was standing before. Two consecutive placements land within 6 m of each other
+often -- routinely in the Chapel's nave -- and when they do the host teleports while **every client
+watches it glide across the floor**. For the one monster whose entire identity is that it never
+takes a step, on the co-op beat where a teammate tells you it moved, that is the whole illusion
+gone. It is invisible to whoever is hosting, which is exactly why 35 monster_lab checks and 70
+pockettest checks all passed over it.
+
+The fix is a **counter on the wire, not a wider distance heuristic**: a hop is a fact the host
+already knows, so it says so. `Monster.teleports` mirrors the brain's `placements`, and a client
+snaps whenever the value differs from the last one it acted on. A counter rather than a one-frame
+flag is the established idiom here and the reason is dropped packets -- a bool set for a single
+frame is missed by a 20 Hz snapshot, and one held longer is applied twice. `_teleports_seen`
+starts at -1 so the first snapshot a machine ever sees also snaps, which is what a client joining
+mid-encounter wants. The snap happens inside `apply_remote`, not via a flag read later, so the
+position it snaps to is the one that arrived in the **same snapshot** as the counter.
+
+It counts **placements, not hops**: `_try_appear` moves it exactly as far as `_hop` does, so a
+pop-in after a banish slid in precisely the same way until it was counted too.
+
+**One node and one entity id for the whole encounter.** It toggles `present` rather than being
+freed and re-added per hop. That is deliberate and it is 0.10.26's fault: a monster recreated every
+time it vanished would hand out a new id per hop, and the bug where a reused id leaves a client
+driving a stale node is exactly the shape of failure a hopping monster would find.
+
+**The wander fence.** It never wanders -- it calls neither `nav_move` nor `random_nav_point`, so it
+never reaches `game.monster_may_wander_to`. It is **not** exempt by accident: placement runs the
+same predicate the fence runs (`pockets.space_of` must be this space, `phantom_at` must be empty),
+so a hop can no more leave the pocket than a wander could. pockettest asserts that on every hop.
+
+**Hearts, not sanity.** It spends hearts through `game.damage_player`, and the sanity/fear meter is
+marked as an **IDEA in DESIGN.md** and not built, as the spec asked.
+
+### The knobs, and the numbers chosen
+
+| knob | value | why |
+| --- | --- | --- |
+| `SPAWN_CHANCE` (watch) | 0.5 | often enough that you check your sightlines every time, rare enough that the empty half still pays |
+| `GRACE` | 9.0 s | long enough to notice it, cross a room and decide; about a sprint and a half of the Chapel's nave |
+| `TICK_FIRST` / `TICK_RAMP` / `TICK_MIN` | 7.0 / 0.7 / 2.0 | hearts at 0, 7.0, 11.9, 15.3, 17.7 s past the grace line, then every 2 s |
+| `BANISH_RANGE` | 6.0 m | generous on purpose: the counter should be a decision ("go at it"), not an execution ("touch it") |
+| `HOP_INTERVAL` / `HOP_JITTER` | 9.0 +/- 2.0 s | turning your back buys you up to nine seconds and no more |
+| `VANISH_COOLDOWN` | 75 s | a banish should feel like it bought you the rest of the room |
+| `MIN_DIST` / `PREFER_DIST` | 14 / 26 m | the Laundromat at 38 x 15 m is the smallest space and still clears 14 comfortably |
+| `LEAVE_GRACE` | 2.0 s | absorbs the frames a seam crossing spends outside the rect |
+
+**The first heart lands AT the grace line, not a tick after it.** "Grace, then a tick" reads as one
+number to a player; "grace, then a further seven seconds of nothing" reads as nothing happening.
+
+### Measured, not reasoned
+
+- **`tools/monster_lab.tscn`** -- **179 checks, 0 failed**, of which 38 are the Onlooker: the five
+  scenarios the spec names (spawn-in-view placement, hop relocation into the sightline you turned
+  to, banish by approach, the ramping tick after the grace period, seam escape), three that pin the
+  client-side snap (a joiner's first snapshot snaps, an ordinary correction still interpolates, and
+  a hop shorter than 6 m arrives as a jump), plus the saw and a
+  shove doing nothing, silence throughout, a downed mark not being eaten further, and the watcher's
+  per-pocket roll and the monster's lifetime. `LabPockets` makes `space_of` a rect test, which is
+  what the real one is, so "escaped through a seam" in the lab is the same predicate as in the game.
+- **`tools/nettest_run.gd --only=onlooker`** -- **PASS**, and it is the only test here that could
+  ever have caught the replication bug above, because the bug is invisible on the machine that is
+  hosting. The assertion is possible because of what this monster is: it never takes a step, so on
+  a client every physics frame's displacement must be either nothing or one whole jump. A slide is
+  a RUN of consecutive moving frames; a teleport is exactly one. The client counts the longest run
+  and fails on two. Four hops of **4 m** each -- deliberately under the 6 m heuristic, because a
+  longer hop would pass with the bug still in. **Measured both ways**: with the fix, longest run
+  **1**; with the snap commented out and nothing else changed, **13 consecutive moving frames**,
+  which is the glide.
+- **`tools/pockettest.tscn`** -- **719 checks on the merged tree (0.10.39), 2 failed**, both the
+  known Night Nurse check in `laundromat`. (Before the merge it was 617 with 4 failing; which
+  spaces fail moves from run to run, which is FAILING_TESTS 1f's whole point.) 70 of those checks are a per-space Onlooker section across all five real spaces, which is
+  the spec's "bot-walk each pocket with it enabled": the real spawn path, the bot turning on the
+  spot until it finds a heading with room in it, then walking out through a seam. It stood
+  32.6 / 15.6 / 23.6 / 27.8 / 29.6 m off in the Factory, Restaurant, Natatorium, Chapel and
+  Laundromat respectively, hopped in all five, and never once landed outside the space or in a
+  stub's dead half.
+  **The 4 failures are not this phase's**: the same tree with the Onlooker section switched off
+  fails **4 of 547**, the same four checks. Worth flagging for whoever owns FAILING_TESTS 1f, which
+  still says *2* of 547 -- on this tree it is 4, and which spaces fail moves from run to run.
+
+### Three things the tests caught that reasoning did not
+
+1. **A banished Onlooker never noticed the players leaving.** The end-of-encounter test lived
+   inside the standing branch, so one banished into its 75-second cooldown sat in the pocket for
+   the rest of the shift waiting to come back for somebody who had walked out long ago. It is the
+   *space emptying* that ends an encounter, not the monster happening to be looking when it does,
+   so that moved up into `think()`.
+2. **Placement sampled the room uniformly and kept whatever was visible.** A frustum is a thin
+   wedge of a big room: in the Natatorium's 72 x 46 m hall forty samples missed it three times
+   running and the Onlooker would not hop at all. Candidates are now thrown down the mark's own
+   heading, with a uniform quarter kept as a fallback for geometry a straight cone misses.
+3. **At thirty metres in the dark it was invisible.** See below; this is the important one.
+4. **A hop shorter than 6 m slid on every client.** Found after the fact by the coordinator reading
+   the claim in this document rather than by any test, which is the honest version of events, and
+   then pinned by the nettest scenario above. See "How it replicates".
+
+### The smoke look, which earned its keep again
+
+Phase 3 wrote that a headless suite cannot see a dark room, and this phase is the third in a row
+where that was the whole story. Four shots (`tools/monster_lab.tscn -- --shots --only=onlooker_*`,
+in `tools/monster_shots/onlooker_*.png`): 30 m dark, 12 m dark, 4 m under a torch, 10 m in a lit
+room.
+
+At **4 m** it read exactly as designed on the first try -- a tall black silhouette, two bright
+eyes. At **30 m** the frame was **blank**. A pair of 3.6 cm eyes subtend about one pixel at that
+range and a one-pixel highlight blooms into nothing, so the monster whose only tell is visual had
+no tell at the distance it is always met at. **Every headless check passed while that was true**,
+and they would have gone on passing for ever.
+
+The fix took three attempts, and the two failures are written into `onlooker_rig.gd` so nobody
+repeats them: an additive billboard quad throws away the node's scale unless `billboard_keep_scale`
+is set, and sitting at the head's centre it was a flat quad through the skull that the depth test
+ate; and a `GradientTexture2D` whose `offsets` and `colors` were assigned out of step with each
+other rendered fully transparent. What works is **plain emissive geometry** -- the Chapel's own
+votive-flame trick -- a dim ball around the bright eye cores. Sized flat it was a white blob
+swallowing the whole head at 4 m, so it **fades in with distance**: nothing inside 6 m, full by
+22 m. Close up you get two eyes; far off you get the glow that tells you they are there.
+
+### Review
+
+`tools\review.bat 3 "ONLOOKER: check your sightlines" --setup=onlooker` drops you in the
+Natatorium (the game's longest sightline) with a bone saw and nothing else to do but look around;
+`--setup=onlooker_chapel` is the same down the Chapel's nave, where the piers give it things to
+stand behind. The roll is forced on and every other monster is off, so the only thing in the room
+is the one that makes no sound.
+
+### Not done, and deliberately
+
+- **`tools/perfprobe` was not run.** The Onlooker adds one monster whose brain does no pathfinding,
+  one `stop()` a frame, a placement sample of forty raycasts every nine seconds, and about a dozen
+  untextured primitives with no shadow casting and no lights of any kind. Phase 1's reasoning
+  applies: there is nothing there that can move a frame-time percentile, and the spaces themselves
+  were measured by phases 2-4. If somebody disagrees, the scenario to run is the Chapel with
+  `--setup=onlooker`.
+- **No sanity meter**, per the spec -- marked as an IDEA in DESIGN.md instead.
+- **A minimum hop displacement in `_place` was considered and rejected.** It would have fixed the
+  glide by making every hop longer than the 6 m heuristic, but it fixes the symptom in the wrong
+  place: it changes where the monster is allowed to stand, and it would bite hardest in the
+  smallest rooms, where placement is already tightest. The wire counter fixes the general case --
+  any short reposition, not just a hop -- and leaves placement alone.
+- **The Factory-fog gameshot** the spec lists under phase 7 is phase 7's, not this one's.
+
 ## Phase 7 — validation
 - tools/mapcheck.gd passes many seeds with all five kinds.
 - pockettest extended to the three new spaces (seams, crossings,
@@ -1043,7 +1223,9 @@ it by going TOWARD it.
   `tools/pockettest.gd` `_footstep_masking`, both halves.
 - Night Nurse: frozen in a placed candle radius with no player
   looking; moves when it burns out.
-- Onlooker: the monster_lab scenarios above.
+- Onlooker: the monster_lab scenarios above. **Done in phase 6** -- 38 checks in
+  `tools/monster_lab.gd` `_scenario_onlooker`, plus a per-space section in `tools/pockettest.gd`
+  `_onlooker` (70 checks) which is also the bot walk of each pocket with it enabled.
 - tools/gameshot shots of each space, each seam from the hallway
   side, and the Onlooker mid-stare in the Factory fog.
 - docs/MORNING_REPORT.md with START HERE, judgment calls, skips.

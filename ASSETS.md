@@ -305,6 +305,16 @@ Fix-ups and conversions (all derived files stay CC0):
 - **X-ray**: the 1929 x 2207 radiograph downscaled to 224 x 256 JPEG.
 - Kenney characters, the defibrillator, the bottle and television_02 are unmodified.
 
+**The Onlooker (POCKETS 2 phase 6) uses no asset at all**, and that is a design decision rather
+than a gap. It is a monster kind whose body is `scripts/monsters/onlooker_rig.gd`: five untextured
+cylinders, two emissive spheres and a third dim one, unshaded near-black. The other three monsters
+are GLB rigs with skeletons and clips; this one never takes a step, never reaches and never lies on
+a table, so there is no clip for a rig to play. Searched the vetted CC0 sources below for a "tall
+shadow figure" / "faceless standing figure" and found only fully modelled monsters or low-poly
+humans, neither of which is a silhouette — and a silhouette is the whole brief, since the thing has
+to read as the same hole in the world at forty metres under the Chapel's candles and in the
+Factory's fog. No sound file either: it is silent on purpose (docs/CONTRACTS.md, "The Onlooker").
+
 Kinds with no CC0 model, still primitives: `pulse_oximeter`, `epipen`, `reflex_hammer`, and
 (POCKETS 2 phase 4) `quarter_bucket`, `warm_scrubs`, `fabric_softener` — searched the same vetted
 CC0 sources below for a mop bucket, a coin pile, folded clothing and a detergent jug, and found

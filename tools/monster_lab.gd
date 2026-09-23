@@ -21,6 +21,8 @@ const NurseRig := preload("res://scripts/monsters/night_nurse_rig.gd")
 const NurseGrab := preload("res://scripts/monsters/nurse_grab.gd")
 const MonsterModelScript := preload("res://scripts/monsters/monster_model.gd")
 const DoorScript := preload("res://scripts/doors/door.gd")
+const OnlookerBrain := preload("res://scripts/monsters/onlooker_brain.gd")
+const OnlookerWatch := preload("res://scripts/monsters/onlooker_watch.gd")
 const SHOT_DIR := "res://tools/monster_shots"
 
 ## The stand-in game: exactly the surface monsters and Perception use.
@@ -35,6 +37,13 @@ class LabGame extends Node3D:
 	var drops: Array = []   # and her letting go: {time, peer}
 	var said: Array = []
 	var combat: Node = null   # a LabCombat while a drag scenario runs
+	## POCKETS 2 phase 6: a LabPockets while the Onlooker scenario runs, null otherwise, exactly as
+	## game.pockets is null outside a shift. Every other scenario sees the null and is unchanged.
+	var pockets: Node = null
+	## What onlooker_watch.gd seeds its roll from.
+	var seed_value := 0
+	var shift := 1
+	var killed: Array = []   # monsters kill_monster() removed
 	## The Sonographer's echo (scripts/monsters/sono_echo.gd), under the name the real game gives it.
 	var sono_echo: Node = null
 
@@ -110,6 +119,94 @@ class LabGame extends Node3D:
 
 	func bleed_rate(_p: Node) -> float:
 		return 1.0
+
+	## POCKETS 2 phase 6. The Onlooker takes hearts through the real game's damage path, which has
+	## no invulnerability window of its own (game.damage_player: alive, not downed, that is all).
+	## monster_hit_player does have one, and a tick swallowed by the last tick's i-frames would make
+	## the ramp untestable here and, worse, quietly untrue in the game.
+	func damage_player(p: Node, amount: int, _source: String, knock: Vector3 = Vector3.ZERO) -> void:
+		if p == null or not is_instance_valid(p) or not p.alive or p.downed or amount <= 0:
+			return
+		p.take_hit(amount, knock)
+		hits.append({"kind": "onlooker", "damage": amount, "time": world_time, "hp": p.hp})
+		if p.hp <= 0:
+			p.downed = true   # game.damage_player -> down_player. Without this the lab would let the
+			                  # ramp run for ever on a surgeon who should already be on the floor,
+			                  # and never exercise the brain giving up on a downed mark.
+
+	## game.spawn_pocket_monster, for onlooker_watch.gd.
+	func spawn_pocket_monster(kind: String, pos: Vector3) -> Node:
+		var m: Node = preload("res://scripts/monster.gd").new_monster(9000 + killed.size(), kind, pos)
+		add_child(m)
+		return m
+
+	func kill_monster(m: Node) -> void:
+		if m == null or not is_instance_valid(m):
+			return
+		killed.append(String(m.kind))
+		m.queue_free()
+
+
+## POCKETS 2 phase 6: the smallest thing that answers what the Onlooker asks of game.pockets.
+## `space_of` is a rect test, which is what the real one is too (pocket_spaces.gd), so "escaped
+## through a seam" in the lab is the same predicate as in the game: the mark's position stops
+## being in this space.
+class LabPockets extends Node:
+	var pocket := {}
+	var rect := Rect2()
+
+	func open(kind: String, r: Rect2, spawn: Vector3) -> void:
+		rect = r
+		# A fresh root node per call, because onlooker_watch.gd keys "have I rolled for this pocket
+		# yet" on the root's instance id, and the lab has to be able to open a second one.
+		var root := Node3D.new()
+		add_child(root)
+		pocket = {"kind": kind, "rect": r, "root": root, "spawn": spawn, "origin": Vector2i.ZERO}
+
+	func shut() -> void:
+		for c in get_children():
+			c.queue_free()
+		pocket = {}
+
+	func active() -> bool:
+		return not pocket.is_empty()
+
+	func space_of(p: Vector3) -> String:
+		if pocket.is_empty():
+			return ""
+		return String(pocket.kind) if rect.has_point(Vector2(p.x, p.z)) else ""
+
+	func in_pocket(p: Vector3) -> bool:
+		return space_of(p) != ""
+
+	func phantom_at(_p: Vector3) -> Array:
+		return []          # no stubs in the lab: nothing is ever in a dead half
+
+	func real_point(p: Vector3) -> Vector3:
+		return p
+
+	func steer_point(_from: Vector3, next: Vector3) -> Vector3:
+		return next
+
+	func mirror_points(_points: Array) -> Array:
+		return []
+
+	# The rest of the surface anything asks of game.pockets while one exists. The lab corridor is
+	# not the Natatorium and has no seams, so all of it is the empty answer.
+	func water_at(_p: Vector3) -> bool:
+		return false
+
+	func water_footstep(_p: Vector3, _sprinting: bool, _crouching: bool) -> Array:
+		return []
+
+	func ambient_noise_at(_p: Vector3) -> float:
+		return 0.0
+
+	func mirror_noise(_pos: Vector3, _loudness: float) -> Array:
+		return []
+
+	func air_factor(_p: Vector3) -> float:
+		return 0.0
 
 
 ## Stand-in for game.combat: the drag pin and drop_dragged.
@@ -315,6 +412,7 @@ func _run_scenarios() -> void:
 	await _scenario_combat()
 	await _scenario_drag_and_lying()
 	_scenario_placement()
+	await _scenario_onlooker()
 	var failed := results.filter(func(r): return not r.ok).size()
 	print("[monster_lab] ------------------------------------------")
 	print("[monster_lab] %d checks, %d failed" % [results.size(), failed])
@@ -1244,6 +1342,202 @@ func _scenario_placement() -> void:
 	check("Hive spots: the shallow part of each wing", ok_shallow, detail)
 	check("Hive spots: groups of 2-4 spread over the wings (worst %d ms)" % t_ms, ok_groups, detail)
 
+
+## POCKETS 2 phase 6, the Onlooker: the five scenarios the spec names, in the order a player meets
+## them -- it pops in already in your view, it hops into wherever you turn to instead, running at it
+## sends it away, ignoring it costs hearts on a ramp, and walking out of the space ends it.
+##
+## The lab corridor stands in for a pocket space: `LabPockets` makes `space_of` a rect test, which
+## is what the real one is, so "escaped through a seam" here is the same predicate the game runs.
+## The player is put mid-corridor, with about thirty metres of sightline each way -- comfortably
+## past MIN_DIST both ways, so a hop has somewhere to go whichever way they face.
+##
+## Every light in the corridor is OFF for all of it, deliberately: unlike the Night Nurse, being lit
+## is not part of this monster's predicate, and a run that only passed in a lit room would be
+## testing the wrong thing.
+func _scenario_onlooker() -> void:
+	print("[monster_lab] --- 11. the Onlooker ---")
+	await clear_monsters()
+	set_all_lights(false)
+	var pk := LabPockets.new()
+	pk.name = "LabPockets"
+	game.add_child(pk)
+	game.pockets = pk
+	# The corridor only: z 6..12. The rooms off it (z under 6 and over 12) are "the hospital", which
+	# is what the seam-escape check walks into.
+	var space_rect := Rect2(0.0, 6.0, 70.0, 6.0)
+	pk.open("lab_pocket", space_rect, cor(32.0))
+	p1.revive_full()
+	var full_hp: int = int(p1.hp)
+	place_player(cor(32.0), cor(63.0), false)   # mid-corridor, looking east
+	await wait(0.2)
+
+	# ---- 1. it pops in, far away, already in the player's view
+	var o: Node = spawn("onlooker", cor(32.0))
+	var br = o.brain
+	await wait(0.5)
+	var d: float = o.global_position.distance_to(p1.global_position)
+	check("Onlooker: pops in", bool(o.present), "at %.1f m" % d)
+	check("Onlooker: far away", d >= OnlookerBrain.MIN_DIST, "%.1f m, min %.0f" % [d, OnlookerBrain.MIN_DIST])
+	check("Onlooker: placed in the player's view", Percept.in_view(p1, o.global_position + Vector3.UP * 1.4))
+	check("Onlooker: marked the watcher", int(br.mark_peer) == 1)
+	check("Onlooker: it is not approaching", not bool(o.moving) and float(o.speed) < 0.01)
+	check("Onlooker: silent on arrival", game.noises.is_empty(), "%d noises" % game.noises.size())
+
+	# ---- 2. the hop relocates into the sightline the player turned to
+	place_player(cor(32.0), cor(0.0), false)   # spun round to look west
+	await wait(0.2)
+	var before: Vector3 = o.global_position
+	var behind := Percept.in_view(p1, before + Vector3.UP * 1.4)
+	br.hop_left = 0.0                          # forced, so the check does not wait on the jitter
+	await wait(0.4)
+	var moved: float = o.global_position.distance_to(before)
+	check("Onlooker: turning round loses it, for a moment", not behind)
+	check("Onlooker: hops", int(br.hops) >= 1 and moved > 2.0, "%.1f m" % moved)
+	check("Onlooker: hops INTO the new sightline", Percept.in_view(p1, o.global_position + Vector3.UP * 1.4))
+	var hd: float = o.global_position.distance_to(p1.global_position)
+	check("Onlooker: the hop is still far away", hd >= OnlookerBrain.MIN_DIST, "%.1f m" % hd)
+	check("Onlooker: the next hop is on the interval", absf(float(br.hop_left) - OnlookerBrain.HOP_INTERVAL) <= OnlookerBrain.HOP_JITTER + 0.2)
+	check("Onlooker: still silent after a hop", game.noises.is_empty())
+
+	# ---- 3. the saw and a shove do nothing, and walking at it is everything
+	var hit: String = o.take_hit(Vector3.FORWARD, 4, "saw:lab")
+	o.shoved(Vector3.FORWARD)
+	await wait(0.1)
+	check("Onlooker: the saw does nothing", hit == "immune" and bool(o.present))
+	check("Onlooker: a shove does nothing", bool(o.present))
+	# Step toward it from where the player stands, rather than picking an axis: the corridor is only
+	# two tiles wide and "its x minus 3.5" can land in the end wall.
+	var to_it: Vector3 = o.global_position
+	var toward: Vector3 = p1.global_position - to_it
+	toward.y = 0.0
+	p1.teleport(to_it + toward.normalized() * (OnlookerBrain.BANISH_RANGE - 2.5))
+	await wait(0.3)
+	check("Onlooker: banished by closing on it", not bool(o.present) and int(br.banished) == 1)
+	check("Onlooker: the banish is a long cooldown", float(br.away_left) > OnlookerBrain.VANISH_COOLDOWN - 1.0,
+		"%.0f s" % float(br.away_left))
+	check("Onlooker: banished, it is not in the room", float(o.presence) <= 0.0 or not bool(o.present))
+
+	# ---- 4. ignored past the grace period it starts eating, on a ramp
+	br.away_left = 0.0                          # skip the cooldown; it is checked above
+	place_player(cor(32.0), cor(63.0), false)
+	await wait(0.6)
+	check("Onlooker: comes back after the cooldown", bool(o.present))
+	game.hits.clear()
+	await wait(OnlookerBrain.GRACE - 1.5)
+	var early: int = int(br.hearts)
+	await wait(2.0)                              # now just past GRACE
+	check("Onlooker: nothing happens during the grace period", early == 0, "%d hearts at %.1f s" % [early, OnlookerBrain.GRACE - 1.5])
+	check("Onlooker: the first heart lands at the grace line", int(br.hearts) == 1, "%d" % int(br.hearts))
+	check("Onlooker: it costs hearts, through the ordinary damage path", int(p1.hp) == full_hp - 1 and game.hits.size() == 1)
+	# Look away and the meter bleeds back down: worth something, but only until the next hop.
+	var hearts_then: int = int(br.hearts)
+	br.hop_left = 999.0
+	place_player(cor(32.0), cor(0.0), false)
+	await wait(3.0)
+	check("Onlooker: looking away stops the tick", int(br.hearts) == hearts_then and float(br.stare) < OnlookerBrain.GRACE,
+		"stare %.1f" % float(br.stare))
+	# Look back and it resumes, and the second heart comes sooner than the first did.
+	place_player(cor(32.0), cor(63.0), false)
+	await wait(OnlookerBrain.GRACE + OnlookerBrain.TICK_FIRST + 1.0)
+	check("Onlooker: the tick ramps", int(br.hearts) >= 2 and float(br.tick_left) < OnlookerBrain.TICK_FIRST,
+		"%d hearts, next in %.1f s" % [int(br.hearts), float(br.tick_left)])
+	check("Onlooker: it takes a surgeon all the way down", bool(p1.downed) and int(p1.hp) <= 0)
+	check("Onlooker: a downed mark is not eaten further", not bool(o.present), "hearts %d" % int(br.hearts))
+	check("Onlooker: silent throughout", game.noises.is_empty())
+
+	# ---- 5. out of the space through a seam and the encounter is over.
+	# A FRESH one: the surgeon above was taken down, and a pocket with nobody left standing in it is
+	# already an ended encounter (that is the same rule, reached the other way). Reusing that one
+	# would have been a test that passed without testing anything.
+	await clear_monsters()
+	p1.revive_full()
+	place_player(cor(32.0), cor(63.0), false)
+	o = spawn("onlooker", cor(32.0))
+	br = o.brain
+	await wait(0.6)
+	check("Onlooker: a fresh encounter starts", bool(o.present) and bool(br.started))
+	p1.teleport(Vector3(cor(20.0).x, 0.0, 13.5))   # a room off the corridor: outside the space
+	check("Onlooker: the room off the corridor is another space", pk.space_of(p1.global_position) != "lab_pocket")
+	await wait(OnlookerBrain.LEAVE_GRACE * 0.5)
+	check("Onlooker: a step outside does not end it at once", not bool(br.finished), "grace %.1f s" % OnlookerBrain.LEAVE_GRACE)
+	await wait(OnlookerBrain.LEAVE_GRACE * 0.7)
+	check("Onlooker: escaping the space ends the encounter", bool(br.finished) and not bool(o.present))
+
+	# ---- the roll: onlooker_watch owns whether a pocket has one at all
+	await clear_monsters()
+	place_player(cor(32.0), cor(63.0), false)
+	var watch: Node = OnlookerWatch.new()
+	watch.name = "LabOnlookerWatch"
+	game.add_child(watch)
+	watch.setup(game)
+	OnlookerWatch.force = "off"
+	pk.open("lab_pocket", space_rect, cor(32.0))    # a new pocket root: a new roll
+	await wait(OnlookerWatch.SETTLE + 0.5)
+	check("Onlooker: a pocket that lost the roll has none", watch.current() == null and int(watch.rolls) == 1)
+	OnlookerWatch.force = "on"
+	pk.open("lab_pocket", space_rect, cor(32.0))
+	await wait(OnlookerWatch.SETTLE + 0.5)
+	var spawned: Node = watch.current()
+	check("Onlooker: a pocket that won the roll gets exactly one", spawned != null and int(watch.rolls) == 2)
+	if spawned != null:
+		check("Onlooker: it is added to the game like any other monster", String(spawned.kind) == "onlooker")
+		# The lifetime: the brain finishing frees it, and walking back in does not buy a second.
+		spawned.brain.finished = true
+		await wait(0.3)
+		check("Onlooker: the watcher frees it when the encounter ends", game.killed.has("onlooker") and watch.current() == null)
+		await wait(1.5)
+		check("Onlooker: the same pocket does not roll a second one", watch.current() == null and int(watch.rolls) == 2)
+
+	# ---- the wire: a hop has to arrive as a JUMP on a client, not a walk.
+	# Driven through apply_remote with game.host = false, which is exactly what a client does. The
+	# distances are 4 m on purpose: that is UNDER the 6 m displacement heuristic in
+	# _physics_process, so it is the replicated counter or nothing. This is the shape of the bug --
+	# the host teleports, every client watches it glide -- and it is invisible to whoever is
+	# hosting, which is why every other check here passed while it was happening.
+	await clear_monsters()
+	place_player(cor(32.0), cor(63.0), false)
+	var was_host: bool = game.host
+	var c: Node = spawn("onlooker", cor(40.0))
+	# Host off BEFORE anything runs: with the brain alive it places itself somewhere of its own
+	# choosing mid-test, which is what made the first two of these checks fail on my own fixture
+	# rather than on the code. This sub-test is purely the client path.
+	game.host = false
+	await wait(0.05)
+	var base: Dictionary = c.report()
+	base["pos"] = cor(40.0)
+	base["pr"] = true
+	# The first snapshot a machine ever sees snaps, so a client joining mid-encounter does not
+	# slide in from wherever the node was built.
+	c.apply_remote(base)
+	await wait(0.02)
+	check("Onlooker: a client's first snapshot snaps", c.global_position.distance_to(cor(40.0)) < 0.01)
+	# An ordinary position correction, counter unchanged: still interpolated, like every monster.
+	var walk_to: Vector3 = cor(36.0)
+	var d1: Dictionary = base.duplicate()
+	d1["pos"] = walk_to
+	c.apply_remote(d1)
+	await wait(0.02)
+	var left: float = c.global_position.distance_to(walk_to)
+	check("Onlooker: an ordinary correction is still interpolated", left > 0.5, "%.1f m still to go" % left)
+	await wait(0.8)
+	# The same 4 m move with the counter bumped: it is a hop, and it is there the instant it lands.
+	var hop_to: Vector3 = cor(40.0)
+	var d2: Dictionary = base.duplicate()
+	d2["pos"] = hop_to
+	d2["tp"] = int(base.get("tp", 0)) + 1
+	c.apply_remote(d2)
+	var off: float = c.global_position.distance_to(hop_to)
+	check("Onlooker: a hop shorter than 6 m arrives as a JUMP on a client", off < 0.01, "%.3f m off" % off)
+	game.host = was_host
+
+	OnlookerWatch.force = ""
+	game.pockets = null
+	watch.queue_free()
+	pk.queue_free()
+	await clear_monsters()
+
+
 # =========================================================================
 # screenshots
 # =========================================================================
@@ -1304,6 +1598,13 @@ func _run_shots() -> void:
 		["sono_echo_fan", _shot_sono_echo.bind(true)],
 		["sono_echo_imaged", _shot_sono_echo.bind(false)],
 		["sono_echo_neck", _shot_sono_suspicion],
+		# POCKETS 2 phase 6, the Onlooker. The distances are the point: it is a monster you only
+		# ever meet a long way off, so the shot that matters is the 30 m one, and what it has to
+		# answer is whether you can tell it is there at all.
+		["onlooker_30m_dark", _shot_onlooker.bind(30.0, false, false)],
+		["onlooker_12m_dark", _shot_onlooker.bind(12.0, false, false)],
+		["onlooker_4m_torch", _shot_onlooker.bind(4.0, true, false)],
+		["onlooker_lit_room", _shot_onlooker.bind(10.0, false, true)],
 	]
 	for s in list:
 		if only != "" and not only.split(",").has(s[0]):
@@ -1417,6 +1718,25 @@ func _shot_nurse(dist: float) -> void:
 	place_player(pos + Vector3(dist, 0, -0.3), pos + Vector3.UP * (1.5 if dist > 2.0 else 1.9), true)
 	await wait(0.35)
 	_pose(n, pos, -PI * 0.5 + 0.15, Modes.Mode.WANDER, false, 0.0, {"ob": true})
+
+
+## POCKETS 2 phase 6. Posed through apply_remote like every other shot here (the runner sets
+## game.host = false), which means `pr` on the wire is what makes it appear -- so these shots are
+## also the only place the client half of the pop-in is looked at rather than asserted.
+##
+## `lights` turns the corridor's fixtures on: an unshaded body is meant to read as the same hole in
+## the world under any light in the game, and a lit room is where that claim could fail.
+func _shot_onlooker(dist: float, flashlight: bool, lights: bool) -> void:
+	if dist_override > 0.0:
+		dist = dist_override
+	if lights:
+		set_all_lights(true)
+	var pos := cor(50.0)
+	var o: Node = spawn("onlooker", pos, PI * 0.5)
+	# Facing the player, who stands back down the corridor at -X.
+	_pose(o, pos, PI * 0.5, Modes.Mode.STALK, false, 0.0, {"pr": true})
+	# Eye to eye: aim at its head, which is where the only bright thing on it is.
+	place_player(pos + Vector3(-dist, 0.0, 0.0), pos + Vector3.UP * 2.45, flashlight)
 
 
 func _shot_nurse_door() -> void:
