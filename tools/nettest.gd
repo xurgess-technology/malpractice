@@ -167,6 +167,7 @@ func _run() -> void:
 		"doors": await _sc_doors()   # DOORS HOOK
 		"wall": await _sc_wall()   # terminal redesign, chunk 4
 		"rocket_boots": await _sc_rocket_boots()   # ROCKET BOOTS
+		"syringe_draw": await _sc_syringe_draw()   # SYRINGE DRAW: two handheld draws at once
 		_: _end(false, "unknown scenario " + scenario)
 
 
@@ -572,6 +573,109 @@ func _sc_leave_operating():
 	if not await _until(func(): return int(game.case.get("step_index", 0)) >= 1, 120.0, "my resumed step to finish"):
 		return
 	await _finish_together("resumed from %.2f and finished the step" % saved_p)
+
+
+## SYRINGE DRAW (docs/ANESTHETIC_INJECTION_SPEC.md 9): THE CRUX. A table is one shared thing, so
+## only one person can ever be operating at it. A handheld draw is not: it belongs to the syringe in
+## your hand, and both clients open one AT THE SAME TIME here. What this proves over the wire is
+## that each gets its own station with its own operator and its own frozen site, that each client
+## can SEE the other's draw (an onlooker needs the node the panel hangs off), and that one of them
+## finishing leaves the other's alone.
+func _sc_syringe_draw():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		var first: int = _peer_of(1)
+		var second: int = _peer_of(2)
+		for peer in [first, second]:
+			var pl = game.players.get(peer)
+			if pl == null or not game.give_hand(pl, "syringe", 3) or not game.give_hand(pl, "anesthetic", 2):
+				return _end(false, "client %d didn't get a syringe and a vial" % peer)
+		await _wall_wait(0.5)
+		_send("draw", {})
+		var st = game.syringe_stations
+		if not await _until(func(): return st.peek(first) != null and st.peek(second) != null \
+				and int(st.peek(first).operator_peer()) == first and int(st.peek(second).operator_peer()) == second,
+				90.0, "both clients to be drawing at once"):
+			return
+		# A beat for both stations to build their game: they open on the frame after the press.
+		await _wall_wait(0.5)
+		var s1 = st.peek(first)
+		var s2 = st.peek(second)
+		# Two live cases at the same moment, which is the thing a table could never do.
+		if s1.case.is_empty() or s2.case.is_empty():
+			return _end(false, "one of the two cases is empty")
+		if s1.site_override().origin.distance_to(s2.site_override().origin) < 0.3:
+			return _end(false, "both draws pinned their site to the same place")
+		for s in [s1, s2]:
+			if s.surgery.mg == null or not bool(s.surgery.mg.ctx.get("draw_only", false)):
+				return _end(false, "a station opened something other than the corridor half: mg=%s key=%s case=%s" % [
+					str(s.surgery.mg), s.surgery.mg_key, str(s.case)])
+			if s.rack().size() != 1:
+				return _end(false, "the rack should hold the one fluid in hand, got %d" % s.rack().size())
+		_say("two draws open at once: %d at %s, %d at %s" % [first, str(s1.site_override().origin.round()), second, str(s2.site_override().origin.round())])
+		# Client 1's finishes. Client 2's must not notice.
+		s1.surgery_step_done({"drawn": 0.55, "bubbles": [], "fluid": "anesthetic"}, first)
+		if not await _until(func(): return s1.case.is_empty(), 30.0, "client 1's draw to close"):
+			return
+		if s2.case.is_empty() or int(s2.operator_peer()) != second:
+			return _end(false, "client 1 finishing took client 2's draw down with it")
+		var p1 = game.players.get(first)
+		var loaded := Syringes.unpack(String(p1.slots[p1.selected_head()].get("x", "")))
+		if loaded.is_empty() or absf(float(loaded.level) - 0.55) > 0.002:
+			return _end(false, "client 1's syringe did not come away loaded: %s" % str(loaded))
+		if p1.hand_count("anesthetic") != 1:
+			return _end(false, "client 1's vial was not spent (has %d)" % p1.hand_count("anesthetic"))
+		_send("check", {"finished": first, "still": second})
+		if not await _until(func(): return _count_msgs("seen") >= clients, 60.0, "both clients to report what they saw"):
+			return
+		for m in _msgs("seen"):
+			if not bool(m.data.ok):
+				return _end(false, "a client saw it wrong: %s" % String(m.data.why))
+		await _finish_together("two handheld draws ran side by side; one finished without touching the other")
+		return
+	# ---- clients ----
+	if not await _wait_shift_as_client():
+		return
+	if not await _until(func(): return _count_msgs("draw") > 0, 60.0, "the order to draw"):
+		return
+	var me := _me()
+	me.bot_active = false
+	for i in me.slots.size():
+		if String(me.slots[i].get("kind", "")) == "syringe":
+			me.selected = i
+	await _frames(4)
+	# E aimed at nothing: exactly what the crosshair does, through the ordinary input counters.
+	if not await _until(func(): return game.syringe_stations.hand_prompt(me) == "Load the syringe", 30.0, "the draw to be offered"):
+		return
+	me.aim_id = "syringe_hand"
+	me.interact_count += 1
+	var mine := func(): return game.syringe_stations.peek(Net.my_id())
+	if not await _until(func(): return mine.call() != null and int(mine.call().operator_peer()) == Net.my_id(), 60.0, "my own draw to open"):
+		return
+	_say("my draw is open on my own machine")
+	if not await _until(func(): return _count_msgs("check") > 0, 120.0, "the check order"):
+		return
+	var d: Dictionary = _msgs("check")[0].data
+	var still := int(d.still)
+	var finished := int(d.finished)
+	var st = game.syringe_stations
+	# THE ONLOOKER CHECK: whoever is still drawing has a station and a panel on MY machine too.
+	var other = st.peek(still)
+	var ok := other != null and int(other.operator_peer()) == still and other.surgery.mg != null
+	var why := "" if ok else "the draw still running (peer %d) is not on my machine: station=%s" % [still, str(other)]
+	if ok and Net.my_id() != still:
+		# The finished one must close here too, once the snapshot carrying it arrives.
+		var closed := await _until(func():
+			var g = st.peek(finished)
+			return g == null or g.case.is_empty(), 30.0, "peer %d's finished draw to close on my machine" % finished)
+		if not closed:
+			ok = false
+			why = "peer %d's finished draw never closed on my machine" % finished
+	_send("seen", {"ok": ok, "why": why})
+	if not ok:
+		return _end(false, why)
+	await _finish_together("I saw the other draw running beside mine")
 
 
 func _sc_late_join():

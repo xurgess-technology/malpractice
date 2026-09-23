@@ -123,6 +123,128 @@ A Debug toggle overlays: vein polylines (bright green), the reach the tip has to
 
 ---
 
+## 9 · Loading a syringe away from the table (SYRINGE DRAW, 2026-09-22)
+
+DRAW! and FLICK! stop being things you only do standing over a patient. There is a `syringe` item
+(`scripts/items.gd`), a batch consumable like the vials, and the two loading stages can be played
+anywhere with one in your hand. This is the first minigame that happens outside the OR.
+
+**One game, two entry points, no fork.** `inject_arcade.gd` already had `_stick_only()` — a `--stick`
+debug flag that pre-filled the barrel and opened on STICK!. That is now the real mechanism, driven
+by the context instead of the command line:
+
+| context | stages | where |
+|---|---|---|
+| `draw_only` | DRAW! FLICK! | anywhere, holding a syringe |
+| `loaded` | STICK! PUSH! | the table, holding a syringe you already loaded |
+| neither | DRAW! FLICK! STICK! PUSH! | the table, empty-handed |
+
+**The last row is not a legacy path, it is the fallback, and it stays.** Arriving at a patient with
+no syringe still offers the whole game exactly as before. Loading ahead is a convenience that saves
+time at the table, never a requirement.
+
+**What a loaded syringe carries, and why it is a level and not a dose.** The contents ride the
+stack's / world item's `x` string (`scripts/syringe/syringes.gd`), the way a specimen vat carries
+its eye — so they survive every carry, drop, shelf and snapshot path with no new replication. The
+string is `fluid|level|bubbles`, and `level` is the **absolute barrel level**, not a score.
+
+The green band is placed by the patient's weight, and a corridor has no patient. So a syringe loaded
+away from the table aims at a **standard 80 kg dose** and stores the level it actually reached; at
+the table the real band is worked out from the real patient and that stored level is scored against
+it, unchanged. **Pre-loading buys time and costs precision** — a standard dose is light for a heavy
+patient and heavy for a light one, and the syringe has no idea which it is about to meet. That is
+the trade, and it is deliberate. (The self-test already measured this shape: "bob's dose into the
+seal -> sedation 0.63".)
+
+**One loaded syringe per slot.** A slot has one `x` and a batch of three syringes shares it, so the
+loaded one is the top of the batch: draw one, stick it, draw the next. That is also what makes a
+syringe one-use — injecting takes one off the count and clears `x`.
+
+**Nothing is billed in the corridor.** No dose is scored and no vitals are charged for a draw away
+from the table: you have not touched a patient, so there is no patient to hurt. The bill comes at
+the table, on the dose that actually goes in.
+
+### The second anchoring mode
+
+The panel is anchored at the step's site and lifted along the site normal, oriented **once** at open
+time — it is not a billboard. Standing in a corridor there is no site and no patient.
+
+The answer is **a synthetic site**, not a second kind of panel: `surgery_system._site_transform()`
+lets a stand-in game pin the site itself, in front of the player instead of on a body. Everything
+downstream is untouched — the panel still lifts `panel_lift` along the site's +Y and still orients
+once to the operator's leaned-in camera, the camera pose is still derived from the site, the cursor
+still projects onto the panel's plane. Neither `surgery_panel.gd` nor the OR path knows which kind
+of site it got, which is exactly why the OR path is unaffected.
+
+Freeze / hand-over comes along for free with it: the arcade's "step away and the game stops dead,
+whoever picks it up gets a READY countdown" is driven by `operating`, not by a table.
+
+### The station, and how a per-player case replicates (2026-09-22)
+
+A table is one shared thing: one surgery system serves it and whoever walks up is the operator. A
+draw is not. It belongs to the syringe in your hand, and four players in four corridors can each
+have one open at the same moment. So there is **one station per player**, and three things had to
+be decided:
+
+- **The node path.** RPCs are addressed by node path, and a node made on demand is a path the far
+  machine may not have yet. So the stations carry **no RPCs of their own**:
+  `scripts/syringe/syringe_stations.gd` sits at a fixed path (child `"SyringeStations"` of Game on
+  every machine) and is the only thing that talks. A station hands its report up to it.
+- **Who a report belongs to.** Nothing on the wire says which station a report is for, and nothing
+  needs to: a station's operator is its owner, by construction and forever, so the **sender id IS
+  the station**. That also means a client can only ever drive its own draw, however it lies.
+- **How many exist.** Host authoritative. The host makes a station the first time a player opens a
+  draw and keeps it for the rest of the shift (freeing it the moment a draw ended would cut off the
+  surgery camera's blend back to the player's own). Clients make and keep theirs from the
+  replicated map, so an onlooker has the node a teammate's panel hangs off: you can watch somebody
+  else load a syringe from across the room.
+
+**The site is frozen at open**, and that is what keeps the freeze honest. `surgery_system`'s
+walk-away test measures the operator against `table_pos()`, so a site that followed the player
+could never be walked away from. Frozen, being shoved out of a corridor draw ends it exactly as
+being shoved off a table does. Everything else the previous note promised held: freeze and
+hand-over needed nothing new.
+
+### The rack
+
+Up to three sources across the top of the DRAW! page — **centre, then left, then right** — built
+from the fluids the player is actually carrying, with the syringe sliding between them (A/D, or
+click a vial). Three because the fourth hand slot is holding the syringes.
+
+**One syringe carries one fluid**, so the rack locks to a source the moment you draw anything; put
+it all back and it unlocks. `rack_sel` and what is left in each vial go on the wire, so an
+onlooker's syringe stands under the same vial as the operator's; the slide itself is worked out
+from them and is not sent.
+
+**With fewer than three, the rack is simply narrower**, and with one it is the single SOMNUL-9 vial
+at the centre that the page always drew. The rack is **empty on the OR path**, so the table's
+fallback is byte for byte what it was. Only `anesthetic` exists today, so a real player can only
+ever fill one slot; `--rack3` (with `--racksel=N`) draws a full one for reviews and lab shots.
+
+### At the table
+
+A loaded syringe is accepted **instead of** the vial the sedate step asks for, and the step opens
+on STICK! through the `loaded` context. Delivering the dose spends the **syringe** rather than a
+vial: one off the count and the `x` cleared, which is what makes it one-use.
+
+One wrinkle worth knowing: a step's minigame is built as soon as the case is on the table, before
+anybody has walked up to it, so it cannot know about a loaded syringe yet. `surgery_system` latches
+a fingerprint of the operator's loaded syringe at the moment they begin (and, on an onlooker, when
+the operator replicates in) and **never again** — so the key is fixed from then on, and stepping
+away freezes the game for the hand-over instead of destroying it.
+
+### Tests
+
+- `tools/syringetest.tscn` — the whole trip solo: the crosshair offer, the station and its frozen
+  site, the corridor half and its rack, the level landing in the syringe's `x`, the table opening
+  on STICK!, the syringe being spent, and the OR's empty-handed fallback still getting all four.
+- `nettest_run.gd --only=syringe_draw` — **two handheld draws open at once** over real processes,
+  each seen by the other's owner, one finishing without touching the other.
+- `tools/review.bat N "..." --setup=syringe_draw` — a patient on a table and a syringe in hand, a
+  few paces off it. `--open` starts with the draw already up.
+
+---
+
 ## Decisions (Zach, 2026-09-21) — these override the spec
 
 1. **It replaces DOSE!, and there is one version.** Delete `scripts/surgery/arcade/dose_arcade.gd` *and* the legacy `scripts/surgery/games/anesthetic.gd`, their `ARCADE_ENABLED` / `MINIGAME_SCRIPTS` / `ARCADE_SCRIPTS` entries and the dev-panel toggle for them. This game is the only sedation game. Rewrite ARCADE_SURGERY.md §5.1 to describe it.

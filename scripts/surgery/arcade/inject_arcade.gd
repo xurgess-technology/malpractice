@@ -203,7 +203,16 @@ const ASM_TIP := 126.0
 # ---- replicated ----
 var phase: int = Phase.DRAW
 var fluid := 0.0                  ## share of the barrel drawn, 0..1
-var vial := 0.9                   ## share of the barrel left in the vial
+var vial := 0.9                   ## share of the barrel left in the vial the syringe is under
+## SYRINGE DRAW -- THE RACK. Up to three fluid sources across the top, centre then left then right,
+## and the syringe slides between them. Three because the fourth hand slot is holding the syringes.
+## `rack` is [{kind, name, count}] straight from the station (scripts/syringe/syringe_station.gd);
+## it is EMPTY on the OR path, and an empty rack draws the one SOMNUL-9 vial the game always had,
+## which is how the table's fallback stays byte for byte what it was.
+var rack: Array = []
+var rack_sel := 0                 ## which source the syringe is under
+var rack_vials: Array = []        ## what is left in each, parallel to `rack`
+var syr_x := SYR_X                ## the syringe's x, rpx: the selected source's, slid to
 var bubbles: Array = []           ## [x, y, r, vx, vy, stuck(0/1), phase]
 var air_drawn := 0                ## air bubbles pulled in
 var drawing := false
@@ -292,10 +301,109 @@ func ink_unit() -> float:
 	return _u()
 
 
+## SYRINGE DRAW: the two halves of this game, and the one flag that decides which you get.
+##
+## THIS IS ONE GAME WITH TWO ENTRY POINTS, NOT TWO GAMES. Everything below -- the barrel, the band,
+## the bubbles, the veins, the costs, the scoring -- is shared. All that changes is where it starts
+## and where it stops:
+##   at the table, empty-handed (the original, and still the fallback)  DRAW! FLICK! STICK! PUSH!
+##   in a corridor, holding a syringe (ctx.draw_only)                   DRAW! FLICK!
+##   at the table, holding a syringe you already loaded (ctx.loaded)    STICK! PUSH!
+## Nothing is forked and nothing is duplicated: the OR path with an empty syringe is byte for byte
+## the game it was before this existed.
+
+## Corridor half: run DRAW! and FLICK! and stop, handing the barrel's level back to the syringe
+## instead of sticking anybody. Set by the syringe station (scripts/syringe/syringe_station.gd).
+func _draw_only() -> bool:
+	return bool(ctx.get("draw_only", false))
+
+
+## Table half: what the syringe in the operator's hand is already carrying (Syringes.unpack), or {}.
+## A loaded syringe skips DRAW! and FLICK! -- the drug is in the barrel, bubbles and all.
+func _loaded() -> Dictionary:
+	var d = ctx.get("loaded", {})
+	return d if d is Dictionary else {}
+
+
+# -- the rack ------------------------------------------------------------------------------------
+
+## How far left and right of centre the outer two sources sit, rpx.
+const RACK_SPREAD := 200.0
+## The brand on each fluid's label.
+const RACK_LABELS := {"anesthetic": "SOMNUL-9", "communion_wine": "COMMUNION", "tequila": "TEQUILA"}
+
+## Where source `i` stands: centre, then left, then right. One source and it is just the old vial.
+static func rack_x(i: int) -> float:
+	match i:
+		1: return SYR_X - RACK_SPREAD
+		2: return SYR_X + RACK_SPREAD
+	return SYR_X
+
+
+## The inverted vial's body at `x` (the spec's 84 x 90 at y 56, centred on the syringe).
+static func vial_rect(x: float) -> Rect2:
+	return Rect2(x - VIAL.size.x * 0.5, VIAL.position.y, VIAL.size.x, VIAL.size.y)
+
+
+## How many sources are on the rack (1 on the OR path: the plain SOMNUL-9 vial).
+func rack_size() -> int:
+	return maxi(1, rack.size())
+
+
+## The kind the barrel is being filled from. `anesthetic` whenever there is no rack -- the OR path
+## is drawing out of the vial the step made you carry.
+func rack_kind() -> String:
+	if rack.is_empty():
+		return "anesthetic"
+	return String((rack[clampi(rack_sel, 0, rack.size() - 1)] as Dictionary).get("kind", "anesthetic"))
+
+
+## The sources in the order they stand on screen, left to right: index 1, then 0, then 2.
+func rack_order() -> Array:
+	var out: Array = []
+	for i in [1, 0, 2]:
+		if int(i) < rack.size():
+			out.append(int(i))
+	return out
+
+
+## The source one step left (-1) or right (+1) of the one the syringe is under, in screen order.
+func _rack_step(dir: int) -> int:
+	var order := rack_order()
+	var at := order.find(rack_sel)
+	if at < 0:
+		return rack_sel
+	return int(order[clampi(at + dir, 0, order.size() - 1)])
+
+
+func rack_label(i: int) -> String:
+	if rack.is_empty():
+		return "SOMNUL-9"
+	var k := String((rack[clampi(i, 0, rack.size() - 1)] as Dictionary).get("kind", "anesthetic"))
+	return String(RACK_LABELS.get(k, k.to_upper()))
+
+
+## Move the syringe to source `i`. ONLY WITH AN EMPTY BARREL: one syringe carries one fluid (the
+## `x` string has room for exactly one), so once you have drawn anything the rack is locked until
+## you put it all back. Returning the fluid to the vial unlocks it again.
+func rack_select(i: int) -> void:
+	if rack.size() < 2 or phase != Phase.DRAW:
+		return
+	i = clampi(i, 0, rack.size() - 1)
+	if i == rack_sel:
+		return
+	if fluid > 0.0005:
+		return
+	rack_vials[rack_sel] = vial
+	rack_sel = i
+	vial = float(rack_vials[i])
+	_hold = 0.0
+
+
 ## --stick (reviews and lab shots) skips the first two stages and opens on STICK!, with the dose
 ## already drawn and no bubbles: the aim is the only thing being looked at.
 func _stick_only() -> bool:
-	return "--stick" in OS.get_cmdline_user_args()
+	return not _loaded().is_empty() or "--stick" in OS.get_cmdline_user_args()
 
 
 func card_word_for_start() -> String:
@@ -315,6 +423,25 @@ func build_game() -> void:
 	target = clampf(ml / barrel_ml + _rng.randf_range(-band_jitter, band_jitter), 0.15, 0.85)
 	band = band_half / k
 	vial = vial_start
+	# SYRINGE DRAW: the rack. It is EMPTY on the OR path, so syr_x stays SYR_X, one vial is drawn
+	# and nothing below this line behaves any differently than it did before the rack existed.
+	var rk = ctx.get("rack", [])
+	rack = (rk as Array).duplicate(true) if rk is Array else []
+	# --rack3 (reviews and lab shots): a full rack whether or not the fluids exist as items yet.
+	# COMMUNION WINE and TEQUILA are docs/POCKET_SPACES_2.md phases still in flight, so today a real
+	# player can only ever carry one fluid and the rack would never draw wider than one vial.
+	if "--rack3" in OS.get_cmdline_user_args():
+		rack = [{"kind": "anesthetic"}, {"kind": "communion_wine"}, {"kind": "tequila"}]
+	if rack.size() > 3:
+		rack.resize(3)
+	rack_sel = 0
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--racksel="):   # reviews and lab shots: open under that vial
+			rack_sel = clampi(int(a.trim_prefix("--racksel=")), 0, maxi(0, rack.size() - 1))
+	rack_vials.clear()
+	for i in rack.size():
+		rack_vials.append(vial_start)
+	syr_x = rack_x(rack_sel)
 	skin_phase = _rng.randf_range(0.0, TAU)
 	_build_veins()
 	grime_spots = InkScript.make_grime(_rng, Rect2(Vector2(40, 60), panel.tex_size() - Vector2(80, 120)))
@@ -326,8 +453,17 @@ func build_game() -> void:
 	if "--inject-debug" in OS.get_cmdline_user_args():
 		debug_overlay = true
 	if _stick_only():
-		fluid = target
-		vial = maxf(0.0, vial - target)
+		# SYRINGE DRAW: a syringe loaded in a corridor brings the level it ACTUALLY reached, and the
+		# bubbles it was left with. `target` above was worked out from THIS patient, so a standard
+		# dose meets the real band here and is scored against it exactly as a dose drawn at the
+		# table would be -- that is the whole cost of pre-loading. --stick has no syringe, so it
+		# keeps its perfect dose and its clean barrel.
+		var load_d := _loaded()
+		fluid = float(load_d.get("level", target)) if not load_d.is_empty() else target
+		carried.clear()
+		for b in (load_d.get("bubbles", []) as Array):
+			carried.append(float(b))
+		vial = maxf(0.0, vial - fluid)
 		phase = Phase.INJECT
 		bubbles.clear()
 	_refresh_tq()
@@ -443,9 +579,15 @@ func _spike(kind: String, vitals: float, reason: String, word := "", at := Vecto
 func keys() -> Array:
 	match phase:
 		Phase.DRAW:
+			# SYRINGE DRAW: with a rack, the first thing to say is which vial you are under.
+			if rack.size() > 1:
+				return [["A / D", "pick a vial"], ["Hold Space", "draw"], ["Enter", "done"]]
 			return [["Hold Space", "draw"], ["RMB / wheel", "put back"], ["Enter", "done"]]
 		Phase.DEBUBBLE:
-			return [["Click barrel", "flick"], ["Space", "purge"], ["Enter", "continue"]]
+			# SYRINGE DRAW: "continue" means "on to the patient" at the table and "cap it and go"
+			# in a corridor, so the corridor half says what it actually does.
+			return [["Click barrel", "flick"], ["Space", "purge"],
+				["Enter", "pocket it" if _draw_only() else "continue"]]
 		Phase.INJECT:
 			if locked:
 				return [["Hold Space", "push, gently"]]
@@ -483,6 +625,10 @@ func hud_line() -> String:
 func rules() -> Array:
 	match phase:
 		Phase.DRAW:
+			# SYRINGE DRAW: a corridor has no patient, so it cannot be their dose. The band here is
+			# the standard one, and meeting the real one is the table's problem.
+			if _draw_only():
+				return ["fill the syringe to a standard dose", "hold too long, or an empty vial, draws in air"]
 			return ["fill the syringe to this patient's dose", "hold too long, or an empty vial, draws in air"]
 		Phase.DEBUBBLE:
 			return ["clear every bubble before it goes in", "loose ones rise to the needle; stuck ones need a flick beside them"]
@@ -520,6 +666,12 @@ func stamp_for(word: String) -> Dictionary:
 	var I := ink
 	match word:
 		"DRAW!":
+			# SYRINGE DRAW: in a corridor there is no patient whose dose it could be. The band is
+			# the standard one, and what it costs to guess is felt later, at the table.
+			if _draw_only():
+				return {"goal": "Draw a standard dose into the green band.",
+					"lines": ["It speeds up the longer you hold.", "No patient here: the band is a guess at theirs."],
+					"prompt": "SPACE to start", "color": I.band_edge if I != null else Color.DARK_GREEN}
 			return {"goal": "Draw this patient's dose into the green band.",
 				"lines": ["It speeds up the longer you hold.", "Hold too long and it pulls in air."],
 				"prompt": "SPACE to start", "color": I.band_edge if I != null else Color.DARK_GREEN}
@@ -579,8 +731,13 @@ func _what_at(p: Vector2) -> String:
 		if on_skin(p):
 			return "skin"
 	if phase == Phase.DEBUBBLE:
-		if Rect2(SYR_X - BARREL_HALF - 34.0, BARREL_Y0 - 10.0, BARREL_HALF * 2.0 + 68.0, BARREL_Y1 - BARREL_Y0 + 14.0).has_point(p):
+		if Rect2(syr_x - BARREL_HALF - 34.0, BARREL_Y0 - 10.0, BARREL_HALF * 2.0 + 68.0, BARREL_Y1 - BARREL_Y0 + 14.0).has_point(p):
 			return "barrel"
+	if phase == Phase.DRAW and rack.size() > 1:
+		# SYRINGE DRAW: clicking a vial sends the syringe to it.
+		for i in rack.size():
+			if vial_rect(rack_x(i)).grow(10.0).has_point(p):
+				return "rack%d" % i
 	return ""
 
 
@@ -590,6 +747,14 @@ func _play_draw(buttons: int, edges: int, notches: int, delta: float) -> void:
 	if (edges & BUTTON_ENTER) != 0:
 		_to_debubble()
 		return
+	# SYRINGE DRAW: slide the syringe along the rack. A/D, or click the vial you want.
+	if rack.size() > 1:
+		if (edges & BUTTON_LEFT) != 0:
+			rack_select(_rack_step(-1))
+		if (edges & BUTTON_RIGHT) != 0:
+			rack_select(_rack_step(1))
+		if (edges & BUTTON_PRIMARY) != 0 and _press_what.begins_with("rack"):
+			rack_select(int(_press_what.substr(4)))
 	drawing = (buttons & BUTTON_ACTION) != 0
 	if drawing:
 		_hold += delta
@@ -603,8 +768,8 @@ func _play_draw(buttons: int, edges: int, notches: int, delta: float) -> void:
 			if _air_acc >= air_sustain and not _air_this_hold:
 				_air_this_hold = true
 				air_drawn += 1
-				bubbles.append([SYR_X + _rng.randf_range(-12.0, 12.0), FLUID_TOP + air_r + 2.0, air_r, 0.0, 0.0, 0, _rng.randf() * TAU])
-				_spike("air", cost_air, "Drew air into the syringe", "AIR!", Vector2(SYR_X + 120.0, FLUID_TOP + 20.0))
+				bubbles.append([syr_x + _rng.randf_range(-12.0, 12.0), FLUID_TOP + air_r + 2.0, air_r, 0.0, 0.0, 0, _rng.randf() * TAU])
+				_spike("air", cost_air, "Drew air into the syringe", "AIR!", Vector2(syr_x + 120.0, FLUID_TOP + 20.0))
 		else:
 			_air_acc = 0.0
 	else:
@@ -625,6 +790,10 @@ func _to_debubble() -> void:
 	phase = Phase.DEBUBBLE
 	drawing = false
 	_hold = 0.0
+	# The rack is behind us: the syringe is out of the vial and the bubbles below spawn around it.
+	syr_x = rack_x(rack_sel)
+	if rack_sel < rack_vials.size():
+		rack_vials[rack_sel] = vial
 	var n := clampi(int(round(float(_rng.randi_range(bubbles_min, bubbles_max)) * k)), 0, 12)
 	var stuck := mini(n, int(round(float(stuck_count) * k)))
 	var rmax := bubble_r_max * k
@@ -635,9 +804,9 @@ func _to_debubble() -> void:
 		var r := _rng.randf_range(bubble_r_min, maxf(bubble_r_min, rmax))
 		r = minf(r, maxf(3.0, (y1 - y0) * 0.5))
 		var st := 1 if i < stuck else 0
-		var x := _rng.randf_range(SYR_X - BARREL_HALF + r + 2.0, SYR_X + BARREL_HALF - r - 2.0)
+		var x := _rng.randf_range(syr_x - BARREL_HALF + r + 2.0, syr_x + BARREL_HALF - r - 2.0)
 		if st == 1:
-			x = (SYR_X - BARREL_HALF + r * 0.55) if i % 2 == 0 else (SYR_X + BARREL_HALF - r * 0.55)
+			x = (syr_x - BARREL_HALF + r * 0.55) if i % 2 == 0 else (syr_x + BARREL_HALF - r * 0.55)
 		fresh.append([x, _rng.randf_range(y0 + r, maxf(y0 + r, y1 - r)), r, 0.0, 0.0, st, _rng.randf() * TAU])
 	# The air bubble(s) from drawing too long go last, as the spec has it.
 	fresh.append_array(bubbles)
@@ -664,7 +833,7 @@ func _flick(p: Vector2) -> void:
 			if Vector2(float(b[0]), float(b[1])).distance_to(p) <= unstick_reach / k:
 				b[5] = 0
 				b[4] = -60.0
-				b[0] = clampf(float(b[0]), SYR_X - BARREL_HALF + float(b[2]), SYR_X + BARREL_HALF - float(b[2]))
+				b[0] = clampf(float(b[0]), syr_x - BARREL_HALF + float(b[2]), syr_x + BARREL_HALF - float(b[2]))
 			continue
 		b[4] = float(b[4]) - _rng.randf_range(flick_vy_min, flick_vy_max)
 		b[3] = float(b[3]) + _rng.randf_range(-flick_vx, flick_vx)
@@ -688,7 +857,7 @@ func _purge() -> void:
 		fluid = maxf(0.0, fluid - squirt_cost)
 		squirts += 1
 		# Nothing at the needle: that was drug, out on the floor.
-		_spike("squirt", 0.0, "Squirted the dose out", "WASTED!", Vector2(SYR_X + 130.0, HUB_Y - 40.0))
+		_spike("squirt", 0.0, "Squirted the dose out", "WASTED!", Vector2(syr_x + 130.0, HUB_Y - 40.0))
 	var low := fluid < target - band
 	if low and not _purge_low_warned:
 		_purge_low_warned = true
@@ -698,12 +867,21 @@ func _purge() -> void:
 
 
 func _to_inject() -> void:
-	phase = Phase.INJECT
 	carried.clear()
 	for b in bubbles:
 		carried.append(snappedf(float(b[2]), 0.1))
 	bubbles.clear()
 	_shown.clear()
+	# SYRINGE DRAW: the corridor half stops here. The barrel is full and flicked; there is nobody to
+	# stick. What it reached goes back to the syringe as the result, and the station writes it into
+	# the item's `x`. No dose is scored and nothing is billed: you have not touched a patient yet,
+	# so there is no patient to hurt. The bill comes at the table.
+	if _draw_only():
+		phase = Phase.DONE
+		quality = snappedf(clampf(1.0 - float(carried.size()) * pts_bubble / 100.0, 0.05, 1.0), 0.01)
+		arcade_finish({"drawn": snappedf(fluid, 0.001), "bubbles": carried.duplicate(), "fluid": rack_kind()})
+		return
+	phase = Phase.INJECT
 	billed = 0
 	_need_release = false
 	_space_t = 0.0
@@ -722,7 +900,7 @@ func _step_bubbles(delta: float) -> void:
 		b[4] = float(b[4]) * exp(-damp_y * dt)
 		var vx := float(b[3]) + sin(_t * 3.0 + float(b[6])) * wobble
 		var vy := float(b[4]) - (rise_base + rise_per_r * r)
-		b[0] = clampf(float(b[0]) + vx * dt, SYR_X - BARREL_HALF + r + 1.0, SYR_X + BARREL_HALF - r - 1.0)
+		b[0] = clampf(float(b[0]) + vx * dt, syr_x - BARREL_HALF + r + 1.0, syr_x + BARREL_HALF - r - 1.0)
 		b[1] = clampf(float(b[1]) + vy * dt, FLUID_TOP + r, maxf(FLUID_TOP + r, sy - r))
 	# Merging.
 	var i := 0
@@ -1015,9 +1193,11 @@ func _update_progress() -> void:
 	var p := 0.0
 	match phase:
 		Phase.DRAW:
-			p = 0.3 * clampf(fluid / maxf(0.01, target), 0.0, 1.0)
+			# SYRINGE DRAW: the corridor half is only these two stages, so they fill the whole bar
+			# rather than the first third of one that stops short of the end.
+			p = (0.7 if _draw_only() else 0.3) * clampf(fluid / maxf(0.01, target), 0.0, 1.0)
 		Phase.DEBUBBLE:
-			p = 0.35
+			p = 0.8 if _draw_only() else 0.35
 		Phase.INJECT:
 			p = 0.45 if not locked else 0.55 + 0.43 * clampf(1.0 - fluid / maxf(0.0001, dose), 0.0, 1.0)
 		Phase.DONE:
@@ -1050,6 +1230,11 @@ func animate(delta: float) -> void:
 	_t += delta
 	_push_snd -= delta
 	var e := 1.0 - exp(-18.0 * delta)
+	# SYRINGE DRAW: the syringe slides along the rack to the source it is under. Worked out from
+	# the replicated `rack_sel` on every machine, so an onlooker sees it move too; purely cosmetic,
+	# and a no-op with no rack (rack_x(0) is SYR_X, which is where the syringe already is).
+	var want := rack_x(rack_sel)
+	syr_x = want if absf(want - syr_x) < 1.0 else lerpf(syr_x, want, clampf(delta * 11.0, 0.0, 1.0))
 	# Spectators get the bubbles and the hand 20 times a second; ease toward them so they glide.
 	if _shown.size() != bubbles.size():
 		_shown = []
@@ -1089,10 +1274,10 @@ func react() -> void:
 		audio(draw_cue, -3.0, 0.2)
 	if int(now.pops) > int(_seen.pops):
 		audio(pop_cue, -6.0, 0.15)
-		_spray(Vector2(SYR_X, HUB_Y - 30.0), Color(0.55, 0.55, 0.55, 0.9), 5)
+		_spray(Vector2(syr_x, HUB_Y - 30.0), Color(0.55, 0.55, 0.55, 0.9), 5)
 	if int(now.squirts) > int(_seen.squirts):
 		audio(squirt_cue, -8.0, 0.2)
-		_spray(Vector2(SYR_X, NEEDLE_TIP_Y + 10.0), ink.drug if ink != null else Color.GREEN, 7)
+		_spray(Vector2(syr_x, NEEDLE_TIP_Y + 10.0), ink.drug if ink != null else Color.GREEN, 7)
 	if int(now.slaps) > int(_seen.slaps):
 		audio(slap_cue, -4.0, 0.1)
 		if b != null and b.has_method("stir"):
@@ -1149,6 +1334,7 @@ func paint_game(c: CanvasItem) -> void:
 	_prof_mark("grime", t0)
 	if _warm:
 		# Warmup: one of everything, so nothing draws for the first time mid-step.
+		_paint_syringe(c, false)   # SYRINGE DRAW: with the vials, which `true` below skips
 		_paint_syringe(c, true)
 		_paint_inject(c)
 		ink.warm(c)
@@ -1178,35 +1364,55 @@ func paint_game(c: CanvasItem) -> void:
 	shell.draw_keycaps(c, keys(), shell.draw_rules(c, rules()))
 
 
+## One source on the rack: the inverted vial, its draining pool, its crimp cap and its label. The
+## neck tapers down to wherever the syringe is standing, so the selected one visibly feeds it.
+func _paint_vial(c: CanvasItem, i: int) -> void:
+	var I := ink
+	var vx := rack_x(i)
+	var vr := vial_rect(vx)
+	var sel: bool = rack.is_empty() or i == rack_sel
+	var left := vial
+	if not sel:
+		left = float(rack_vials[i]) if i < rack_vials.size() else vial_start
+	var vbody := Rect2(cv(vr.position), vr.size * _u())
+	# Only the vial the syringe is under has a neck reaching down to it.
+	var neck := PackedVector2Array([cv(Vector2(vr.position.x + 12.0, vr.end.y)), cv(Vector2(vr.end.x - 12.0, vr.end.y)),
+		cv(Vector2((syr_x if sel else vx) + 16.0, VIAL_NECK_Y)), cv(Vector2((syr_x if sel else vx) - 16.0, VIAL_NECK_Y))])
+	c.draw_rect(vbody, Color(I.paper.darkened(0.04)))
+	var pool_top: float = lerpf(vr.end.y, vr.position.y + 6.0, clampf(left, 0.0, 1.0))
+	if left > 0.002:
+		c.draw_colored_polygon(neck, I.drug_pool if sel else Color(I.drug_pool, I.drug_pool.a * 0.6))
+		c.draw_rect(Rect2(cv(Vector2(vr.position.x + 2.0, pool_top)), Vector2(vr.size.x - 4.0, vr.end.y - pool_top) * _u()),
+			I.drug_pool if sel else Color(I.drug_pool, I.drug_pool.a * 0.6))
+		I.seg(c, cv(Vector2(vr.position.x + 4.0, pool_top)), cv(Vector2(vr.end.x - 4.0, pool_top)), I.meniscus, I.detail, 700 + i * 8)
+	I.rect(c, vbody, I.ink, I.outline if sel else I.detail, 701 + i * 8)
+	I.line(c, neck, I.ink, I.outline if sel else I.detail, 702 + i * 8, false)
+	# The crimp cap at the neck, and the label.
+	I.rect(c, Rect2(cv(Vector2((syr_x if sel else vx) - 19.0, VIAL_NECK_Y - 6.0)), Vector2(38.0, 12.0) * _u()), I.ink, I.detail, 703 + i * 8, Color(I.label, 0.35))
+	I.rect(c, Rect2(cv(Vector2(vr.position.x + 4.0, vr.position.y + 10.0)), Vector2(vr.size.x - 8.0, 24.0) * _u()), I.ink_soft, I.detail, 704 + i * 8, Color(I.paper, 0.9))
+	I.text(c, cv(Vector2(vx, vr.position.y + 27.0)), rack_label(i), 10.5, I.ink, 1)
+	if left <= 0.002:
+		I.text(c, cv(Vector2(vx, vr.end.y + 16.0)), "empty", 11.0, Color(I.deep_red, 0.85), 1)
+
+
 ## The needle-up syringe in its inverted vial: stages 1 and 2.
 func _paint_syringe(c: CanvasItem, debubble: bool) -> void:
 	var I := ink
 	var sy := seal_y()
-	var bx0 := SYR_X - BARREL_HALF
-	var bx1 := SYR_X + BARREL_HALF
-	# The vial, upside down, with its pool at the neck end draining as you draw.
+	var bx0 := syr_x - BARREL_HALF
+	var bx1 := syr_x + BARREL_HALF
+	# SYRINGE DRAW -- THE RACK. Every source across the top, upside down, each pool draining as you
+	# draw from it. With no rack that is one vial at the centre with the old label, which is exactly
+	# what this page drew before the rack existed: the OR's fallback is untouched.
 	if not debubble:
-		var vbody := Rect2(cv(VIAL.position), VIAL.size * _u())
-		var neck := PackedVector2Array([cv(Vector2(VIAL.position.x + 12.0, VIAL.end.y)), cv(Vector2(VIAL.end.x - 12.0, VIAL.end.y)),
-			cv(Vector2(SYR_X + 16.0, VIAL_NECK_Y)), cv(Vector2(SYR_X - 16.0, VIAL_NECK_Y))])
-		c.draw_rect(vbody, Color(I.paper.darkened(0.04)))
-		var pool_top: float = lerpf(VIAL.end.y, VIAL.position.y + 6.0, clampf(vial, 0.0, 1.0))
-		if vial > 0.002:
-			c.draw_colored_polygon(neck, I.drug_pool)
-			c.draw_rect(Rect2(cv(Vector2(VIAL.position.x + 2.0, pool_top)), Vector2(VIAL.size.x - 4.0, VIAL.end.y - pool_top) * _u()), I.drug_pool)
-			I.seg(c, cv(Vector2(VIAL.position.x + 4.0, pool_top)), cv(Vector2(VIAL.end.x - 4.0, pool_top)), I.meniscus, I.detail, 31)
-		I.rect(c, vbody, I.ink, I.outline, 32)
-		I.line(c, neck, I.ink, I.outline, 33, false)
-		# The crimp cap at the neck, and the label.
-		I.rect(c, Rect2(cv(Vector2(SYR_X - 19.0, VIAL_NECK_Y - 6.0)), Vector2(38.0, 12.0) * _u()), I.ink, I.detail, 34, Color(I.label, 0.35))
-		I.rect(c, Rect2(cv(Vector2(VIAL.position.x + 4.0, VIAL.position.y + 10.0)), Vector2(VIAL.size.x - 8.0, 24.0) * _u()), I.ink_soft, I.detail, 35, Color(I.paper, 0.9))
-		I.text(c, cv(Vector2(SYR_X, VIAL.position.y + 27.0)), "SOMNUL-9", 10.5, I.ink, 1)
+		for i in rack_size():
+			_paint_vial(c, i)
 	# The needle, up through the neck.
 	var needle_top := NEEDLE_TIP_Y if not debubble else HUB_Y - 70.0
-	I.seg(c, cv(Vector2(SYR_X, HUB_Y)), cv(Vector2(SYR_X, needle_top)), I.ink, I.detail, 36)
-	I.seg(c, cv(Vector2(SYR_X, needle_top)), cv(Vector2(SYR_X + 4.0, needle_top + 7.0)), I.ink, I.detail * 0.8, 37)
+	I.seg(c, cv(Vector2(syr_x, HUB_Y)), cv(Vector2(syr_x, needle_top)), I.ink, I.detail, 36)
+	I.seg(c, cv(Vector2(syr_x, needle_top)), cv(Vector2(syr_x + 4.0, needle_top + 7.0)), I.ink, I.detail * 0.8, 37)
 	# The hub.
-	I.rect(c, Rect2(cv(Vector2(SYR_X - 12.0, HUB_Y)), Vector2(24.0, BARREL_Y0 - HUB_Y) * _u()), I.ink, I.outline, 38, Color(I.paper.darkened(0.06)))
+	I.rect(c, Rect2(cv(Vector2(syr_x - 12.0, HUB_Y)), Vector2(24.0, BARREL_Y0 - HUB_Y) * _u()), I.ink, I.outline, 38, Color(I.paper.darkened(0.06)))
 	# The barrel: fluid from the needle end down to the seal, the band, the ticks.
 	var inner := Rect2(cv(Vector2(bx0, FLUID_TOP)), Vector2(BARREL_HALF * 2.0, sy - FLUID_TOP) * _u())
 	c.draw_rect(Rect2(cv(Vector2(bx0, BARREL_Y0)), Vector2(BARREL_HALF * 2.0, BARREL_Y1 - BARREL_Y0) * _u()), Color(1, 1, 1, 0.25))
@@ -1231,8 +1437,8 @@ func _paint_syringe(c: CanvasItem, debubble: bool) -> void:
 	I.seg(c, cv(Vector2(bx0 - 26.0, BARREL_Y1)), cv(Vector2(bx1 + 26.0, BARREL_Y1)), I.ink, I.heavy, 44)
 	I.rect(c, Rect2(cv(Vector2(bx0 + 2.0, sy)), Vector2(BARREL_HALF * 2.0 - 4.0, 10.0) * _u()), I.ink, I.detail, 45, Color(I.ink_soft, 0.85))
 	var py := pad_y()
-	I.seg(c, cv(Vector2(SYR_X, sy + 10.0)), cv(Vector2(SYR_X, py)), I.ink, I.outline, 46)
-	I.rect(c, Rect2(cv(Vector2(SYR_X - 40.0, py)), Vector2(80.0, 12.0) * _u()), I.ink, I.outline, 47, Color(I.paper.darkened(0.1)))
+	I.seg(c, cv(Vector2(syr_x, sy + 10.0)), cv(Vector2(syr_x, py)), I.ink, I.outline, 46)
+	I.rect(c, Rect2(cv(Vector2(syr_x - 40.0, py)), Vector2(80.0, 12.0) * _u()), I.ink, I.outline, 47, Color(I.paper.darkened(0.1)))
 	I.seg(c, cv(Vector2(bx0 + 4.0, FLUID_TOP)), cv(Vector2(bx1 - 4.0, FLUID_TOP)), I.meniscus, I.detail * 0.7, 48)
 	# Bubbles.
 	for i in _shown.size():
@@ -1484,12 +1690,17 @@ func _paint_meter(c: CanvasItem) -> void:
 ## one draws nothing new.
 func warm_all() -> void:
 	_warm = true
+	# SYRINGE DRAW: a full rack, so the three vials, their labels and the "empty" line are all
+	# drawn once here and never for the first time in front of a player (CLAUDE.md, warmup).
+	rack = [{"kind": "anesthetic"}, {"kind": "communion_wine"}, {"kind": "tequila"}]
+	rack_vials = [vial_start, vial_start, 0.0]
+	rack_sel = 0
 	if shell != null:
 		shell.mistake("MISS!", shell.area.get_center(), true, 0)
 	vis = 1.0
 	held = true
 	flashed = true
-	bubbles = [[SYR_X, 300.0, 9.0, 0.0, 0.0, 0, 0.0], [SYR_X - 40.0, 350.0, 7.0, 0.0, 0.0, 1, 0.0]]
+	bubbles = [[syr_x, 300.0, 9.0, 0.0, 0.0, 0, 0.0], [syr_x - 40.0, 350.0, 7.0, 0.0, 0.0, 1, 0.0]]
 	punctures = [[300.0, 420.0]]
 	tq_on = true
 	tq_left = tq_time * 0.5
@@ -1513,6 +1724,9 @@ func net_pack() -> Dictionary:
 		"pu": punctures, "rp": ripples, "dt": deliver_t,
 		"ms": misses, "fp": fast_pushes, "sl": slaps, "po": pops, "sq": squirts,
 		"se": snappedf(sedation, 0.01),
+		# SYRINGE DRAW: which source the syringe is under, and what is left in each. The slide
+		# itself is cosmetic and worked out from these, so it does not go on the wire.
+		"rs": rack_sel, "rv": rack_vials.duplicate(),
 	}
 
 
@@ -1546,6 +1760,13 @@ func net_apply(s: Dictionary) -> void:
 				"ca": carried = (v as Array).duplicate()
 				"pu": punctures = (v as Array).duplicate(true)
 				"rp": ripples = (v as Array).duplicate(true)
+	# SYRINGE DRAW: an onlooker's syringe stands under the same vial as the operator's.
+	rack_sel = clampi(int(s.get("rs", rack_sel)), 0, maxi(0, rack.size() - 1))
+	var rv = s.get("rv", null)
+	if rv is Array:
+		rack_vials = (rv as Array).duplicate()
+	if phase != Phase.DRAW:
+		syr_x = rack_x(rack_sel)
 	billed = int(s.get("bl", billed))
 	vis = float(s.get("vs", vis))
 	tq_on = bool(s.get("tq", tq_on))
@@ -1573,7 +1794,7 @@ func bot_input(t: float, skill: float) -> Dictionary:
 	skill = clampf(skill, 0.0, 1.0)
 	if _b.is_empty():
 		_b = {"t": 0.0, "wait": 0.0, "st": 0, "tries": 0, "misses0": 0, "aim_i": 0, "click": false, "prev_lmb": false}
-	var out := {"cursor": metres_of_ref(Vector2(SYR_X, 360.0)), "buttons": 0}
+	var out := {"cursor": metres_of_ref(Vector2(syr_x, 360.0)), "buttons": 0}
 	# A stamp card: take it down with Enter (which is not an action) once it will go.
 	if stamp_waiting():
 		if card_left <= 0.0 and not frozen:
@@ -1609,7 +1830,7 @@ func _bot_click(p: Vector2, out: Dictionary) -> Dictionary:
 
 
 func _bot_draw(skill: float, out: Dictionary) -> Dictionary:
-	out.cursor = metres_of_ref(Vector2(SYR_X, 380.0))
+	out.cursor = metres_of_ref(Vector2(syr_x, 380.0))
 	# A sloppy hand keeps pulling well past the line.
 	var aim := target + lerpf(0.10, 0.0, skill)
 	if skill < 0.5:
@@ -1674,7 +1895,7 @@ func _bot_debubble(skill: float, out: Dictionary) -> Dictionary:
 			return out
 	# Otherwise a flick every so often to hurry them up.
 	_b.wait = 0.7
-	return _bot_click(Vector2(SYR_X, BARREL_Y1 - 30.0), out)
+	return _bot_click(Vector2(syr_x, BARREL_Y1 - 30.0), out)
 
 
 ## Where the bot means to put the needle in: [grip, angle, vein index, x, the point the tip aims at].

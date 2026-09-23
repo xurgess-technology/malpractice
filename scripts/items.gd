@@ -160,6 +160,23 @@ const ITEMS := {
 		"where": "Starts on the OR's storage shelves.",
 		"handling": "Reusable. Scoops the eye out of the socket.",
 	},
+	## SYRINGE DRAW (docs/ANESTHETIC_INJECTION_SPEC.md 9): the barrel you load anywhere and stick at
+	## the table. A batch consumable like the vials: one slot is several syringes, and a syringe is
+	## spent the moment its dose goes into a patient. What a LOADED one holds rides the slot's `x`
+	## string (scripts/syringe/syringes.gd), so only the top syringe of a batch is ever loaded.
+	"syringe": {
+		"name": "Syringe",
+		"short": "Syringes",
+		"surgical": true,
+		"consumable": true,
+		"batch": [2, 3],
+		"fragile": false,
+		"found": {"med_fridge": 0.35, "drawer_unit": 0.4, "station_drawers": 0.15, "loose": 0.1},
+		"loose_surfaces": ["counter", "tray"],
+		"real_use": "A barrel, a plunger and a hollow needle. Drawn from a vial ahead of time so the drug is ready the moment it is needed; the plunger is marked so the dose can be read off the barrel.",
+		"where": "Medicine fridges and steel drawer units, some in nurse station drawers, now and then a loose one on a counter or tray.",
+		"handling": "Consumable. Found in batches of 2 to 3. E while holding one loads it from a fluid you are carrying; it is spent once its dose is in a patient.",
+	},
 	"specimen_vat": {
 		"name": "Specimen vat",
 		"short": "Specimen vats",

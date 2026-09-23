@@ -128,6 +128,15 @@ How to run things is at the bottom of this file.
   that depends on a short-lived state being sampled at 20 Hz is vulnerable to them, so this is worth
   its own look before the next netcode feature leans on snapshot timing.
 
+## 1k. spawncheck: 600 suture_kit failures
+
+- **Found 2026-09-22** by the `syringe-draw` task, which generalised the loose-supply spawner and
+  wanted a clean baseline. **Confirmed identical on clean `main`**, so it is pre-existing and not
+  that branch's doing. It had never been written down.
+- Nobody has looked at the cause. Worth knowing that `suture_kit` is the newest of the loose
+  supplies -- SUTURE! (0.10.4) added the closing step that needs it, and 0.10.33 generalised the
+  spawner that places it -- so if this turns out to date from either, it is young.
+
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
 
 - **Command:** `godot --headless --path . -s tools/mapcheck.gd`

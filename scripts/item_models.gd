@@ -95,6 +95,7 @@ static func make(kind: String, count: int = 1) -> Node3D:
 	root.name = "Model_%s" % kind
 	match kind:
 		"anesthetic": _vials(root, clampi(count, 1, 6))
+		"syringe": _syringes(root, clampi(count, 1, 6))   # SYRINGE DRAW
 		"gauze": _gauze(root, clampi(count, 1, 6))
 		"forceps": _forceps(root)
 		"tourniquet": _tourniquet(root)
@@ -179,6 +180,7 @@ static func footprint(kind: String) -> Vector3:
 			return (asset_transform(kind) * mesh.get_aabb()).size
 	match kind:
 		"anesthetic": return Vector3(0.14, 0.09, 0.08)
+		"syringe": return Vector3(0.17, 0.04, 0.09)
 		"gauze": return Vector3(0.22, 0.1, 0.12)
 		"forceps": return Vector3(0.2, 0.03, 0.08)
 		"tourniquet": return Vector3(0.28, 0.05, 0.1)
@@ -553,6 +555,29 @@ static func _vials(root: Node3D, n: int) -> void:
 		_add(v, _cyl(0.0145, 0.016, label), Vector3(0, 0.03, 0))
 		_add(v, _cyl(0.009, 0.012, cap), Vector3(0, 0.056, 0))
 		_add(root, v, Vector3(x, 0, z), Vector3(0, i * 37.0, 0))
+
+
+## SYRINGE DRAW: syringes lying side by side, barrel along X with the needle at +X (the grip in
+## scripts/hands/grips.gd points that forward, so a held one aims where you are looking).
+static func _syringes(root: Node3D, n: int) -> void:
+	var glass := _glass(Color(0.82, 0.9, 0.95))
+	var plunger := _mat(Color(0.25, 0.28, 0.32), 0.7)
+	var collar := _mat(Color(0.86, 0.88, 0.9), 0.8)
+	var hub := _mat(Color(0.75, 0.55, 0.15), 0.4)
+	var steel := _mat(Color(0.82, 0.84, 0.88), 0.25)
+	for i in n:
+		var s := Node3D.new()
+		# barrel, then the thumb rest and plunger rod out the back, then hub and needle out the front
+		_add(s, _cyl(0.0115, 0.075, glass, 12), Vector3(0.0, 0.0, 0.0), Vector3(0, 0, 90))
+		_add(s, _cyl(0.0105, 0.030, plunger, 10), Vector3(-0.022, 0.0, 0.0), Vector3(0, 0, 90))
+		_add(s, _cyl(0.0035, 0.034, plunger, 8), Vector3(-0.054, 0.0, 0.0), Vector3(0, 0, 90))
+		_add(s, _cyl(0.014, 0.005, collar, 12), Vector3(-0.072, 0.0, 0.0), Vector3(0, 0, 90))
+		_add(s, _cyl(0.0125, 0.004, collar, 12), Vector3(0.0385, 0.0, 0.0), Vector3(0, 0, 90))
+		_add(s, _cyl(0.006, 0.012, hub, 8), Vector3(0.047, 0.0, 0.0), Vector3(0, 0, 90))
+		_add(s, _cyl(0.0013, 0.036, steel, 6), Vector3(0.071, 0.0, 0.0), Vector3(0, 0, 90))
+		var row := i % 3
+		var layer := i / 3
+		_add(root, s, Vector3(0.0, 0.013 + layer * 0.026, (row - 1) * 0.028), Vector3(0, (i * 7) % 9 - 4, 0))
 
 
 static func _gauze(root: Node3D, n: int) -> void:

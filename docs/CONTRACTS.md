@@ -353,6 +353,59 @@ are easy to miss:
 `bot_input()`, and can take screenshots:
 `godot --path . tools/minigame_lab.tscn -- --game=<id> [--patient=bob|seal] [--ailment=...] [--variant=...] [--bot=1.0|0.0] [--seconds=N] [--shot=res://tools/lab_shots/name.png] [--headless-report]`.
 
+### A step away from a patient (SYRINGE DRAW, 2026-09-22, docs/ANESTHETIC_INJECTION_SPEC.md §9)
+
+A step normally happens at a marker on a body. Two hooks let a **stand-in game** (the
+`scripts/downed/player_surgery.gd` pattern: a node that exposes the surface the surgery system
+reads and runs its own copy of it) put one somewhere else instead. Both are opt-in by
+`has_method`, so a game that does not define them behaves exactly as before.
+
+- `site_override() -> Transform3D` — **the second anchoring mode.** Pins the site itself rather
+  than looking it up on a patient body. Local +Y is "out of the body", local +Z is back toward the
+  operator, exactly as a body site. Everything downstream is unchanged: the panel still lifts
+  `panel_lift` along +Y and still orients **once** at open time to the leaned-in camera, the
+  camera pose still comes from the site, the cursor still projects onto the panel's plane. Neither
+  `surgery_panel.gd` nor the OR path can tell which kind of site it got.
+- `extra_ctx() -> Dictionary` — merged over the context last, so a stand-in game can add or
+  override any knob. The syringe station uses it for `draw_only`; a table hands the sedate step a
+  `loaded` syringe's contents the same way.
+
+Freeze and hand-over need nothing new: the arcade's "step away and the game stops dead, whoever
+picks it up gets a READY countdown" keys off `operating`, not off a table. **The site must be
+frozen at open** for that to hold, though: `_host_tick`'s walk-away test measures the operator
+against `table_pos()`, so a site that followed the player could never be walked away from. The
+syringe station works its site out once, in `begin()`, and replicates it.
+
+**A per-player case** (SYRINGE DRAW, 2026-09-22). A table is one shared thing; a handheld case
+belongs to the item in your hand, and several players can have one open at once. So:
+`scripts/syringe/syringe_stations.gd`, child `"SyringeStations"` of Game on every machine, is a map
+of `peer_id -> scripts/syringe/syringe_station.gd`, one stand-in game each.
+
+- `game.syringe_stations.hand_prompt(p)` / `hand_open(p)` — the `"syringe_hand"` pseudo-target's
+  two halves, the local crosshair line and the host's action (`player._update_aim` →
+  `game.player_pressed_interact`, the `"vat_hand"` pattern).
+- **The stations carry no RPCs.** Node paths are how RPCs are addressed, and a node made on demand
+  may not exist on the far machine yet, so the manager at its fixed path is the only thing that
+  talks. A report's sender id **is** its station (a station's operator is its owner, by
+  construction), which both routes it and stops a client driving anybody else's draw.
+- Host authoritative: the host makes a station on the first draw and keeps it for the shift
+  (freeing it at once would cut off the surgery camera's blend home). Clients make theirs from the
+  replicated map (`"sy"` in `_global_fields`), so an onlooker has the node a teammate's panel hangs
+  off and can watch them load a syringe from across the room.
+- `surgery_system` latches a fingerprint of the operator's loaded syringe when they `begin()` (and
+  on an onlooker when the operator replicates in) into the minigame key, and never again — so a
+  step that takes a loaded syringe is rebuilt for it once, and stepping away afterwards still
+  freezes the game rather than destroying it.
+- `Syringes.accepts_loaded(step)` / `held_loaded(p)` / `spend_loaded(p)`: which steps take a loaded
+  syringe instead of the item they name, what the operator is holding, and spending it (one off the
+  count and the `x` cleared, which is what makes a syringe one-use).
+- Nothing is billed in a corridor: a handheld case's vitals sit at 100, a botch only says its line,
+  and the surgery HUD leaves its corner number off for a `handheld` ailment.
+
+Procedures gets a matching flag: `handheld: true` on an ailment means it is something you do to a
+thing in your hand, not an operation on anybody. `Procedures.is_handheld()`; it is kept off the
+patient tables' roll (`patient_ailments()`) and out of the terminal's procedure lists.
+
 ## Minigames (minigames worker, sweep 2)
 
 The five steps no longer ask the player to read gauges or match sliders; the patient and the

@@ -103,6 +103,20 @@ const AILMENTS := {
 			{"id": "stitch", "label": "Stitch the wound closed", "item": "suture_kit", "uses": 1, "game": "stitches", "site": "gash"},
 		],
 	},
+	# SYRINGE DRAW: not a procedure on anybody -- the one "step" you play standing in a corridor with
+	# a syringe in your hand, which loads it. `handheld` keeps it off the patient tables' roll AND
+	# out of the terminal's procedure list, because it is an action, not an operation. It runs
+	# through the ordinary surgery system (scripts/syringe/syringe_station.gd stands in for the
+	# game), so it gets the panel, the camera, the freeze and the hand-over for free; its site is
+	# not on a body but in front of the player.
+	"syringe_draw": {
+		"name": "Loading a syringe",
+		"code": "SY",
+		"handheld": true,
+		"steps": [
+			{"id": "load", "label": "Load the syringe", "item": "syringe", "uses": 0, "game": "anesthetic", "site": "injection"},
+		],
+	},
 	# GRAFTING chunk C (docs/GRAFTING.md): Eyeball Grafting on a surgeon who strapped themselves to a
 	# table, with the vat holding the eye going in on that table's stand. `player_only` keeps it off
 	# the patient tables' roll. No botches (the case sets `no_fail`), and no anesthetic: the patient
@@ -233,7 +247,7 @@ static func patient_ailments() -> Array:
 	var out := []
 	for id in AILMENTS.keys():
 		var a: Dictionary = AILMENTS[id]
-		if not bool(a.get("player_only", false)) and not bool(a.get("monster_only", false)) 				and not bool(a.get("test_only", false)):
+		if not bool(a.get("player_only", false)) and not bool(a.get("monster_only", false)) 				and not bool(a.get("test_only", false)) and not bool(a.get("handheld", false)):
 			out.append(id)
 	out.sort()
 	return out
@@ -253,6 +267,13 @@ static func dev_ailments() -> Array:
 ## PANEL TESTBED: a testbed procedure, never rolled into a shift.
 static func is_test_only(ailment_id: String) -> bool:
 	return bool(AILMENTS.get(ailment_id, {}).get("test_only", false))
+
+
+## SYRINGE DRAW: an "ailment" that is really something you do to a thing in your hand, not to a
+## patient. It runs on the surgery system like any step, but it is nobody's operation, so the
+## terminal's procedure list and the tables' roll both leave it alone.
+static func is_handheld(ailment_id: String) -> bool:
+	return bool(AILMENTS.get(ailment_id, {}).get("handheld", false))
 
 
 ## Whether a case of this ailment arrives already sedated (nothing to inject, and no stirring).
