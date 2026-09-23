@@ -582,6 +582,11 @@ left below is what still applies to the shared strapped-monster infrastructure.
   the danger heartbeat counts only monsters in the same space. Hearing does cross: a noise within 26 m of
   a seam is mirrored into the other copy, pulled into the stub (the Sonographer comes through and then
   hears the real noise).
+  **Still open, and wider than it was** (POCKET_SPACES_2 phase 1): this and the Hive-sight half of it are
+  properties of the seam, not of any one space, and the seam system is unchanged by that sweep. So they
+  apply to **five** pocket spaces now, not two — the Factory and the Restaurant plus the Natatorium, the
+  Chapel and the Laundromat that phases 2-4 add. The Chapel is the one to watch: its light *is* votive
+  candlelight, so whatever the mirrors fail to carry across a seam is most visible there.
 - **Mirrors copy meshes, not animation state**: a mirror shares the body's skeleton, so it animates, but
   anything drawn without a MeshInstance3D (particles, decals, Label3D name tags) does not show, and blend
   shape weights (the human model's GashOpen) are not copied. The skinned human bodies mirror correctly
@@ -597,8 +602,14 @@ left below is what still applies to the shared strapped-monster infrastructure.
 - **The Restaurant's fourth entrance wall is the kitchen's back wall**, so an entrance can open into the
   kitchen between the stove and the sink (only when the dining room's walls are taken).
 - **The pockets add loot, containers and monster spawn points** to the map's lists, so a map with a pocket
-  has more loot, and a Sonographer or a Night Nurse may spawn inside the pocket. `Monster.random_nav_point`
-  can pick a pocket point, so hospital monsters sometimes wander into a pocket through a seam.
+  has more loot, and a Sonographer or a Night Nurse may spawn inside the pocket. Spawning inside one is
+  intended and stays.
+  **Fixed 2026-09-22** (POCKET_SPACES_2 phase 1): idle wander no longer crosses a seam. It used to, because
+  `Monster.random_nav_point` samples the whole navigation map and the pocket's region is part of it, and
+  because the Night Nurse's vanish asks for a point up to 400 m away — far enough to reach the pocket
+  origins out at tile 800. `Game.monster_may_wander_to` now takes the monster's own position and rejects
+  any goal in a different space, or in the dead half of a stub. Chases are untouched: they steer at the
+  quarry, not at a wander goal, so a monster still follows a player through a seam.
 - **The Factory reads dim**: pools of high-bay light 12-20 m apart and the flashlight; the far walls are
   lost in the (per-pocket) fog on purpose. Its machines are primitive silhouettes.
 - **The two copies of a stub are not pixel-identical**: the gameshot comparison (same pose in both copies,

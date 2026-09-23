@@ -325,7 +325,7 @@ func _draw_unequip_button(r: Rect2, me) -> void:
 static func unequip_reason(me) -> String:
 	if not me.alive or me.downed:
 		return "Not now"
-	if bool(me.get("rocketing")) or bool(me.get("_remote_rocket")) or not me.is_on_floor():
+	if bool(me.call("rocket_burning")) or not me.is_on_floor():
 		return "Not in mid-air"
 	if me.carrying != 0 or me.operating:
 		return "Hands busy"

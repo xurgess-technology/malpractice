@@ -257,6 +257,14 @@ func _hear(g: Node) -> Dictionary:
 	var best_margin := 0.0
 	var deaf: bool = m.calm > 0.0 or m.mode == M.Mode.STUNNED or m.mode == M.Mode.RETREAT
 	var ear: Vector3 = m.global_position + Vector3.UP * 1.55
+	# POCKETS 2 phase 1: a pocket space may declare an ambient_noise_level — running machines, a
+	# tiled echo. Standing in it, the floor is subtracted from every noise's loudness before the
+	# existing reach maths, so quiet things (a walking footstep is 0.25) are masked outright and
+	# loud ones simply do not carry as far. A space with no floor, which is every space today,
+	# gives 0.0 here and the arithmetic below is untouched.
+	var floor_level := 0.0
+	if g.get("pockets") != null:
+		floor_level = g.pockets.ambient_noise_at(m.global_position)
 	for n in noises:
 		var t := float(n.time)
 		if t <= heard_time:
@@ -265,7 +273,9 @@ func _hear(g: Node) -> Dictionary:
 		if deaf:
 			continue
 		var pos: Vector3 = n.pos
-		var reach := float(n.loudness) * HEAR_PER_LOUDNESS
+		# `loudness` is the raw value when there is no floor, so nothing below changes at 0.
+		var loudness := maxf(float(n.loudness) - floor_level, 0.0)
+		var reach := loudness * HEAR_PER_LOUDNESS
 		# DOORS HOOK: closed doors between the noise and its head muffle it.
 		var doors = g.get("doors")
 		if doors != null:
@@ -278,15 +288,19 @@ func _hear(g: Node) -> Dictionary:
 		var margin := reach - d
 		# Quiet noises fill the meter, scaled by loudness and how near they were; a loud one
 		# needs no echo at all, so it fills nothing and makes it certain instead.
-		if float(n.loudness) < LOUD:
+		if loudness < LOUD:
 			var near := 1.0 - clampf(d / maxf(reach, 0.001), 0.0, 1.0)
-			suspicion = clampf(suspicion + float(n.loudness) * (SUSP_NEAR_FLOOR + (1.0 - SUSP_NEAR_FLOOR) * near) * SUSP_GAIN, 0.0, 1.0)
+			suspicion = clampf(suspicion + loudness * (SUSP_NEAR_FLOOR + (1.0 - SUSP_NEAR_FLOOR) * near) * SUSP_GAIN, 0.0, 1.0)
 			if suspicion >= 1.0:
 				_full = true
 		_note_quarry_noise(n)
 		if margin > best_margin:
 			best_margin = margin
-			best = n
+			# Under a floor the noise it reacts to is the masked one, so _react's LOUD test sees
+			# what it actually heard. With no floor this is the very same dictionary as before.
+			best = n if floor_level <= 0.0 else n.duplicate()
+			if floor_level > 0.0:
+				best["loudness"] = loudness
 	heard_time = newest
 	return best
 

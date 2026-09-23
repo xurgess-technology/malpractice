@@ -24,8 +24,17 @@ const StubScript := preload("res://scripts/level/pockets/stub.gd")
 const KINDS := ["factory", "restaurant"]
 ## Zone id of stub tiles (wings are 2..5, outdoor 9).
 const ZONE_STUB := 10
-## Chance a map (with doors: a shift) gets a pocket at all.
-const CHANCE := 0.5
+
+## POCKETS 2 phase 1: the chance a map (with doors: a shift) gets a pocket at all. The design doc
+## wants a low base chance with higher odds in deeper wings, not the flat 0.5 this used to roll.
+## Each wing gets its own chance, BASE_CHANCE for the shallowest and DEPTH_STEP more per level of
+## depth; the map's chance is the chance that at least one of them lands, capped at MAX_CHANCE.
+## With the usual three wings (depths 1-3) that is 4% / 9% / 14%, so about a quarter of shifts.
+## Measure, don't reason: `godot --headless --path . --script tools/pocketrate.gd`.
+const BASE_CHANCE := 0.04
+const DEPTH_STEP := 0.05
+const MAX_CHANCE := 0.45
+
 const MIN_ENTRANCES := 2
 const MAX_ENTRANCES := 3
 const MAX_W := 14
@@ -37,6 +46,29 @@ static var force_entrances := 0
 const RESERVED := "__pocket_stub"
 ## Tools: why the last roll that wanted a pocket placed none ("" when it did).
 static var last_failure := ""
+## POCKETS 2 phase 1, no repeats: the kind the run has most recently seen, kept out of the next
+## roll so the same space never turns up two shifts running. The host owns it and replicates it
+## with the shift's globals ("px"), because clients generate their own copy of the map and would
+## build a different hospital if they rolled from a different pool. "" excludes nothing.
+static var exclude_kind := ""
+
+
+## The chance this map gets a pocket, from the wing definitions (`defs`, each with a `depth`).
+static func chance_for(defs: Array) -> float:
+	var miss := 1.0
+	for d in defs:
+		var c := clampf(BASE_CHANCE + DEPTH_STEP * float(int(d.depth) - 1), 0.0, 1.0)
+		miss *= 1.0 - c
+	return clampf(1.0 - miss, 0.0, MAX_CHANCE)
+
+
+## The kinds this roll may pick from: everything but the one the run just had.
+static func pool() -> Array:
+	var out: Array = []
+	for k in KINDS:
+		if k != exclude_kind:
+			out.append(k)
+	return out if not out.is_empty() else KINDS.duplicate()
 
 ## `gens`: the wing generators (WingGen, hallways carved, no room kinds yet), `defs`: the wing
 ## definitions, `seed`: the map's stream. Slots the stubs take are marked RESERVED so MapGen gives
@@ -45,8 +77,9 @@ static func plan(st: S, gens: Array, defs: Array, seed: int) -> void:
 	var rng := Rng.new((seed * 1103515245 + 0x70C4E7) & 0x7FFFFFFF)
 	var kind := ""
 	if force_kind == "":
-		if rng.chance(CHANCE):
-			kind = KINDS[rng.rint(0, KINDS.size() - 1)]
+		if rng.chance(chance_for(defs)):
+			var pick := pool()
+			kind = pick[rng.rint(0, pick.size() - 1)]
 	elif KINDS.has(force_kind):
 		kind = force_kind
 		rng.nextf()

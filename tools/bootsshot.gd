@@ -69,7 +69,7 @@ func _run() -> void:
 
 	# Flat out, burning (the replicated bits a remote copy would have).
 	d._remote_dive_air = true
-	d._remote_rocket = true
+	d._burn_hold = 99.0   # the held burn a remote copy runs on, kept lit for the shot
 	d.global_position = spot + Vector3.UP * 0.45
 	if d._rocket_fx != null:
 		d._rocket_fx._heading = -d.global_basis.z

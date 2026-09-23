@@ -260,6 +260,27 @@ func _run() -> void:
 		"a scalpel, an eye spoon and forceps wait in the OR's storage (forceps %d)" % game.shelf_count("forceps"))
 	_check(not vats.spot_free(0) and not vats.spot_free(2) and vats.spot_free(3), "spots 0-2 hold vats, 3-5 are free")
 
+	# ---- a vat on the bench can actually be reached where it stands
+	# The vat bench is 2.3 m of shelving over a counter, and a collider that tall used to swallow the
+	# counter top: the vats stood inside the piece's own box, so the aim ray hit the bench every time
+	# and E never saw them. They read as "not pick up-able". The bench now collides only to the
+	# counter top (PieceDefs "collide_h"), which is what puts the vats back out in the open air.
+	var cam_was: String = String(Settings.get_value("camera"))
+	Settings.set_value("camera", "first_person")
+	await _seconds(0.6)
+	var bench_vat: WorldItem = vat_items[0]
+	var bv_id: int = bench_vat.item_id
+	_check(await _aim_vat(bench_vat), "a vat on the lab bench can be aimed at where it stands (aim '%s', prompt '%s')" % [me.aim_id, me.aim_prompt])
+	_check(me.aim_prompt == "Take the empty specimen vat", "and the prompt offers to take it ('%s')" % me.aim_prompt)
+	me.bot_press += 1
+	await _seconds(0.5)
+	_check(Vats.held_vat(me) >= 0 and not game.world_items.has(bv_id), "E takes it off the bench into both hands (slot %d)" % Vats.held_vat(me))
+	vats.set_down(me, 0)
+	await _frames(4)
+	Settings.set_value("camera", cam_was)
+	await _frames(2)
+	vat_items = _vat_items()   # set_down spawned a fresh item; the old reference is gone
+
 	# ---- spoiling, in and out of a vat
 	var vat: WorldItem = vat_items[0]
 	me.teleport(game._floor_at(vat.global_position + Vector3(0.0, 0.0, 0.9)))
@@ -525,6 +546,29 @@ func _slot_of_for(p, kind: String) -> int:
 func _clear_hands_of(p) -> void:
 	for i in p.slots.size():
 		p.slots[i] = Player.empty_slot()
+
+
+## Stand in front of `vat` on the bench's open side and look at it, until the aim ray finds it.
+## Tries both sides of the bench run and a few distances: which side is open depends on the level.
+func _aim_vat(vat: Node) -> bool:
+	var yaw: float = float(game.vats.spots[0].get("yaw", 0.0))
+	var vid := String(vat.get_meta("interact_id"))
+	for fwd in [Basis(Vector3.UP, yaw) * Vector3(0, 0, -1), Basis(Vector3.UP, yaw) * Vector3(0, 0, 1)]:
+		for dist in [0.9, 1.2]:
+			me.teleport(game._floor_at((vat.global_position as Vector3) + fwd * dist))
+			me.bot_move = Vector2.ZERO
+			await _frames(8)
+			var end := t + 1.0
+			while t < end:
+				# Re-aim from where the body actually settled, every frame, until it converges.
+				var eye: Vector3 = me.global_position + Vector3.UP * C.EYE_H
+				var d: Vector3 = (vat.global_position as Vector3) + Vector3.UP * 0.13 - eye
+				me.bot_yaw = atan2(-d.x, -d.z)
+				me.bot_pitch = clampf(atan2(d.y, Vector2(d.x, d.z).length()), -1.2, 1.2)
+				await get_tree().physics_frame
+				if me.aim_id == vid:
+					return true
+	return false
 
 
 func _vat_items() -> Array:

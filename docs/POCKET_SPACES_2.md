@@ -19,22 +19,109 @@ not change in this sweep.
 - Commit per phase. If a phase is blocked, skip it, note why in
   docs/MORNING_REPORT.md, and continue.
 
-## Phase 1 — system changes (first)
-1. RECONCILE THE ROLL. PocketPlan rolls CHANCE = 0.5 flat; the design
-   doc says higher odds in deeper wings. Make the code match the doc:
-   low base chance scaling with wing depth, roughly 20-30% of shifts
-   getting a pocket overall. Expose the curve as tunables.
-2. NO REPEATS. Host tracks the last pocket kind seen this run and
-   excludes it from the next roll.
-3. AMBIENT NOISE FLOOR. Optional per-pocket field
-   ambient_noise_level: raises the hearing threshold for
-   sound-hunting monsters inside that pocket via the existing sound
-   values. Factory and Restaurant set 0 (verify no behavior change).
-4. FIX: monsters must not wander into pockets via random nav
-   (KNOWN_ISSUES). Spawning inside and chasing through seams both
-   stay. Fence idle wander at the stub; document the approach.
-5. Seam light-mirroring and Hive-sight stay known issues; note they
-   now apply to five spaces.
+## Phase 1 — system changes — DONE 2026-09-22, branch `pockets-phase1`
+1. RECONCILE THE ROLL. **Done.** PocketPlan rolled CHANCE = 0.5 flat;
+   the design doc says higher odds in deeper wings. Every wing now
+   rolls `BASE_CHANCE + DEPTH_STEP * (depth - 1)` and the map takes
+   the chance any of them lands, capped at `MAX_CHANCE`. Those three
+   are the tunables, in `pocket_plan.gd`. At 0.04 / 0.05 / 0.45 the
+   usual depths 1-3 give 4% / 9% / 14%.
+   **Measured, not reasoned**: `tools/pocketrate.gd` (new) generates
+   many seeds x many shifts, prints the real rate, and exits non-zero
+   if it leaves the band. Before the change, 300 seeds x 4 shifts
+   gave **46.6%**. After, three sweeps:
+   - seeds 1-300 x 4 shifts (1200 shifts): **24.5%**
+   - seeds 1-500 x 4 shifts (2000 shifts): **23.9%**
+   - seeds 2001-2400 x 4 shifts (1600, disjoint): **27.2%**
+
+   **25.4% over 4800 shifts** all told, with every individual shift
+   number also inside 20-30%, and not one roll that wanted a pocket
+   failing to find room for it. Re-run it after any change to the
+   curve.
+2. NO REPEATS. **Done.** `game.pocket_seen_kind` holds the kind the
+   run last saw; `_to_next_shift` copies it into
+   `PocketPlan.exclude_kind` before the wings regenerate, and
+   `pool()` drops it from the roll. It is replicated in the globals
+   as `"px"` and applied in `_repl_apply` before anything generates —
+   clients build their own copy of the map, so a client rolling from
+   a different pool would build a *different hospital*. Reset in
+   `start_session`. `force_kind` still overrides it, for tools.
+3. AMBIENT NOISE FLOOR. **Done.** A pocket layout script may declare
+   `AMBIENT_NOISE_LEVEL`; `PocketSpaces.ambient_noise_at(pos)` reads
+   it. The Sonographer — the only monster that hears, the Hive being
+   deaf and the Night Nurse never listening — subtracts it from each
+   noise's loudness before the existing reach maths in `_hear`, so a
+   loud room masks quiet noises outright and loud ones simply do not
+   carry as far. No new sound system: it rides the loudness values
+   that already exist. Factory and Restaurant both declare 0.0, and
+   at 0.0 the subtraction is identity and the noise dictionary is not
+   even copied, so their behaviour is unchanged by construction as
+   well as by test.
+   **This is what phase 4 is built on**: the Laundromat's drone is
+   this knob and nothing else.
+4. FIX: monsters wandering into pockets via random nav. **Done.**
+   `game.monster_may_wander_to(p, from)` now takes where the monster
+   stands and rejects a goal in another space, or in a stub's dead
+   half. See "How idle wander is fenced" below.
+5. Seam light-mirroring and Hive-sight stay known issues. **Done** —
+   KNOWN_ISSUES now says they are properties of the seam, not of any
+   one space, so they apply to five spaces once phases 2-4 land.
+
+### How idle wander is fenced
+The leak was never the seam. `Monster.random_nav_point` samples
+`NavigationServer3D.map_get_random_point` over the **whole**
+navigation map, and the pocket's region is part of that map, so a
+hospital monster could draw a goal 800 tiles away and walk to it; the
+other half of its picks come from `level_info.monster_spawns`, which
+the pocket also appends to. The Night Nurse's vanish made it worse by
+asking for a point up to 400 m away.
+
+The fence is one predicate, not three patches: a wander goal must be
+in the same space as the monster. `monster_may_wander_to` gained an
+optional `from`, and the two samplers (`Monster.random_nav_point`,
+`HiveBrain._home_point`) pass the monster's own position. Goals in a
+stub's dead half are rejected too, since that half *is* the other
+copy. Fencing at the predicate rather than in the samplers covers all
+three brains at once, the Night Nurse's vanish included.
+
+What deliberately still works: **spawning** inside a pocket (spawn
+points do not come through this predicate) and **chasing** a player
+through a seam (a chase steers at the quarry, not at a wander goal).
+
+### What phase 1 was tested with
+- `tools/pocketrate.gd` — the rates above, plus a direct no-repeats
+  check: **470 pockets rolled with a kind excluded, 0 of them the
+  excluded kind**.
+- `tools/pockettest.tscn` — **PASS, 208 checks**, including new ones
+  for the noise floor (declared 0.0, 0.0 inside the space, 0.0 in the
+  hospital) and the fence (refused both ways across a seam, allowed
+  within a space, refused into every stub's dead half, and unchanged
+  when called without a `from`). It fails intermittently on the
+  pre-existing Night Nurse check — see FAILING_TESTS 1f, which phase
+  1 turned from a deterministic failure into a coin flip and did not
+  fix.
+- `tools/mapcheck.gd` — the pockets section passes on 300 seeds
+  (341/341 forced placements). Its morgue-tray failures are the
+  pre-existing ones; the seed list moves when the pocket rate moves,
+  which is written up in FAILING_TESTS 2.
+- **`tools/perfprobe` was not run, deliberately.** It needs a real
+  window to give honest frame times, and a minimized one does not
+  render. Phase 1 changes no geometry, no lights and no materials —
+  the added cost is one `Rect2.has_point` plus a cached dictionary
+  lookup per sound-hunting monster per tick, and one `space_of` and
+  `phantom_at` per wander-goal candidate, which are picked rarely.
+  Nothing there can move a frame-time percentile. **Phases 2-4 do add
+  geometry and must run it.**
+
+### Notes for the later phases
+- A new space declares `AMBIENT_NOISE_LEVEL` in its layout script and
+  gets a floor; declaring nothing means 0.0.
+- Add its kind to `PocketPlan.KINDS` and to
+  `PocketSpaces.ambient_noise_of`'s match. With five kinds the
+  no-repeat exclusion costs far less variety than it does with two.
+- The curve is a *per-wing* chance, so adding kinds does not need it
+  retuned — the rate is how often *a* pocket appears, not which one.
+  Re-run `tools/pocketrate.gd` anyway.
 
 ## Phase 2 — the Natatorium
 An indoor Olympic pool that can't fit in a one-story hospital.
