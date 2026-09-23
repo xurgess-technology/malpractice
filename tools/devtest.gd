@@ -22,6 +22,7 @@ extends Node
 ##       Windowed screenshots of the reply fax, the panel and the gun into tools/dev_shots/.
 
 const DevControllerScript := preload("res://scripts/dev/dev_controller.gd")
+const PocketPlanScript := preload("res://scripts/level/pockets/pocket_plan.gd")   # POCKETS HOOK (dev force)
 const SHOT_DIR := "res://tools/dev_shots"
 const SEED := 4242
 ## This machine's player files the panel's tools touch; put back as they were at the end.
@@ -218,20 +219,32 @@ func _run_solo() -> void:
 	await _panel_extras()
 	await _nurse_watch_solo()
 
-	# POCKETS HOOK: the panel builds a pocket space beside the hospital and walks you in and out.
-	for kind in ["Factory", "Restaurant"]:
-		_press_panel(kind)
-		await _frames(3)
-		_check(game.pockets.active() and String(game.pockets.pocket.kind) == kind.to_lower(), "the panel's %s button builds the %s" % [kind, kind.to_lower()])
-		_press_panel("Go there")
-		await _frames(3)
-		_check(game.pockets.in_pocket(me.global_position), "Go there puts you in the %s" % kind.to_lower())
-		_press_panel("Back to the start")
-		await _frames(3)
-		_check(not game.pockets.in_pocket(me.global_position), "Back to the start brings you back")
-	_press_panel("Remove")
-	await _frames(3)
-	_check(not game.pockets.active() and dev.dev_pocket == "", "Remove takes the pocket away")
+	# POCKETS HOOK (dev force): the panel forces a real pocket into the hospital's own wings and
+	# walks you up to its seam.
+	var force_opt: OptionButton = main.dev_panel._c["pocket_force"]
+	force_opt.select(2)   # "Factory" (0 Off, 1 Random, 2.. PocketPlanScript.KINDS)
+	_press_panel("Force & rebuild")
+	game.wing_loader.finish_now()
+	game.pockets.finish_now()
+	await _frames(2)
+	_check(game.pockets.active() and String(game.pockets.pocket.kind) == "factory", "forcing Factory from the panel rebuilds the wings with it")
+	_check(not game.pockets.seams.is_empty(), "the forced pocket has a real seam into the hospital")
+	main.dev_panel._refresh()
+	var seam_opt: OptionButton = main.dev_panel._c["pocket_seams"]
+	_check(seam_opt.item_count == game.pockets.seams.size(), "the seam picker lists every seam")
+	if seam_opt.item_count > 0:
+		seam_opt.select(0)
+		_press_panel("Go to seam")
+		await _frames(2)
+		_check(game.pockets.phantom_at(me.global_position).is_empty() and not game.pockets.in_pocket(me.global_position),
+			"Go to seam lands you in the hospital, not already past the seam")
+		_check(me.global_position.distance_to(game.pockets.seams[0].seam_h) < 3.0, "and close enough to the seam to walk through it")
+	force_opt.select(0)   # Off
+	_press_panel("Force & rebuild")
+	game.wing_loader.finish_now()
+	game.pockets.finish_now()
+	await _frames(2)
+	_check(PocketPlanScript.force_kind == "", "Off turns the forcing back off")
 
 	# ---- DEV MODE OFF
 	dev.request("god", {"on": true})

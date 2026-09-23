@@ -48,6 +48,8 @@ const PlayerScript := preload("res://scripts/player.gd")
 const WorldItemScript := preload("res://scripts/world_item.gd")
 const LootTable := preload("res://scripts/economy/loot_table.gd")
 const MonsterScript3 := preload("res://scripts/monster.gd")  # SWEEP 3 HOOK (monsters): display names
+const Plan := preload("res://scripts/level/pockets/pocket_plan.gd")   # POCKETS HOOK (dev force)
+const Stub := preload("res://scripts/level/pockets/stub.gd")          # POCKETS HOOK (dev force): the seam teleport
 
 var game: Node = null
 
@@ -185,22 +187,31 @@ func _build_open_floor() -> void:
 # lifecycle (called from game.gd hooks)
 # =========================================================================
 
-# ---- POCKETS HOOK: a pocket space beside the hospital, and a way in and out ----
+# ---- POCKETS HOOK: force the level's own generation to include a real pocket, and jump to its seam.
+# (Replaces the old "Pocket spaces" mechanism -- PocketSpaces.build_kind(), a bare standalone space
+# with no hospital entrances, built for the now-deleted dev room. That one is gone: it hadn't kept up
+# with the five real kinds (it only knew three), and side by side with a real forced pocket it was
+# just confusing -- two "Pocket spaces" controls that don't do the same thing. build_kind() itself is
+# left in pocket_spaces.gd, documented in CONTRACTS.md, in case an isolated art-review space is ever
+# wanted again; nothing calls it now.)
 
-var dev_pocket := ""
-
-
-func _set_pocket(kind: String) -> void:
-	if kind == dev_pocket or game == null or game.get("pockets") == null:
-		return
-	dev_pocket = kind
-	if kind == "":
-		game.pockets.teardown()
-		return
-	if game.level != null:
-		game.pockets.build_kind(kind, game.level_info, game.level, 4077)
-		game._attach_light_flicker(game.pockets.pocket.root)
-		game.say("The %s is through the wall. Dev panel: Go there." % kind, 3.0)
+## Host: PocketPlan.force_kind for the *next* wing build -- rebuilt now if the level already has
+## wings (like "Regenerate wings now"), else it takes effect at the next one (a new run, a new shift).
+## "" rolls at normal odds, "random" forces one of the five kinds (still guaranteed, just not chosen
+## by the caller), anything else must be a real kind.
+func _force_pocket(kind: String) -> void:
+	if kind == "random":
+		kind = Plan.KINDS[randi() % Plan.KINDS.size()]
+	elif kind != "" and not Plan.KINDS.has(kind):
+		kind = ""
+	Plan.force_kind = kind
+	if game.wing_loader != null and game.wing_loader.has_wings():
+		game.wing_loader.regenerate(int(game.wing_loader.generation) + 1)
+		game.say(("Forcing a %s pocket -- rebuilding the wings now." % kind) if kind != "" else
+			"Pocket forcing off -- wings rebuilding at normal odds.", 3.0)
+	else:
+		game.say(("The next hospital will force a %s pocket." % kind) if kind != "" else
+			"Pocket forcing off.", 3.0)
 
 
 ## The local player (who owns their own position) steps into the pocket or back to the start.
@@ -213,6 +224,28 @@ func pocket_go(into: bool) -> void:
 	elif not into:
 		var spots: Array = game.spawn_points()
 		me.teleport(spots[0] if not spots.is_empty() else Vector3.ZERO)
+
+
+## Local: the player steps up to seam `i` of the current pocket, one tile shy of the seam itself on
+## the hospital side -- close enough to cross with a step or two, not already past it. `i` indexes
+## `game.pockets.seams` (see pocket_spaces.gd _make_seam); every machine computes its own copy of the
+## same seam geometry from the same forced kind, so this needs no request to the host.
+func go_seam(i: int) -> bool:
+	if game == null or game.get("pockets") == null:
+		return false
+	var seams: Array = game.pockets.seams
+	if i < 0 or i >= seams.size():
+		return false
+	var me: Node = game.local_player()
+	if me == null:
+		return false
+	var s: Dictionary = seams[i]
+	var xh: Transform3D = s.xh
+	var mid: float = Stub.seam_s(int(s.w))
+	var back: float = float(s.d) - float(Stub.CORRIDOR) * 0.5
+	var at: Vector3 = Stub.local_point(xh, mid - 1.0, back)
+	me.teleport(game._floor_at(at))
+	return true
 
 
 ## Dev mode off or the session over: undo anything global.
@@ -236,7 +269,7 @@ func reset_state() -> void:
 	nurse_ignore_watch = false
 	nurse_walk = ""
 	nurse_pace = 0
-	dev_pocket = ""   # POCKETS HOOK (its nodes go with the level)
+	Plan.force_kind = ""   # POCKETS HOOK (dev force): dev mode off leaves the odds alone
 	nurse_who = 0
 	nurse_loop = []
 	state_changed.emit()
@@ -616,8 +649,8 @@ func _apply_request(sender: int, action: String, a: Dictionary) -> void:
 			set_nurse_walk(String(a.get("mode", "")), who)
 		"nurse_pace":
 			nurse_pace = clampi(int(a.get("i", 0)), 0, NURSE_PACES.size() - 1)
-		"pocket":
-			_set_pocket(String(a.get("kind", "")))   # POCKETS HOOK
+		"force_pocket":
+			_force_pocket(String(a.get("kind", "")))   # POCKETS HOOK (dev force)
 		"strap_monster":
 			# GRAFTING part one: a Hive strapped to a patient table.
 			game.dissection.dev_strap(String(a.get("kind", "hive")), float(a.get("sedation", 1.0)), int(a.get("table", -1)))
@@ -1055,7 +1088,6 @@ func net_state() -> Dictionary:
 		"mo": monsters_off, "ng": no_game_over,
 		"gd": god.keys(), "nc": noclip.keys(), "gn": gun.keys(), "bt": bots, "st": stun,
 		"nn": [nurse_ignore_watch, nurse_walk, nurse_pace],   # NURSE HOOK
-		"pk": dev_pocket,   # POCKETS HOOK
 	}
 
 
@@ -1072,7 +1104,6 @@ func apply_net_state(s: Dictionary) -> void:
 	god = _as_set(s.get("gd", []))
 	noclip = _as_set(s.get("nc", []))
 	gun = _as_set(s.get("gn", []))
-	_set_pocket(String(s.get("pk", "")))   # POCKETS HOOK
 	var nn: Array = s.get("nn", [false, "", 0])   # NURSE HOOK
 	if nn.size() >= 3:
 		nurse_ignore_watch = bool(nn[0])
