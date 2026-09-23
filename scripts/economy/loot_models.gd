@@ -24,6 +24,9 @@ static func build(root: Node3D, kind: String, count: int) -> void:
 		"ultrasound": _ultrasound(root)
 		"pool_chemical_drum": _pool_drum(root)
 		"lifeguard_whistle": _whistle(root)
+		"grease_bucket": _grease_bucket(root)
+		"copper_wire_spool": _wire_spool(root)
+		"foremans_clipboard": _clipboard(root)
 		_: _add(root, _box(Vector3(0.15, 0.1, 0.15), _m("magenta", Color.MAGENTA)), Vector3(0, 0.05, 0))
 
 
@@ -71,6 +74,9 @@ static func footprint(kind: String) -> Vector3:
 		"ultrasound": return Vector3(0.42, 0.34, 0.32)
 		"pool_chemical_drum": return Vector3(0.42, 0.62, 0.42)
 		"lifeguard_whistle": return Vector3(0.1, 0.04, 0.05)
+		"grease_bucket": return Vector3(0.28, 0.32, 0.28)
+		"copper_wire_spool": return Vector3(0.44, 0.44, 0.44)
+		"foremans_clipboard": return Vector3(0.24, 0.03, 0.33)
 	return Vector3(0.15, 0.1, 0.15)
 
 
@@ -379,3 +385,65 @@ static func _whistle(root: Node3D) -> void:
 	# The lanyard, coiled beside it.
 	for i in 3:
 		_add(root, _cyl(0.018, 0.004, cord, 10, 0.018), Vector3(0.036 + i * 0.002, 0.004 + i * 0.004, 0.0))
+
+
+# --- POCKETS 2 phase 5: the Factory's three ----------------------------------------------------
+
+## A pail of machine grease with the lid levered off and leaning against it: a tapered tin bucket,
+## a wire handle over the top, and a dull yellow-grey surface that has been dug out of.
+static func _grease_bucket(root: Node3D) -> void:
+	var tin := _m("grease_tin", Color(0.38, 0.36, 0.33), 0.55, 0.65)
+	var grease := _m("grease_goo", Color(0.68, 0.63, 0.44), 0.85)
+	var wire := _m("grease_wire", Color(0.28, 0.27, 0.26), 0.45, 0.8)
+	# The pail: narrower at the base, the way a pail is.
+	_add(root, _cyl(0.115, 0.28, tin, 16, 0.14), Vector3(0, 0.14, 0))
+	_add(root, _cyl(0.145, 0.018, tin, 16), Vector3(0, 0.281, 0))        # the rolled rim
+	# What is left in it, sitting a little below the rim and dug out on one side.
+	_add(root, _cyl(0.132, 0.03, grease, 16), Vector3(0, 0.252, 0))
+	_add(root, _cyl(0.055, 0.022, grease, 12, 0.03), Vector3(0.04, 0.267, -0.03))
+	# The handle, standing up off one side.
+	_add(root, _cyl(0.006, 0.2, wire, 6), Vector3(-0.128, 0.36, 0), Vector3(0, 0, 18))
+	_add(root, _cyl(0.006, 0.2, wire, 6), Vector3(0.128, 0.36, 0), Vector3(0, 0, -18))
+	_add(root, _cyl(0.006, 0.23, wire, 6), Vector3(0, 0.452, 0), Vector3(0, 0, 90))
+	# The lid, prised off and leaning on the pail.
+	_add(root, _cyl(0.142, 0.012, tin, 16), Vector3(0.17, 0.11, 0.05), Vector3(0, 0, 72))
+
+
+## A wooden cable drum of heavy copper wire: two flanges, and the coil filling the barrel between
+## them. Bulky, and it reads as bulky -- it is the widest thing in the Factory you can pick up.
+static func _wire_spool(root: Node3D) -> void:
+	var wood := _m("spool_wood", Color(0.44, 0.33, 0.21), 0.85)
+	var copper := _m("spool_copper", Color(0.72, 0.38, 0.16), 0.3, 0.9)
+	var band := _m("spool_band", Color(0.30, 0.29, 0.28), 0.5, 0.7)
+	# It lies on its side, so the flanges are vertical discs and the coil is a fat ring.
+	for x in [-0.155, 0.155]:
+		_add(root, _cyl(0.21, 0.022, wood, 18), Vector3(x, 0.21, 0), Vector3(0, 0, 90))
+		_add(root, _cyl(0.05, 0.026, band, 12), Vector3(x, 0.21, 0), Vector3(0, 0, 90))   # the hub plate
+	# The copper itself, in three visible laps so it reads as wound rather than solid.
+	for i in 3:
+		_add(root, _cyl(0.163 - i * 0.004, 0.27, copper, 18), Vector3(0, 0.21, 0), Vector3(0, 0, 90))
+	# The loose tail, tucked back against a flange so it cannot stick out of the pickup box.
+	_add(root, _cyl(0.008, 0.12, copper, 6), Vector3(0.138, 0.075, 0.135), Vector3(22, 0, 10))
+	# The through-axle, poking out either end.
+	_add(root, _cyl(0.016, 0.38, band, 8), Vector3(0, 0.21, 0), Vector3(0, 0, 90))
+
+
+## A foreman's clipboard: a masonite board, the spring clip across the top, and a shift schedule
+## under it with its rows struck through. The crossings-out are the point, so they are real geometry
+## rather than a texture -- this is X-ray-film tier loot you are meant to stop and read.
+static func _clipboard(root: Node3D) -> void:
+	var board := _m("clip_board", Color(0.46, 0.35, 0.24), 0.9)
+	var paper := _m("clip_paper", Color(0.88, 0.86, 0.79), 0.95)
+	var clip := _m("clip_metal", Color(0.72, 0.73, 0.75), 0.35, 0.85)
+	var ink := _m("clip_ink", Color(0.12, 0.12, 0.14), 0.9)
+	_add(root, _box(Vector3(0.23, 0.012, 0.32), board), Vector3(0, 0.006, 0))
+	_add(root, _box(Vector3(0.2, 0.004, 0.27), paper), Vector3(0, 0.014, 0.012))
+	# The spring clip across the head of the board.
+	_add(root, _box(Vector3(0.1, 0.016, 0.045), clip), Vector3(0, 0.02, -0.132))
+	_add(root, _cyl(0.008, 0.088, clip, 8), Vector3(0, 0.026, -0.113), Vector3(0, 0, 90))
+	# The schedule: ruled rows, and a line drawn through most of the names. No dates anywhere.
+	for i in 7:
+		var z := -0.1 + i * 0.031
+		_add(root, _box(Vector3(0.15, 0.002, 0.0035), ink), Vector3(-0.012, 0.017, z))
+		if i != 2 and i != 5:
+			_add(root, _box(Vector3(0.158, 0.002, 0.0045), ink), Vector3(-0.012, 0.019, z), Vector3(0, 0, 0))

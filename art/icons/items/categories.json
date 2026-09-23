@@ -152,6 +152,21 @@
       "name": "EpiPen",
       "category": "trinket",
       "glow": null
+    },
+    "grease_bucket": {
+      "name": "Grease bucket",
+      "category": "loot",
+      "glow": null
+    },
+    "copper_wire_spool": {
+      "name": "Copper wire spool",
+      "category": "loot",
+      "glow": null
+    },
+    "foremans_clipboard": {
+      "name": "Foreman's clipboard",
+      "category": "loot",
+      "glow": null
     }
   }
 }

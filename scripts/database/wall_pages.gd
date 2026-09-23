@@ -69,6 +69,10 @@ const LOOT_BLURBS := {
 	# POCKETS 2 phase 2: the Natatorium.
 	"pool_chemical_drum": "A sealed drum of pool chemicals. Nobody ordered it and nobody opened it. Takes both hands.",
 	"lifeguard_whistle": "A lifeguard's whistle on a red lanyard. Blow it once and every monster within thirty metres comes to look at you. There is no second blast.",
+	# POCKETS 2 phase 5: the Factory.
+	"grease_bucket": "A pail of machine grease, half dug out. Whatever it was for, nobody got round to it.",
+	"copper_wire_spool": "A drum of heavy copper wire off the line. Worth real money, and it takes both hands.",
+	"foremans_clipboard": "A shift schedule with no dates on it. Every name but two has been crossed out.",
 	"heart_monitor": "A bedside heart monitor. Takes both hands.",
 	"defibrillator": "A portable defibrillator. Takes both hands.",
 	"ultrasound": "A portable ultrasound. The best find in the wings.",

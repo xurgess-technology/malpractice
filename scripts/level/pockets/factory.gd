@@ -17,6 +17,12 @@ const Stub := preload("res://scripts/level/pockets/stub.gd")
 ## so it has no floor and monsters hear here exactly what they hear in the hospital.
 const AMBIENT_NOISE_LEVEL := 0.0
 
+## POCKETS 2: the item kinds this space contributes, as a set anything else can read without digging
+## through the layout below. The follow-up task that bleeds a pocket's items into the hospital rooms
+## near its entrances reads this; so does anything that wants to know what a space is worth.
+## Phase 5 is what gave the Factory items of its own; before it this list would have been empty.
+const POCKET_ITEMS := ["grease_bucket", "copper_wire_spool", "foremans_clipboard"]
+
 const T := 1.5
 const M := 10
 const RW := 60

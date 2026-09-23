@@ -92,6 +92,33 @@ const LOOT := {
 		"rooms": {"natatorium_deck": 2.0, "natatorium_lockers": 1.2},
 		"surfaces": ["counter", "tray"], "containers": {"drawer_unit": 0.5, "trauma_bag": 0.4, "first_aid_cabinet": 0.5},
 	},
+	# POCKETS 2 phase 5 (docs/POCKET_SPACES_2.md): items for the two spaces that had none of their
+	# own. Same rule as the Natatorium's -- every kind here names only its own space's room kinds and
+	# none of them lists "*", so none of it exists in the hospital proper. The Factory's rooms are
+	# `factory_floor`, `factory_office` and `factory_catwalk`; the Restaurant's are `restaurant`,
+	# `restaurant_kitchen` and `restaurant_restroom`.
+	#
+	# GREASE BUCKET is deliberately plain loot and not a trinket yet. The design is a slip patch you
+	# slather on the floor, and that needs monsters and players to have a slide/knockdown state,
+	# which the game does not have. Shipping it in Trinkets.KINDS with nothing behind the click would
+	# eat the shove and do nothing, so it spawns and sells now and becomes a trinket the day those
+	# states land: add it to KINDS and ONE_USE, set "trinket": true and a trinket_weight here, and
+	# write _use_grease. Tracked in docs/POCKET_SPACES_2.md phase 5.
+	"grease_bucket": {
+		"name": "Grease bucket", "short": "Grease buckets", "value": [15, 28], "tier": 0,
+		"rooms": {"factory_floor": 2.2, "factory_catwalk": 1.1, "factory_office": 0.4},
+		"surfaces": ["floor", "counter"], "containers": {},
+	},
+	"copper_wire_spool": {
+		"name": "Copper wire spool", "short": "Copper wire spools", "value": [55, 95], "tier": 2, "bulky": true,
+		"rooms": {"factory_floor": 2.4, "factory_catwalk": 0.9},
+		"surfaces": ["floor", "counter"], "containers": {},
+	},
+	"foremans_clipboard": {
+		"name": "Foreman's clipboard", "short": "Foremen's clipboards", "value": [10, 20], "tier": 0,
+		"rooms": {"factory_office": 3.0, "factory_floor": 0.7, "factory_catwalk": 0.5},
+		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.35},
+	},
 	# GRAFTING part one (scripts/grafting/eyes.gd): taken out of a strapped Hive, or a surgeon's own
 	# eye swapped out; never found. They spoil outside a vat (Eyes.spoil_factor).
 	"eye_hive": {
