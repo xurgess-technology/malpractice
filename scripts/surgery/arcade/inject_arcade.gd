@@ -625,6 +625,10 @@ func hud_line() -> String:
 func rules() -> Array:
 	match phase:
 		Phase.DRAW:
+			# SYRINGE DRAW: a corridor has no patient, so it cannot be their dose. The band here is
+			# the standard one, and meeting the real one is the table's problem.
+			if _draw_only():
+				return ["fill the syringe to a standard dose", "hold too long, or an empty vial, draws in air"]
 			return ["fill the syringe to this patient's dose", "hold too long, or an empty vial, draws in air"]
 		Phase.DEBUBBLE:
 			return ["clear every bubble before it goes in", "loose ones rise to the needle; stuck ones need a flick beside them"]
@@ -662,6 +666,12 @@ func stamp_for(word: String) -> Dictionary:
 	var I := ink
 	match word:
 		"DRAW!":
+			# SYRINGE DRAW: in a corridor there is no patient whose dose it could be. The band is
+			# the standard one, and what it costs to guess is felt later, at the table.
+			if _draw_only():
+				return {"goal": "Draw a standard dose into the green band.",
+					"lines": ["It speeds up the longer you hold.", "No patient here: the band is a guess at theirs."],
+					"prompt": "SPACE to start", "color": I.band_edge if I != null else Color.DARK_GREEN}
 			return {"goal": "Draw this patient's dose into the green band.",
 				"lines": ["It speeds up the longer you hold.", "Hold too long and it pulls in air."],
 				"prompt": "SPACE to start", "color": I.band_edge if I != null else Color.DARK_GREEN}
