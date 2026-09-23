@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.34**: Load a syringe anywhere you like 💉
+    - Added: Hold a syringe, press E, and the clipboard comes up wherever you're standing -- a broom cupboard, a corridor, behind a gurney. Draw the dose and flick the bubbles out there, then walk to the table and go straight to sticking it in. The first thing in this game you can play outside the OR.
+    - Added: A rack of up to three fluids across the top of the page, and you move the needle between them. Only anesthetic for now; the wine and the tequila are coming.
+    - Changed: You can still do the whole thing at the table with an empty syringe, exactly as before. Drawing ahead buys you time and costs you precision -- with no patient in front of you, you're guessing at a standard dose.
 - **0.10.33**: Syringes are a thing you carry
     - Added: Syringes, found loose around the hospital in twos and threes. A syringe remembers what's in it, so a loaded one is a loaded one wherever you take it.
     - Note: The groundwork for drawing a dose outside the OR. The part where you actually open it in a corridor and pick your fluid comes next; the operating table works exactly as it did.
