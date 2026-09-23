@@ -137,6 +137,29 @@ How to run things is at the bottom of this file.
   supplies -- SUTURE! (0.10.4) added the closing step that needs it, and 0.10.33 generalised the
   spawner that places it -- so if this turns out to date from either, it is young.
 
+## 1l. perfprobe --pockets crashes before it measures anything (signal 11)
+
+- **Command:** `tools\perfprobe.ps1 -Extra "--pockets"` (or the same flags on `perfprobe.tscn` in
+  any windowed run).
+- **Result:** a burst of `ERROR: BUG, indexing did not unpair geometries from light` from
+  `renderer_scene_cull.cpp`, then `CrashHandlerException: Program crashed with signal 11`, straight
+  after `[warmup] built and drew everything once`. Not one scenario row is printed.
+- **Not ours, and not any one pocket space.** Found independently by POCKET_SPACES_2 phase 2 and
+  phase 4. Phase 4 verified it on 2026-09-22 on a detached checkout of **`main` (3b30969)** with
+  only `tools/perfprobe.ps1` brought over: identical crash, identical place, with no Laundromat in
+  the tree at all. Phase 2 saw the same with the Natatorium taken back out of `PocketPlan.KINDS`.
+- **Why:** `_run_pockets` calls `game.start_session()` once per kind, tearing down and rebuilding a
+  whole level with all its lights. docs/KNOWN_ISSUES.md already records that renderer error as a
+  Godot bug seen in windowed runs ("Seen during this work and not ours"); doing it once per kind
+  turns it from an error into a crash.
+- **The way round, for measuring one space:** `--pocket=<kind>` forces the kind before the first
+  session is built and never restarts it, so nothing is torn down. Both phases arrived at it; it is
+  how every pocket space's numbers in docs/POCKET_SPACES_2.md were taken.
+- **Where to look:** `tools/perfprobe.gd` `_run_pockets`, and whatever frees lights in
+  `game._clear_level` / `WingLoader` ahead of a `start_session`.
+
+---
+
 ## 2. mapcheck: a morgue tray out of reach on seeds 38 and 112
 
 - **Command:** `godot --headless --path . -s tools/mapcheck.gd`

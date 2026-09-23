@@ -23,6 +23,7 @@ extends Node
 
 const Plan := preload("res://scripts/level/pockets/pocket_plan.gd")
 const Stub := preload("res://scripts/level/pockets/stub.gd")
+const PocketSpaces := preload("res://scripts/level/pockets/pocket_spaces.gd")
 const NatatoriumScript := preload("res://scripts/level/pockets/natatorium.gd")
 const SonoScript := preload("res://scripts/monsters/sonographer_brain.gd")
 const LootTableScript := preload("res://scripts/economy/loot_table.gd")
@@ -100,6 +101,7 @@ func _run_space(kind: String) -> void:
 		_check(worst < 0.001, "%s seam %d: both copies line up (%.5f m)" % [kind, int(s.id), worst])
 	await _check_nav(kind, pk)
 	_ambient_noise_floor(kind, pk)
+	await _footstep_masking(kind, pk)
 	_wander_fenced(kind, pk)
 	if kind == "natatorium":
 		_water(kind, pk)
@@ -189,17 +191,97 @@ func _water(kind: String, pk) -> void:
 
 ## The ambient noise floor. The Factory and the Restaurant declare 0.0, which has to mean "hearing
 ## is exactly what it always was": the floor is subtracted from a noise's loudness before the
-## Sonographer's reach maths, so 0.0 is the identity. The checks below pin both halves of that —
-## the declared value and what `ambient_noise_at` answers inside the space and out in the hospital.
-## A space that wants a real floor (the Laundromat, phase 4) will need its own expectation here.
+## Sonographer's reach maths, so 0.0 is the identity. The Laundromat (phase 4) declares a real one.
+## The checks below pin both halves for either case — the declared value, and what
+## `ambient_noise_at` answers inside the space and out in the hospital.
+const FLOOR_EXPECTED := {"factory": 0.0, "restaurant": 0.0, "laundromat": 0.30}
+
 func _ambient_noise_floor(kind: String, pk) -> void:
+	var want: float = float(FLOOR_EXPECTED.get(kind, 0.0))
 	var declared: float = pk.ambient_noise_of(kind)
-	_check(is_equal_approx(declared, 0.0), "%s: declares an ambient noise floor of 0.0 (got %.3f)" % [kind, declared])
+	_check(is_equal_approx(declared, want), "%s: declares an ambient noise floor of %.2f (got %.3f)" % [kind, want, declared])
 	var inside: float = pk.ambient_noise_at(pk.pocket.spawn)
-	_check(is_equal_approx(inside, 0.0), "%s: the floor inside the pocket is 0.0, so hearing is unchanged (got %.3f)" % [kind, inside])
+	_check(is_equal_approx(inside, want), "%s: the floor inside the pocket is %.2f (got %.3f)" % [kind, want, inside])
 	var outside: float = pk.ambient_noise_at(bot.global_position)
 	_check(is_equal_approx(outside, 0.0), "%s: the hospital has no floor (got %.3f)" % [kind, outside])
 	_check(not pk.in_pocket(bot.global_position), "%s: ... and that reading was taken in the hospital" % kind)
+
+
+## POCKETS 2 phase 4, and the phase 7 acceptance test for the Laundromat: the drone genuinely masks
+## footsteps. Two halves, because either one alone could pass for the wrong reason.
+##
+## The arithmetic half checks the claim against the numbers it is made of — game.gd's own footstep
+## loudnesses and the Sonographer's own reach constant, read from those files rather than retyped —
+## so the day somebody retunes a footstep, this fails instead of quietly becoming false.
+##
+## The live half puts a real Sonographer a few metres from a real walking player, once inside the
+## Laundromat and once out in the hospital, and asks the brain what it heard. Inside: nothing, ever.
+## Outside, at the same distance: the footsteps.
+func _footstep_masking(kind: String, pk) -> void:
+	var floor_level: float = pk.ambient_noise_of(kind)
+	var walk: float = game.FOOTSTEP_LOUDNESS
+	var sprint: float = game.FOOTSTEP_SPRINT_LOUDNESS
+	var per: float = SonoScript.HEAR_PER_LOUDNESS
+	var walk_reach: float = maxf(walk - floor_level, 0.0) * per
+	var sprint_reach: float = maxf(sprint - floor_level, 0.0) * per
+	if kind != "laundromat":
+		_check(is_equal_approx(walk_reach, walk * per), "%s: a walking footstep still carries its full %.1f m" % [kind, walk * per])
+		return
+	_check(floor_level > walk, "laundromat: the floor (%.2f) is above a walking footstep (%.2f), so one is masked outright" % [floor_level, walk])
+	_check(is_equal_approx(walk_reach, 0.0), "laundromat: a walking footstep carries 0 m inside (got %.2f m)" % walk_reach)
+	_check(walk * per > 4.0, "laundromat: ... and the same footstep carries %.1f m outside" % (walk * per))
+	_check(sprint_reach > 6.0 and sprint_reach < sprint * per, 			"laundromat: a sprinting one still carries, but shorter: %.1f m in here against %.1f m outside" % [sprint_reach, sprint * per])
+	var margin := sprint - floor_level
+	_check(margin < SonoScript.LOUD, "laundromat: and a sprint drops under the brain's certainty threshold (%.2f < %.2f), so it fills suspicion instead" % [margin, SonoScript.LOUD])
+	# The live half.
+	var inside: bool = await _walk_heard(pk, true)
+	_check(not inside, "laundromat: a Sonographer beside a walking player in here hears no footstep at all")
+	var outside: bool = await _walk_heard(pk, false)
+	_check(outside, "laundromat: the same Sonographer and the same walk out in the hospital does hear them")
+
+
+## Stand the bot and a Sonographer MASK_GAP apart (inside the pocket, or out in the hospital), walk
+## the bot on the spot for a few seconds, and answer whether the brain ever logged a footstep.
+const MASK_GAP := 4.0
+const MASK_SECONDS := 6.0
+
+func _walk_heard(pk, in_pocket: bool) -> bool:
+	var at: Vector3 = pk.pocket.spawn if in_pocket else game.level_info.get("or_table", Vector3.ZERO)
+	if not in_pocket:
+		at = _hospital_floor_near(bot.global_position)
+	bot.teleport(at)
+	await _frames(2)
+	var m = game._add_monster("sonographer", at + Vector3(MASK_GAP, 0.0, 0.0))
+	await _frames(2)
+	# Calm it and blank what it has already heard, so only this walk counts.
+	m.calm = 0.0
+	var brain = m.get("brain")
+	if brain != null:
+		brain.last_heard = {}
+	var heard := false
+	var t0: float = game.world_time
+	while game.world_time - t0 < MASK_SECONDS:
+		# Walk on the spot: `moving` and not crouching is all _tick_noise looks at.
+		bot.moving = true
+		bot.sprinting = false
+		bot.crouching = false
+		bot.silent_steps = false
+		await _frames(1)
+		if brain != null and String((brain.last_heard as Dictionary).get("kind", "")) == "footstep":
+			heard = true
+			break
+	game.kill_monster(m)
+	bot.moving = false
+	await _frames(2)
+	return heard
+
+
+## A point on the hospital's own floor near `from`, for the "and outside it is heard" half.
+func _hospital_floor_near(from: Vector3) -> Vector3:
+	var pk = game.pockets
+	if not pk.in_pocket(from) and pk.phantom_at(from).is_empty():
+		return from
+	return game.level_info.get("or_table", Vector3.ZERO)
 
 
 ## Idle wander is fenced at the stub. A goal in the other space is refused whichever side you stand
@@ -459,10 +541,17 @@ func _sonographer_hears(kind: String, pk) -> void:
 	var before := _count_crossings("monster", int(d.monster_id))
 	var t0 := game.world_time
 	var last_noise := -10.0
+	# POCKETS 2 phase 4: the noise has to be one the listener can actually hear WHERE IT STANDS. The
+	# listener is inside the pocket, and a space with an ambient noise floor (the Laundromat, 0.30)
+	# subtracts that floor before the reach maths — so a flat 0.8 in there is really a 0.5, which is
+	# the Laundromat doing its job rather than the seam failing. What this test is about is that
+	# sound crosses a seam and a sound-hunter follows it, so clear the floor and keep the intent.
+	# Factory and Restaurant declare 0.0, so for them this is the same 0.8 it always was.
+	var loud: float = 0.8 + pk.ambient_noise_of(kind)
 	while game.world_time - t0 < 40.0:
 		if game.world_time - last_noise > 1.2:
 			last_noise = game.world_time
-			game.emit_noise(bot.global_position, 0.8, "test")
+			game.emit_noise(bot.global_position, loud, "test")
 		if not pk.in_pocket(d.global_position) and d.global_position.distance_to(bot.global_position) < 3.0:
 			break
 		await _frames(1)
@@ -495,13 +584,11 @@ func _item_crosses(kind: String, pk) -> void:
 func _doors_in_place(kind: String, pk, tag: String) -> void:
 	var lay: Dictionary = pk.pocket.layout
 	var origin: Vector2i = pk.pocket.origin
+	# Every space publishes its own doorways; ask it rather than knowing each one's layout keys.
 	var tiles: Array = []
-	if kind == "factory":
-		tiles = lay.doors
-	elif kind == "natatorium":
-		tiles = [lay.doors.lockers]
-	else:
-		tiles = [lay.doors.corridor, lay.doors.men, lay.doors.women] + lay.doors.kitchen
+	for dw in PocketSpaces.script_of(kind).doorways(lay):
+		for t in (dw.tiles as Array):
+			tiles.append(t)
 	var missing := 0
 	for t: Vector2i in tiles:
 		var d = game.doors.door_at_tile(origin + t)

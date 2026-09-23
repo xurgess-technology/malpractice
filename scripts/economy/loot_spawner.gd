@@ -53,7 +53,7 @@ static func plan(seed_value: int, shift: int, info: Dictionary, occupied: Dictio
 	var units := {}
 	var kinds := LootTable.kinds()
 	# Trinkets are finds: a few a shift in total, some kinds capped (LootTable max_per_shift).
-	var wanted := _draw_trinkets(rng)   # kind -> how many are still to place
+	var wanted := _draw_trinkets(rng, locs)   # kind -> how many are still to place
 	var placed := {}
 	var out_locs: Array = []
 	# Two passes: the first honours the chance roll; the second tops up to MIN_LOOT.
@@ -90,7 +90,7 @@ static func plan(seed_value: int, shift: int, info: Dictionary, occupied: Dictio
 				order[i] = order[j]
 				order[j] = t
 			for i in order:
-				if not LootTable.is_trinket(String(out[i].kind)) and _fits(kind, out_locs[i]):
+				if not LootTable.is_trinket(String(out[i].kind)) and _can_place(kind, out_locs[i]):
 					out[i] = _entry(kind, out_locs[i], rng)
 					break
 	return out
@@ -98,16 +98,32 @@ static func plan(seed_value: int, shift: int, info: Dictionary, occupied: Dictio
 
 ## The shift's trinkets: LootTable.TRINKETS_PER_SHIFT of them, drawn by each kind's trinket_weight,
 ## a kind with max_per_shift no more than that. {kind: count}.
-static func _draw_trinkets(rng: RandomNumberGenerator) -> Dictionary:
+##
+## POCKETS 2: the draw only offers kinds this level actually has somewhere to put. A pocket space's
+## trinket lists no "*" room weight, so on a shift without that space it has no home; drawing it
+## anyway used to burn one of the shift's few trinkets, and the swap pass at the end of plan() would
+## then parachute it into a hospital room it should never appear in. Restricting the draw is also
+## what lets the Natatorium's whistle and the Chapel's candle stay in their own spaces.
+static func _draw_trinkets(rng: RandomNumberGenerator, locs: Array) -> Dictionary:
+	var placeable := {}
+	for kind in LootTable.kinds():
+		if not LootTable.is_trinket(kind):
+			continue
+		for loc in locs:
+			if _can_place(kind, loc):
+				placeable[kind] = true
+				break
 	var n := rng.randi_range(int(LootTable.TRINKETS_PER_SHIFT[0]), int(LootTable.TRINKETS_PER_SHIFT[1]))
 	var got := {}
 	for k in n:
 		var open: Array = []
 		var total := 0.0
 		for kind in LootTable.kinds():
-			if LootTable.is_trinket(kind) and int(got.get(kind, 0)) < int(LootTable.LOOT[kind].get("max_per_shift", 1000000)):
+			if LootTable.is_trinket(kind) and placeable.has(kind) and int(got.get(kind, 0)) < int(LootTable.LOOT[kind].get("max_per_shift", 1000000)):
 				open.append(kind)
 				total += float(LootTable.LOOT[kind].get("trinket_weight", 1.0))
+		if open.is_empty():
+			break
 		var roll := rng.randf() * total
 		for kind in open:
 			roll -= float(LootTable.LOOT[kind].get("trinket_weight", 1.0))
@@ -131,6 +147,14 @@ static func _entry(kind: String, loc: Dictionary, rng: RandomNumberGenerator) ->
 		e["position"] = loc.position
 		e["yaw"] = rng.randf() * TAU
 	return e
+
+
+## POCKETS 2: `_fits` plus the room. A kind whose `rooms` gives this room kind no weight (and that
+## has no "*") does not belong here at all, and neither the trinket draw nor the swap that follows it
+## may put one here. Every hospital kind has a "*" weight, so this is the same answer as `_fits` for
+## all of them; it only bites on a kind that lives in one pocket space.
+static func _can_place(kind: String, loc: Dictionary) -> bool:
+	return _fits(kind, loc) and LootTable.weight(kind, String(loc.room_kind), int(loc.depth)) > 0.0
 
 
 ## Whether `kind` can sit at `loc` at all (surface, container, bulky rules), whatever the room.

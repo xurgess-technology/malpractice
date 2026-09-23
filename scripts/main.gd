@@ -224,6 +224,7 @@ const SETUP_COOP_WAIT_MS := 180000
 ## share one world: see scripts/review_setups.gd's header. Only the host stages.
 func _boot_setup(setup: String) -> void:
 	var role := ReviewSetups.role()
+	ReviewSetups.before_session(setup)
 	if role == "join":
 		await _boot_setup_join(ReviewSetups.port())
 		return

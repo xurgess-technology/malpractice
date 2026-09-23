@@ -75,6 +75,18 @@ func run(gs: Node, pocket_kind: String) -> void:
 		await _shot("p_natatorium_b_drum", w.call(Vector2(30, 21), 1.6), w.call(Vector2(30, 26), 1.2))
 		bot.slots = Player.empty_slots()
 		await _settle(4)
+	elif kind == "laundromat":
+		# POCKETS 2 phase 4. Flat fluorescent light, so the flashlight is off for the wide shots.
+		bot.set_flashlight(false)
+		await _shot("p_laundromat_1_length", w.call(Vector2(12.5, 18.5)), w.call(Vector2(48, 18.5), 1.6))
+		await _shot("p_laundromat_2_corner", w.call(Vector2(12, 12)), w.call(Vector2(48, 25), 1.6))
+		await _shot("p_laundromat_3_aisle", w.call(Vector2(15, 18.5)), w.call(Vector2(48, 18.5), 1.2))
+		await _shot("p_laundromat_4_dryers", w.call(Vector2(22, 14)), w.call(Vector2(22, 11), 1.4))
+		var isl: Dictionary = lay.islands[mini(8, lay.islands.size() - 1)]
+		var ip: Vector3 = w.call(Vector2(isl.tile) + Vector2(0.5, 2.4))
+		await _shot("p_laundromat_5_washers", ip, ip + Vector3(0, 0.6, -2.4))
+		bot.set_flashlight(true)
+		await _shot("p_laundromat_6_back", w.call(Vector2(16, 23)), w.call(Vector2(15, 28), 1.3))
 	else:
 		await _shot("p_restaurant_1_dining", w.call(Vector2(12.5, 25.5)), w.call(Vector2(34, 12), 1.0))
 		await _shot("p_restaurant_2_host", w.call(Vector2(28, 22)), w.call(Vector2(28, 11), 1.6))

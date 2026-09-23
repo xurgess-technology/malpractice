@@ -21,7 +21,7 @@ const S := preload("res://scripts/level/level_state.gd")
 const Rng := preload("res://scripts/level/rng.gd")
 const StubScript := preload("res://scripts/level/pockets/stub.gd")
 
-const KINDS := ["factory", "restaurant", "natatorium"]
+const KINDS := ["factory", "restaurant", "natatorium", "laundromat"]
 ## Zone id of stub tiles (wings are 2..5, outdoor 9).
 const ZONE_STUB := 10
 

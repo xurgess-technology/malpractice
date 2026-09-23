@@ -346,18 +346,183 @@ lit them. Candlelight is the room's light.
   shorter sedation, stirs sooner. Patients and strapped monsters.
 - COLLECTION PLATE: loot, gold-watch tier.
 
-## Phase 4 — the Laundromat
+## Phase 4 — the Laundromat — DONE 2026-09-22, branch `pockets-laundromat`
 Coin-op, fluorescent, every machine running with nothing inside.
-ambient_noise_level tuned so the drone genuinely masks footsteps
-from the Sonographer — built entirely from the Phase 1 knob.
-- BUCKET OF QUARTERS: loot; charged throw scatters a clattering
-  handful as a directional noisemaker.
-- WARM SCRUBS: cosmetics unlock pickup (scrub pattern for the
-  personnel mirror). If the mirror isn't ready, bank the unlock in
-  the host save and note it.
-- FABRIC SOFTENER JUG: trinket. Drink it (E from hands): footsteps
-  quieted ~60s (crouch noise multiplier at full speed). Sells as
-  plain loot too.
+Built entirely from the phase 1 knob, as planned: the space adds no
+sound system and no monster rule, only `AMBIENT_NOISE_LEVEL = 0.30`.
+
+`scripts/level/pockets/laundromat.gd`, origin (800, 2000). A 38 x 15
+hall with back-to-back washer islands down the middle (~90 of them,
+broken by cross aisles), stacked dryer banks along both long walls
+(62), folding tables, a row of moulded chairs, a change machine, and
+a utility room and attendant's office off the back wall. 3 of 3
+entrances placed on every seed tried.
+
+### The masking, measured
+The claim "tuned so the drone genuinely masks footsteps" is arithmetic
+over numbers that already existed, not a guess:
+- `Game.FOOTSTEP_LOUDNESS` **0.25** walking, `FOOTSTEP_SPRINT_LOUDNESS`
+  **0.8** sprinting (they were inline literals in `_tick_noise`; this
+  phase named them so the test reads them instead of retyping them).
+- `SonographerBrain.HEAR_PER_LOUDNESS` **22 m per unit of loudness**,
+  and the floor is subtracted before it (phase 1's `_hear`).
+
+At **0.30**:
+- a walking step masks to **0.0** and carries **0 m** — unheard in the
+  room at any range, with 0.05 of headroom over the 0.25 it has to
+  swallow (a floor of exactly 0.25 also works, but on a knife edge);
+- outside, the same step is untouched and carries **5.5 m**;
+- a sprint masks to 0.50 and carries **11 m** instead of 17.6, and
+  drops under the brain's `LOUD` (0.8), so sprinting in here fills
+  suspicion instead of pinning you outright;
+- a thrown handful of quarters (`Game.QUARTER_NOISE`, 0.9) masks to
+  0.60 and still carries **13 m** in the room, 19.8 m outside — which
+  is what keeps it worth throwing where you found it.
+
+Phase 7's acceptance test is written and passing already, in
+`tools/pockettest.gd` `_footstep_masking`: the arithmetic above, read
+from the two source files rather than retyped, **plus a live half** —
+a real Sonographer 4 m from a real walking player, once inside and
+once out in the hospital, asking the brain what it heard. Inside:
+nothing. Outside: the footsteps.
+
+### Perf, measured
+Phase 1 skipped `tools/perfprobe` deliberately and said phases 2-4 must
+run it. Run, on the Radeon 890M, medium (`--quality=1`), 180 frames a
+view, in a **windowed 1600x900** run that never took focus
+(`tools/perfprobe.ps1`, new: the same never-activate WMI trick as
+`mirrorshot.ps1` / `vatshot.ps1`; there was no launcher for perfprobe at
+all before, and a headless run renders nothing so its numbers are
+worthless).
+
+**Read the room against the hospital corridor measured in the same run,
+not against the absolute 60/50.** Runs A (before the room was brightened),
+B (after), C (after the machines were widened into banks) and D (after
+the merge, on main's launcher). The other two phases were building on the
+same machine throughout — nine Godot processes by the end — which is why
+the absolute numbers fall through the floor and why only the same-run
+comparison means anything:
+
+| view | A | B | C | D |
+| --- | --- | --- | --- | --- |
+| **that map's hospital corridor** (the control) | **49 / 36** | **31 / 17** | **17 / 10** | **9 / 7** |
+| laundromat: the length of the room | 51 / 39 | 32 / 16 | 20 / 11 | 9 / 7 |
+| laundromat: corner to corner | 47 / 37 | 40 / 25 | 19 / 10 | 9 / 7 |
+| laundromat: down an aisle | 45 / 35 | 39 / 29 | 23 / 11 | 9 / 7 |
+| laundromat: an entrance from inside | 47 / 38 | 42 / 31 | 19 / 9 | 9 / 7 |
+| laundromat: seam, hospital side | 41 / 30 | 40 / 30 | 18 / 9 | 9 / 7 |
+| laundromat: seam, pocket side | 41 / 30 | 40 / 32 | 17 / 9 | — |
+
+**Run D is not data and should not be quoted.** Every view came back at
+exactly 9 / 7, the control included, with 113-131 ms of *script* time a
+frame: that is the CPU contending with eight other Godot processes, not
+the scene. It is in the table only as the evidence that the machine was
+unusable, and because it was taken with main's launcher
+(`SW_SHOWNOACTIVATE`) rather than the minimized one runs A-C used — main
+found that a minimized window does not render honestly, so **A-C want
+re-taking on an idle machine with that launcher before anyone trusts
+their absolute values either.**
+
+What does survive all four runs is the shape: in A, B and C every view of
+the room sits at or above the hospital corridor of the map it is in, on
+fewer draw calls (125-397 inside against 432-437 for the corridor), and
+in D everything including the control is equally pinned. Nothing in any
+run suggests the room costs more to look at than the hospital beside it,
+which is the claim a new space has to be able to make. The absolute bar
+(60 fps, 1% lows above 50) is not met on this machine in a windowed run
+by the hospital either — the plain baseline sweep, taken when it was
+quieter, gives "corridor, long sightline" 48 / 27 and "lobby clock-in
+room" 31 / 17. That is pre-existing and wants its own look.
+
+For scale, the same probe on the **Factory**, which has shipped since the
+first sweep: 27-39 fps avg and **14-30** 1% lows, with its map's own
+hospital corridor at 32 / 15. The Laundromat is a good deal cheaper than
+the pocket space the bar was originally written against.
+
+**`perfprobe --pockets` crashes, on `main` as much as here.** It restarts
+the session once per kind, and in a windowed run that trips the Godot
+renderer bug docs/KNOWN_ISSUES.md already records ("BUG, indexing did not
+unpair geometries from light") and dies with signal 11 after warmup,
+before it measures anything. Verified by running it on a detached
+checkout of `main` (3b30969): same crash, same place. **`--pocket=<kind>`**
+— one space, forced before the first session is built and never rebuilt —
+is the way round it, and phases 2 and 4 arrived at it independently; the
+merge kept phase 2's version. See docs/FAILING_TESTS.md 1l.
+
+### The three items
+`Laundromat.POCKET_ITEMS` declares the set (see "the item set" below).
+All three give the `laundromat` / `laundromat_back` room kinds a weight
+in `loot_table.gd` and **no `"*"` weight**, so they are found here and
+nowhere else. All three are primitives in `loot_models.gd` (no CC0
+model exists for any of them; searched, recorded in ASSETS.md).
+
+- **BUCKET OF QUARTERS** (`quarter_bucket`): stacked loot, 3-5
+  handfuls. A **charged throw** flings one handful, which bursts where
+  it lands rather than settling as a pickup, and emits the noise
+  *there* — the directional part. A tap sets the bucket down normally.
+  It reuses the placebo-pill throw pattern exactly (a branch in
+  `game.drop_selected`, a meta flag, and a resolver on `game`); the one
+  new thing is a per-kind branch in `world_item.gd`'s settle block,
+  which had no hook of any kind before.
+- **WARM SCRUBS** (`warm_scrubs`): loot that also unlocks a scrub
+  pattern. **The spec's "if the mirror isn't ready" fallback was
+  obsolete but its premise was still wrong**: the mirror and its four
+  patterns shipped in 0.10.12/0.10.14, but there was no *unlock*
+  concept anywhere in the game — every pattern was available to
+  everyone from the first shift, so there was nothing to grant. So
+  this phase added the smallest one that works: a per-machine bitmask
+  in `settings.cfg` (`patterns_unlocked`), a fifth pattern **Gingham**
+  appended to `Customization.PATTERNS` behind it, and a branch in the
+  cloth shader to draw it. Holding a set of warm scrubs grants it, on
+  the holder's own machine, for good.
+  **The multiplayer trap, avoided deliberately**: `sanitize()` runs on
+  every *remote* player's unpacked look, so gating there would strip a
+  teammate's earned pattern on a machine that had not earned it. The
+  gate is in `cycle()` only, which is the sole way a look is chosen.
+- **FABRIC SOFTENER JUG** (`fabric_softener`): a one-use trinket in
+  the 0.10.24 system (`trinkets.gd`), scrap value 4. **The spec says
+  "E from hands"; that predates the trinket system, where every
+  trinket is left mouse.** It is left mouse, like the other six.
+  Drinking it suppresses the footstep *noise event* for 60 s at full
+  speed. "Crouch noise multiplier" turned out to be a suppression
+  rather than a multiplier — `game._tick_noise` skips a crouching
+  player entirely — so `Player.silent_steps` makes it skip a drinker
+  the same way. That is the existing multiplier reused, not a second
+  quiet mode. You still hear your own steps at -12 dB, so you can tell
+  it is working; nothing that hunts by sound hears anything.
+
+### The item set (for the "bleeding out" follow-up)
+A pocket's items can also spawn in ordinary hospital rooms within a
+radius of that pocket's entrance — a separate task. **No convention
+for "this space's item kinds" existed**: the Factory and the
+Restaurant contribute no kinds of their own, and loot is keyed by
+`room_kind` in `loot_table.gd`. The smallest one that works is a
+`const POCKET_ITEMS` on the layout script, next to `AMBIENT_NOISE_LEVEL`.
+**Phase 2 reached the same conclusion independently and the name is now
+settled across all three spaces**, so a new space declares `POCKET_ITEMS`
+and the bleed-out task finds one shape everywhere.
+Warm scrubs is in the set, but whether a permanent cosmetic unlock
+*should* bleed into a corridor is the follow-up's call, not this one's.
+
+### One shared-file fix, which the Natatorium needed too
+`LootSpawner._draw_trinkets` drew the shift's 3-5 trinkets from every
+trinket kind, knowing nothing about the level. A pocket-only trinket
+has no `"*"` room weight, so on a shift without its space the draw
+burned one of those few slots, and the swap pass at the end of `plan()`
+then parachuted it into a hospital room it must never appear in. The
+draw now only offers kinds the level has a positive-weight, fitting
+location for (`_can_place`). Every hospital kind has a `"*"` weight, so
+this is a no-op for everything that existed.
+
+**This was live on `main`.** The Natatorium's `lifeguard_whistle` has the
+same shape — natatorium room weights, no `"*"` — so from 0.10.35 until
+this merge, a whistle could be drawn on a shift with no Natatorium and
+placed in a hospital room. The Chapel's votive candle will want the same
+thing. Two other things the merge caught in the same family: `loottest`
+had never been told about the Natatorium's two kinds, so it was failing
+its "every kind is a kept kind" check on `main`; and its pocket-only
+assertions are now driven by a `POCKET_ONLY` table of kind -> its space's
+room kinds, so a new space's items are checked the day they are added.
 
 ## Phase 5 — items for the existing spaces
 Factory:
@@ -420,7 +585,8 @@ it by going TOWARD it.
   carried bodies, noise mirroring, shift rebuild).
 - Headless bot walk through every entrance of each new space.
 - Sonographer: standing footsteps unheard inside the Laundromat at
-  the tuned threshold, heard outside.
+  the tuned threshold, heard outside. **Done in phase 4** —
+  `tools/pockettest.gd` `_footstep_masking`, both halves.
 - Night Nurse: frozen in a placed candle radius with no player
   looking; moves when it burns out.
 - Onlooker: the monster_lab scenarios above.

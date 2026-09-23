@@ -88,8 +88,8 @@ func _physics_process(delta: float) -> void:
 
 func _run() -> void:
 	_check(tk != null, "the game has a Trinkets system")
-	_check(tk.is_usable("laptop") and tk.is_usable("desk_phone") and not tk.is_usable("gauze") and not tk.is_usable(""),
-		"left mouse uses the six trinkets and nothing else")
+	_check(tk.is_usable("laptop") and tk.is_usable("desk_phone") and tk.is_usable("fabric_softener") 			and not tk.is_usable("gauze") and not tk.is_usable(""),
+		"left mouse uses the seven trinkets and nothing else")
 	await _laptop()
 	await _epipen()
 	await _defib()
@@ -97,6 +97,62 @@ func _run() -> void:
 	await _pulse_ox()
 	await _hammer()
 	await _whistle()
+	await _softener()
+
+
+# =========================================================================
+# POCKETS 2 phase 4: the fabric softener jug, from the Laundromat
+# =========================================================================
+
+## Drinking it buys QUIET_SECONDS of footsteps that make no noise event at all, at full speed. The
+## check that matters is the last one: while it lasts, walking normally produces no "footstep"
+## noise for anything that hunts by sound, which is exactly what crouching already produces.
+func _softener() -> void:
+	_stand(o + Vector3(10.0, 0, 18.0))
+	_give("fabric_softener", 1, 22)
+	_check(not tk.quiet_steps(me), "before the jug, footsteps are ordinary")
+	await _use()
+	_check(TrinketsScript.is_spent(me.selected_stack()), "the jug is spent in one swig")
+	_check(String(tk.last_result.get("what", "")) == "quiet", "and it reports the quiet (%s)" % str(tk.last_result))
+	_check(tk.quiet_steps(me), "the quiet is on")
+	await _frames(2)
+	_check(me.silent_steps, "the player carries it")
+	# Walk normally and prove nothing is emitted. game.gd's _tick_noise runs on the host every
+	# frame; a walking player without the jug emits one every 0.5 s.
+	var quiet_steps := await _footstep_noises(2.0)
+	_check(quiet_steps == 0, "walking at full speed makes no footstep noise at all (%d in 2 s)" % quiet_steps)
+	_check(absf(me.sprint_mult - 1.0) < 0.01, "and it is the noise that changed, not the speed")
+	await _seconds(TrinketsScript.QUIET_SECONDS + 0.2)
+	_check(not tk.quiet_steps(me), "a minute later it has worn off")
+	await _frames(2)
+	_check(not me.silent_steps, "and the player has it no longer")
+	var loud_steps := await _footstep_noises(2.0)
+	_check(loud_steps > 0, "footsteps are heard again (%d in 2 s)" % loud_steps)
+	var money0: int = game.money
+	game.furnace_sell("fabric_softener", 1, game.furnace_value("fabric_softener", me.selected_stack()), me.global_position)
+	_check(game.money - money0 == TrinketsScript.scrap_value("fabric_softener"),
+		"an empty jug burns for scrap ($%d)" % (game.money - money0))
+	me.slots = Player.empty_slots()
+	me.moving = false
+	await _frames(2)
+
+
+## Walk on the spot for `secs` and count the footstep noise events the game emitted.
+func _footstep_noises(secs: float) -> int:
+	var seen := 0
+	var t0: float = game.world_time
+	var last := -1.0
+	while game.world_time - t0 < secs:
+		me.moving = true
+		me.sprinting = false
+		me.crouching = false
+		await _frames(1)
+		for n in game.recent_noises(0.2):
+			if String(n.kind) == "footstep" and float(n.time) > last:
+				last = float(n.time)
+				seen += 1
+	me.moving = false
+	return seen
 
 
 # =========================================================================
