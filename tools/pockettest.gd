@@ -29,6 +29,7 @@ const SonoScript := preload("res://scripts/monsters/sonographer_brain.gd")
 const LootTableScript := preload("res://scripts/economy/loot_table.gd")
 const ItemsScript := preload("res://scripts/items.gd")
 const PlayerScript := preload("res://scripts/player.gd")
+const PocketBleedScript := preload("res://scripts/economy/pocket_bleed.gd")
 
 var main: Node3D
 var game: Game
@@ -118,6 +119,36 @@ func _check_pocket_items() -> void:
 			if all_mine:
 				_check(String(seen.get(k, "")) == kind,
 					"%s: %s spawns only here, so POCKET_ITEMS lists it" % [kind, k])
+	_bleed_agrees()
+
+
+## POCKETS 2, the bleed. Each space declares what it holds as POCKET_ITEMS beside its layout, and
+## LootTable says the same thing again with a per-kind `pocket` field, because the loot planner runs
+## in `-s` tools that must not load the pocket runtime. The two must not drift apart.
+func _bleed_agrees() -> void:
+	_say("==== the bleed")
+	_check(PocketBleedScript.MOUTH_TILES == Stub.CORRIDOR,
+		"the bleed measures a seam's mouth the same way the stub builds it (%d / %d)"
+			% [PocketBleedScript.MOUTH_TILES, Stub.CORRIDOR])
+	for space: String in PocketSpaces.LAYOUTS.keys():
+		var script: GDScript = PocketSpaces.LAYOUTS[space]
+		var items: Array = script.get("POCKET_ITEMS") if script.get("POCKET_ITEMS") != null else []
+		# Only the loot half of POCKET_ITEMS can bleed: the bleed is a swap made inside the loot plan,
+		# so a kind that lives in Items.ITEMS is invisible to it. That is the Chapel's communion wine
+		# and the Restaurant's tequila -- both anesthetic substitutes, both supplies, neither loot.
+		var loot: Array = []
+		for k in items:
+			if LootTableScript.has(String(k)):
+				loot.append(String(k))
+		loot.sort()
+		_check(LootTableScript.pocket_kinds(space) == loot,
+			"%s: the loot table names the same items the space does (%s)" % [space, str(loot)])
+		# A kind may only bleed out of a space that actually holds it.
+		for k: String in LootTableScript.bleeding_kinds(space):
+			_check(loot.has(k), "%s: %s may only bleed if the space actually holds it" % [space, k])
+		# A space that holds loot has something to swap in, or the bleed is dead for that space.
+		_check(loot.is_empty() or not LootTableScript.bleeding_kinds(space).is_empty(),
+			"%s: a space that holds loot bleeds at least one kind" % space)
 
 
 ## Where a kind is allowed to spawn, from whichever table defines it. {} when it names nowhere,

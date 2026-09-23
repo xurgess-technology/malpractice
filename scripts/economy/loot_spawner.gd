@@ -10,7 +10,10 @@ extends RefCounted
 ##     room kind (LootTable.rooms), the surface or container type, and the tier (rare kinds get
 ##     likelier deeper); values roll per stack and rise with depth;
 ##   - bulky loot only on the floor, a counter or a gurney, never inside a container;
-##   - at most MAX_PER_UNIT stacks per container unit, so one cabinet is not a treasure chest.
+##   - at most MAX_PER_UNIT stacks per container unit, so one cabinet is not a treasure chest;
+##   - POCKETS 2: on a shift with a pocket space, a couple of the stacks planned for the rooms
+##     nearest one of its entrances are swapped for that space's own items (`_bleed`). It is a swap
+##     and never an addition, so everything above still bounds the shift.
 ##
 ## Depth comes from, in order: the location entry's own `depth`, a `level_info.rooms` entry
 ## containing it, a `level_info.wings` rect containing it, else its distance from the OR table.
@@ -19,6 +22,7 @@ extends RefCounted
 ## anchor), and `position` when neither (levels without anchors)}.
 
 const LootTable := preload("res://scripts/economy/loot_table.gd")
+const PocketBleed := preload("res://scripts/economy/pocket_bleed.gd")
 
 const SAFE_ROOMS := ["or", "or_storage", "or_lab", "hub_crematorium", "break_room", "hub_personnel",
 		"hub_waiting", "lobby", "hub_pharmacy", "anteroom", "clockin", "entrance", "neutral", "outdoor", "dev"]
@@ -93,6 +97,93 @@ static func plan(seed_value: int, shift: int, info: Dictionary, occupied: Dictio
 				if not LootTable.is_trinket(String(out[i].kind)) and _can_place(kind, out_locs[i]):
 					out[i] = _entry(kind, out_locs[i], rng)
 					break
+	# POCKETS 2: last, the shift's pocket space bleeds into the rooms around its entrances. It only
+	# ever swaps a stack already in the plan for one of the pocket's own, so the budget above is the
+	# whole budget. See scripts/economy/pocket_bleed.gd.
+	_bleed(out, out_locs, locs, units, info, rng)
+	return out
+
+
+## The bleed. A couple of stacks (PocketBleed.BLEED_PER_SHIFT) that would have spawned in a room near
+## an entrance become that pocket's items instead. Nothing is appended: a bled stack is one the
+## hospital did not get. The swap is like for like -- a trinket replaces a trinket and a plain stack
+## a plain stack -- so the shift's stack count and its trinket count are both untouched.
+##
+## This is deliberately not routed through `_can_place`. That guard says "this kind has no business
+## in this room kind", and it stays true: a lifeguard whistle has no business in a supply closet as
+## such. It is here because *this* supply closet is three rooms from a seam, which is a fact about
+## the hospital and not about the room kind, so it is asked here and nowhere else.
+##
+## Each bled stack takes over a planned stack of its own class. When that stack is already sitting in
+## a room near a seam it simply changes kind and stays put; otherwise the whole stack moves to a free
+## spot near a seam, which is still "a stack that would have spawned elsewhere" and nothing more.
+static func _bleed(out: Array, out_locs: Array, locs: Array, units: Dictionary, info: Dictionary,
+		rng: RandomNumberGenerator) -> void:
+	if out.is_empty():
+		return
+	var kinds := LootTable.bleeding_kinds(PocketBleed.pocket_kind(info))
+	if kinds.is_empty():
+		return
+	var near := PocketBleed.seam_tiles(info)
+	if near.is_empty():
+		return
+	var width := int((info.get("size", Vector2i.ZERO) as Vector2i).x)
+	if width <= 0:
+		return
+	var bled := {}
+	for step in rng.randi_range(int(PocketBleed.BLEED_PER_SHIFT[0]), int(PocketBleed.BLEED_PER_SHIFT[1])):
+		var kind: String = kinds[rng.randi_range(0, kinds.size() - 1)]
+		var trinket := LootTable.is_trinket(kind)
+		var victims := _shuffled(range(out.size()), rng)
+		var spare := _shuffled(range(locs.size()), rng)
+		var here := -1     # a planned stack already near a seam that this kind could take over
+		var away := -1     # ... failing that, any planned stack of the same class
+		for i in victims:
+			if bled.has(i) or LootTable.is_trinket(String(out[i].kind)) != trinket:
+				continue
+			if away < 0:
+				away = i
+			if _near(out_locs[i], near, width) and _fits(kind, out_locs[i]):
+				here = i
+				break
+		if here >= 0:
+			out[here] = _entry(kind, out_locs[here], rng)
+			out[here]["bled"] = true
+			bled[here] = true
+			continue
+		if away < 0:
+			continue
+		for li in spare:
+			var loc: Dictionary = locs[li]
+			if loc.get("taken", false) or int(units.get(loc.unit, 0)) >= MAX_PER_UNIT:
+				continue
+			if not _near(loc, near, width) or not _fits(kind, loc):
+				continue
+			var gone: Dictionary = out_locs[away]
+			gone["taken"] = false
+			units[gone.unit] = maxi(0, int(units.get(gone.unit, 0)) - 1)
+			out[away] = _entry(kind, loc, rng)
+			out[away]["bled"] = true
+			out_locs[away] = loc
+			loc["taken"] = true
+			units[loc.unit] = int(units.get(loc.unit, 0)) + 1
+			bled[away] = true
+			break
+
+
+static func _near(loc: Dictionary, near: Dictionary, width: int) -> bool:
+	var pos: Vector3 = loc.position
+	return near.has(int(floor(pos.z / C.TILE)) * width + int(floor(pos.x / C.TILE)))
+
+
+## A stable shuffle of `a`, from `rng`.
+static func _shuffled(a: Array, rng: RandomNumberGenerator) -> Array:
+	var out: Array = a.duplicate()
+	for i in range(out.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t = out[i]
+		out[i] = out[j]
+		out[j] = t
 	return out
 
 

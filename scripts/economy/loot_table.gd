@@ -19,6 +19,10 @@ extends RefCounted
 ##   rooms          room kind -> weight; "*" is any other kind. Unlisted kinds without "*" never.
 ##   surfaces       loose anchor surfaces it may sit on ("counter", "tray", "gurney", "floor")
 ##   containers     container type -> weight, when it may also turn up inside one
+##   pocket         the pocket space this kind belongs to (POCKETS 2), matching the layout script's
+##                  POCKET_ITEMS; a kind with one is never found in the hospital by a normal roll
+##   may_bleed      with `pocket`: this kind may turn up in the hospital rooms around one of that
+##                  space's entrances (scripts/economy/pocket_bleed.gd). Off unless it is set
 
 const LOOT := {
 	# ---- plain loot: it exists to be sold -----------------------------------------------------
@@ -54,6 +58,7 @@ const LOOT := {
 	# than that, and the task that bleeds pocket items out near an entrance is the right way in.
 	"collection_plate": {
 		"name": "Collection plate", "short": "Collection plates", "value": [45, 115], "tier": 3,
+		"pocket": "chapel", "may_bleed": true,
 		"rooms": {"chapel_sanctuary": 3.5, "chapel_sacristy": 2.2, "chapel_nave": 1.4, "chapel_aisle": 1.0},
 		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.3},
 	},
@@ -94,11 +99,13 @@ const LOOT := {
 	# declared where anything that wants to know what a space contributes can read it.
 	"pool_chemical_drum": {
 		"name": "Pool chemical drum", "short": "Pool chemical drums", "value": [45, 80], "tier": 1, "bulky": true,
+		"pocket": "natatorium", "may_bleed": true,
 		"rooms": {"natatorium_deck": 2.4, "natatorium_lockers": 0.9},
 		"surfaces": ["floor", "counter"], "containers": {},
 	},
 	"lifeguard_whistle": {
 		"name": "Lifeguard whistle", "short": "Lifeguard whistles", "value": [10, 20], "tier": 0, "trinket": true, "trinket_weight": 2.0,
+		"pocket": "natatorium", "may_bleed": true,
 		"rooms": {"natatorium_deck": 2.0, "natatorium_lockers": 1.2},
 		"surfaces": ["counter", "tray"], "containers": {"drawer_unit": 0.5, "trauma_bag": 0.4, "first_aid_cabinet": 0.5},
 	},
@@ -114,25 +121,35 @@ const LOOT := {
 	# eat the shove and do nothing, so it spawns and sells now and becomes a trinket the day those
 	# states land: add it to KINDS and ONE_USE, set "trinket": true and a trinket_weight here, and
 	# write _use_grease. Tracked in docs/POCKET_SPACES_2.md phase 5.
+	#
+	# All three of the Factory's bleed (`may_bleed`): each is a plain stack of industrial goods, and
+	# one of them a few rooms from a seam reads as something that came out through it rather than as
+	# hospital furniture. None of them is capped or unlocks anything, so a second one costs nothing.
 	"grease_bucket": {
 		"name": "Grease bucket", "short": "Grease buckets", "value": [15, 28], "tier": 0,
+		"pocket": "factory", "may_bleed": true,
 		"rooms": {"factory_floor": 2.2, "factory_catwalk": 1.1, "factory_office": 0.4},
 		"surfaces": ["floor", "counter"], "containers": {},
 	},
 	"copper_wire_spool": {
 		"name": "Copper wire spool", "short": "Copper wire spools", "value": [55, 95], "tier": 2, "bulky": true,
+		"pocket": "factory", "may_bleed": true,
 		"rooms": {"factory_floor": 2.4, "factory_catwalk": 0.9},
 		"surfaces": ["floor", "counter"], "containers": {},
 	},
 	"foremans_clipboard": {
 		"name": "Foreman's clipboard", "short": "Foremen's clipboards", "value": [10, 20], "tier": 0,
+		"pocket": "factory", "may_bleed": true,
 		"rooms": {"factory_office": 3.0, "factory_floor": 0.7, "factory_catwalk": 0.5},
 		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.35},
 	},
 	# ... and the Restaurant's. Same rule: only `restaurant`, `restaurant_kitchen` and
 	# `restaurant_restroom`, and never "*".
+	# The molcajete bleeds: a heavy stone bowl sitting in a ward three rooms from a seam is exactly the
+	# trace the bleed is for, and nothing else in the game depends on there being only one.
 	"cast_iron_molcajete": {
 		"name": "Cast iron molcajete", "short": "Cast iron molcajetes", "value": [50, 120], "tier": 3, "bulky": true,
+		"pocket": "restaurant", "may_bleed": true,
 		"rooms": {"restaurant_kitchen": 2.6, "restaurant": 0.7},
 		"surfaces": ["counter", "floor"], "containers": {},
 	},
@@ -145,9 +162,22 @@ const LOOT := {
 	# it only ever comes out of a station. And a pager whose partner has stopped existing (sold,
 	# burnt, left behind at the end of a shift) is worth listing on its own, because it is then plain
 	# loot: half the money and no trick.
+	#
+	# NO BLEED, and the reason is mechanical rather than a matter of taste. `max_per_shift` is honoured
+	# in two places (LootSpawner._draw_trinkets and _pick_kind) and both of them count what the plan
+	# itself rolled; the bleed runs after the plan is finished and swaps a stack for a pocket kind
+	# without consulting that count. Every kind that bleeds today is uncapped, so that has never
+	# mattered -- this would be the first capped one, and a shift could end up with the station rolled
+	# in the Restaurant *and* a second one bled into a corridor, which is two sets of bound pagers
+	# where the table says one. The bleed's own rule is "replace like for like, never add", and
+	# teaching it about caps is a bigger change than this kind is worth.
+	#
+	# It reads oddly too: the others are goods somebody carried through a seam, while this is a fixture
+	# off the host stand, and the hospital already has desk phones for that.
 	"restaurant_pagers": {
 		"name": "Restaurant pagers", "short": "Sets of restaurant pagers", "value": [28, 48], "tier": 1,
 		"trinket": true, "trinket_weight": 1.6, "max_per_shift": 1,
+		"pocket": "restaurant", "may_bleed": false,
 		"rooms": {"restaurant": 2.4, "restaurant_kitchen": 1.0},
 		"surfaces": ["counter"], "containers": {"drawer_unit": 0.3},
 	},
@@ -155,6 +185,11 @@ const LOOT := {
 	# beside the Chapel's communion wine (Items.ANESTHETIC_KINDS), fenced to the Restaurant by the
 	# same `rooms` key the wine uses. A substitute has to be surgical and consumable and satisfy a
 	# procedure step, which is the supply table's job and not this one's.
+	#
+	# The lone pager below carries no `pocket` either, and that is on purpose: `pocket` means "found in
+	# that space", the lone pager is found nowhere, and POCKET_ITEMS leaves it out for the same reason.
+	# That keeps pocket_kinds() and the Restaurant's POCKET_ITEMS exactly equal (tools/pockettest.gd),
+	# and it puts the half-pair out of the bleed's reach, which is what restaurant.gd's warning asks.
 	"restaurant_pager": {
 		"name": "Restaurant pager", "short": "Restaurant pagers", "value": [14, 24], "tier": 1, "trinket": true,
 		"rooms": {}, "surfaces": [], "containers": {},
@@ -164,18 +199,21 @@ const LOOT := {
 	# same set, declared where the space is).
 	"quarter_bucket": {
 		"name": "Bucket of quarters", "short": "Buckets of quarters", "value": [10, 18], "tier": 1,
-		"stack": true, "batch": [3, 5],
+		"stack": true, "batch": [3, 5], "pocket": "laundromat", "may_bleed": true,
 		"rooms": {"laundromat": 3.2, "laundromat_back": 1.1},
 		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.4, "station_drawers": 0.4},
 	},
 	"warm_scrubs": {
 		"name": "Warm scrubs", "short": "Warm scrubs", "value": [20, 38], "tier": 1,
+		# No bleed: warm scrubs are a permanent cosmetics unlock, and finding a permanent unlock in a
+		# corridor devalues the space it belongs to. It is only ever found in the Laundromat.
+		"pocket": "laundromat", "may_bleed": false,
 		"rooms": {"laundromat": 2.6, "laundromat_back": 2.2},
 		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.5, "station_drawers": 0.3},
 	},
 	"fabric_softener": {
 		"name": "Fabric softener", "short": "Fabric softener jugs", "value": [14, 26], "tier": 0,
-		"trinket": true, "trinket_weight": 1.8,
+		"trinket": true, "trinket_weight": 1.8, "pocket": "laundromat", "may_bleed": true,
 		"rooms": {"laundromat": 2.4, "laundromat_back": 1.6},
 		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.35},
 	},
@@ -186,6 +224,7 @@ const LOOT := {
 	# it is the use (scripts/trinkets/trinkets.gd).
 	"votive_candle": {
 		"name": "Votive candle", "short": "Votive candles", "value": [9, 18], "tier": 0, "trinket": true, "trinket_weight": 2.4,
+		"pocket": "chapel", "may_bleed": true,
 		"rooms": {"chapel_aisle": 6.0, "chapel_nave": 3.0, "chapel_sanctuary": 3.0, "chapel_sacristy": 2.0},
 		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.2},
 	},
@@ -259,3 +298,26 @@ static func roll_value(kind: String, depth: int, roll: float) -> int:
 
 static func is_trinket(kind: String) -> bool:
 	return bool(LOOT.get(kind, {}).get("trinket", false))
+
+
+## POCKETS 2: the kinds that belong to pocket space `space`, sorted. The same set as the layout
+## script's POCKET_ITEMS (tools/pockettest.gd checks the two agree); declared here as well because
+## the loot planner must not load the pocket runtime.
+static func pocket_kinds(space: String) -> Array:
+	var out: Array = []
+	if space == "":
+		return out
+	for kind in kinds():
+		if String(LOOT[kind].get("pocket", "")) == space:
+			out.append(kind)
+	return out
+
+
+## Of those, the ones allowed to bleed into the hospital rooms around one of that space's entrances
+## (scripts/economy/pocket_bleed.gd). "" -- a shift with no pocket -- bleeds nothing.
+static func bleeding_kinds(space: String) -> Array:
+	var out: Array = []
+	for kind in pocket_kinds(space):
+		if bool(LOOT[kind].get("may_bleed", false)):
+			out.append(kind)
+	return out

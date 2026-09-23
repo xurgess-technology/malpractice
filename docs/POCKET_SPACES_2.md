@@ -641,6 +641,121 @@ its "every kind is a kept kind" check on `main`; and its pocket-only
 assertions are now driven by a `POCKET_ONLY` table of kind -> its space's
 room kinds, so a new space's items are checked the day they are added.
 
+## Phase 4b — bleeding out — DONE 2026-09-22, branch `pockets-bleed`
+(Reconciled with phase 5 on 2026-09-23: the Factory and the Restaurant gained items, so they became
+bleed candidates and everything here was re-decided and re-measured. See the last section.)
+
+*"Items that belong in pocket spaces can spawn in normal hospital rooms, but only within a certain
+radius of the entrance to the pocket space — kind of like the items are bleeding out."* The rooms
+around an entrance start showing traces of whatever is on the other side, so the hospital hints that
+something is through there before you find it.
+
+### Where the seam is, in hospital terms
+Not a metre radius: **a radius of rooms**. An entrance stub's leg 1 opens onto a wing hallway at its
+two mouth tiles (stub-local `(u, -1)`, `o + eu * u - ev` in hospital tiles), and that pair of tiles
+is the seam's address in the hospital's own grid. From each mouth, `PocketBleed.seam_rooms` walks
+the hallway outward over open tiles that belong to no room, and takes the first `ROOM_RADIUS` (3)
+rooms it touches — the rooms you pass walking away from the entrance. A room is *reached*, never
+walked through, so the count is rooms and not tiles. With the usual 2-3 entrances that is **6-9
+rooms** of a hospital (measured on seeds 1-3: 6 or 9).
+
+### It is taken from the budget, not added to it
+Loot is scarce on purpose (15-20 stacks, about $1,000 a shift) and that is the point of it, so
+`LootSpawner._bleed` runs **last**, on a plan that already exists, and only ever *replaces* an entry.
+The swap is like for like — a trinket takes over a trinket, a plain stack a plain stack — so both
+`LOOT_PER_SHIFT` and `TRINKETS_PER_SHIFT` are untouched. When the victim stack is already sitting in
+a room near a seam it changes kind where it lies; otherwise the whole stack **moves** to a free spot
+near a seam, which is still a stack that would have spawned elsewhere and nothing more. Re-measured
+after the phase 5 merge, over seeds 1-3 x shifts 1-3 x all five spaces: **60 bled stacks over 45
+shifts**, 1.33 a shift against 15-20 — a trace, not a shop window. (Before the merge, with only
+three spaces holding loot, it was 36 over 27, the same 1.3: the rate is `BLEED_PER_SHIFT` and does
+not move when a space gains items. What moved is that the Factory and the Restaurant now bleed at
+all.) Every shift in that run still held 15-20 stacks and 3-5 trinkets.
+
+### It is not a hole in the 0.10.36 guard
+A pocket kind still lists no `"*"` room weight, and `LootSpawner._can_place` still refuses it in
+every hospital room, which is what fixed the whistle leaking on shifts with no pool. `_can_place`
+answers "does this kind belong in this *room kind*", and the answer is still no. The bleed asks a
+different question — "is *this* room three rooms from a seam" — which is a fact about the hospital
+and not about the room kind, so it lives in its own pass and nowhere near that guard.
+
+### Per-item flag
+`LootTable.LOOT` gained `pocket` (which space a kind belongs to) and `may_bleed`. Not everything
+should leak:
+
+| kind | bleeds | |
+|---|---|---|
+| `lifeguard_whistle`, `pool_chemical_drum` | yes | the Natatorium |
+| `votive_candle`, `collection_plate` | yes | the Chapel |
+| `quarter_bucket`, `fabric_softener` | yes | the Laundromat |
+| `grease_bucket`, `copper_wire_spool`, `foremans_clipboard` | yes | the Factory |
+| `cast_iron_molcajete` | yes | the Restaurant |
+| `warm_scrubs` | **no** | a permanent cosmetics unlock; finding one in a corridor devalues the space it belongs to (phase 4's author's call, and this flag is what it is for) |
+| `restaurant_pagers` | **no** | the only bleed candidate with a `max_per_shift`; see below |
+| `communion_wine`, `tequila` | **no** | not loot at all: `Items.SURGICAL` with a room-restricted `ItemSpawner._legal`, a separate mechanism, and bleeding either would need a third one |
+
+### The six kinds phase 5 added, decided one at a time
+This section was first written against a `main` where the Factory and the Restaurant held nothing,
+so **both of them bled nothing and everything here was measured with three spaces contributing.**
+Phase 5 landed first and gave them six kinds between them, which made them bleed candidates for the
+first time. The merge re-decided each one, and re-measured the numbers above.
+
+- **`grease_bucket`, `copper_wire_spool`, `foremans_clipboard` — they bleed.** Each is a plain stack
+  of industrial goods with no cap and nothing unlocked behind it, and one of them lying three rooms
+  from a seam reads as something carried out through it. The clipboard is the nicest of the three:
+  in a hospital it is almost camouflage until you read it.
+- **`cast_iron_molcajete` — it bleeds.** A heavy stone bowl in a ward is exactly the trace this is
+  for, and it is tier 3, so finding one is worth the walk back.
+- **`restaurant_pagers` — it does not, and the reason is mechanical rather than taste.**
+  `max_per_shift: 1` is honoured in `LootSpawner._draw_trinkets` and `_pick_kind`, both of which
+  count what *the plan* rolled. `_bleed` runs after the plan is finished and swaps a stack for a
+  pocket kind without consulting that count. Every kind that bleeds today is uncapped, so that has
+  never mattered — this would be the first capped one, and a shift could end up with the station
+  rolled in the Restaurant *and* a second one bled into a corridor: two sets of bound pagers where
+  the table says one, and two `PAIR_MARK` pairs in play. Teaching `_bleed` about caps is a bigger
+  change than this one kind is worth, and the rule here is "replace like for like, never add". It
+  also reads oddly: the other four are goods somebody carried through a seam, while this is a fixture
+  off the host stand, and the hospital already has desk phones for that.
+- **`tequila` — it cannot.** It is a surgical supply in `Items.ITEMS`, not loot, and the bleed is a
+  swap made inside the loot plan. Identical to the Chapel's `communion_wine`, for the same reason.
+- **`restaurant_pager` (singular) — never a candidate.** It has no `rooms`, is not in `POCKET_ITEMS`
+  and carries no `pocket` field, so nothing here can reach it. That is what restaurant.gd's warning
+  about not scattering half-pairs asks for, met by the kind simply not existing to the bleed.
+
+All five spaces hold loot now, so all five bleed something: the Restaurant one kind, the Factory
+three, and the other three two each.
+
+### Every machine agrees
+The bleed is a pure function of `level_info`, which every machine builds from the replicated seed and
+the replicated pocket kind (the `"px"` global), and it rolls on the loot plan's own stream **after**
+everything else, so it perturbs no earlier roll. Loot planning is host-authoritative anyway, but a
+client that asked would get the same answer. A shift with no pocket has `pocket_kind(info) == ""` and
+bleeds nothing, so the "did not spawn this shift" case is the empty case and not a special one.
+
+### What it was tested with
+`tools/loottest.gd`, **153 checks to 484 before the phase 5 merge and 612 after it** (the extra
+checks are the two spaces that now have something to bleed): forcing each of the five spaces onto
+seeds 1-3, every pocket kind that got out is one flagged `may_bleed`, is marked `bled`, and sits in a
+room near a seam; each shift still holds 15-20 stacks and 3-5 trinkets; planning twice gives the same
+plan; with `force_kind = "none"` nothing leaks at all; and one check counts the total, so the suite
+fails loudly if the feature ever goes dead and the rest starts passing on an empty set. Its `BLEEDS`
+table spells out, per space, which kinds may get out, and is checked against the loot table's own
+flags both ways round.
+
+`tools/pockettest.gd`, **649 checks to 670**, checks `POCKET_ITEMS` and the loot table's `pocket`
+fields have not drifted apart, that a space holding loot bleeds at least one kind of it, and that the
+bleed measures a mouth the same way `Stub.CORRIDOR` builds it. Those 21 checks all pass. The suite's
+own failures are FAILING_TESTS 1f and nothing else: two full runs after the merge gave **1 of 670**
+(a `laundromat` follower-crossing check, green on its own at `--only=laundromat`, 111 checks) and
+**6 of 670** (the Night Nurse on `restaurant`, `natatorium` and `chapel`, at the exact distances 1f
+records). The identity of the failing space moves between runs and the failure does not, which is
+1f's whole story. `tools/inventorytest.tscn` is **PASS, 98 checks**. The new section lives in
+`_bleed_agrees`, called from phase 5's
+`_check_pocket_items`: the merge found the two tasks had written **two** `POCKET_ITEMS` checkers,
+and phase 5's was the more thorough (it checks `SPACE_ROOMS` has not gone stale, that no two spaces
+claim a kind, and the other way round that a kind spawning only in one space is listed by it), so it
+is the one that survived, with the bleed's own checks folded in beside it.
+
 ## Phase 5 — items for the existing spaces — DONE 2026-09-23, branch `pockets-phase5`
 Six items for the two spaces that had none of their own, plus the shared
 "lure" database tag. Built over two sittings: the first was stopped part-way

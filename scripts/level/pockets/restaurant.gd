@@ -15,12 +15,19 @@ const Stub := preload("res://scripts/level/pockets/stub.gd")
 const AMBIENT_NOISE_LEVEL := 0.0
 
 ## POCKETS 2: the item kinds this space contributes, as a set anything else can read without digging
-## through the layout below. The follow-up task that bleeds a pocket's items into the hospital rooms
-## near its entrances reads this; so does anything that wants to know what a space is worth.
+## through the layout below. The bleed -- a space's items turning up in the hospital rooms around one
+## of its entrances -- reads this (scripts/economy/pocket_bleed.gd); so does anything that wants to
+## know what a space is worth. Phase 5 is what gave the Restaurant items of its own; before it this
+## list was empty and the Restaurant bled nothing.
 ##
 ## This is what SPAWNS here. `restaurant_pager` is deliberately absent: a single pager is never
 ## placed on the map, it only ever comes out of a `restaurant_pagers` station, so a task that seeds
 ## hospital rooms from this list must not scatter half-pairs about.
+##
+## Of these three, only the molcajete bleeds. The pager station does not (LootTable says why: it is
+## the one bleed candidate in the game with a `max_per_shift`, and the bleed cannot honour one), and
+## the tequila cannot -- it is a surgical supply in Items.ITEMS, not loot, and the bleed is the loot
+## planner's, exactly as for the Chapel's communion wine.
 const POCKET_ITEMS := ["cast_iron_molcajete", "restaurant_pagers", "tequila"]
 
 const T := 1.5

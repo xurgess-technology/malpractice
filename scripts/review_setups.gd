@@ -41,6 +41,9 @@ const SETUPS := {
 	# hand and a Sonographer already hunting you, in a room where it cannot hear you walk.
 	"laundromat": {"seed": 4242, "pocket": "laundromat", "stage": "_laundromat"},
 	"chapel": {"seed": 4242, "pocket": "chapel", "stage": "_chapel"},
+	# POCKETS 2 phase 4b (docs/POCKET_SPACES_2.md): on the hospital side, in front of something from
+	# the pocket that has no business being there. The seed is one whose Natatorium bleeds on shift 1.
+	"bleed": {"seed": 4242, "pocket": "natatorium", "stage": "_bleed"},
 	"items": {"seed": 1, "stage": "_items"},
 	# GRAFTING chunk C (docs/GRAFTING.md): strapped to a table with a loaded vat on its stand, as
 	# Dr. Botsworth, ready to operate. `graft_back` is the same with the graft already done.
@@ -1271,3 +1274,61 @@ static func _laundromat(game: Game) -> void:
 	if m != null:
 		m.calm = 20.0
 	await tree.physics_frame
+
+
+## POCKETS 2 phase 4b, the bleed. You are standing in an ordinary hospital room a few rooms from a
+## pocket entrance, looking at one of the pocket's own items sitting there as if it belonged. The
+## thing to judge is whether it reads as a *hint* -- odd enough to make you look for the way through,
+## not so odd that it looks like a bug -- and whether one or two a shift is the right amount. The
+## console says what it found and where; the entrance it came from is a few rooms away, so walking
+## the wing from here should turn it up.
+static func _bleed(game: Game) -> void:
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	var PocketBleed := preload("res://scripts/economy/pocket_bleed.gd")
+	var LootTable := preload("res://scripts/economy/loot_table.gd")
+	var info: Dictionary = game.level_info
+	var near := PocketBleed.seam_tiles(info)
+	var width := int((info.get("size", Vector2i.ZERO) as Vector2i).x)
+	if near.is_empty():
+		print("[review] bleed: no pocket was built on this seed")
+		return
+	print("[review] bleed: %d rooms near a seam" % PocketBleed.seam_rooms(info).size())
+	# Whatever got out: a pocket kind standing on the hospital side, in a room near a seam.
+	var found = null
+	for it in game.world_items.values():
+		if not is_instance_valid(it) or String(LootTable.LOOT.get(it.kind, {}).get("pocket", "")) == "":
+			continue
+		var q: Vector3 = it.global_position
+		if near.has(int(floor(q.z / C.TILE)) * width + int(floor(q.x / C.TILE))):
+			found = it
+			break
+	if found == null:
+		print("[review] bleed: nothing bled on this seed and shift -- try another --seed=N")
+		return
+	var at: Vector3 = found.global_position
+	print("[review] bleed: a %s in the hospital at %v" % [found.kind, at])
+	# Somewhere that can actually see it: the first of the four axes, at the first distance, whose
+	# eye line reaches the thing without a wall or a pillar in the way. "Most open direction" is not
+	# enough on its own -- it happily puts you round the corner from what you came to look at.
+	var look := at + Vector3.UP * 0.35
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	var spot := game._floor_at(at + Vector3.BACK * 1.5)
+	for d in [Vector3.BACK, Vector3.FORWARD, Vector3.LEFT, Vector3.RIGHT]:
+		var clear := false
+		for dist in [2.6, 2.0, 1.5]:
+			var try_at := game._floor_at(at + d * dist)
+			var q := PhysicsRayQueryParameters3D.create(try_at + Vector3.UP * 1.6, look)
+			q.collision_mask = C.L_WORLD
+			if space.intersect_ray(q).is_empty():
+				spot = try_at
+				clear = true
+				break
+		if clear:
+			break
+	place(game, spot, look)
+	print("[review] bleed: standing at %v, %.1f m from it" % [spot, spot.distance_to(at)])
