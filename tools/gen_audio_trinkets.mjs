@@ -17,6 +17,9 @@
 //                           (POCKETS 2, the Restaurant)
 //   trinkets_pager_rattle   the same motor with nothing holding it: a pager left on a hard floor,
 //                           walking and clattering. This one is in the world, and monsters hear it.
+//   trinkets_softener       POCKETS 2 phase 4: a cap cracking, then long thick glugs of syrup
+//   trinkets_candle_light   POCKETS 2 phase 3: a match struck, and a wick catching
+//   trinkets_candle_out     the same wick giving up: a small wet snuff and a breath of smoke
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -315,6 +318,100 @@ function pager(name, held) {
   }
 }
 
+
+// POCKETS 2 phase 4 (the Laundromat): the fabric softener jug. The cap cracks off its ring, then
+// somebody drinks a thick blue liquid straight from the bottle: slow, resonant glugs with the neck
+// gulping air back in between them, and a swallow at the end.
+function softener(name) {
+  const r = rngFor(name);
+  const n = Math.floor(SR * 1.9);
+  const x = new Float32Array(n);
+  // The cap twisting off: a ratchet of small plastic cracks.
+  for (let k = 0; k < 7; k++) {
+    const at = Math.floor(SR * (0.01 + k * 0.016));
+    for (let i = 0; i < SR * 0.01 && at + i < n; i++) {
+      x[at + i] += (r() * 2 - 1) * Math.exp(-i / (SR * 0.0016)) * (0.34 + r() * 0.16);
+    }
+  }
+  // Four glugs. Each is a short pitched blob (the bottle's air column, falling as it empties)
+  // with a wet noise burst on its front.
+  const glugs = [0.30, 0.61, 0.93, 1.27];
+  for (let g = 0; g < glugs.length; g++) {
+    const at = Math.floor(SR * glugs[g]);
+    const f0 = 196 - g * 17;
+    for (let i = 0; i < SR * 0.22 && at + i < n; i++) {
+      const t = i / SR;
+      const env = Math.min(1, t / 0.006) * Math.exp(-t / 0.055);
+      const f = f0 * (1 - 0.22 * t / 0.22);
+      x[at + i] += Math.sin(TAU * f * t) * 0.85 * env;
+      x[at + i] += Math.sin(TAU * f * 2 * t) * 0.22 * env;
+      x[at + i] += (r() * 2 - 1) * 0.30 * Math.exp(-t / 0.014);
+    }
+  }
+  // The swallow: a low wet click and a breath.
+  const sw = Math.floor(SR * 1.56);
+  for (let i = 0; i < SR * 0.05 && sw + i < n; i++) {
+    x[sw + i] += (r() * 2 - 1) * Math.exp(-i / (SR * 0.006)) * 0.5;
+    x[sw + i] += Math.sin(TAU * 128 * i / SR) * 0.4 * Math.exp(-i / (SR * 0.02));
+  }
+  for (let i = 0; sw + Math.floor(SR * 0.08) + i < n; i++) {
+    const t = i / SR;
+    x[sw + Math.floor(SR * 0.08) + i] += (r() * 2 - 1) * 0.12 * Math.min(1, t / 0.03) * Math.exp(-t / 0.14);
+  }
+  writeWav(name, lowpass(x, 3400));
+}
+
+
+// The Chapel's votive candle. A match dragged along the strip, the head catching, then the wick
+// taking with a soft crackle that settles into a flame. Nothing musical: it is a small dry sound.
+function candleLight(name) {
+  const r = rngFor(name);
+  const n = Math.floor(SR * 0.70);
+  const x = new Float32Array(n);
+  const strike = Math.floor(SR * 0.02);
+  for (let i = 0; i < SR * 0.09 && strike + i < n; i++) {
+    const t = i / SR;
+    // The drag: broadband scrape, rough at the start and thinning out.
+    x[strike + i] += (r() * 2 - 1) * 0.55 * Math.exp(-t / 0.028) * (0.5 + 0.5 * Math.sin(TAU * 60 * t));
+  }
+  const cat = Math.floor(SR * 0.10);
+  for (let i = 0; i < SR * 0.06 && cat + i < n; i++) {
+    // The head going up: a short puff with a little body to it.
+    x[cat + i] += (r() * 2 - 1) * 0.7 * Math.exp(-i / (SR * 0.012));
+  }
+  const wick = Math.floor(SR * 0.18);
+  for (let i = 0; wick + i < n; i++) {
+    const t = i / SR;
+    const env = Math.min(1, t / 0.05) * Math.exp(-t / 0.30);
+    x[wick + i] += (r() * 2 - 1) * 0.22 * env;
+    if (r() < 0.0012) {
+      for (let k = 0; k < SR * 0.004 && wick + i + k < n; k++) {
+        x[wick + i + k] += (r() * 2 - 1) * 0.30 * Math.exp(-k / (SR * 0.0012)) * env;  // a crackle
+      }
+    }
+  }
+  writeWav(name, highpass(lowpass(x, 6800), 300));
+}
+
+// Two minutes later. A wet little snuff as the flame drowns in its own wax, then the smoke.
+function candleOut(name) {
+  const r = rngFor(name);
+  const n = Math.floor(SR * 0.55);
+  const x = new Float32Array(n);
+  for (let i = 0; i < SR * 0.05; i++) {
+    const t = i / SR;
+    // The snuff itself: low, damp, gone almost at once.
+    x[i] += (r() * 2 - 1) * 0.8 * Math.exp(-t / 0.010);
+    x[i] += Math.sin(TAU * 180 * t) * 0.25 * Math.exp(-t / 0.014);
+  }
+  const smoke = Math.floor(SR * 0.06);
+  for (let i = 0; smoke + i < n; i++) {
+    const t = i / SR;
+    x[smoke + i] += (r() * 2 - 1) * 0.16 * Math.min(1, t / 0.04) * Math.exp(-t / 0.16);
+  }
+  writeWav(name, highpass(lowpass(x, 3400), 150));
+}
+
 fs.mkdirSync(OUT, { recursive: true });
 phoneRing('trinkets_phone_ring');
 phonePick('trinkets_phone_pick');
@@ -327,3 +424,6 @@ epipen('trinkets_epipen');
 whistle('trinkets_whistle');
 pager('trinkets_pager_buzz', true);
 pager('trinkets_pager_rattle', false);
+softener('trinkets_softener');
+candleLight('trinkets_candle_light');
+candleOut('trinkets_candle_out');

@@ -1,6 +1,6 @@
 class_name Trinkets
 extends Node
-## TRINKETS (docs/ITEMS_AND_ICONS.md, chunk B). The six loot items that sell but also do one thing,
+## TRINKETS (docs/ITEMS_AND_ICONS.md, chunk B). The loot items that sell but also do one thing,
 ## so it is always use it or sell it. A child "Trinkets" of Game on every machine.
 ##
 ##   Desk phone      left mouse sets it down and it rings for RING_SECONDS: a decoy. Pick it up and
@@ -21,6 +21,12 @@ extends Node
 ##                   hospital: if a person is holding it, only that person hears it; if it is lying
 ##                   on the floor, it rattles out loud where it lies and the monsters hear that.
 ##                   Break the pair (sell one, burn it, leave it behind) and what is left is loot.
+##   Votive candle   POCKETS 2 phase 3 (the Chapel). Once: set it down and it burns for
+##                   CANDLE_SECONDS. Inside CANDLE_RADIUS of a burning one the Night Nurse counts
+##                   as watched with nobody looking at her (scripts/perception.gd), so a placed
+##                   candle is a safe zone with a two minute fuse. Lighting it IS the use: it goes
+##                   down already spent, worth scrap, so one candle buys one safe zone and you
+##                   cannot pick it up and re-light it somewhere better.
 ##
 ## A one-use trinket that has been spent is marked `used` on its hand slot and its value drops to
 ## SCRAP: greyed with a crack in the item bar (hud.gd), and it still sells at the furnace. The mark
@@ -33,13 +39,15 @@ extends Node
 const MonsterScript := preload("res://scripts/monster.gd")
 const LootTable := preload("res://scripts/economy/loot_table.gd")
 
-## The nine. Anything else falls through to combat.use (the saw and the needle).
+## The eleven. Anything else falls through to combat.use (the saw and the needle).
 const KINDS := ["desk_phone", "laptop", "defibrillator", "pulse_oximeter", "reflex_hammer", "epipen",
-	"lifeguard_whistle", "restaurant_pagers", "restaurant_pager"]
+		"lifeguard_whistle", "restaurant_pagers", "restaurant_pager", "fabric_softener", "votive_candle"]
 ## Spent once and never again. The phone, the hammer and the pulse oximeter keep working.
-const ONE_USE := ["laptop", "defibrillator", "epipen", "lifeguard_whistle"]
+const ONE_USE := ["laptop", "defibrillator", "epipen", "lifeguard_whistle", "fabric_softener",
+		"votive_candle"]
 ## What a spent one-use trinket sells for: scrap, not nothing.
-const SCRAP := {"laptop": 8, "defibrillator": 15, "epipen": 3, "lifeguard_whistle": 3}
+const SCRAP := {"laptop": 8, "defibrillator": 15, "epipen": 3, "lifeguard_whistle": 3,
+		"fabric_softener": 4, "votive_candle": 3}
 ## The mark a spent trinket carries through a drop (WorldItem.x).
 const USED_MARK := "used"
 ## The shortest gap the host accepts between one player's trinket uses.
@@ -84,6 +92,18 @@ const HAMMER_REACH := 2.2
 const HAMMER_CONE_DEG := 45.0
 const HAMMER_COOLDOWN := 1.2
 
+# --- the votive candle (POCKETS 2 phase 3)
+## About two minutes of burn, as the Chapel spec asks for.
+const CANDLE_SECONDS := 120.0
+## How far the candle's regard reaches. Generous enough to hold a junction or a doorway, small
+## enough that it is a place you stand rather than a wing you own.
+const CANDLE_RADIUS := 5.0
+## The last stretch of the burn, when the flame gutters and the light sinks: the tell that your
+## safe zone is about to stop being one.
+const CANDLE_GUTTER := 12.0
+const CANDLE_ENERGY := 1.5
+const CANDLE_RANGE := 8.0
+
 # --- the EpiPen
 const EPI_REACH := 2.0
 const EPI_CONE_DEG := 45.0
@@ -125,6 +145,12 @@ const PAIR_MARK := "pg"
 
 var game: Node = null
 ## Host: the break roll for the pull-out ring. Tests seed it.
+# --- POCKETS 2 phase 4: the fabric softener jug (the Laundromat)
+## How long a swig keeps your footsteps quiet.
+const QUIET_SECONDS := 60.0
+## How much of the step sound you still hear yourself while it lasts, in decibels off the usual.
+const QUIET_STEP_DB := -12.0
+
 var rng := RandomNumberGenerator.new()
 ## Host: what the last use did, for tests: {what: "...", kind: ..., id: ...}.
 var last_result: Dictionary = {}
@@ -135,6 +161,8 @@ var _hand_rings: Dictionary = {} ## peer id -> world_time the ring in their hand
 var _maps: Dictionary = {}       ## peer id -> world_time the laptop map goes dark
 var _tagged: Dictionary = {}     ## monster id -> the peer id whose pulse oximeter is on it
 var _epi: Dictionary = {}        ## peer id -> world_time the sprint boost ends
+var _quiet: Dictionary = {}      ## peer id -> world_time their quiet footsteps run out
+var _candles: Dictionary = {}    ## world item id -> world_time its flame goes out
 var _spins: Dictionary = {}      ## peer id -> how many times the reflex hammer has turned them (mod 64)
 var _swings: Dictionary = {}     ## peer id -> how many reflex-hammer swings they have thrown (mod 64)
 var _buzz: Dictionary = {}       ## peer id -> how many times the pager IN THEIR HANDS has buzzed (mod 64)
@@ -151,6 +179,7 @@ var _bonk_due: Dictionary = {}   ## peer id -> world_time their swing connects (
 # --- every machine, local presentation only
 var _beat: Dictionary = {}       ## monster id -> seconds until its next heartbeat
 var _ring_at: Dictionary = {}    ## ring key -> seconds until its next ring
+var _candle_lights: Dictionary = {} ## world item id -> the Node3D holding its "Bulb" (every machine)
 var _spin_seen: Dictionary = {}  ## peer id -> the spin counter this machine has already acted on
 var _swing_seen: Dictionary = {} ## peer id -> the swing counter this machine has already animated
 var _buzz_seen: Dictionary = {}  ## peer id -> the buzz counter this machine has already felt
@@ -266,6 +295,8 @@ func use(p) -> void:
 		"lifeguard_whistle": _use_whistle(p, head)
 		"restaurant_pagers": _use_pager_station(p, head)
 		"restaurant_pager": _use_pager(p, head)
+		"fabric_softener": _use_fabric_softener(p, head)
+		"votive_candle": _use_candle(p, head)
 
 
 ## Every machine (Player._update_aim, a few Hz): the crosshair line while holding a trinket that
@@ -282,6 +313,8 @@ func use_prompt(p) -> String:
 			return "[Click] Put it down and let it ring"
 		"laptop":
 			return "[Click] Open the laptop"
+		"votive_candle":
+			return "[Click] Light it and set it down"
 		"epipen":
 			var q := _downed_or_standing_mate(p, EPI_REACH, EPI_CONE_DEG, false)
 			return "[Click] Jab %s" % (q.player_name if q != null else "yourself")
@@ -298,6 +331,8 @@ func use_prompt(p) -> String:
 			if where == "floor":
 				return "[Click] Buzz the other pager. You left it somewhere."
 			return ""
+		"fabric_softener":
+			return "[Click] Drink the fabric softener"
 		"defibrillator":
 			var d := _downed_mate(p)
 			if d == null:
@@ -915,6 +950,32 @@ func jab_epipen(q) -> void:
 	game._sound("trinkets_epipen", q.global_position + Vector3.UP * 1.1)
 
 
+## POCKETS 2 phase 4: drink the jug. For QUIET_SECONDS your footsteps make no noise event at all —
+## the same nothing a crouching player makes (game.gd `_tick_noise`) — except that you keep walking
+## and sprinting at full speed. It is the crouch multiplier, not a second quiet mode, so a monster
+## that cannot hear a crouching player cannot hear you either.
+func _use_fabric_softener(p, head: int) -> void:
+	spend(p, head)
+	drink_softener(p)
+	last_result = {"what": "quiet", "id": int(p.peer_id)}
+	game.tell(p, "It coats your throat. Your feet stop making any sound at all.", 3.5)
+
+
+## Host: the quiet starts on `q` (tests call it directly).
+func drink_softener(q) -> void:
+	if q == null or not is_instance_valid(q) or game == null or not game.is_host():
+		return
+	_quiet[int(q.peer_id)] = float(game.world_time) + QUIET_SECONDS
+	game._sound("trinkets_softener", q.global_position + Vector3.UP * 1.3)
+
+
+## Every machine: whether this player's steps are making no noise right now.
+func quiet_steps(p) -> bool:
+	if p == null or game == null:
+		return false
+	return float(_quiet.get(int(p.peer_id), 0.0)) > float(game.world_time)
+
+
 ## Every machine: how much faster this player sprints right now (1.0 normally).
 func sprint_mult(p) -> float:
 	if p == null or game == null:
@@ -924,6 +985,130 @@ func sprint_mult(p) -> float:
 
 func boosted(p) -> bool:
 	return sprint_mult(p) > 1.0
+
+
+# =============================================================================== the votive candle
+
+## Set it down in front of you and light it. It burns for CANDLE_SECONDS, and while it burns the
+## Night Nurse counts as watched anywhere within CANDLE_RADIUS of it even though nobody is looking
+## (scripts/perception.gd calls candle_watches before it asks whether anyone can see the point).
+##
+## It goes into the world already spent. Lighting a candle is what a candle is for, so there is no
+## state where you are carrying a lit one: one candle is one safe zone, in one place, and moving it
+## is not on the table. What you can pick up afterwards is the stub, worth SCRAP.
+func _use_candle(p, head: int) -> void:
+	var fwd: Vector3 = -p.global_transform.basis.z
+	var spot: Vector3 = game._floor_at(p.global_position + fwd * 0.7) + Vector3.UP * 0.05
+	var it: Node = game._spawn_item("votive_candle", 1, Transform3D(Basis(Vector3.UP, p.rotation.y), spot), WorldItem.State.LOOSE)
+	it.value = scrap_value("votive_candle")
+	it.x = USED_MARK
+	p.clear_slot(head)
+	_candles[int(it.item_id)] = float(game.world_time) + CANDLE_SECONDS
+	last_result = {"what": "candle_lit", "id": int(it.item_id)}
+	game._sound("trinkets_candle_light", spot)
+	game.tell(p, "About two minutes of light. She will not move while you are in it.", 4.0)
+
+
+## Every machine: is any of `points` inside a burning candle? This is the whole of the Night Nurse
+## rule the candle buys, and it is deliberately the same predicate the rest of the game uses rather
+## than a second one bolted onto her brain.
+func candle_watches(points: Array) -> bool:
+	if _candles.is_empty() or game == null:
+		return false
+	var r2 := CANDLE_RADIUS * CANDLE_RADIUS
+	for id in _candles.keys():
+		var it = game.world_items.get(int(id))
+		if it == null or not is_instance_valid(it) or not it.is_inside_tree():
+			continue
+		var at: Vector3 = (it as Node3D).global_position
+		for p: Vector3 in points:
+			if at.distance_squared_to(p) <= r2:
+				return true
+	return false
+
+
+## Every machine (tests, the HUD): seconds of burn left on this one, 0 when it is out.
+func candle_left(item_id: int) -> float:
+	if game == null or not _candles.has(item_id):
+		return 0.0
+	return maxf(0.0, float(_candles[item_id]) - float(game.world_time))
+
+
+func lit_candles() -> Array:
+	return _candles.keys()
+
+
+## Host: flames that have burned down. The item stays where it is, already marked spent.
+func _tick_candles() -> void:
+	var now: float = game.world_time
+	for id in _candles.keys():
+		var it = game.world_items.get(int(id))
+		if it != null and is_instance_valid(it) and now < float(_candles[id]):
+			continue
+		_candles.erase(id)
+
+
+## Every machine: the candle's own light, which is a real OmniLight3D and not an emissive fake,
+## because the Night Nurse's watched rule asks whether a point is LIT and a fake would not answer.
+## It is registered in level_info.lights so Perception.fixture_lit finds it exactly as it finds a
+## ceiling fixture, and it guts out over the last CANDLE_GUTTER seconds so the flame visibly dies
+## instead of vanishing between frames.
+func _play_candles(_delta: float) -> void:
+	for id in _candle_lights.keys():
+		if _candles.has(id) and is_instance_valid(_candle_lights[id]):
+			continue
+		_drop_candle_light(int(id))
+	for id in _candles.keys():
+		var it = game.world_items.get(int(id))
+		if it == null or not is_instance_valid(it) or not it.is_inside_tree():
+			continue
+		if not _candle_lights.has(int(id)):
+			_make_candle_light(int(id), it)
+		var node = _candle_lights.get(int(id))
+		if node == null or not is_instance_valid(node):
+			continue
+		var left := candle_left(int(id))
+		var k := clampf(left / CANDLE_GUTTER, 0.0, 1.0)
+		var bulb: OmniLight3D = (node as Node3D).get_node_or_null("Bulb")
+		if bulb != null:
+			# A guttering flame, not a dimmer: it jumps about as it goes.
+			var jump := 1.0 if k >= 1.0 else k * (0.72 + 0.28 * sin(float(game.world_time) * 11.0 + float(id)))
+			bulb.light_energy = CANDLE_ENERGY * maxf(0.0, jump)
+
+
+func _make_candle_light(id: int, it: Node) -> void:
+	var node := Node3D.new()
+	node.name = "CandleLight"
+	var bulb := OmniLight3D.new()
+	bulb.name = "Bulb"
+	bulb.light_energy = CANDLE_ENERGY
+	bulb.omni_range = CANDLE_RANGE
+	bulb.omni_attenuation = 1.4
+	bulb.light_color = Color(1.0, 0.66, 0.32)
+	bulb.light_volumetric_fog_energy = 1.3
+	bulb.shadow_enabled = false
+	bulb.set_meta("base_energy", CANDLE_ENERGY)
+	node.add_child(bulb)
+	node.position = Vector3(0, 0.12, 0)
+	(it as Node3D).add_child(node)
+	_candle_lights[id] = node
+	if game.level_info != null:
+		(game.level_info.get("lights", []) as Array).append(
+				{"tile": Vector2i.ZERO, "position": (it as Node3D).global_position, "mode": 0, "node": node, "candle": id})
+
+
+func _drop_candle_light(id: int) -> void:
+	var node = _candle_lights.get(id)
+	_candle_lights.erase(id)
+	if game != null and game.level_info != null:
+		var lights: Array = game.level_info.get("lights", [])
+		for i in range(lights.size() - 1, -1, -1):
+			if int((lights[i] as Dictionary).get("candle", -1)) == id:
+				lights.remove_at(i)
+	if node != null and is_instance_valid(node):
+		if game != null:
+			Audio.play("trinkets_candle_out", (node as Node3D).global_position)
+		(node as Node).queue_free()
 
 
 # =============================================================================== targets
@@ -953,6 +1138,7 @@ func physics_tick(delta: float) -> void:
 	_tick_pagers()
 	_play_rings(delta)
 	_play_heartbeats(delta)
+	_play_candles(delta)
 
 
 func _host_tick(delta: float) -> void:
@@ -997,6 +1183,14 @@ func _host_tick(delta: float) -> void:
 		game._broadcast("stun", {"id": int(peer), "t": EPI_COLLAPSE})
 		game._sound("downed_fall", p3.global_position)
 		game.tell(p3, "That is the adrenaline gone.", 3.0)
+	# The fabric softener wearing off: your feet come back.
+	for peer in _quiet.keys():
+		if now < float(_quiet[peer]):
+			continue
+		_quiet.erase(peer)
+		var p4 = game.players.get(int(peer))
+		if p4 != null and is_instance_valid(p4) and p4.alive:
+			game.tell(p4, "You can hear your own footsteps again.", 3.0)
 	# A tagged monster that stopped existing without going through kill_monster.
 	for mid in _tagged.keys():
 		var m = game.monsters.get(int(mid))
@@ -1005,6 +1199,7 @@ func _host_tick(delta: float) -> void:
 			_tag_value.erase(mid)
 	_tick_ring_noise(delta)
 	_tick_bonks()
+	_tick_candles()
 
 
 ## Host: each ringing phone shouts about RING_PERIOD apart. The local sound is played by
@@ -1067,6 +1262,7 @@ func _apply_boosts() -> void:
 		if p == null or not is_instance_valid(p):
 			continue
 		p.sprint_mult = sprint_mult(p)
+		p.silent_steps = quiet_steps(p)
 
 
 # =============================================================================== networking
@@ -1083,6 +1279,10 @@ func net_state() -> Dictionary:
 		s["tg"] = _tagged.duplicate()
 	if not _epi.is_empty():
 		s["ep"] = _snapped(_epi)
+	if not _quiet.is_empty():
+		s["qt"] = _snapped(_quiet)
+	if not _candles.is_empty():
+		s["cd"] = _snapped(_candles)
 	if not _spins.is_empty():
 		s["sp"] = _spins.duplicate()
 	if not _swings.is_empty():
@@ -1109,6 +1309,8 @@ func apply_net_state(s: Dictionary) -> void:
 	_maps = _ints((s.get("mp", {}) as Dictionary))
 	_tagged = _ints((s.get("tg", {}) as Dictionary))
 	_epi = _ints((s.get("ep", {}) as Dictionary))
+	_quiet = _ints((s.get("qt", {}) as Dictionary))
+	_candles = _ints((s.get("cd", {}) as Dictionary))
 	_spins = _ints((s.get("sp", {}) as Dictionary))
 	_swings = _ints((s.get("sw", {}) as Dictionary))
 	_buzz = _ints((s.get("pb", {}) as Dictionary))
@@ -1137,7 +1339,11 @@ func on_reset() -> void:
 	_tagged.clear()
 	_tag_value.clear()
 	_epi.clear()
+	_quiet.clear()
 	_collapse.clear()
+	for id in _candle_lights.keys():
+		_drop_candle_light(int(id))
+	_candles.clear()
 	_sel_seen.clear()
 	_hammer_cd.clear()
 	_last_use.clear()

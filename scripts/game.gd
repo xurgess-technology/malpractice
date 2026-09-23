@@ -1608,6 +1608,24 @@ func drop_selected(p: Node, charge: float = 0.0) -> void:
 			p.slots[head].count = left
 		_sound("thud", from.origin)
 		return
+	# POCKETS 2 phase 4 (the Laundromat): a charged throw flings one handful of quarters out of the
+	# bucket and keeps the bucket; a tap sets the whole bucket down like anything else. The handful
+	# is spent either way — it bursts where it lands (world_item.gd) and the noise is over there.
+	if String(s.kind) == "quarter_bucket" and charge > 0.02 and int(s.count) > 0:
+		var handful := _spawn_item("quarter_bucket", 1, from, WorldItem.State.LOOSE)
+		handful.value = 0
+		handful.set_meta("quarters_thrown", true)
+		handful.toss(from, vel)
+		var was_n: int = int(s.count)
+		var left_q: int = was_n - 1
+		if left_q <= 0:
+			p.clear_slot(head)
+		else:
+			p.slots[head].count = left_q
+			# The bucket is worth what is still in it.
+			p.slots[head]["v"] = int(round(float(int(s.get("v", 0))) * float(left_q) / float(maxi(1, was_n))))
+		_sound("thud", from.origin)
+		return
 	var it := _spawn_item(s.kind, s.count, from, WorldItem.State.LOOSE)
 	it.value = int(s.get("v", 0))
 	it.bt = float(s.get("bt", -1000000.0))   # GRAFTING: the eye spoil clock
@@ -2289,8 +2307,23 @@ func surgery_step_done(result: Dictionary, table_index: int = -1, operator_peer:
 		if p != null and p.has_method("consume_hand"):
 			# SYRINGE DRAW: a dose that came out of a pre-loaded syringe spends the syringe, not a
 			# vial -- one off the count and the `x` cleared, which is what makes it one-use.
+			# POCKETS 2 phase 3: whichever way the dose arrived, it is weakened by what it actually
+			# WAS (Items.ANESTHETIC_KINDS). A syringe drawn from communion wine is still communion
+			# wine, so the fluid has to be read HERE, before spend_loaded clears it -- otherwise
+			# loading the wine into a syringe would quietly launder it into a full-strength dose.
+			# The injection minigame is untouched either way: it reports the sedation it always did
+			# and the substitute is applied to its result.
+			var loaded: Dictionary = Syringes.held_loaded(p) if Syringes.accepts_loaded(step) else {}
+			var used_kind := String(loaded.get("fluid", ""))
 			if not (Syringes.accepts_loaded(step) and Syringes.spend_loaded(p)):
-				p.consume_hand(String(step.item), uses)
+				used_kind = Items.held_for_step(p, String(step.item), uses)
+				if used_kind == "":
+					used_kind = String(step.item)
+				p.consume_hand(used_kind, uses)
+			var strength := Items.anesthetic_strength(used_kind)
+			if strength < 1.0 and result.has("sedation"):
+				result = result.duplicate()
+				result["sedation"] = snappedf(float(result.sedation) * strength, 0.01)
 	var flags: Dictionary = c.get("flags", {})
 	flags.merge(result, true)
 	c.flags = flags
@@ -2371,6 +2404,13 @@ func recent_noises(max_age: float = 1.5) -> Array:
 	return out
 
 
+## How loud a footstep is to something that hunts by sound. POCKETS 2 phase 4 tunes the Laundromat's
+## AMBIENT_NOISE_LEVEL directly against these two numbers (its floor has to be above the walking one
+## to swallow it whole), and tools/pockettest.gd reads them from here rather than retyping them.
+const FOOTSTEP_LOUDNESS := 0.25
+const FOOTSTEP_SPRINT_LOUDNESS := 0.8
+
+
 func _tick_noise(delta: float) -> void:
 	var cut := world_time - NOISE_MEMORY
 	while not _noises.is_empty() and float(_noises[0].time) < cut:
@@ -2381,14 +2421,19 @@ func _tick_noise(delta: float) -> void:
 		var wet: Array = pockets.water_footstep(p.global_position, bool(p.sprinting), bool(p.get("crouching"))) if pockets != null else []
 		# SWEEP 4A HOOK (controls): a crouching player's footsteps make no sound and no noise event
 		# at all (not just quieter): the Sonographer can't hear a crouching player walk.
-		if not p.moving or (bool(p.get("crouching")) and wet.is_empty()):
+		# POCKETS 2 phase 4: a fabric softener jug buys the same nothing for a minute, at full speed
+		# (scripts/trinkets/trinkets.gd pushes `silent_steps`). It is this multiplier reused, which
+		# means it is silenced by water exactly as crouching is: a drinker wading across the
+		# Natatorium is still as loud as anyone else.
+		if not p.moving or ((bool(p.get("crouching")) or bool(p.get("silent_steps"))) and wet.is_empty()):
 			_footstep_acc[p.peer_id] = 0.0
 			continue
 		var acc: float = float(_footstep_acc.get(p.peer_id, 0.0)) + delta
 		var interval: float = float(wet[1]) if not wet.is_empty() else (0.3 if p.sprinting else 0.5)
 		if acc >= interval:
 			acc = 0.0
-			var loudness: float = float(wet[0]) if not wet.is_empty() else (0.8 if p.sprinting else 0.25)
+			var dry: float = FOOTSTEP_SPRINT_LOUDNESS if p.sprinting else FOOTSTEP_LOUDNESS
+			var loudness: float = float(wet[0]) if not wet.is_empty() else dry
 			emit_noise(p.global_position, loudness, "footstep")
 		_footstep_acc[p.peer_id] = acc
 
@@ -3770,6 +3815,25 @@ func eat_pill(p: Node) -> void:
 	else:
 		p.slots[head].count = left
 	_pill_hit_player(p, p)
+
+
+# ---------------------------------------------------------------------------
+# POCKETS 2 phase 4 (the Laundromat): a thrown handful of quarters.
+
+## How loud a scattered handful is. It has to beat the Laundromat's own ambient noise floor (0.30,
+## Laundromat.AMBIENT_NOISE_LEVEL) by enough to still be worth throwing in the room it is found in:
+## masked to 0.60 it carries 13 m in there, and the full 0.9 carries 20 m out in the hospital.
+const QUARTER_NOISE := 0.9
+
+
+## Host, called by a thrown handful the moment it lands (world_item.gd). The coins burst across the
+## floor: a loud noise event exactly there, which is what makes this a directional noisemaker rather
+## than something that gives away where the thrower is standing.
+func quarters_scatter(at: Vector3) -> void:
+	if not is_host():
+		return
+	emit_noise(at, QUARTER_NOISE, "quarters")
+	_sound("quarters_scatter", at)
 
 
 # ---------------------------------------------------------------------------

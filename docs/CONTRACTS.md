@@ -469,6 +469,12 @@ Game-side API for monsters:
   line of sight AND the point is lit, by any player's flashlight cone or by a ceiling fixture
   that is currently on. Fixtures: `game.level_info["lights"]`, each `{position, mode, node}`
   where `node` is the fixture whose child `OmniLight3D` named `Bulb` carries the live energy.
+  **One thing observes without being anybody** (POCKET_SPACES_2 phase 3): a lit votive candle from
+  the Chapel counts every point within `Trinkets.CANDLE_RADIUS` of it as observed, and that test
+  runs at the very top of `observed_any`, **before** the "is anybody alive to look" early-out. The
+  Night Nurse therefore freezes inside a placed candle with nobody in the room, and because it is
+  the predicate rather than her brain, it holds everywhere the predicate is asked -- her `_vanish()`
+  will not pick a hiding place inside one either.
 
 Noise the game already emits on the host: footsteps (walk 0.25, sprint 0.8), containers 0.5,
 pickups 0.15, drops 0.4, breaking glass 0.9, shoves 0.6, surgery monitors 0.6 while someone
@@ -943,25 +949,49 @@ zones: {grid, width, height, names}   # HospitalBuilder.zone_of(info, pos) -> wi
 
 ### Pocket spaces (pockets worker, docs/POCKET_SPACES.md)
 
-A map (each shift's wings) rolls 0-1 pocket space: **the Factory**, **the Restaurant** or
-**the Natatorium**, built far from the hospital (world tile origin `PocketSpaces.ORIGINS`: factory
-(800, 0), restaurant (800, 500), natatorium (800, 1000)) with 2-3 entrances into at least two different
-wings, deeper wings more likely. Code in `scripts/level/pockets/`: `pocket_plan.gd` (generation),
-`stub.gd` (an entrance, its frame and its pocket-side copy), `pocket_spaces.gd` (runtime,
-`game.pockets`), `pocket_common.gd`, `factory.gd`, `restaurant.gd`, `natatorium.gd`.
+A map (each shift's wings) rolls 0-1 pocket space: **the Factory**, **the Restaurant**,
+**the Natatorium**, **the Chapel** or **the Laundromat**, built far from the hospital (world tile
+origin `PocketSpaces.ORIGINS`: factory (800, 0), restaurant (800, 500), natatorium (800, 1000),
+chapel (800, 1500), laundromat (800, 2000) — one 500-tile band per space, in the order the phases
+added them) with 2-3 entrances into at least two different wings, deeper wings more likely. Code in
+`scripts/level/pockets/`: `pocket_plan.gd` (generation), `stub.gd` (an entrance, its frame and its
+pocket-side copy), `pocket_spaces.gd` (runtime, `game.pockets`), `pocket_common.gd`, `factory.gd`,
+`restaurant.gd`, `natatorium.gd`, `chapel.gd`, `laundromat.gd`.
 
 **Adding a kind** is two lines: its name in `PocketPlan.KINDS` and its layout script in
 `PocketSpaces.LAYOUTS`, which every builder, the warmup and the ambient-noise lookup read (there is no
-`if kind == ...` chain left). A layout script must expose `layout(stubs, seed)`, `prepare(lay, origin)`,
+`if kind == ...` chain left) — plus an entry in `PocketSpaces.ORIGINS` and one in `AIR` if the space
+wants its own air. A layout script must expose `layout(stubs, seed)`, `prepare(lay, origin)`,
 `build_steps(...)`, `build(...)`, `doorways(lay)` and `door_entries(lay, origin)`, may declare
 `AMBIENT_NOISE_LEVEL`, and declares `POCKET_ITEMS`, the item kinds it contributes, as a set anything
-else can read without digging through the layout.
+else can read without digging through the layout. Re-run `tools/pocketrate.gd` after any of it.
+
+**The Laundromat** (`laundromat.gd`, POCKET_SPACES_2 phase 4) is one mechanic:
+`AMBIENT_NOISE_LEVEL = 0.30`, above `Game.FOOTSTEP_LOUDNESS` (0.25), so a walking player makes no
+audible noise in there at all and a sprinting one (0.8) carries 11 m instead of 17.6. Its
+`POCKET_ITEMS` are `["quarter_bucket", "warm_scrubs", "fabric_softener"]`, each weighted for the
+`laundromat` / `laundromat_back` room kinds with **no `"*"` weight**, which is what keeps them in the
+space. Coin-op machines all running, back-to-back washer islands, dryer banks on the long walls, a
+utility room and an attendant's office off the back wall.
+
+**The Chapel** (`chapel.gd`, POCKET_SPACES_2 phase 3) is a hospital chapel that is somehow a
+cathedral, and its one mechanic is light. It declares `AMBIENT_NOISE_LEVEL = 0.0` on purpose —
+silence is the point of it. Every flame in it is emissive geometry in a MultiMesh and costs no
+light; illumination is `LIGHT_BUDGET` (28) real unshadowed `OmniLight3D`s **pooled one per votive
+rack or candle stand**, of which `SHADOW_BUDGET` (2) cast shadows, and the sanctuary claims them
+first so the altar can never go dark. Its `POCKET_ITEMS` are `["votive_candle", "communion_wine",
+"collection_plate"]`, weighted for the `chapel_nave` / `chapel_aisle` / `chapel_sanctuary` /
+`chapel_sacristy` room kinds with **no `"*"` weight**, the same rule the other spaces follow.
+
+`tools/mapcheck.gd`, `tools/pockettest.gd`, `tools/pocketrate.gd` and `tools/perfprobe.gd` all
+sweep `KINDS` rather than a hardcoded list, so a new space is covered by all four for free.
 
 **The roll** (POCKET_SPACES_2 phase 1) is not a flat chance. Every wing rolls
 `BASE_CHANCE + DEPTH_STEP * (depth - 1)` — 4%, 9%, 14% for the usual depths 1-3 — and the map takes the
 chance that at least one of them lands, capped at `MAX_CHANCE`. Measured over 300 seeds x 4 shifts with
 `tools/pocketrate.gd`: **24.5% of shifts get a pocket**, against the 20-30% docs/POCKET_SPACES.md asks
-for. **No repeats**: the host keeps the kind the run last saw in `game.pocket_seen_kind`, sets
+for; re-measured over 500 seeds x 4 shifts with three kinds, **23.9%**, evenly split between them.
+Adding a kind does not move the rate, because the curve is how often *a* pocket appears and not which. **No repeats**: the host keeps the kind the run last saw in `game.pocket_seen_kind`, sets
 `PocketPlan.exclude_kind` from it before the next shift's wings are generated, and sends it to clients in
 the globals as `"px"` — a client rolling from a different pool would build a different hospital.
 
@@ -1316,11 +1346,38 @@ game.economy.request_order({kind: sets})      # this machine's player orders (ho
 game.economy.open_fax_ui() / .fax_ui          # the order form (scripts/economy/fax_order_ui.gd)
 ```
 
+### Anesthetic substitutes (POCKET_SPACES_2 phase 3)
+
+`Items.ANESTHETIC_KINDS` is `kind -> share of a real dose`: `anesthetic` 1.0, `communion_wine` 0.55.
+Anything in it satisfies a procedure step that asks for `"anesthetic"` and re-doses a strapped
+monster, at that share of the dose, so a substitute is a **weak dose that wears off sooner** rather
+than a separate mechanic. Phase 5's top-shelf tequila is meant to be one more line in it.
+
+```gdscript
+Items.step_accepts(want, held) -> bool     # held satisfies a step asking for want
+Items.anesthetic_strength(kind) -> float   # 1.0 for anything that is not a substitute
+Items.held_for_step(p, want, need) -> String   # the kind in their hands that will do, or ""
+```
+
+Three call sites, and **the injection minigame is not one of them** -- it reports the sedation it
+always did and never learns a substitute was used. `surgery_system.can_begin` accepts a substitute
+in the selected slot; `game.surgery_step_done` spends the kind actually held and multiplies the
+arcade's `sedation` by its strength; `dissection._anesthetic_slot` / `redose` scale `dose_amount`
+the same way. `ItemSpawner._legal` also honours an optional `rooms` key on an item definition, which
+is how the wine is only ever found in the Chapel; an item without one is found anywhere.
+
 ### Trinkets (docs/ITEMS_AND_ICONS.md chunk B, 2026-09-18)
 
 `scripts/trinkets/trinkets.gd` (`Trinkets`), a child **"Trinkets"** of Game on every machine
 (`game.trinkets`), created in `_ready` beside Combat, Brains, Vats and Grafts. It owns what the six
 trinket loot kinds do. DESIGN.md "Trinkets" is the design; this is the surface.
+
+**The seventh** (POCKET_SPACES_2 phase 4) is the Laundromat's **fabric softener jug**: one use, drink it,
+and for `QUIET_SECONDS` (60) that player's footsteps emit no noise event at all while they keep full speed.
+It is the crouch suppression reused, not a second quiet mode: `game._tick_noise` already skips a crouching
+player, and `Player.silent_steps` (pushed every physics frame by `_apply_boosts`, like `sprint_mult`) makes
+it skip a drinker too. Replicated as `"qt"` (peer id -> the `world_time` it runs out), host authoritative.
+`trinkets.quiet_steps(p) -> bool`; `trinkets.drink_softener(q)` starts it (tests call it directly).
 
 **The use path.** Left mouse with a trinket selected goes through `Player._local_step` exactly where
 the saw and the needle do: `combat.is_usable(kind)` is tried first, then
@@ -1337,7 +1394,20 @@ trinkets.use_prompt(p) -> String                 # every machine, ~10 Hz: the cr
 Trinkets.is_spent(slot_or_item) -> bool          # static: a used-up one-use trinket
 Trinkets.scrap_value(kind) -> int                # what a spent one sells for
 trinkets.last_result                             # host, for tests: {what, kind?, id?}
+trinkets.quiet_steps(p) -> bool                  # POCKETS 2 phase 4: their footsteps make no noise right now
+trinkets.drink_softener(q)                       # host: start it (Player.silent_steps follows every frame)
+
+# POCKETS 2 phase 3, the votive candle. Lighting it IS the use: it is set down already spent, so
+# one candle is one safe zone in one place. Replicated as "cd" (item id -> world_time it goes out).
+trinkets.candle_watches(points: Array) -> bool   # every machine: any point inside a burning candle
+trinkets.candle_left(item_id) -> float           # seconds of burn left, 0 when out
+trinkets.lit_candles() -> Array                  # world item ids currently burning
+Trinkets.CANDLE_SECONDS / CANDLE_RADIUS          # ~120 s, and how far its regard reaches
 ```
+
+A burning candle also carries a real `OmniLight3D` named `Bulb`, appended to
+`game.level_info["lights"]` with a `candle` key and removed when it goes out, so it lights the room
+and counts as a fixture for `Perception.fixture_lit` by exactly the rule a ceiling light does.
 
 **Used up.** A spent one-use trinket (`ONE_USE`: `laptop`, `defibrillator`, `epipen`) gets `used: true`
 on its hand slot and its `v` drops to `SCRAP[kind]`. The HUD greys it and draws a crack

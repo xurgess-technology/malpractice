@@ -66,6 +66,10 @@ const DEFAULTS := {
 	# one int, chosen at the big mirror in Personnel. Per machine, so it follows you into any shift.
 	# -1 means nobody has been to the mirror yet: the surgeon wears the default for their peer id.
 	"look": -1,
+	# POCKETS 2 phase 4: which scrub patterns this machine has earned, a bitmask over
+	# Customization.PATTERNS. 0 means "only what ships unlocked": Customization.unlocked_mask()
+	# folds the shipped ones back in, so an old save is never short a pattern it used to have.
+	"patterns_unlocked": 0,
 }
 
 ## Settings key -> the InputMap action it rebinds.
@@ -90,6 +94,7 @@ const RANGES := {
 	"key_ability_alt": [0, 4194500],
 	"key_scan": [0, 4194500],
 	"look": [-1, 1073741823],
+	"patterns_unlocked": [0, 1073741823],
 }
 
 ## Below this slider position a bus is muted outright.

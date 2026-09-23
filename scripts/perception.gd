@@ -9,6 +9,10 @@ extends RefCounted
 ##      (Player.lights_point), or by a ceiling fixture that is on right now, in range,
 ##      with line of sight to the point.
 ##
+## One thing observes without being anybody: a burning votive candle from the Chapel counts every
+## point within Trinkets.CANDLE_RADIUS of it as observed, with nobody looking and nobody alive to
+## look. That test runs first, before any of the three above.
+##
 ## Cost, cheapest test first, early out on the first success:
 ##   frustum: pure maths per player. Rays only for players whose view contains the point.
 ##   flashlight: one ray per player whose cone/glow reaches the point.
@@ -35,6 +39,15 @@ static func is_observed(game: Node, point: Vector3) -> bool:
 static func observed_any(game: Node, points: Array) -> bool:
 	if game == null:
 		return false
+	# POCKETS 2 phase 3, the Chapel's votive candle: a burning one watches on its own. This has to
+	# come before the "is anybody alive to look" early-out and before the frustum work, because the
+	# whole of what the candle buys is that a point inside it counts as observed with NOBODY looking
+	# at it. Putting it here rather than in the Night Nurse's brain means the candle satisfies the
+	# same predicate everything else does -- including her own _vanish(), which now will not choose
+	# a hiding place inside somebody's candle.
+	var tk = game.get("trinkets")
+	if tk != null and is_instance_valid(tk) and tk.has_method("candle_watches") and tk.candle_watches(points):
+		return true
 	var watchers := _living(game)
 	if watchers.is_empty():
 		return false

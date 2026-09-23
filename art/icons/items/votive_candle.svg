@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+<defs></defs>
+<rect x="6" y="6" width="244" height="244" rx="36" fill="#0b1416"/>
+<rect x="9" y="9" width="238" height="238" rx="33" fill="none" stroke="#f0b429" stroke-width="5"/><rect x="14" y="14" width="228" height="228" rx="28" fill="none" stroke="#fff1b8" stroke-width="2" opacity="0.8"/><path d="M40 12 L96 12" stroke="#fffbe6" stroke-width="4" stroke-linecap="round"/>
+<g stroke-linejoin="round" stroke-linecap="round">
+<ellipse cx="128" cy="206" rx="62" ry="14" fill="#5b1a14" stroke="#1c2226" stroke-width="7"/>
+<path d="M92 112 L164 112 L156 198 Q128 208 100 198 Z" fill="#9e2a22" stroke="#1c2226" stroke-width="9"/>
+<path d="M104 122 L118 122 L113 190 Q106 188 101 184 Z" fill="#d9453a" opacity="0.85"/>
+<rect x="96" y="104" width="64" height="16" rx="6" fill="#e8ddc2" stroke="#1c2226" stroke-width="8"/>
+<path d="M128 100 L128 84" stroke="#1c2226" stroke-width="8" stroke-linecap="round"/>
+<path d="M128 34 Q150 62 144 82 Q138 98 128 98 Q118 98 112 82 Q106 62 128 34 Z" fill="#f2b632" stroke="#1c2226" stroke-width="8"/>
+<path d="M128 56 Q138 72 134 82 Q131 90 128 90 Q125 90 122 82 Q118 72 128 56 Z" fill="#fff0b8"/></g>
+
+</svg>

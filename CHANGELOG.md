@@ -5,6 +5,18 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.38**: A cathedral, behind a door in a one-storey hospital ⛪
+    - Added: The Chapel. A nave thirty-three metres long under a twenty-four metre vault, arcades and side aisles, pews for three hundred, an altar at the end. Every votive candle is lit. Nobody lit them.
+    - Added: Votive candles you can take and place. Inside the light of one, the Night Nurse counts as watched -- she freezes with nobody looking at her at all. It burns about two minutes and gutters out, and lighting it is the whole of its use.
+    - Added: Communion wine, which will do the job of an anesthetic if you are desperate. It won't do it well: they go under lighter and they stir sooner.
+    - Added: A collection plate, worth about what a gold watch is.
+- **0.10.37**: Crouching looks like crouching
+    - Fixed: A crouching teammate used to stand there at full height with a slight lean, which is not what crouching looks like. They now actually drop -- knees bent, feet planted, about a fifth shorter -- and crouch-walk at the right pace instead of jogging on the spot. Your own view is unchanged; this is what everyone else sees.
+    - Note: Worth seeing now that the pool exists, since wading across it at a crouch is the one crossing that isn't a dead giveaway.
+- **0.10.36**: A laundromat, running with nothing in it
+    - Added: The Laundromat. Coin-op, fluorescent, every machine going, nothing inside any of them. The drone is loud enough to genuinely swallow your footsteps -- walk around in there and the Sonographer hears nothing at all. Sprint and it still hears you, just not well enough to come straight for you.
+    - Added: A bucket of quarters worth throwing for the noise, a jug of fabric softener you can drink to walk quietly for a minute, and a set of warm scrubs that unlocks a new pattern at the mirror.
+    - Fixed: The lifeguard's whistle was leaking out of the pool and turning up in ordinary hospital rooms on shifts that had no pool.
 - **0.10.35**: There is a swimming pool in the hospital 🏊
     - Added: The Natatorium. An Olympic pool under a nine-metre ceiling, lane ropes, starting blocks, bleachers, the lot -- behind a door in a building with one storey. The underwater lights are on. Nobody is swimming.
     - Added: Wading across is the short way and it is *loud* -- louder than sprinting on tile, loud enough that anything listening knows exactly where you are. The dry deck is the long way round. Crouching through the water is the only crossing that isn't a certainty, and it's the one place in the hospital where crouching doesn't make you quiet.

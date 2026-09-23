@@ -274,6 +274,35 @@ add("lifeguard_whistle", "Lifeguard whistle", "trinket", { body: `
 <path d="M62 186 Q100 214 146 206 Q190 198 206 172" fill="none" stroke="${RED}" stroke-width="12" stroke-linecap="round"/>
 <path d="M214 92 Q236 110 236 130 M214 62 Q252 98 252 130" fill="none" stroke="${GOLD}" stroke-width="9" stroke-linecap="round"/>` });
 
+// POCKETS 2 phase 3, the Chapel. The candle's cup and flame sit on the centre line, the wax pool
+// spreading around the base rather than pushing the object off centre.
+add("votive_candle", "Votive candle", "trinket", { body: `
+<ellipse cx="128" cy="206" rx="62" ry="14" fill="#5b1a14" stroke="${O}" stroke-width="7"/>
+<path d="M92 112 L164 112 L156 198 Q128 208 100 198 Z" fill="${RED_DK}" stroke="${O}" stroke-width="9"/>
+<path d="M104 122 L118 122 L113 190 Q106 188 101 184 Z" fill="${RED}" opacity="0.85"/>
+<rect x="96" y="104" width="64" height="16" rx="6" fill="#e8ddc2" stroke="${O}" stroke-width="8"/>
+<path d="M128 100 L128 84" stroke="${O}" stroke-width="8" stroke-linecap="round"/>
+<path d="M128 34 Q150 62 144 82 Q138 98 128 98 Q118 98 112 82 Q106 62 128 34 Z" fill="${GOLD}" stroke="${O}" stroke-width="8"/>
+<path d="M128 56 Q138 72 134 82 Q131 90 128 90 Q125 90 122 82 Q118 72 128 56 Z" fill="#fff0b8"/>` });
+
+// A bottle, upright and centred; the label band is what makes it read as wine and not a chemical.
+add("communion_wine", "Communion wine", "surgery", { body: `
+<path d="M112 34 L144 34 L144 92 Q176 110 176 146 L176 202 Q176 218 158 218 L98 218 Q80 218 80 202 L80 146 Q80 110 112 92 Z" fill="#1d4a2a" stroke="${O}" stroke-width="9"/>
+<path d="M96 150 Q96 122 116 108 L116 202 Q96 202 96 186 Z" fill="#2f7040" opacity="0.9"/>
+<rect x="104" y="22" width="48" height="26" rx="7" fill="${RED_DK}" stroke="${O}" stroke-width="8"/>
+<rect x="84" y="150" width="88" height="44" rx="5" fill="#e9e0c6" stroke="${O}" stroke-width="8"/>
+<path d="M128 158 L128 186 M116 168 L140 168" stroke="${RED_DK}" stroke-width="8" stroke-linecap="round"/>` });
+
+// The dish fills the slot; the coins sit inside it rather than hanging off an edge.
+add("collection_plate", "Collection plate", "loot", { body: `
+<ellipse cx="128" cy="140" rx="104" ry="58" fill="#9a8f6e" stroke="${O}" stroke-width="9"/>
+<ellipse cx="128" cy="130" rx="104" ry="58" fill="#cbbe93" stroke="${O}" stroke-width="9"/>
+<ellipse cx="128" cy="130" rx="74" ry="40" fill="#6b1f1c" stroke="${O}" stroke-width="7"/>
+<path d="M70 112 Q100 94 146 98" fill="none" stroke="#efe6c2" stroke-width="8" stroke-linecap="round"/>
+<ellipse cx="106" cy="132" rx="20" ry="12" fill="${GOLD}" stroke="${O}" stroke-width="6"/>
+<ellipse cx="146" cy="140" rx="20" ry="12" fill="${GOLD}" stroke="${O}" stroke-width="6"/>
+<ellipse cx="128" cy="120" rx="20" ry="12" fill="${GOLD_DK}" stroke="${O}" stroke-width="6"/>` });
+
 add("ultrasound", "Portable ultrasound", "loot", { body: `
 <rect x="30" y="38" width="196" height="180" rx="16" fill="#dfe4e6" stroke="${O}" stroke-width="9"/>
 <rect x="44" y="52" width="168" height="132" rx="6" fill="#0d1216" stroke="${O}" stroke-width="5"/>
@@ -288,6 +317,28 @@ add("ultrasound", "Portable ultrasound", "loot", { body: `
 </g>
 <rect x="44" y="192" width="80" height="12" rx="5" fill="#8a969c"/>
 <circle cx="192" cy="198" r="9" fill="${TEAL}" stroke="${O}" stroke-width="5"/>` });
+
+// POCKETS 2 phase 4: the Laundromat's plain loot.
+add("quarter_bucket", "Bucket of quarters", "loot", { count: "x4", body: `
+<path d="M70 96 Q70 86 82 86 L174 86 Q186 86 186 96 L172 196 Q170 208 156 208 L100 208 Q86 208 84 196 Z" fill="${GOLD}" stroke="${O}" stroke-width="9"/>
+<path d="M62 84 L194 84 Q200 84 200 92 Q200 100 194 100 L62 100 Q56 100 56 92 Q56 84 62 84 Z" fill="${GOLD_DK}" stroke="${O}" stroke-width="7"/>
+<path d="M74 84 Q80 40 128 40 Q176 40 182 84" fill="none" stroke="${O}" stroke-width="13"/>
+<path d="M74 84 Q80 40 128 40 Q176 40 182 84" fill="none" stroke="#8a969c" stroke-width="6"/>
+<g stroke="${O}" stroke-width="5">
+<ellipse cx="104" cy="118" rx="24" ry="9" fill="${STEEL}"/>
+<ellipse cx="152" cy="116" rx="23" ry="9" fill="${STEEL_HI}"/>
+<ellipse cx="128" cy="136" rx="25" ry="9" fill="${STEEL}"/>
+<ellipse cx="96" cy="152" rx="21" ry="8" fill="${STEEL_HI}"/>
+<ellipse cx="158" cy="150" rx="21" ry="8" fill="${STEEL}"/></g>` });
+
+add("warm_scrubs", "Warm scrubs", "loot", { body: `
+<path d="M48 176 L208 176 Q216 176 216 186 L216 202 Q216 212 206 212 L50 212 Q40 212 40 202 L40 186 Q40 176 48 176 Z" fill="#1f4646" stroke="${O}" stroke-width="9"/>
+<path d="M52 136 L204 136 Q212 136 212 146 L212 164 Q212 174 202 174 L54 174 Q44 174 44 164 L44 146 Q44 136 52 136 Z" fill="#2f6b68" stroke="${O}" stroke-width="9"/>
+<path d="M58 96 L198 96 Q206 96 206 106 L206 124 Q206 134 196 134 L60 134 Q50 134 50 124 L50 106 Q50 96 58 96 Z" fill="#3c8481" stroke="${O}" stroke-width="9"/>
+<path d="M104 96 L128 124 L152 96" fill="none" stroke="${O}" stroke-width="8"/>
+<g opacity="0.55" stroke="#bfe6e2" stroke-width="4"><path d="M70 96 L70 134 M96 96 L96 134 M160 96 L160 134 M186 96 L186 134"/></g>
+<g fill="none" stroke="#e8e2d2" stroke-width="7" stroke-linecap="round" opacity="0.85">
+<path d="M104 56 Q114 44 104 32 Q94 20 104 10"/><path d="M128 60 Q138 48 128 36 Q118 24 128 14"/><path d="M152 56 Q162 44 152 32 Q142 20 152 10"/></g>` });
 
 // ---- Trinkets ----
 add("desk_phone", "Desk phone", "trinket", { body: `
@@ -339,6 +390,16 @@ add("epipen", "EpiPen", "trinket", { body: `
 <rect x="24" y="112" width="40" height="32" rx="10" fill="${BLUE}" stroke="${O}" stroke-width="9"/>
 <path d="M176 114 L214 118 Q226 128 214 138 L176 142 Z" fill="#e8742a" stroke="${O}" stroke-width="9"/>
 </g>` });
+
+// POCKETS 2 phase 4: the Laundromat's trinket.
+add("fabric_softener", "Fabric softener", "trinket", { body: `
+<path d="M78 112 Q78 100 90 100 L166 100 Q178 100 178 112 L178 202 Q178 216 164 216 L92 216 Q78 216 78 202 Z" fill="${BLUE}" stroke="${O}" stroke-width="9"/>
+<path d="M98 100 L98 74 Q98 64 110 64 L146 64 Q158 64 158 74 L158 100" fill="${BLUE}" stroke="${O}" stroke-width="9"/>
+<rect x="108" y="30" width="40" height="38" rx="8" fill="${WHITE}" stroke="${O}" stroke-width="9"/>
+<path d="M178 122 Q214 122 214 152 Q214 182 178 182" fill="none" stroke="${O}" stroke-width="22"/>
+<path d="M178 126 Q208 126 208 152 Q208 178 178 178" fill="none" stroke="${BLUE}" stroke-width="11"/>
+<rect x="92" y="128" width="72" height="56" rx="7" fill="#f2efe2" stroke="${O}" stroke-width="7"/>
+<path d="M128 140 Q146 160 146 170 Q146 182 128 182 Q110 182 110 170 Q110 160 128 140 Z" fill="${PALE}" stroke="${O}" stroke-width="5"/>` });
 
 // ---- Write files and a contact sheet ----
 // Two versions of each icon: framed (slot, border, a sample count badge) for sheets, the database

@@ -34,8 +34,10 @@ eyeball").
 | Gold watch (`gold_watch`) | Tiny and rare |
 | Portable ultrasound (`ultrasound`) | Bulky and rare; the jackpot |
 | Specimen vat (`specimen_vat`) | Equipment from grafting; counts as plain loot for its icon |
+| **Bucket of quarters** (`quarter_bucket`) | POCKETS 2 phase 4. Laundromat only. Stacks 3-5 handfuls. A **charged throw** flings one handful, which bursts where it lands and makes a loud noise **there**: a directional noisemaker. A tap sets the bucket down as usual. |
+| **Warm scrubs** (`warm_scrubs`) | POCKETS 2 phase 4. Laundromat only. Sells like any loot, and **holding a set unlocks the Gingham scrub pattern** at the personnel mirror, for good, on that player's own machine. |
 
-**Trinkets (6):** they sell, but each also does one thing, so it's always use it or sell it. One-use
+**Trinkets (7):** they sell, but each also does one thing, so it's always use it or sell it. One-use
 trinkets sell for a small scrap value once used up.
 
 | Item (kind) | What it does |
@@ -46,6 +48,7 @@ trinkets sell for a small scrap value once used up.
 | **Pulse oximeter** (`pulse_oximeter`, new trinket; replaces the old loot of that name) | **Tag a monster.** In the same window as the sedative jab (a monster stunned by a shove), use it on the monster instead of sedating it. The monster gets up and carries on, and from then on **the whole team hears its heartbeat**: positional, through walls, slow while it wanders, faster when it's suspicious, racing when it hunts. You get the pulse ox back when that monster is caught or killed. The Night Nurse can't be tagged (shoves don't stun her). |
 | **Reflex hammer** (`reflex_hammer`, existing loot) | Bonk anyone in reach and **they instantly spin 180°.** A teammate's camera snaps round. A Hive loses sight of you. A Sonographer turns, and a charging echo goes the wrong way. The Night Nurse ignores it. Reusable, with a short cooldown. |
 | **EpiPen** (`epipen`, new) | Once: jab yourself or a teammate for double sprint speed for 10 s, then a 3 s collapse. |
+| **Fabric softener** (`fabric_softener`, POCKETS 2 phase 4; Laundromat only) | Once: drink it. For 60 s your footsteps emit **no noise event at all** — the same nothing a crouching player makes — but at full walking and sprinting speed. You still hear your own steps faintly, so you can tell it is working; nothing that hunts by sound hears anything. |
 
 **Cut (13 kinds):** stethoscope, ear thermometer (`thermometer`), BP cuff, otoscope, patient
 records, wheelchair wheel, sample rack, wedding ring, coffee maker, IV pump, microscope, the old

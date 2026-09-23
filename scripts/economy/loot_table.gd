@@ -47,6 +47,16 @@ const LOOT := {
 		"rooms": {"radiology": 0.7, "patient_room": 0.14, "supply_closet": 0.14, "lab": 0.14, "*": 0.017},
 		"surfaces": ["counter", "gurney", "floor"], "containers": {},
 	},
+	# POCKETS 2 phase 3, the Chapel. Gold-watch tier: a heavy silver-gilt alms dish, and whatever the
+	# congregation that never came put in it. Chapel room kinds only and no "*", the same rule the
+	# Natatorium's two follow, so it cannot turn up in a hospital that has no Chapel in it. It had
+	# a small office/waiting-room weight before the merge; matching the other spaces is worth more
+	# than that, and the task that bleeds pocket items out near an entrance is the right way in.
+	"collection_plate": {
+		"name": "Collection plate", "short": "Collection plates", "value": [45, 115], "tier": 3,
+		"rooms": {"chapel_sanctuary": 3.5, "chapel_sacristy": 2.2, "chapel_nave": 1.4, "chapel_aisle": 1.0},
+		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.3},
+	},
 	# ---- trinkets: they sell, but each also does one thing (a later chunk). Rarer than plain loot.
 	"desk_phone": {
 		"name": "Desk phone", "short": "Desk phones", "value": [12, 25], "tier": 0, "trinket": true, "trinket_weight": 3.0,
@@ -155,6 +165,36 @@ const LOOT := {
 	"restaurant_pager": {
 		"name": "Restaurant pager", "short": "Restaurant pagers", "value": [14, 24], "tier": 1, "trinket": true,
 		"rooms": {}, "surfaces": [], "containers": {},
+	},
+	# ---- POCKETS 2 phase 4: the Laundromat's own three. None of them lists a "*" weight, so they are
+	# found in that space and nowhere else (docs/POCKET_SPACES_2.md; Laundromat.POCKET_ITEMS is the
+	# same set, declared where the space is).
+	"quarter_bucket": {
+		"name": "Bucket of quarters", "short": "Buckets of quarters", "value": [10, 18], "tier": 1,
+		"stack": true, "batch": [3, 5],
+		"rooms": {"laundromat": 3.2, "laundromat_back": 1.1},
+		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.4, "station_drawers": 0.4},
+	},
+	"warm_scrubs": {
+		"name": "Warm scrubs", "short": "Warm scrubs", "value": [20, 38], "tier": 1,
+		"rooms": {"laundromat": 2.6, "laundromat_back": 2.2},
+		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.5, "station_drawers": 0.3},
+	},
+	"fabric_softener": {
+		"name": "Fabric softener", "short": "Fabric softener jugs", "value": [14, 26], "tier": 0,
+		"trinket": true, "trinket_weight": 1.8,
+		"rooms": {"laundromat": 2.4, "laundromat_back": 1.6},
+		"surfaces": ["counter", "floor"], "containers": {"drawer_unit": 0.35},
+	},
+	# POCKETS 2 phase 3, the Chapel. Same rule as the Natatorium's two: Chapel room kinds only and
+	# no "*", so neither leaks into a hospital that has no Chapel in it. The votive candle is a
+	# placeable light -- set it down and the Night Nurse counts as watched inside its radius with
+	# nobody looking at her, until it burns out about two minutes later. One use, because lighting
+	# it is the use (scripts/trinkets/trinkets.gd).
+	"votive_candle": {
+		"name": "Votive candle", "short": "Votive candles", "value": [9, 18], "tier": 0, "trinket": true, "trinket_weight": 2.4,
+		"rooms": {"chapel_aisle": 6.0, "chapel_nave": 3.0, "chapel_sanctuary": 3.0, "chapel_sacristy": 2.0},
+		"surfaces": ["counter", "tray", "floor"], "containers": {"drawer_unit": 0.2},
 	},
 	# GRAFTING part one (scripts/grafting/eyes.gd): taken out of a strapped Hive, or a surgeon's own
 	# eye swapped out; never found. They spoil outside a vat (Eyes.spoil_factor).

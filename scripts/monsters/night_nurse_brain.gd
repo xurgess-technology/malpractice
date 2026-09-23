@@ -4,6 +4,9 @@ extends RefCounted
 ## "Watching" is Percept.observed_any() over three points up its body (feet, chest,
 ## head): some living player has one of them in view, with a clear line, and it is lit
 ## by a flashlight or a working ceiling fixture. Looking at it in the dark does nothing.
+## A burning votive candle (the Chapel, POCKETS 2 phase 3) also counts as watching her, so a
+## placed candle freezes her inside its radius with nobody there at all. That lives in
+## observed_any, not here, so it holds everywhere the predicate is asked -- _vanish() included.
 ##
 ##   observed    stops dead in whatever pose it was in; the clip freezes. No sound.
 ##   unobserved  walks at 3.4 m/s along the navigation path toward the nearest living

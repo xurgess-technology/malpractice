@@ -993,10 +993,14 @@ left below is what still applies to the shared strapped-monster infrastructure.
   the crosshair to be essentially on the monster (mask `L_WORLD | L_MONSTER`), same as the aim ray
   used for interactables. It works, but is stricter than "aiming at it" might suggest for a moving
   target at range.
-- **Crouch's third-person pose is a single fixed-weight torso lean** (`body_poser.gd`'s new `crouch`
-  field, ~0.3 rad), independent of whatever `body_hands.gd` sets `torso`/`torso_w` to for a held
-  item, carry or wind-up pose, rather than a rig-aware crouched stance blended with those poses.
-  Reads correctly (a stooped lean) in the common cases; not verified against every hold pose.
+- ~~**Crouch's third-person pose is a single fixed-weight torso lean**~~ **Fixed 2026-09-22
+  (`crouch-pose`).** A 0.3 rad lean and nothing else meant the legs stayed straight and the rig
+  stayed at full standing height, so a crouching teammate read as standing -- which is how Zach
+  reported it. `body_poser.gd`'s `_crouch_legs` now bends the knees and sinks the hips by exactly
+  what the bent leg lost (1.24 m tall against 1.58 m standing, feet still on the floor), and a
+  crouch walk is the Walk clip slowed to `C.CROUCH_SPEED`. Measured in `tools/downedtest.gd`;
+  shots in `tools/crouchshot.gd`. The lean itself is unchanged and still stacks with the hold,
+  carry and wind-up poses, and is still not verified against every one of them.
 - **`game.database` (the scanner's sighted/scanned records) has no reset hook.** It is host-only,
   in-memory, and intentionally not cleared on `reset_money()` / game over the way
   `abilities.on_reset()` clears ability levels and slots — species knowledge is meant to persist

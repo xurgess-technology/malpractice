@@ -19,8 +19,28 @@ const LootModels := preload("res://scripts/economy/loot_models.gd")
 const CUT := ["stethoscope", "thermometer", "bp_cuff", "otoscope", "patient_records", "wheelchair_wheel",
 	"sample_rack", "wedding_ring", "coffee_maker", "iv_pump", "microscope"]
 const KEPT := ["pill_bottle", "xray_film", "heart_monitor", "gold_watch", "ultrasound",
-	"desk_phone", "laptop", "defibrillator", "reflex_hammer", "epipen", "pulse_oximeter"]
-const TRINKETS := ["desk_phone", "laptop", "defibrillator", "reflex_hammer", "epipen", "pulse_oximeter"]
+	"desk_phone", "laptop", "defibrillator", "reflex_hammer", "epipen", "pulse_oximeter",
+	# POCKETS 2: the pocket spaces' own kinds. Unlike everything above they list no "*" room
+	# weight, so they never turn up in the hospital — see POCKET_ONLY below.
+	"pool_chemical_drum", "lifeguard_whistle",
+	"votive_candle", "collection_plate",
+	"quarter_bucket", "warm_scrubs", "fabric_softener"]
+const TRINKETS := ["desk_phone", "laptop", "defibrillator", "reflex_hammer", "epipen", "pulse_oximeter",
+	"lifeguard_whistle", "fabric_softener", "votive_candle"]
+## POCKETS 2: kinds that belong to one pocket space, and the room kinds of the space each belongs to.
+## They are exempt from the "must be findable in the hospital" rules below and checked the other way
+## round instead. A new space's POCKET_ITEMS go here. (Spelt out rather than read from the layout
+## scripts: this test runs with `-s`, where pulling in the pocket runtime would drag in autoloads it
+## does not have.)
+const POCKET_ONLY := {
+	"pool_chemical_drum": ["natatorium_deck", "natatorium_lockers"],
+	"lifeguard_whistle": ["natatorium_deck", "natatorium_lockers"],
+	"votive_candle": ["chapel_nave", "chapel_aisle", "chapel_sanctuary", "chapel_sacristy"],
+	"collection_plate": ["chapel_nave", "chapel_aisle", "chapel_sanctuary", "chapel_sacristy"],
+	"quarter_bucket": ["laundromat", "laundromat_back"],
+	"warm_scrubs": ["laundromat", "laundromat_back"],
+	"fabric_softener": ["laundromat", "laundromat_back"],
+}
 ## Room kinds the loot could turn up in before the cut (the union of the old table's `rooms`).
 const OLD_ROOMS := ["ward", "patient_room", "nurse_station", "office", "corridor", "waiting_room", "pharmacy",
 	"restroom", "radiology", "storage", "maintenance", "janitor", "lab", "morgue", "break_room", "cafeteria"]
@@ -137,6 +157,18 @@ func _static_checks() -> void:
 		root.free()
 		# Every place a kept kind may turn up is a real room kind or the catch-all.
 		_check(not (LootTable.LOOT[k].rooms as Dictionary).is_empty(), "%s has rooms" % k)
+	# POCKETS 2: a pocket space's kinds are found in that space and nowhere else, which is exactly
+	# "its own room kinds have a weight and there is no `*` catch-all".
+	for k in POCKET_ONLY.keys():
+		var rooms: Dictionary = LootTable.LOOT[k].rooms
+		_check(not rooms.has("*"), "%s has no catch-all room weight, so it stays in its pocket" % k)
+		var found := false
+		for room in POCKET_ONLY[k]:
+			found = found or float(rooms.get(room, 0.0)) > 0.0
+		_check(found, "%s is found in %s" % [k, " / ".join(POCKET_ONLY[k])])
+		for hospital_room in ["corridor", "office", "patient_room", "supply_closet"]:
+			_check(LootTable.weight(k, hospital_room, 3) <= 0.0,
+				"%s is not found in a deep hospital %s" % [k, hospital_room])
 	# The table holds only the kept kinds plus the grafting parts.
 	for k in LootTable.kinds():
 		var d: Dictionary = LootTable.LOOT[k]

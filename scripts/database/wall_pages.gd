@@ -48,6 +48,7 @@ const PROCEDURE_TEXT := {
 const SURGERY_TEXT := {
 	"anesthetic": ["Puts the patient under so they don't feel a thing. Too little and they wake up mid-surgery.", "Found in medicine fridges. Glass: dropping it breaks some."],
 	"syringe": ["Load one from a vial anywhere in the hospital and the dose is ready before you reach the table.", "Found in fridges and drawer units. Spent once the dose is in a patient."],
+	"communion_wine": ["Does the job of anesthetic, badly: a little over half the dose, so they stir sooner. Works on a patient or a strapped monster, and a syringe drawn from it is just as weak.", "Not in the hospital. There is a case of it in the chapel."],
 	"gauze": ["Rolls of dressing that pack wounds and soak up bleeding.", "Found in nurse station drawers."],
 	"forceps": ["Long tongs for pulling out bullets, and seating a graft.", "Found in steel drawer units. Kept after use."],
 	"tourniquet": ["A strap that cuts off the blood to a limb before you saw.", "Found in trauma bags. Kept after use."],
@@ -76,6 +77,11 @@ const LOOT_BLURBS := {
 	"heart_monitor": "A bedside heart monitor. Takes both hands.",
 	"defibrillator": "A portable defibrillator. Takes both hands.",
 	"ultrasound": "A portable ultrasound. The best find in the wings.",
+	"quarter_bucket": "A mop bucket of quarters, from a coin slot nobody empties. A hard throw scatters a handful, and they land loud.",
+	"warm_scrubs": "A folded set of scrubs, still warm. Somebody will want the pattern.",
+	"fabric_softener": "A jug of fabric softener. Sells, and it has a trick.",
+	"collection_plate": "A silver-gilt alms dish from the chapel, with what was left in it.",
+	"votive_candle": "A chapel candle in red glass. Set it down and the Night Nurse stands still inside the light, watched by nobody. About two minutes.",
 	"eye_hive": "The eyeball of a strapped Hive. It clouds over and spoils in a minute or two unless it goes in a vat.",
 	# POCKETS 2 phase 5: the Restaurant.
 	"cast_iron_molcajete": "A basalt mortar the size of a football, pestle and all. It weighs what a rock weighs, and it is worth what the office watches are worth.",
