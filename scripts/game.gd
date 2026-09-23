@@ -183,6 +183,8 @@ var or_screen: Node = null
 
 ## Downed players (sweep 2 wave 3; docs/CONTRACTS.md "Downed players").
 const PlayerSurgeryScript := preload("res://scripts/downed/player_surgery.gd")
+## SYRINGE DRAW (docs/ANESTHETIC_INJECTION_SPEC.md 9): the handheld draws, one per player.
+const SyringeStationsScript := preload("res://scripts/syringe/syringe_stations.gd")
 const DownedViewScript := preload("res://scripts/downed/downed_view.gd")
 const PlayerTableScript := preload("res://scripts/downed/player_table.gd")
 ## Seconds a downed player takes to bleed out (then dead until the next shift).
@@ -206,6 +208,9 @@ const SUTURE_KITS_PER_SHIFT := 3
 const SYRINGES_PER_SHIFT := 3
 ## scripts/downed/player_surgery.gd, child "PlayerSurgery": the stitches operation.
 var player_surgery: Node = null
+## SYRINGE DRAW: scripts/syringe/syringe_stations.gd, child "SyringeStations": the handheld draws
+## that are open right now, one per player (its header explains why it is a map and not a node).
+var syringe_stations: Node = null
 ## scripts/downed/downed_view.gd, child "DownedView": blood trails and the downed overlay.
 var downed_view: Node = null
 ## The player table: {position: Vector3 (floor), yaw: float, top: float (table top height)}.
@@ -295,6 +300,11 @@ func _ready() -> void:
 	player_surgery.name = "PlayerSurgery"
 	add_child(player_surgery)
 	player_surgery.setup(self)
+	# SYRINGE DRAW: the handheld draws, at the same path everywhere so their one RPC lines up.
+	syringe_stations = SyringeStationsScript.new()
+	syringe_stations.name = "SyringeStations"
+	add_child(syringe_stations)
+	syringe_stations.setup(self)
 	downed_view = DownedViewScript.new()
 	downed_view.name = "DownedView"
 	add_child(downed_view)
@@ -993,6 +1003,8 @@ func end_operations(p: Node) -> void:
 		s.end(p)
 	if player_surgery != null:
 		player_surgery.end(p)
+	if syringe_stations != null:
+		syringe_stations.end(p)   # SYRINGE DRAW: and their draw, if they had one open
 
 
 func _ensure_surgeries(n: int) -> void:
@@ -1340,6 +1352,12 @@ func player_pressed_interact(p: Node, target_id: String) -> void:
 		return
 	if target_id == "vat_hand":
 		vats.hand_put(p)   # GRAFTING part one: a vat and an eye both in hand
+		return
+	if target_id == "syringe_hand":
+		# SYRINGE DRAW: a syringe in hand and something to fill it from. No reach test and no node
+		# prompt on this path, so the station re-asks every question for itself.
+		if syringe_stations != null:
+			syringe_stations.hand_open(p)
 		return
 	var node := find_interactable(target_id)
 	if node == null or not _within_reach(p, node):
@@ -2219,6 +2237,8 @@ func _clear_case() -> void:
 	_apply_cases_locally()
 	if player_surgery != null:
 		player_surgery.reset()   # downed: nobody on the player table either
+	if syringe_stations != null:
+		syringe_stations.reset()   # SYRINGE DRAW: and no draws open
 	_call_at.clear()
 	if shelf_node != null and is_instance_valid(shelf_node):
 		shelf_node.show_stock(shelf)
@@ -2266,7 +2286,10 @@ func surgery_step_done(result: Dictionary, table_index: int = -1, operator_peer:
 		# 2026-09-18: used from the operator's hands (surgery_system.can_begin made sure they held it).
 		var p = players.get(operator_peer)
 		if p != null and p.has_method("consume_hand"):
-			p.consume_hand(String(step.item), uses)
+			# SYRINGE DRAW: a dose that came out of a pre-loaded syringe spends the syringe, not a
+			# vial -- one off the count and the `x` cleared, which is what makes it one-use.
+			if not (Syringes.accepts_loaded(step) and Syringes.spend_loaded(p)):
+				p.consume_hand(String(step.item), uses)
 	var flags: Dictionary = c.get("flags", {})
 	flags.merge(result, true)
 	c.flags = flags
@@ -2472,6 +2495,8 @@ func _physics_process(delta: float) -> void:
 	for s in surgeries:
 		s.physics_tick(delta)
 	player_surgery.physics_tick(delta)  # downed
+	if syringe_stations != null:
+		syringe_stations.physics_tick(delta)   # SYRINGE DRAW
 	for t in _bodies.keys():
 		var body := body_for_table(int(t))
 		if body == null:
@@ -2636,6 +2661,10 @@ func _simulate(delta: float) -> void:
 		var op: int = s.operator_peer()
 		if op != 0 and players.has(op):
 			players[op].operating = true
+	if syringe_stations != null:   # SYRINGE DRAW: a corridor draw makes you busy too
+		for op2 in syringe_stations.operator_peers():
+			if players.has(int(op2)):
+				players[int(op2)].operating = true
 	if phase != Phase.MENU:
 		_tick_downed(delta)
 		_tick_table_holds(delta)   # GRAFT HOOK: hold E to strap yourself in, and again to get up
@@ -3622,11 +3651,14 @@ func surgery_camera() -> Camera3D:
 	var cam: Camera3D = surgery.camera() if surgery != null else null
 	if cam == null and player_surgery != null:
 		cam = player_surgery.surgery.camera()
+	if cam == null and syringe_stations != null:   # SYRINGE DRAW
+		cam = syringe_stations.camera()
 	return cam
 
 
 func surgery_wants_mouse() -> bool:
-	return (surgery != null and surgery.wants_mouse()) or (player_surgery != null and player_surgery.surgery.wants_mouse())
+	return (surgery != null and surgery.wants_mouse()) or (player_surgery != null and player_surgery.surgery.wants_mouse()) \
+		or (syringe_stations != null and syringe_stations.wants_mouse())   # SYRINGE DRAW
 
 
 func surgery_local_exit() -> void:
@@ -3634,6 +3666,8 @@ func surgery_local_exit() -> void:
 		surgery.local_operator_exit()
 	if player_surgery != null and player_surgery.surgery.wants_mouse():
 		player_surgery.surgery.local_operator_exit()
+	if syringe_stations != null:   # SYRINGE DRAW
+		syringe_stations.local_exit()
 
 
 ## Host only. A shove lands. HANDS HOOK: `charge` 0..1 from the wind-up (scripts/combat/windup.gd:
@@ -4262,6 +4296,7 @@ func _global_fields() -> Dictionary:
 		"t": snappedf(world_time, 0.5), "ph": phase, "sh": shift, "sd": seed_value,
 		"pu": snappedf(punch, 0.01),
 		"pt": player_surgery.net_state(),  # downed: the player table's case and its surgery
+		"sy": syringe_stations.net_state() if syringe_stations != null else {},  # SYRINGE DRAW
 		"st": strap_table,  # GRAFT HOOK: the table a healthy surgeon strapped themselves to
 		"et": snappedf(end_timer, 0.1), "sf": shelf.duplicate(),
 		"wp": waiting_peers.keys(),
@@ -4561,6 +4596,10 @@ func _apply_state(state: Dictionary, msg: Dictionary, keyframe: bool) -> void:
 	# downed: the player table's case, after the players so its patient's colour is known.
 	var pt = g.get("pt", {})
 	player_surgery.apply_net_state(pt if pt is Dictionary else {})
+	# SYRINGE DRAW: the handheld draws, likewise after the players (a station reads its owner's hands).
+	var sy = g.get("sy", {})
+	if syringe_stations != null:
+		syringe_stations.apply_net_state(sy if sy is Dictionary else {})
 	strap_table = int(g.get("st", -1))   # GRAFT HOOK: after the case, which wins when there is one
 	_apply_strap_table()
 

@@ -179,14 +179,69 @@ of site it got, which is exactly why the OR path is unaffected.
 Freeze / hand-over comes along for free with it: the arcade's "step away and the game stops dead,
 whoever picks it up gets a READY countdown" is driven by `operating`, not by a table.
 
-### Not built yet
+### The station, and how a per-player case replicates (2026-09-22)
 
-The item, the split and the anchoring mode are in. **The station that opens the window
-(`scripts/syringe/syringe_station.gd`), the three-fluid rack, and the table's acceptance of a
-loaded syringe are not.** The shape is a stand-in game after the model of
-`scripts/downed/player_surgery.gd`, reached by the `"vat_hand"` pseudo-target pattern
-(`player._update_aim` → `game.player_pressed_interact`), with the rack drawn across the top of the
-DRAW! page and the syringe moving between up to three fluids the player is actually carrying.
+A table is one shared thing: one surgery system serves it and whoever walks up is the operator. A
+draw is not. It belongs to the syringe in your hand, and four players in four corridors can each
+have one open at the same moment. So there is **one station per player**, and three things had to
+be decided:
+
+- **The node path.** RPCs are addressed by node path, and a node made on demand is a path the far
+  machine may not have yet. So the stations carry **no RPCs of their own**:
+  `scripts/syringe/syringe_stations.gd` sits at a fixed path (child `"SyringeStations"` of Game on
+  every machine) and is the only thing that talks. A station hands its report up to it.
+- **Who a report belongs to.** Nothing on the wire says which station a report is for, and nothing
+  needs to: a station's operator is its owner, by construction and forever, so the **sender id IS
+  the station**. That also means a client can only ever drive its own draw, however it lies.
+- **How many exist.** Host authoritative. The host makes a station the first time a player opens a
+  draw and keeps it for the rest of the shift (freeing it the moment a draw ended would cut off the
+  surgery camera's blend back to the player's own). Clients make and keep theirs from the
+  replicated map, so an onlooker has the node a teammate's panel hangs off: you can watch somebody
+  else load a syringe from across the room.
+
+**The site is frozen at open**, and that is what keeps the freeze honest. `surgery_system`'s
+walk-away test measures the operator against `table_pos()`, so a site that followed the player
+could never be walked away from. Frozen, being shoved out of a corridor draw ends it exactly as
+being shoved off a table does. Everything else the previous note promised held: freeze and
+hand-over needed nothing new.
+
+### The rack
+
+Up to three sources across the top of the DRAW! page — **centre, then left, then right** — built
+from the fluids the player is actually carrying, with the syringe sliding between them (A/D, or
+click a vial). Three because the fourth hand slot is holding the syringes.
+
+**One syringe carries one fluid**, so the rack locks to a source the moment you draw anything; put
+it all back and it unlocks. `rack_sel` and what is left in each vial go on the wire, so an
+onlooker's syringe stands under the same vial as the operator's; the slide itself is worked out
+from them and is not sent.
+
+**With fewer than three, the rack is simply narrower**, and with one it is the single SOMNUL-9 vial
+at the centre that the page always drew. The rack is **empty on the OR path**, so the table's
+fallback is byte for byte what it was. Only `anesthetic` exists today, so a real player can only
+ever fill one slot; `--rack3` (with `--racksel=N`) draws a full one for reviews and lab shots.
+
+### At the table
+
+A loaded syringe is accepted **instead of** the vial the sedate step asks for, and the step opens
+on STICK! through the `loaded` context. Delivering the dose spends the **syringe** rather than a
+vial: one off the count and the `x` cleared, which is what makes it one-use.
+
+One wrinkle worth knowing: a step's minigame is built as soon as the case is on the table, before
+anybody has walked up to it, so it cannot know about a loaded syringe yet. `surgery_system` latches
+a fingerprint of the operator's loaded syringe at the moment they begin (and, on an onlooker, when
+the operator replicates in) and **never again** — so the key is fixed from then on, and stepping
+away freezes the game for the hand-over instead of destroying it.
+
+### Tests
+
+- `tools/syringetest.tscn` — the whole trip solo: the crosshair offer, the station and its frozen
+  site, the corridor half and its rack, the level landing in the syringe's `x`, the table opening
+  on STICK!, the syringe being spent, and the OR's empty-handed fallback still getting all four.
+- `nettest_run.gd --only=syringe_draw` — **two handheld draws open at once** over real processes,
+  each seen by the other's owner, one finishing without touching the other.
+- `tools/review.bat N "..." --setup=syringe_draw` — a patient on a table and a syringe in hand, a
+  few paces off it. `--open` starts with the draw already up.
 
 ---
 

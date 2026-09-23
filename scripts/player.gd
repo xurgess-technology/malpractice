@@ -1480,6 +1480,14 @@ func _update_aim() -> void:
 			aim_id = "vat_hand"
 			aim_prompt = vp
 			aim_hold = 0.0
+	# SYRINGE DRAW: aimed at nothing with a syringe in hand, E opens the draw wherever you stand.
+	# The first minigame that happens outside the OR (docs/ANESTHETIC_INJECTION_SPEC.md 9).
+	if aim_id == "" and alive and not downed and not operating and game != null and game.get("syringe_stations") != null:
+		var sp: String = game.syringe_stations.hand_prompt(self)
+		if sp != "":
+			aim_id = "syringe_hand"
+			aim_prompt = sp
+			aim_hold = 0.0
 	# HANDS HOOK: holding the needle and aiming at a monster in its stun window: "Jab it" (a few Hz).
 	if aim_prompt == "" and alive and not downed and game != null and game.combat != null and game.combat.has_method("jab_prompt") \
 			and String(selected_stack().kind) == "anesthetic":

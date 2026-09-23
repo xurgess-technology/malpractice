@@ -48,6 +48,11 @@ var _own_bot_skill: float = -1.0
 var game: Node = null
 ## loop: the table this system operates at (index into level_info.tables); -1 when unused.
 var table_index: int = 0
+## SYRINGE DRAW: the latched loaded-syringe fingerprint for the step being played, and the step it
+## belongs to (see _current_key).
+var _loaded_sig := ""
+var _loaded_base := ""
+
 
 # ---- replicated (host authoritative) ----
 var operator_id: int = 0
@@ -155,6 +160,8 @@ func _reset() -> void:
 	_last_operator = 0
 	_mg_state = {}
 	_mg_state_key = ""
+	_loaded_sig = ""
+	_loaded_base = ""
 	_stir_count = 0
 	_seen_stirs = 0
 	_finished_keys.clear()
@@ -182,7 +189,12 @@ func can_begin(player) -> String:
 	# 2026-09-18: the step's item has to be in your hands, selected (and enough of it).
 	var needed: int = maxi(1, int(s.get("uses", 0)))
 	var held: Dictionary = player.selected_stack() if player.has_method("selected_stack") else {}
-	if String(held.get("kind", "")) != String(s.item) or int(held.get("count", 0)) < needed:
+	# SYRINGE DRAW: a syringe you loaded in a corridor stands in for the drug this step asks for.
+	# Turning up empty-handed with the vial is still the fallback and behaves exactly as before.
+	var by_syringe: bool = Syringes.accepts_loaded(s) and not Syringes.held_loaded(player).is_empty()
+	if not by_syringe and (String(held.get("kind", "")) != String(s.item) or int(held.get("count", 0)) < needed):
+		if Syringes.accepts_loaded(s):
+			return "Hold %s, or a loaded syringe." % Items.display_name(String(s.item))
 		if needed > 1:
 			return "Hold %d %s to do this." % [needed, Items.display_name(String(s.item))]
 		return "Hold %s to do this." % Items.display_name(String(s.item))
@@ -199,6 +211,7 @@ func begin(player) -> void:
 		return
 	operator_id = player.peer_id
 	_last_operator = operator_id
+	_latch_loaded()   # SYRINGE DRAW: did they walk up with a syringe already loaded?
 
 
 func end(player) -> void:
@@ -315,7 +328,10 @@ func net_state() -> Dictionary:
 func apply_net_state(s: Dictionary) -> void:
 	if game == null or game.is_host():
 		return
+	var was_op := operator_id
 	operator_id = int(s.get("op", 0))
+	if operator_id != 0 and was_op == 0:
+		_latch_loaded()   # SYRINGE DRAW: an onlooker latches the same thing the operator did
 	var key := String(s.get("k", ""))
 	var ms = s.get("ms", {})
 	if ms is Dictionary:
@@ -426,7 +442,35 @@ func _current_key() -> String:
 	if s.is_empty():
 		return ""
 	var c := _case()
-	return "%d|%s|%s|%d" % [int(c.get("id", 0)), c.get("patient_id", ""), c.get("ailment_id", ""), int(c.get("step_index", 0))]
+	var base := "%d|%s|%s|%d" % [int(c.get("id", 0)), c.get("patient_id", ""), c.get("ailment_id", ""), int(c.get("step_index", 0))]
+	# SYRINGE DRAW: a step is built as soon as the case is on the table, before anybody has walked
+	# up to it, so a step that takes a loaded syringe cannot know about one yet. `_loaded_sig` is
+	# latched at the moment somebody begins (and, on an onlooker, when the operator replicates in)
+	# and never moves again, so stepping away FREEZES the game for the hand-over rather than
+	# destroying it. Every machine latches the same value, from the same replicated hand slots.
+	if not Syringes.accepts_loaded(s):
+		return base
+	if base != _loaded_base:
+		_loaded_base = base
+		_loaded_sig = ""
+	return base if _loaded_sig == "" else base + "|" + _loaded_sig
+
+
+## A short fingerprint of the loaded syringe the operator holds ("" when they hold none). Derived
+## only from replicated state, so the host and every client agree on it.
+func _operator_loaded_sig() -> String:
+	if operator_id == 0 or game == null:
+		return ""
+	var pl = game.get("players")
+	var p = (pl as Dictionary).get(operator_id) if pl is Dictionary else null
+	var d := Syringes.held_loaded(p)
+	return "" if d.is_empty() else "L%.3f" % float(d.level)
+
+
+## SYRINGE DRAW: latch the loaded-syringe signature for whoever just took this step over.
+func _latch_loaded() -> void:
+	if Syringes.accepts_loaded(_step()):
+		_loaded_sig = _operator_loaded_sig()
 
 
 func _sync_minigame() -> void:
@@ -511,6 +555,15 @@ func _spawn_mg() -> void:
 	for k in ["no_fail", "eye_kind", "eye_kind_in", "eye_radius"]:
 		if c.flags.has(k):
 			ctx[k] = c.flags[k]
+	# SYRINGE DRAW: the operator walked up with a syringe already loaded, so the barrel is full and
+	# flicked and the step opens on STICK!. The level it stored is ABSOLUTE, and the band above was
+	# worked out from THIS patient -- a standard corridor dose meets a real band here, which is the
+	# whole cost of pre-loading. Every machine reads the same replicated hand slots.
+	if Syringes.accepts_loaded(step) and operator_id != 0:
+		var op_p = (game.get("players") as Dictionary).get(operator_id) if game.get("players") is Dictionary else null
+		var ld := Syringes.held_loaded(op_p)
+		if not ld.is_empty():
+			ctx["loaded"] = ld
 	# SYRINGE DRAW: a stand-in game adds its own knobs on top (the syringe station's `draw_only`,
 	# and the `loaded` syringe a table's sedate step is handed). Last word, so a station can
 	# override anything above it.

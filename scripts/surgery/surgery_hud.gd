@@ -72,8 +72,10 @@ class _Canvas extends Control:
 		var total := Procedures.steps(String(case_d.get("ailment_id", ""))).size()
 		var v: float = maxf(0.0, _vitals_of(game, case_d))
 		var vcol := Color("5cff8a") if v > 50.0 else (Color("ffd35c") if v > 25.0 else Color(1, 0.16, 0.16, 0.7 + 0.3 * sin(_t * 9.0)))
-		var vtxt := "VITALS %d" % ceili(v)
-		var vw := font.get_string_size(vtxt, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		# SYRINGE DRAW: a handheld step has no patient, so there are no vitals to report and
+		# nothing it could cost. The corner stays empty rather than sitting at a steady 100.
+		var vtxt := "" if Procedures.is_handheld(String(case_d.get("ailment_id", ""))) else "VITALS %d" % ceili(v)
+		var vw: float = font.get_string_size(vtxt, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x if vtxt != "" else 0.0
 		var title := "%d/%d  %s" % [idx, total, String(st.get("title", "")).to_upper()] if total > 0 else String(st.get("title", "")).to_upper()
 		draw_string(font, Vector2(x + 14, y + 19), title, HORIZONTAL_ALIGNMENT_LEFT, pw - vw - 44, 14, Color(0.94, 0.9, 0.78, 0.95))
 		draw_string(font, Vector2(x + pw - vw - 14, y + 19), vtxt, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, vcol)

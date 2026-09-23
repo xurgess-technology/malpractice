@@ -59,6 +59,11 @@ const SETUPS := {
 	"sedate": {"seed": 4242, "stage": "_sedate"},
 	# SYRINGE DRAW: the new syringe item -- three in hand, vials to load them from, some on the floor.
 	"syringe": {"seed": 4242, "stage": "_syringe"},
+	# SYRINGE DRAW (docs/ANESTHETIC_INJECTION_SPEC.md 9): standing in a corridor with a syringe and
+	# a vial and a patient waiting on a table. Press E where you stand to load it, then carry it
+	# over and operate: the step opens on STICK! instead of DRAW!. `--open` starts with the draw
+	# already up (the smoke look uses it, since a screenshot cannot press E).
+	"syringe_draw": {"seed": 4242, "stage": "_syringe_draw"},
 	# 2026-09-21 (docs/ARCADE_SURGERY.md 5.2): DODGE!, a gunshot wound at the bullet step, sedated, and
 	# you already operating. `--undersedated` makes the patient squirm; `--patient=seal` swaps in the seal.
 	"dodge": {"seed": 4242, "stage": "_dodge"},
@@ -431,6 +436,31 @@ static func _syringe(game: Game) -> void:
 	floor_item(game, "syringe", here + Vector3(1.0, 0.0, -1.4), 2)
 	floor_item(game, "syringe", here + Vector3(-0.9, 0.0, -1.6), 1)
 	floor_item(game, "anesthetic", here + Vector3(0.1, 0.0, -1.9), 3)
+
+
+## SYRINGE DRAW: the whole trip. A patient waits on a table; you stand a few paces off it with a
+## syringe selected and a vial in the other hand. E loads the syringe where you stand (the first
+## minigame that happens outside the OR), and walking it over opens the sedate step on STICK!.
+static func _syringe_draw(game: Game) -> void:
+	var table: int = game.free_patient_table()
+	if table < 0:
+		table = int(game.patient_tables[0].index) if not game.patient_tables.is_empty() else 0
+	game.add_case({"patient_id": "bob", "ailment_id": "gunshot", "table": table, "state": "on_table"})
+	var t: Vector3 = game.table_position(table)
+	# A few paces back from the table, facing it: there is nothing to aim at from here, which is
+	# exactly the state the draw is offered in.
+	place(game, t + Vector3(0.0, 0.0, 3.2), t + Vector3(0.0, 1.05, 0.0))
+	clear_hands(game)
+	give(game, "syringe", 3)
+	give(game, "anesthetic", 2)
+	give(game, "tourniquet", 1)
+	game.local_player().selected = 0
+	game.stock_storage("syringe", 3)
+	var tree := game.get_tree()
+	for i in 6:
+		await tree.physics_frame
+	if "--open" in OS.get_cmdline_user_args() and game.syringe_stations != null:
+		game.syringe_stations.hand_open(game.local_player())
 
 
 static func _sedate(game: Game) -> void:

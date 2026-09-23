@@ -82,6 +82,43 @@ static func label(x: String) -> String:
 	return "Syringe of %s (%d%%)" % [fluid_name(String(d.fluid)), roundi(float(d.level) * 100.0)]
 
 
+## ARRIVING AT THE TABLE WITH ONE ALREADY LOADED. The step still asks for `anesthetic` -- turning
+## up empty-handed with a vial is the fallback and it stays exactly as it was. A loaded syringe is
+## accepted INSTEAD of it: the dose is already in the barrel, so the step opens on STICK! and the
+## two loading stages are simply skipped (inject_arcade's `loaded` context).
+static func accepts_loaded(step: Dictionary) -> bool:
+	return String(step.get("game", "")) == "anesthetic" and String(step.get("item", "")) == "anesthetic"
+
+
+## The loaded syringe in `p`'s selected hand, or {}. {slot: int, fluid, level, bubbles}.
+static func held_loaded(p) -> Dictionary:
+	if p == null or not is_instance_valid(p) or not p.has_method("selected_stack"):
+		return {}
+	var s: Dictionary = p.selected_stack()
+	if String(s.get("kind", "")) != "syringe" or int(s.get("count", 0)) < 1:
+		return {}
+	var d := unpack(String(s.get("x", "")))
+	if d.is_empty():
+		return {}
+	d["slot"] = int(p.selected_head())
+	return d
+
+
+## Host: the loaded syringe `p` just emptied into a patient is spent -- one off the count, and the
+## `x` cleared so the next one out of the batch is empty. That is what makes a syringe one-use.
+## Does nothing (and says so) when they were not holding one.
+static func spend_loaded(p) -> bool:
+	var d := held_loaded(p)
+	if d.is_empty():
+		return false
+	var i := int(d.slot)
+	# Clear `x` first: a partial consume leaves the stack (and its `x`) behind.
+	p.slots[i]["x"] = ""
+	if p.has_method("consume_hand"):
+		p.consume_hand("syringe", 1)
+	return true
+
+
 ## The fluid's display name, lower case, for prose.
 static func fluid_name(fluid: String) -> String:
 	match fluid:
