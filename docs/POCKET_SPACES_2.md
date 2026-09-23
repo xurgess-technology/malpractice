@@ -189,33 +189,43 @@ nothing. Outside: the footsteps.
 ### Perf, measured
 Phase 1 skipped `tools/perfprobe` deliberately and said phases 2-4 must
 run it. Run, on the Radeon 890M, medium (`--quality=1`), 180 frames a
-view, in a **windowed** 1600x900 run that never took focus
+view, in a **windowed 1600x900** run that never took focus
 (`tools/perfprobe.ps1`, new: the same never-activate WMI trick as
-`mirrorshot.ps1` / `vatshot.ps1`; there was no launcher for perfprobe
-before, and a headless run renders nothing so its numbers are worthless).
+`mirrorshot.ps1` / `vatshot.ps1`; there was no launcher for perfprobe at
+all before, and a headless run renders nothing so its numbers are
+worthless).
 
-| view | avg fps | 1% low | worst ms | draws |
-| --- | --- | --- | --- | --- |
-| that map's hospital corridor | 49 | 36 | 30.1 | 435 |
-| laundromat: the length of the room | 51 | 39 | 26.8 | 367 |
-| laundromat: corner to corner | 47 | 37 | 31.0 | 387 |
-| laundromat: down an aisle | 45 | 35 | 30.4 | 379 |
-| laundromat: an entrance from inside | 47 | 38 | 30.0 | 190 |
-| laundromat: seam, hospital side | 41 | 30 | 42.7 | 187 |
-| laundromat: seam, pocket side | 41 | 30 | 37.1 | 124 |
+**Read the room against the hospital corridor measured in the same run,
+not against the absolute 60/50.** Two runs, before and after the room was
+brightened, with three other Godot instances on the machine (phases 2 and
+3 were building at the same time) — which is exactly why the absolute
+numbers move so much between them and the same-run comparison is the one
+worth anything:
 
-**Read it against the corridor on the same map, not against 60/50.**
-The Laundromat's own views (45-51 avg, 35-39 low) sit at or above the
-hospital corridor of the very map they are in (49 / 36), so the room
-costs no more to look at than the hospital does — which is the thing a
-new space has to be true of.
+| view | run A avg / 1% low | run B avg / 1% low |
+| --- | --- | --- |
+| **that map's hospital corridor** (the control) | **49 / 36** | **31 / 17** |
+| laundromat: the length of the room | 51 / 39 | 32 / 16 |
+| laundromat: corner to corner | 47 / 37 | 40 / 25 |
+| laundromat: down an aisle | 45 / 35 | 39 / 29 |
+| laundromat: an entrance from inside | 47 / 38 | 42 / 31 |
+| laundromat: seam, hospital side | 41 / 30 | 40 / 30 |
+| laundromat: seam, pocket side | 41 / 30 | 40 / 32 |
 
-The **absolute bar (60 fps, 1% lows above 50) is not met on this machine
-in a windowed run by the hospital either**: the plain baseline sweep on
-this branch gives "corridor, long sightline" 48 fps / 27 low and "lobby
-clock-in room" 31 / 17. That is a pre-existing condition of the project
-at this resolution, not something this space introduced, and it wants
-its own look — flagged, not fixed here.
+Draw calls 124-387 inside the room against 435 for the corridor. In both
+runs every view of the room sits at or above the hospital corridor of the
+very map it is in, which is the claim a new space has to be able to make:
+**it costs no more to look at than the hospital does.**
+
+Two honest caveats, neither of them this space's doing:
+- **The absolute bar (60 fps, 1% lows above 50) is not met on this machine
+  in a windowed run by the hospital either.** The plain baseline sweep on
+  this branch gives "corridor, long sightline" 48 / 27 and "lobby clock-in
+  room" 31 / 17. That is a pre-existing condition at this resolution and
+  wants its own look; flagged, not fixed here.
+- **The machine was not quiet.** Three other Godot instances were running
+  for most of these runs. Worth re-taking on an idle machine before anyone
+  reads the absolute numbers as gospel.
 
 For scale, the same probe on the **Factory**, which has shipped since the
 first sweep: 27-39 fps avg and **14-30** 1% lows, with its map's own
@@ -230,7 +240,7 @@ before it measures anything. Verified by running it on a detached
 checkout of `main` (3b30969): same crash, same place. So this phase added
 **`--pocket=<kind>`**: one space, forced before the first session is
 built and never rebuilt, which is how the numbers above were taken. See
-docs/FAILING_TESTS.md.
+docs/FAILING_TESTS.md 1g.
 
 ### The three items
 `Laundromat.ITEM_KINDS` declares the set (see "the item set" below).

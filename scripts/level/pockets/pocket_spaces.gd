@@ -736,8 +736,8 @@ const AIR := {
 			"ambient_light_energy": 0.3, "ambient_light_color": Color(0.62, 0.46, 0.34)},
 	# The Laundromat hides nothing: flat fluorescent light to the far wall, almost no fog, and the
 	# faint blue-white bounce of a room lit entirely by tubes.
-	"laundromat": {"fog_depth_begin": 26.0, "fog_depth_end": 80.0, "fog_density": 0.12, "volumetric_fog_density": 0.008,
-			"ambient_light_energy": 0.55, "ambient_light_color": Color(0.70, 0.78, 0.86)},
+	"laundromat": {"fog_depth_begin": 30.0, "fog_depth_end": 95.0, "fog_density": 0.08, "volumetric_fog_density": 0.006,
+			"ambient_light_energy": 0.95, "ambient_light_color": Color(0.80, 0.85, 0.88)},
 }
 var _air_base := {}
 var _air_env: Environment = null

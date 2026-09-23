@@ -145,9 +145,11 @@ static func layout(stubs: Array, seed: int) -> Dictionary:
 
 	var spawns := [Vector2i(MAIN.position.x + 6, TABLE_Y), Vector2i(MAIN.end.x - 7, TABLE_Y),
 			Vector2i(UTILITY.get_center().x, UTILITY.get_center().y)]
+	# Tubes close enough together that the light is flat and there is nowhere dim to stand. The room
+	# hides you by sound, not by darkness, so it wants to be unpleasantly well lit.
 	var lamps: Array = []
 	for ly in [MAIN.position.y + 2, TABLE_Y, MAIN.end.y - 3]:
-		for lx in range(MAIN.position.x + 4, MAIN.end.x - 2, 6):
+		for lx in range(MAIN.position.x + 3, MAIN.end.x - 2, 5):
 			lamps.append(Vector2i(lx, ly))
 	return {"kind": "laundromat", "size": Vector2i(g.w, g.h), "grid": g, "rows": Common.rows(g), "ports": ports,
 			"islands": islands, "dryers": dryers, "tables": tables, "chairs": chairs, "change": change,
@@ -533,7 +535,7 @@ static func _lights(root: Node3D, lay: Dictionary, world: Callable, out: Diction
 	for t: Vector2i in lay.lamps:
 		var p: Vector3 = world.call(Vector2(t) + Vector2(0.5, 0.5), CEIL - 0.12)
 		var mode := 1 if i % 6 == 5 else 0
-		var node := Common.omni(lights, p - Vector3(0, 0.1, 0), 1.55, 8.5, cool, 0.35, false, 1.1)
+		var node := Common.omni(lights, p - Vector3(0, 0.1, 0), 2.1, 12.0, cool, 0.3, false, 0.9)
 		var mi := MeshInstance3D.new()
 		mi.mesh = tube
 		mi.position = Vector3(0, 0.1, 0)
@@ -542,7 +544,7 @@ static func _lights(root: Node3D, lay: Dictionary, world: Callable, out: Diction
 		i += 1
 	for r: Rect2i in [UTILITY, OFFICE]:
 		var p: Vector3 = world.call(Vector2(r.get_center()) + Vector2(0.5, 0.5), BACK_CEIL - 0.12)
-		var node := Common.omni(lights, p, 1.0, 6.0, Color(0.95, 0.96, 0.92), 0.4)
+		var node := Common.omni(lights, p, 1.35, 8.0, Color(0.95, 0.96, 0.92), 0.35)
 		var mi := MeshInstance3D.new()
 		mi.mesh = tube
 		mi.position = Vector3(0, 0.05, 0)
