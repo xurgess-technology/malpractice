@@ -202,8 +202,10 @@ const STRAP_IN_PROMPT := "Hold E: lie down and strap in"
 const REVIVE_HP := 2
 const CALL_COOLDOWN := 4.0
 ## How many stacks of suture kits and of syringes a shift scatters lives in one place,
-## ItemSpawner.LOOSE_SUPPLY: three stacks of 1-2 each, so a crew that wants to pre-load a dose or
-## stitch a teammate up can usually find one.
+## ItemSpawner.LOOSE_SUPPLY: three stacks each, sized by the kind's own Items.batch (suture_kit
+## 1-2, syringe 2-3, so 6-9 syringes a shift -- what Items.ITEMS' "handling" text already promised
+## before 0.10.45 fixed the scatter to actually deliver it), so a crew that wants to pre-load a
+## dose or stitch a teammate up can usually find one.
 ## scripts/downed/player_surgery.gd, child "PlayerSurgery": the stitches operation.
 var player_surgery: Node = null
 ## SYRINGE DRAW: scripts/syringe/syringe_stations.gd, child "SyringeStations": the handheld draws
