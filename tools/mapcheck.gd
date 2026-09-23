@@ -43,7 +43,7 @@ func _initialize() -> void:
 			"seeds": seed_count = int(kv[1])
 			"builds": build_count = int(kv[1])
 			"first": first_seed = int(kv[1])
-			"build_pocket": build_pocket = kv[1]   # POCKETS: "" alternate, none, factory, restaurant
+			"build_pocket": build_pocket = kv[1]   # POCKETS: "" cycles the kinds, "none", or a PocketPlan.KINDS name
 	var t0 := Time.get_ticks_msec()
 	_check_generation()
 	_check_determinism()
@@ -199,7 +199,8 @@ const Stub := preload("res://scripts/level/pockets/stub.gd")
 const PS := preload("res://scripts/level/pockets/pocket_spaces.gd")
 const S := preload("res://scripts/level/level_state.gd")
 
-## Every seed of the run again with a pocket forced (Factory on odd seeds, Restaurant on even), plus
+## Every seed of the run again with a pocket forced (every kind on the first 40 seeds, then one
+## kind per seed in turn), plus
 ## the natural roll: the plan, the stubs carved into the hospital, the pocket's own grid, and the
 ## seams lining up tile for tile both ways.
 func _check_pockets() -> void:
@@ -213,13 +214,14 @@ func _check_pockets() -> void:
 		var g0: Dictionary = MG.generate(seed)
 		var k0 := String(Plan.of(g0).get("kind", "none"))
 		natural[k0] = int(natural.get(k0, 0)) + 1
-		for kind in ["factory", "restaurant"]:
-			if (seed % 2 == 1) != (kind == "factory") and seed > first_seed + 40:
-				continue   # both kinds on the first 40 seeds, then alternate
+		for ki in Plan.KINDS.size():
+			var kind: String = Plan.KINDS[ki]
+			if seed > first_seed + 40 and seed % Plan.KINDS.size() != ki:
+				continue   # every kind on the first 40 seeds, then one kind per seed in turn
 			Plan.force_kind = kind
 			tried += 1
 			# Wings differ every shift: later shifts' wing seeds too (the plan is rolled with the wings).
-			var gn := 1 + (seed + (1 if kind == "factory" else 0)) % 4
+			var gn := 1 + (seed + ki) % 4
 			var gen: Dictionary = MG.generate(seed, MG.wing_seed_for(seed, gn))
 			var plan := Plan.of(gen)
 			if plan.is_empty():
@@ -300,7 +302,7 @@ func _check_pocket_plan(seed: int, kind: String, gen: Dictionary, plan: Dictiona
 		fail("%s: every entrance leads to the same wing" % tag)
 	# The pocket's own grid: every stub has a port, the copies line up tile for tile with the hospital's
 	# stubs through the seam transform (both ways), and everything open is reachable from each opening.
-	var layout_script: GDScript = PS.Factory if kind == "factory" else PS.Restaurant
+	var layout_script: GDScript = PS.script_for(kind)
 	var lay: Dictionary = layout_script.layout(stubs, int(plan.seed))
 	var g: Dictionary = lay.grid
 	var origin: Vector2i = PS.ORIGINS[kind]
@@ -509,7 +511,7 @@ class Runner extends Node:
 		var seed: int = seeds[index]
 		info = {}
 		# POCKETS: every build seed gets a pocket, the Factory and the Restaurant in turn.
-		Plan.force_kind = ("factory" if index % 2 == 0 else "restaurant") if check.build_pocket == "" else check.build_pocket
+		Plan.force_kind = String(Plan.KINDS[index % Plan.KINDS.size()]) if check.build_pocket == "" else check.build_pocket
 		gen = MG.generate(seed)
 		Plan.force_kind = ""
 		var t0 := Time.get_ticks_msec()
@@ -840,7 +842,7 @@ class Runner extends Node:
 		var open := 0
 		# Coverage from the pocket's grid, rebuilt from the plan (layouts are pure).
 		var plan := Plan.of(gen)
-		var layout_script: GDScript = PS.Factory if String(plan.kind) == "factory" else PS.Restaurant
+		var layout_script: GDScript = PS.script_for(String(plan.kind))
 		var g: Dictionary = layout_script.layout(plan.stubs, int(plan.seed)).grid
 		for y in int(g.h):
 			for x in int(g.w):

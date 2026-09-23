@@ -24,10 +24,16 @@ const Plan := preload("res://scripts/level/pockets/pocket_plan.gd")
 const Stub := preload("res://scripts/level/pockets/stub.gd")
 const Factory := preload("res://scripts/level/pockets/factory.gd")
 const Restaurant := preload("res://scripts/level/pockets/restaurant.gd")
+const Chapel := preload("res://scripts/level/pockets/chapel.gd")
 const Common := preload("res://scripts/level/pockets/pocket_common.gd")
 
+## Every pocket kind's layout script. A new space adds one line here, one to PocketPlan.KINDS, one
+## to ORIGINS and one to AIR, and needs nothing else: the three call sites below all come through
+## `script_for`, so adding a kind never touches them.
+const LAYOUTS := {"factory": Factory, "restaurant": Restaurant, "chapel": Chapel}
+
 ## World tile of each pocket's local tile (0, 0): far outside any hospital (maps are ~110 m).
-const ORIGINS := {"factory": Vector2i(800, 0), "restaurant": Vector2i(800, 500)}
+const ORIGINS := {"factory": Vector2i(800, 0), "restaurant": Vector2i(800, 500), "chapel": Vector2i(800, 1000)}
 ## A remote body that jumps further than this between snapshots is moved, not interpolated.
 const SNAP_DISTANCE := 6.0
 ## Noises within this many metres of a seam (on its own side) are also heard on the other side.
@@ -327,9 +333,15 @@ func build_kind(kind: String, info: Dictionary, parent: Node3D, pocket_seed: int
 		game.doors.register(pocket.get("doors", []))
 
 
+## The layout script of a pocket kind (the Factory, for an unknown one, so a bad kind builds
+## something rather than crashing a shift).
+static func script_for(kind: String) -> GDScript:
+	return LAYOUTS.get(kind, Factory)
+
+
 ## Data only (a worker thread): the layout, the surface arrays, the navigation mesh.
 static func prepare(kind: String, stubs: Array, pocket_seed: int) -> Dictionary:
-	var layout_script: GDScript = Factory if kind == "factory" else Restaurant
+	var layout_script: GDScript = script_for(kind)
 	var origin: Vector2i = ORIGINS.get(kind, Vector2i(800, 0))
 	var lay: Dictionary = layout_script.layout(stubs, pocket_seed)
 	var interior: Dictionary = layout_script.prepare(lay, origin)
@@ -349,7 +361,7 @@ static func build_into(kind: String, stubs: Array, pocket_seed: int, map_seed: i
 static func build_steps(prep: Dictionary, stubs: Array, map_seed: int, hospital_lights: Array,
 		info: Dictionary, parent: Node3D, out_seams: Array, links: bool, result: Dictionary) -> Array:
 	var kind: String = prep.kind
-	var layout_script: GDScript = Factory if kind == "factory" else Restaurant
+	var layout_script: GDScript = script_for(kind)
 	var origin: Vector2i = prep.origin
 	var lay: Dictionary = prep.lay
 	var out := {"lights": [], "containers": [], "loose_anchors": [], "monster_spawns": [], "nav_faces": PackedVector3Array()}
@@ -446,7 +458,7 @@ static func warm(parent: Node3D) -> void:
 		{"id": 1, "wing": "", "depth": 1, "o": Vector2i(0, 20), "eu": Vector2i(-1, 0), "ev": Vector2i(0, 1), "w": 12, "d": 5, "lights": []},
 	]
 	var x := -1.2
-	for script: GDScript in [Factory, Restaurant]:
+	for script: GDScript in LAYOUTS.values():
 		var lay: Dictionary = script.layout(fake, 1)
 		var out := {"lights": [], "containers": [], "loose_anchors": [], "monster_spawns": [], "nav_faces": PackedVector3Array(), "wing": "", "depth": 1}
 		var root: Node3D = script.build(lay, Vector2i.ZERO, out)
@@ -534,8 +546,9 @@ func ambient_noise_at(p: Vector3) -> float:
 
 
 ## The optional `AMBIENT_NOISE_LEVEL` a pocket's layout script declares, or 0.0. Declaring it is how
-## a new space (docs/POCKET_SPACES_2.md phase 4, the Laundromat) gets a noise floor; the Factory and
-## the Restaurant both declare 0.0, which is the same as not declaring it at all.
+## a new space (docs/POCKET_SPACES_2.md phase 4, the Laundromat) gets a noise floor; the Factory,
+## the Restaurant and the Chapel all declare 0.0, which is the same as not declaring it at all.
+## A kind with no layout script (and "", the hospital) is 0.0 too.
 ## Cached: `get_script_constant_map()` builds a dictionary every call, and `_hear` asks once per
 ## sound-hunting monster per tick.
 static var _ambient_cache := {}
@@ -543,10 +556,7 @@ static var _ambient_cache := {}
 static func ambient_noise_of(kind: String) -> float:
 	if _ambient_cache.has(kind):
 		return float(_ambient_cache[kind])
-	var s: GDScript = null
-	match kind:
-		"factory": s = Factory
-		"restaurant": s = Restaurant
+	var s: GDScript = LAYOUTS.get(kind, null)
 	var v := 0.0 if s == null else float(s.get_script_constant_map().get("AMBIENT_NOISE_LEVEL", 0.0))
 	_ambient_cache[kind] = v
 	return v
@@ -721,6 +731,10 @@ const AIR := {
 			"ambient_light_energy": 0.13, "ambient_light_color": Color(0.26, 0.55, 0.44)},
 	"restaurant": {"fog_depth_begin": 16.0, "fog_depth_end": 60.0, "fog_density": 0.35, "volumetric_fog_density": 0.016,
 			"ambient_light_energy": 0.3, "ambient_light_color": Color(0.62, 0.46, 0.34)},
+	# The Chapel's ambient is almost nothing on purpose: what you can see, a candle is showing you.
+	# The volumetric density is the highest of the three so every flame throws a visible cone.
+	"chapel": {"fog_depth_begin": 12.0, "fog_depth_end": 70.0, "fog_density": 0.4, "volumetric_fog_density": 0.035,
+			"ambient_light_energy": 0.06, "ambient_light_color": Color(0.36, 0.22, 0.12)},
 }
 var _air_base := {}
 var _air_env: Environment = null

@@ -21,7 +21,7 @@ const S := preload("res://scripts/level/level_state.gd")
 const Rng := preload("res://scripts/level/rng.gd")
 const StubScript := preload("res://scripts/level/pockets/stub.gd")
 
-const KINDS := ["factory", "restaurant"]
+const KINDS := ["factory", "restaurant", "chapel"]
 ## Zone id of stub tiles (wings are 2..5, outdoor 9).
 const ZONE_STUB := 10
 
@@ -39,7 +39,7 @@ const MIN_ENTRANCES := 2
 const MAX_ENTRANCES := 3
 const MAX_W := 14
 
-## Tools and the dev room: "" rolls normally, "none" never, "factory" / "restaurant" always that one.
+## Tools and the dev room: "" rolls normally, "none" never, a name in KINDS always that one.
 static var force_kind := ""
 ## Tools: how many entrances a forced pocket wants (0 = roll 2-3).
 static var force_entrances := 0
