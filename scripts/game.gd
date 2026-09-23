@@ -2347,16 +2347,20 @@ func _tick_noise(delta: float) -> void:
 	while not _noises.is_empty() and float(_noises[0].time) < cut:
 		_noises.pop_front()
 	for p in alive_players():
+		# POCKETS 2 phase 2: standing in the Natatorium's pool replaces both numbers below, and is the
+		# one case where crouching does not buy silence (PocketSpaces.water_footstep says why).
+		var wet: Array = pockets.water_footstep(p.global_position, bool(p.sprinting), bool(p.get("crouching"))) if pockets != null else []
 		# SWEEP 4A HOOK (controls): a crouching player's footsteps make no sound and no noise event
 		# at all (not just quieter): the Sonographer can't hear a crouching player walk.
-		if not p.moving or bool(p.get("crouching")):
+		if not p.moving or (bool(p.get("crouching")) and wet.is_empty()):
 			_footstep_acc[p.peer_id] = 0.0
 			continue
 		var acc: float = float(_footstep_acc.get(p.peer_id, 0.0)) + delta
-		var interval := 0.3 if p.sprinting else 0.5
+		var interval: float = float(wet[1]) if not wet.is_empty() else (0.3 if p.sprinting else 0.5)
 		if acc >= interval:
 			acc = 0.0
-			emit_noise(p.global_position, 0.8 if p.sprinting else 0.25, "footstep")
+			var loudness: float = float(wet[0]) if not wet.is_empty() else (0.8 if p.sprinting else 0.25)
+			emit_noise(p.global_position, loudness, "footstep")
 		_footstep_acc[p.peer_id] = acc
 
 
