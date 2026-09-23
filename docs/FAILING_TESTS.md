@@ -76,8 +76,8 @@ How to run things is at the bottom of this file.
   A passing run has her following in **9.2 s, 3.9 m** — a healthy follow, not a near-miss — and a
   failing one still reports exactly 60.0 s and 1444.3 m, which is just "she stayed in the hospital
   while the bot walked into the pocket", so the identical number says nothing about the cause.
-- **So it is not fixed, and the branch did not break it either**: a deterministic failure became a
-  coin flip. That is a strong hint about the cause. The Night Nurse's `_vanish()` asks
+- **So it is not fixed, and phase 1 did not break it either**: a deterministic failure became
+  order-dependent. That is a strong hint about the cause. The Night Nurse's `_vanish()` asks
   `random_nav_point` for a point up to **400 m** away, which used to reach the pocket at tile 800;
   the fence now refuses those, so she is far likelier to still be nearby when the bot crosses.
   Whoever picks this up should look at `_vanish()` in `scripts/monsters/night_nurse_brain.gd` and at
@@ -95,6 +95,25 @@ How to run things is at the bottom of this file.
   layout and the distance, and points squarely at **state left behind by the previous space's run** —
   `_run_space` tears a shift down and starts another, and something the Night Nurse depends on does
   not survive that. Start at what `_nurse_follows` assumes about a freshly rebuilt shift.
+- **2026-09-22, `pockets-chapel`, with FIVE spaces (factory, restaurant, natatorium, chapel,
+  laundromat): FAILED 2 of 547, and the one that fails is the `chapel`** -- a different space
+  again, and not the last in the list. Run alone it is green. Across the runs recorded here the
+  identity of the failing space keeps moving while the failure itself never does, which is the
+  strongest argument yet that this is per-run leftover state and nothing to do with any space.
+- **2026-09-22, `pockets-chapel`, with four spaces: the order story does not fully hold.** A merged
+  run of factory, restaurant, natatorium, chapel gives **FAILED 4 of 430**: `restaurant` (second)
+  and `natatorium` (third) fail, while `factory` (first) **and `chapel` (fourth)** both pass. So it
+  is not simply "only the first one passes" -- something about the previous space's teardown, not
+  the position in the list. Worth re-measuring the phase 2 orderings now there is a fourth space.
+- **2026-09-22, `pockets-chapel`: a warning for anyone changing her.** With four spaces the Chapel
+  ran last and *passed* in one run while `restaurant` (second) failed, and an earlier run of the
+  same set passed every check, so the ordering effect is not perfectly deterministic — the cause
+  still looks like leftover state rather than position as such. **Alone, the Chapel is green**:
+  `--only=chapel` passes 102 checks with her following in **9.2 s, 3.9 m**.
+  **If you are changing Night Nurse behaviour, run your space alone before concluding anything.**
+  The Chapel's votive candle makes her count as watched inside its radius (it is in
+  `Perception.observed_any`, above the early-out), which is exactly the sort of change that would
+  otherwise get blamed for this.
 
 ## 1g. nettest `pockets`: client 1 never carries client 2 into the pocket
 
@@ -133,9 +152,47 @@ How to run things is at the bottom of this file.
 - **Found 2026-09-22** by the `syringe-draw` task, which generalised the loose-supply spawner and
   wanted a clean baseline. **Confirmed identical on clean `main`**, so it is pre-existing and not
   that branch's doing. It had never been written down.
+- **Confirmed a second time, independently**, by the POCKET_SPACES_2 phase 3 task, which checked
+  out `main`'s `scripts/items.gd` and `scripts/item_spawner.gd` over its own branch and got the
+  same failure on every one of six seeds: `seed N gunshot: suture_kit totals 0, needs at least
+  3x 1` and `suture_kit is in only 0 places`.
 - Nobody has looked at the cause. Worth knowing that `suture_kit` is the newest of the loose
   supplies -- SUTURE! (0.10.4) added the closing step that needs it, and 0.10.33 generalised the
   spawner that places it -- so if this turns out to date from either, it is young.
+- **One lead worth trying first:** `suture_kit` is in `Items.ITEMS` with `"surgical": true` but is
+  **not** in `Items.SURGICAL`, and `Items.SURGICAL` is the list `ItemSpawner.plan`'s needed/herring
+  split actually iterates. It also declares `"found": {"trauma_bag": 0.4, "station_drawers": 0.35,
+  "drawer_unit": 0.25}` and no `"loose"`, so it can only ever appear inside a container.
+
+
+## 3. perfprobe --pockets crashes after the warmup, before it measures anything
+
+- **Command:** `tools\perfprobe.ps1 -Extra "--pockets"` (a real window that renders but never
+  takes focus — SW_SHOWNOACTIVATE, not minimized: a minimized window does not render and its frame
+  times mean nothing)
+- **Result:** twelve `BUG, indexing did not unpair geometries from light` errors from
+  `renderer_scene_cull.cpp`, then `CrashHandlerException: Program crashed with signal 11`. The log
+  stops at the warmup line and **not one scenario is measured**.
+- **Found independently by two tasks on 2026-09-22** (POCKET_SPACES_2 phases 2 and 3) and
+  **confirmed pre-existing by both**: phase 3 reproduced it exactly -- the same crash, the same
+  twelve errors, the same 67-line log -- with the Chapel taken back out of `PocketSpaces.LAYOUTS`
+  and perfprobe's kind loop pinned to the old `["none", "factory", "restaurant"]`. It is the
+  restart, not any one space.
+- **Where the fault is.** `perfprobe._run_pockets()` calls `game.start_session()` again, once per
+  kind, and the first of those restarts lands immediately after the one-time warmup. Tearing that
+  down while the renderer still holds the warmup shelf's light-geometry pairings is what trips the
+  engine bug. Plain `perfprobe` (one session, no restart) completes all 27 scenarios on the same
+  machine and only crashes **at exit**, after the summary table has printed, which is harmless and
+  has presumably been happening for a while.
+- **The way round it, which works today:** `-- --pocket=<kind>` forces the kind *before* the one
+  and only `start_session` and measures that space in the session already built. Both tasks landed
+  on this independently; it is what the Natatorium's and the Chapel's numbers were taken with
+  (`tools\perfprobe.ps1 -Extra "--pocket=chapel"`, which uses SW_SHOWNOACTIVATE -- a minimized
+  window does not render and its frame times mean nothing).
+- **Where to look:** whether `_run_pockets` can wait out the renderer (a few frames, or
+  `RenderingServer.force_sync()`) before restarting, or whether it should simply be rebuilt on top
+  of `--pocket` and run one process per kind.
+
 
 ## 1l. perfprobe --pockets crashes before it measures anything (signal 11)
 

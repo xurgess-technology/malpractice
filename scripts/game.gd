@@ -2307,8 +2307,23 @@ func surgery_step_done(result: Dictionary, table_index: int = -1, operator_peer:
 		if p != null and p.has_method("consume_hand"):
 			# SYRINGE DRAW: a dose that came out of a pre-loaded syringe spends the syringe, not a
 			# vial -- one off the count and the `x` cleared, which is what makes it one-use.
+			# POCKETS 2 phase 3: whichever way the dose arrived, it is weakened by what it actually
+			# WAS (Items.ANESTHETIC_KINDS). A syringe drawn from communion wine is still communion
+			# wine, so the fluid has to be read HERE, before spend_loaded clears it -- otherwise
+			# loading the wine into a syringe would quietly launder it into a full-strength dose.
+			# The injection minigame is untouched either way: it reports the sedation it always did
+			# and the substitute is applied to its result.
+			var loaded: Dictionary = Syringes.held_loaded(p) if Syringes.accepts_loaded(step) else {}
+			var used_kind := String(loaded.get("fluid", ""))
 			if not (Syringes.accepts_loaded(step) and Syringes.spend_loaded(p)):
-				p.consume_hand(String(step.item), uses)
+				used_kind = Items.held_for_step(p, String(step.item), uses)
+				if used_kind == "":
+					used_kind = String(step.item)
+				p.consume_hand(used_kind, uses)
+			var strength := Items.anesthetic_strength(used_kind)
+			if strength < 1.0 and result.has("sedation"):
+				result = result.duplicate()
+				result["sedation"] = snappedf(float(result.sedation) * strength, 0.01)
 	var flags: Dictionary = c.get("flags", {})
 	flags.merge(result, true)
 	c.flags = flags

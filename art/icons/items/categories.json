@@ -118,6 +118,21 @@
       "category": "trinket",
       "glow": null
     },
+    "votive_candle": {
+      "name": "Votive candle",
+      "category": "trinket",
+      "glow": null
+    },
+    "communion_wine": {
+      "name": "Communion wine",
+      "category": "surgery",
+      "glow": null
+    },
+    "collection_plate": {
+      "name": "Collection plate",
+      "category": "loot",
+      "glow": null
+    },
     "ultrasound": {
       "name": "Portable ultrasound",
       "category": "loot",

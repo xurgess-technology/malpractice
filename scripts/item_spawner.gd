@@ -222,6 +222,12 @@ static func _legal(kind: String, loc: Dictionary, used: Dictionary) -> bool:
 	if used.has(loc.key) or SAFE_ROOMS.has(loc.room_kind):
 		return false
 	var def := ItemsData.def(kind)
+	# POCKETS 2 phase 3: an item may name the room kinds it is ever found in, and the Chapel's
+	# communion wine is only ever found in the Chapel. No `rooms` key means anywhere, which is
+	# every other surgical item, so nothing else changes.
+	var rooms: Dictionary = def.get("rooms", {})
+	if not rooms.is_empty() and not rooms.has(String(loc.room_kind)):
+		return false
 	var t: String = loc.type
 	if t.begins_with("loose:"):
 		return float(def.get("found", {}).get("loose", 0.0)) > 0.0 and (def.get("loose_surfaces", []) as Array).has(t.substr(6))

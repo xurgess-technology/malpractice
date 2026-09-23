@@ -28,6 +28,8 @@ static func build(root: Node3D, kind: String, count: int) -> void:
 		"quarter_bucket": _quarter_bucket(root, clampi(count, 1, 5))
 		"warm_scrubs": _warm_scrubs(root)
 		"fabric_softener": _fabric_softener(root)
+		"collection_plate": _collection_plate(root)
+		"votive_candle": _votive_candle(root)
 		_: _add(root, _box(Vector3(0.15, 0.1, 0.15), _m("magenta", Color.MAGENTA)), Vector3(0, 0.05, 0))
 
 
@@ -78,6 +80,8 @@ static func footprint(kind: String) -> Vector3:
 		"quarter_bucket": return Vector3(0.22, 0.2, 0.22)
 		"warm_scrubs": return Vector3(0.28, 0.13, 0.22)
 		"fabric_softener": return Vector3(0.17, 0.26, 0.12)
+		"votive_candle": return Vector3(0.07, 0.09, 0.07)
+		"collection_plate": return Vector3(0.28, 0.04, 0.28)
 	return Vector3(0.15, 0.1, 0.15)
 
 
@@ -291,6 +295,28 @@ static func _laptop(root: Node3D) -> void:
 	_add(root, lid, Vector3(0, 0.018, -0.114), Vector3(-105, 0, 0))
 	_add(lid, _box(Vector3(0.33, 0.012, 0.23), shell), Vector3(0, -0.006, 0.115))
 	_add(lid, _box(Vector3(0.29, 0.002, 0.19), _screen("laptop", Color(0.25, 0.45, 0.8))), Vector3(0, 0.001, 0.115))
+
+
+## POCKETS 2 phase 3: a shallow silver-gilt alms dish with a felt liner and a few coins in it.
+static func _collection_plate(root: Node3D) -> void:
+	var silver := _m("plate_silver", Color(0.72, 0.70, 0.62), 0.28, 0.85)
+	var felt := _m("plate_felt", Color(0.30, 0.06, 0.08), 0.95)
+	_add(root, _cyl(0.115, 0.012, silver, 24), Vector3(0, 0.006, 0))
+	_add(root, _cyl(0.125, 0.014, silver, 24, 0.142), Vector3(0, 0.017, 0))
+	_add(root, _cyl(0.100, 0.002, felt, 24), Vector3(0, 0.013, 0))
+	for c in [Vector3(0.03, 0.016, 0.02), Vector3(-0.02, 0.016, -0.03), Vector3(0.01, 0.019, -0.01)]:
+		_add(root, _cyl(0.011, 0.002, _gold(), 12), c)
+
+
+## POCKETS 2 phase 3: a red glass votive cup with a wax puck. No flame on the model: the flame and
+## the light belong to the placed candle (scripts/trinkets/trinkets.gd), not to the stock item, so
+## an unlit one in your hands looks unlit.
+static func _votive_candle(root: Node3D) -> void:
+	var glass := _m("votive_glass", Color(0.42, 0.06, 0.05), 0.25)
+	var wax := _m("votive_wax", Color(0.90, 0.86, 0.74), 0.75)
+	_add(root, _cyl(0.031, 0.072, glass, 14), Vector3(0, 0.036, 0))
+	_add(root, _cyl(0.027, 0.014, wax, 14), Vector3(0, 0.060, 0))
+	_add(root, _box(Vector3(0.002, 0.008, 0.002), _black_plastic()), Vector3(0, 0.070, 0))
 
 
 static func _watch(root: Node3D) -> void:

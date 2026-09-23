@@ -335,7 +335,7 @@ and the probe crashes before printing a number. **That reproduces on
 `main`**, so it is the offscreen window and not the scenario. The window
 is left where it lands and closed when the numbers are in.
 
-## Phase 3 — the Chapel
+## Phase 3 — the Chapel — DONE 2026-09-22, branch `pockets-chapel`
 A hospital chapel that is somehow a cathedral: pews for three
 hundred, vaulted dark ceiling, every votive candle lit, nobody who
 lit them. Candlelight is the room's light.
@@ -345,6 +345,123 @@ lit them. Candlelight is the room's light.
 - COMMUNION WINE: anesthetic substitute, batch of 1, weak dose —
   shorter sedation, stirs sooner. Patients and strapped monsters.
 - COLLECTION PLATE: loot, gold-watch tier.
+
+**The space.** `scripts/level/pockets/chapel.gd`. A nave 33 m long under a vault 24 m up that
+nothing ever lights, two arcades of stone piers with pointed arches between them, side aisles
+ceiled much lower (9 m) so the nave reads tall, thirty-two rows of pews, a sanctuary with an altar
+and a reredos of votive tiers, and a sacristy behind the one hinged door. Origin (800, 1500).
+
+**Candlelight is the room's light, and here is how it is paid for.** Every flame in the building is
+emissive geometry in a MultiMesh — about 350 votive cups and tapers — and costs no light at all.
+Illumination comes from `LIGHT_BUDGET` (26) real `OmniLight3D`s, pooled one per votive rack and one
+per candle stand rather than one per flame, of which `SHADOW_BUDGET` (2) cast shadows, which is the
+shape the Factory's high bays already had. A build uses 19 of the 26. The sanctuary is built
+**before** the racks and the stands precisely so it draws on that budget first and the altar can
+never be the thing that goes dark. The lights are real and not the emissive trick 0.10.25 found in
+the mirrors, because they have to be: the Night Nurse's rule asks whether a point is **lit**, and
+`Perception.fixture_lit` walks `level_info.lights` looking for an `OmniLight3D` named `Bulb`.
+
+**The votive candle satisfies the existing predicate, it does not copy it.** The check lives in
+`Perception.observed_any`, ahead of the frustum work **and ahead of the "is anybody alive to look"
+early-out** — that ordering is the whole feature, since the point is that a candle watches with
+nobody there. Because it is in the predicate rather than in `night_nurse_brain.gd`, it holds
+everywhere the predicate is asked, including her own `_vanish()`, which will now not choose a
+hiding place inside somebody's candle. Lighting a candle **is** its use: it goes into the world
+already spent and worth `SCRAP`, so one candle buys exactly one safe zone in exactly one place and
+there is no carrying a lit one to a better spot. It burns `CANDLE_SECONDS` (120) and gutters over
+the last twelve, so the thing a player sees when their safe zone dies is the light jumping and
+sinking, then `trinkets_candle_out`.
+
+**Communion wine** is `Items.ANESTHETIC_KINDS`, a dictionary of kind -> share of a real dose (wine
+0.55). `surgery_system.can_begin` accepts a substitute, the consume spends what was actually held,
+and the strength multiplies the sedation the arcade already reported; the strapped-monster re-dose
+gets the same factor. **The injection minigame is untouched and does not know the difference** —
+that was deliberate, because the syringe/fluid-rack work is happening in parallel. Phase 5's
+top-shelf tequila should be one more line in that dictionary.
+
+**Collection plate** is gold-watch tier (3) loot weighted to the Chapel's own room kinds.
+
+**Measured, not reasoned.**
+- `tools/pocketrate.gd`, 500 seeds x 4 shifts with three kinds: **23.9%**, in the 20-30% band,
+  exit 0. Evenly split (factory 149 / chapel 168 / restaurant 161), every individual shift in band,
+  **0 rolls that wanted a pocket and found no room**, and the no-repeat exclusion still perfect
+  (384 rolled with a kind excluded, 0 were it). Adding a kind does not move the rate, as phase 1
+  predicted: the curve is how often *a* pocket appears, not which one.
+- `tools/mapcheck.gd --build_pocket=chapel`: **100% pocket navigation coverage**, every entrance
+  walked out through its own seam, nothing unreachable and nothing resting on air. Only the
+  pre-existing morgue-tray failures remain (FAILING_TESTS 2).
+- `tools/pockettest.tscn`: **the Chapel alone passes 102 checks** (`--only=chapel`), her follow
+  through the seam a healthy 9.2 s / 3.9 m. On the merged four-space tree the whole run is
+  **FAILED 4 of 430**, and all four are the known FAILING_TESTS 1f Night Nurse check in
+  `restaurant` and `natatorium` -- the Chapel and the Factory pass it. Since this phase changes
+  Night Nurse behaviour, that distinction is the one to check first if 1f ever moves.
+- `tools/trinkettest.tscn`: **PASS**, with eleven new candle checks — including *she is frozen,
+  observed with the room empty*, that a step outside the radius ends it, and that burning out ends
+  it too.
+- **The smoke look mattered here more than any of the above**, and is worth a line because a
+  headless suite cannot see a dark room. `tools/gameshot.tscn -- --pocket=chapel` (shots in
+  `tools/game_shots/p_chapel_*.png`) caught, in order: **no votive rack had ever been placed** —
+  their free-tile test was grown by one and so reached into the outer wall they stand against, and
+  every rack in the building was refused without a word; the pooled lights were tuned to a single
+  candle's brightness when each stands in for a bank of them, so from the narthex the nave was
+  black with one orange dot 60 m away; there was no light down the nave at all, only on the aisle
+  walls; and the volumetric fog was so dense that the 24 m vault, the one thing the space is meant
+  to lose in the dark, was a bright olive ceiling. All four are fixed and the shots now read as a
+  cathedral. **Every one of these passed every headless check while it was broken.**
+- **`tools/perfprobe` was run**, and after three contended attempts across the day it was finally
+  re-read on a **genuinely idle machine** (zero other Godot processes) against the **final**
+  content -- the votive racks, the stronger pooled lights, all of it -- with
+  `tools\perfprobe.ps1 -Extra "--pocket=chapel"`. Main's launcher is the right one and corrects a
+  real mistake of mine: it uses SW_SHOWNOACTIVATE, because a **minimized window does not render**
+  and the frame times it gives are meaningless. **At medium (q1) the Chapel clears the bar with
+  room to spare:**
+
+  | view (q1, medium) | avg fps | 1% low | draws |
+  |---|---|---|---|
+  | **chapel: the whole nave** (the designed worst frame) | **112** | **93** | 641 |
+  | chapel: the reredos close up | 134 | 110 | 337 |
+  | chapel: down a side aisle | 115 | 98 | 634 |
+  | chapel: an entrance from inside | 139 | 101 | 270 |
+  | chapel: seam, hospital side | 108 | 81 | 191 |
+  | *hospital corridor on the same map (baseline)* | *86* | *30* | *445* |
+
+  Against a bar of 60 avg and 1% lows above 50, the worst Chapel view is **112 / 93**. Every view
+  in the space beats the hospital corridor it opens off, on both numbers.
+  **One thing for somebody else:** that corridor baseline's 1% low of **30** is the only figure in
+  the table under the bar, and it is untouched hospital, not the Chapel -- it is the first scenario
+  measured and may just be the run settling, but it is worth a look by whoever owns the hospital.
+  At low (q0) and high (q2) the Chapel is 108-156 and 41-55 avg respectively; q2 is below 60 across
+  the board including the corridor, which is what "high" costs on this machine and not new.
+
+**Merged with `main` at 0.10.35 (the Natatorium and the syringe), and what that changed.**
+- **Origin moved to (800, 1500)**: the Natatorium had taken (800, 1000), which I had also picked.
+  Two spaces at one origin would build on top of each other.
+- **`script_of`, not `script_for`**: the Natatorium replaced the same ternaries independently and
+  landed first, so the merge took its name and the Chapel is one more entry in `LAYOUTS`. Same for
+  `perfprobe --pocket=<kind>`, which both of us added after hitting the same renderer crash.
+- **The syringe was the conflict that mattered.** `Syringes.FLUIDS` already forward-declared
+  `communion_wine`, so a syringe can be loaded from the wine — and `surgery_step_done` now spends
+  the *syringe*, not the vial. Resolved mechanically, that would have laundered the wine into a
+  full-strength dose: the hand holds a syringe, so the substitute lookup would have missed it. The
+  merged version reads `Syringes.held_loaded(p).fluid` **before** `spend_loaded` clears it, so a
+  dose is weakened by what it actually was however it arrived. `can_begin` accepts a substitute
+  vial in the fallback path the same way.
+- **The Chapel's loot went pocket-only**, dropping the small `office` / `waiting_room` / `"*"`
+  weights the plate and the candle had. The Natatorium's two name only their own room kinds and no
+  `"*"`, and the Laundromat is landing a `loot_spawner._can_place` fix for exactly the leak that
+  causes. Matching the other spaces is worth more than a rare plate in a waiting room, and the
+  bleed-out task is the right way to put pocket items in the hospital deliberately.
+- **`POCKET_ITEMS`** is the agreed name (renamed from my `ITEM_KINDS`), beside `AMBIENT_NOISE_LEVEL`.
+- **Review setup**: `--setup=chapel`, built on the Natatorium's `ReviewSetups.before_session` hook
+  rather than a competing one. It drops you in the processional aisle with all three items in hand
+  and a Night Nurse walking down the nave at you.
+- FAILING_TESTS: my `suture_kit` section folded into main's `1k` (both tasks confirmed it
+  independently) and my perfprobe section merged with phase 2's evidence.
+
+**Unsure / for whoever merges.** The three sedation touch points (`surgery_system.can_begin`,
+`game.surgery_step_done`, `dissection._anesthetic_slot`/`redose`) are the likeliest merge conflict
+with the syringe-rack task, which is moving DRAW!/FLICK! out of the OR. Nothing here restructures
+the injection, but the lines are close together.
 
 ## Phase 4 — the Laundromat — DONE 2026-09-22, branch `pockets-laundromat`
 Coin-op, fluorescent, every machine running with nothing inside.

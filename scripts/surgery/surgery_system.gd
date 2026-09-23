@@ -191,8 +191,11 @@ func can_begin(player) -> String:
 	var held: Dictionary = player.selected_stack() if player.has_method("selected_stack") else {}
 	# SYRINGE DRAW: a syringe you loaded in a corridor stands in for the drug this step asks for.
 	# Turning up empty-handed with the vial is still the fallback and behaves exactly as before.
+	# POCKETS 2 phase 3: and the vial in that fallback may be a SUBSTITUTE (Items.step_accepts) --
+	# the Chapel's communion wine does wherever a vial of anesthetic would. Kind-for-kind for
+	# everything else, because nothing else declares a substitute.
 	var by_syringe: bool = Syringes.accepts_loaded(s) and not Syringes.held_loaded(player).is_empty()
-	if not by_syringe and (String(held.get("kind", "")) != String(s.item) or int(held.get("count", 0)) < needed):
+	if not by_syringe and (not Items.step_accepts(String(s.item), String(held.get("kind", ""))) or int(held.get("count", 0)) < needed):
 		if Syringes.accepts_loaded(s):
 			return "Hold %s, or a loaded syringe." % Items.display_name(String(s.item))
 		if needed > 1:

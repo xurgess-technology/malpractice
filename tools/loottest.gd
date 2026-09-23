@@ -23,9 +23,10 @@ const KEPT := ["pill_bottle", "xray_film", "heart_monitor", "gold_watch", "ultra
 	# POCKETS 2: the pocket spaces' own kinds. Unlike everything above they list no "*" room
 	# weight, so they never turn up in the hospital — see POCKET_ONLY below.
 	"pool_chemical_drum", "lifeguard_whistle",
+	"votive_candle", "collection_plate",
 	"quarter_bucket", "warm_scrubs", "fabric_softener"]
 const TRINKETS := ["desk_phone", "laptop", "defibrillator", "reflex_hammer", "epipen", "pulse_oximeter",
-	"lifeguard_whistle", "fabric_softener"]
+	"lifeguard_whistle", "fabric_softener", "votive_candle"]
 ## POCKETS 2: kinds that belong to one pocket space, and the room kinds of the space each belongs to.
 ## They are exempt from the "must be findable in the hospital" rules below and checked the other way
 ## round instead. A new space's POCKET_ITEMS go here. (Spelt out rather than read from the layout
@@ -34,6 +35,8 @@ const TRINKETS := ["desk_phone", "laptop", "defibrillator", "reflex_hammer", "ep
 const POCKET_ONLY := {
 	"pool_chemical_drum": ["natatorium_deck", "natatorium_lockers"],
 	"lifeguard_whistle": ["natatorium_deck", "natatorium_lockers"],
+	"votive_candle": ["chapel_nave", "chapel_aisle", "chapel_sanctuary", "chapel_sacristy"],
+	"collection_plate": ["chapel_nave", "chapel_aisle", "chapel_sanctuary", "chapel_sacristy"],
 	"quarter_bucket": ["laundromat", "laundromat_back"],
 	"warm_scrubs": ["laundromat", "laundromat_back"],
 	"fabric_softener": ["laundromat", "laundromat_back"],

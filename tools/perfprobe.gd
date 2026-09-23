@@ -141,10 +141,7 @@ func _ready() -> void:
 		for s in scenarios:
 			await s.setup.call()
 			await _measure(s.name, q)
-	print("[perf] ============================================================================")
-	print("[perf] %-30s q  avg fps  1%%low fps  worst ms  phys ms  proc ms  draws  nodes" % "scenario")
-	for r in _rows:
-		print("[perf] %-30s %d  %7.0f  %9.0f  %8.1f  %7.2f  %7.2f  %5d  %5d" % [r.name, r.q, r.fps, r.low_fps, r.worst, r.phys, r.proc, r.draws, r.nodes])
+	_report()
 	get_tree().quit(0)
 
 
@@ -360,6 +357,12 @@ func _pocket_views(kind: String, pk) -> Array:
 		views.append({"name": "laundromat: the length of the room", "setup": func(): _look(w.call(Vector2(12.5, 18.5)), w.call(Vector2(48, 18), C.EYE_H))})
 		views.append({"name": "laundromat: corner to corner", "setup": func(): _look(w.call(Vector2(12, 12)), w.call(Vector2(48, 25), C.EYE_H))})
 		views.append({"name": "laundromat: down an aisle", "setup": func(): _look(w.call(Vector2(13, 18.5)), w.call(Vector2(48, 20.5), 1.2))})
+	elif kind == "chapel":
+		# The worst frame the Chapel has: the whole nave from the narthex, which is every votive
+		# rack, every candle stand, all the pew rows, both arcades and the reredos drawn at once.
+		views.append({"name": "chapel: the whole nave", "setup": func(): _look(w.call(Vector2(21.5, 13.0)), w.call(Vector2(21.5, 53.0), C.EYE_H))})
+		views.append({"name": "chapel: the reredos close up", "setup": func(): _look(w.call(Vector2(21.5, 48.0)), w.call(Vector2(21.5, 54.0), C.EYE_H))})
+		views.append({"name": "chapel: down a side aisle", "setup": func(): _look(w.call(Vector2(13.0, 14.0)), w.call(Vector2(13.0, 50.0), C.EYE_H))})
 	elif kind == "factory":
 		views.append({"name": "factory: hall, corner to corner", "setup": func(): _look(w.call(Vector2(13, 13)), w.call(Vector2(70, 52), C.EYE_H))})
 		views.append({"name": "factory: down a production line", "setup": func(): _look(w.call(Vector2(14, 27)), w.call(Vector2(70, 23), C.EYE_H))})
@@ -373,6 +376,14 @@ func _pocket_views(kind: String, pk) -> Array:
 
 ## POCKETS: each space forced onto the run's hospital, measured from a few views, with the
 ## hospital's long corridor on the same map as the baseline.
+## The summary table.
+func _report() -> void:
+	print("[perf] ============================================================================")
+	print("[perf] %-30s q  avg fps  1%%low fps  worst ms  phys ms  proc ms  draws  nodes" % "scenario")
+	for r in _rows:
+		print("[perf] %-30s %d  %7.0f  %9.0f  %8.1f  %7.2f  %7.2f  %5d  %5d" % [r.name, r.q, r.fps, r.low_fps, r.worst, r.phys, r.proc, r.draws, r.nodes])
+
+
 func _run_pockets() -> void:
 	var Plan := preload("res://scripts/level/pockets/pocket_plan.gd")
 	var Stub := preload("res://scripts/level/pockets/stub.gd")
@@ -416,6 +427,13 @@ func _run_pockets() -> void:
 			views.append({"name": "factory: hall, corner to corner", "setup": func(): _look(w.call(Vector2(13, 13)), w.call(Vector2(70, 52), C.EYE_H))})
 			views.append({"name": "factory: down a production line", "setup": func(): _look(w.call(Vector2(14, 27)), w.call(Vector2(70, 23), C.EYE_H))})
 			views.append({"name": "factory: from the catwalk", "setup": func(): _look(w.call(Vector2(40, 12), 6.0), w.call(Vector2(40, 45), 1.0))})
+		elif kind == "chapel":
+			# The worst frame the Chapel has: the whole nave from the narthex, which is every
+			# votive rack, every candle stand, all thirty-two pew rows, both arcades and the
+			# reredos drawn at once, under the one shadowed light.
+			views.append({"name": "chapel: the whole nave from the narthex", "setup": func(): _look(w.call(Vector2(21.5, 13.0)), w.call(Vector2(21.5, 53.0), C.EYE_H))})
+			views.append({"name": "chapel: the reredos close up", "setup": func(): _look(w.call(Vector2(21.5, 48.0)), w.call(Vector2(21.5, 54.0), C.EYE_H))})
+			views.append({"name": "chapel: down a side aisle", "setup": func(): _look(w.call(Vector2(13.0, 14.0)), w.call(Vector2(13.0, 50.0), C.EYE_H))})
 		else:
 			views.append({"name": "restaurant: dining room", "setup": func(): _look(w.call(Vector2(12.5, 25.5)), w.call(Vector2(38, 12), C.EYE_H))})
 			views.append({"name": "restaurant: bar", "setup": func(): _look(w.call(Vector2(33, 23)), w.call(Vector2(41, 13), C.EYE_H))})

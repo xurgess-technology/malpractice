@@ -199,7 +199,8 @@ const Stub := preload("res://scripts/level/pockets/stub.gd")
 const PS := preload("res://scripts/level/pockets/pocket_spaces.gd")
 const S := preload("res://scripts/level/level_state.gd")
 
-## Every seed of the run again with a pocket forced (Factory on odd seeds, Restaurant on even), plus
+## Every seed of the run again with a pocket forced (every kind on the first 40 seeds, then one
+## kind per seed in turn), plus
 ## the natural roll: the plan, the stubs carved into the hospital, the pocket's own grid, and the
 ## seams lining up tile for tile both ways.
 func _check_pockets() -> void:
