@@ -1271,7 +1271,8 @@ showed what they showed:
    first row of a process, and **127 / 100 with 5 ms** as the last. Every kind did it. **This is
    FAILING_TESTS 1m, and it is the whole of it** — the Chapel's 86/30 corridor baseline was a
    warm-up artefact and the hospital never had a stutter there. The probe now measures one view and
-   drops the row.
+   drops the row. **The plain sweep's `lobby clock-in room` is the same artefact** — its first
+   scenario, quoted at **31 / 17** in phase 4's notes, reads **82 / 75** with the warm-up dropped.
 2. **Every "map's hospital corridor" baseline published in this document is one of those first
    rows.** So the comparisons phases 2, 3 and 4 made — "every view in the space beats the hospital
    corridor it opens off" — were made against a number that was low for a reason that had nothing

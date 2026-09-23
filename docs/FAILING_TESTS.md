@@ -259,7 +259,9 @@ number is quoted in docs/POCKET_SPACES_2.md and somebody will meet it again.
   camera, same map, same ~480 draws, one run: `hospital corridor` as the **first** view read
   **60 avg / 22 low with 58 ms of process time a frame**; as the **last** view it read
   **127 / 100 with 5 ms**. Every kind showed it (20-40 ms of proc on its first row). The probe now
-  measures one view and throws the row away before it keeps anything.
+  measures one view and throws the row away before it keeps anything. **The plain sweep's `lobby
+  clock-in room` was the same artefact**: it is that sweep's first scenario, it is quoted around
+  the docs at **31 / 17**, and with the warm-up dropped it reads **82 / 75**.
 - **A "1% low" over 240 frames is the third-worst frame of about two seconds**, so one hitch
   decided it. Measured across three full sweeps on an idle machine, the *same* view swung
   **24 to 105**. The default window is now 600 frames, and anything being published wants
