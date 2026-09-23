@@ -5,6 +5,8 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-22 (0.10.x)**
 
+- **0.10.48**: Every morgue tray is reachable now 🗄️
+    - Fixed: A supply cart and a sink could land close enough together to wall off the tray between them, so on a couple of maps a morgue tray sat behind furniture nobody could actually reach. Every tray now keeps a clear path to it.
 - **0.10.47**: The pocket spaces, checked over 🔎
     - Fixed: The performance sweep was reading its first measurement before the machine had finished building the level, which made whatever it measured first look terrible. That's where the "a corridor runs at 30" figure came from -- the same corridor reads 100 once it settles. Several numbers written down over the last two days were measuring the warm-up, not the game.
     - Fixed: The screenshot tool took its first picture from inside the hospital's air, which is why the chapel once photographed as a washed-out grey box and then as a cathedral from the same spot a run later.
