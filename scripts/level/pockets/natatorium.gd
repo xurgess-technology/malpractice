@@ -47,9 +47,17 @@ const BLEACHERS := Rect2i(M + 1, M + 4, 3, RH - 6)
 const LOCKERS := Rect2i(M + 3, M + RH + 2, 13, 6)
 const LOCKER_DOOR := Vector2i(M + 5, M + RH + 1)
 
-## Water surface, metres above the deck. The floor plane is the deck's: you wade, you do not swim.
+## Water surface, metres above the deck. Stays an absolute height above deck level (not above the
+## basin floor) so the coping, ropes and blocks -- all built at deck height -- don't have to move.
 const WATER_Y := 0.34
 const LANE_W := 2.55
+
+## The basin: real depth below the deck, not much. C.JUMP_VELOCITY (5.2) against gravity (18.0)
+## gives a jump apex of v^2/(2g) = 0.75 m (matches the estimate in economy/furnace.gd's SILL
+## comment) -- POOL_DEPTH sits well under half that, so climbing out from the basin floor clears
+## the lip with room to spare rather than demanding a precise jump. You wade, you do not swim: the
+## drop is a step down and a hop up, not a platforming challenge.
+const POOL_DEPTH := 0.4
 
 
 static func layout(stubs: Array, seed: int) -> Dictionary:
@@ -58,7 +66,10 @@ static func layout(stubs: Array, seed: int) -> Dictionary:
 	var g := Common.new_grid(HALL.end.x + M + 1, LOCKERS.end.y + M + 1)
 	var deck := Common.add_room(g, {"name": "deck", "ceil": CEIL, "floor": "deck_tile", "ceiling": "roof",
 			"wall": "wall_up", "wall_low": "pool_tile_wall", "split": 2.4, "uv": 2.0, "place": "natatorium_deck"})
-	var water := Common.add_room(g, {"name": "water", "ceil": CEIL, "floor": "pool_floor", "ceiling": "roof",
+	# No "floor" key: the shared grid pipeline (Common.build_surfaces) draws every room's floor
+	# flat at y=0, and the basin's is sunk POOL_DEPTH below that, so it can't come from the grid.
+	# _basin() draws it by hand, in the same "pool_floor" material this room still registers below.
+	var water := Common.add_room(g, {"name": "water", "ceil": CEIL, "ceiling": "roof",
 			"wall": "wall_up", "wall_low": "pool_tile_wall", "split": 2.4, "uv": LANE_W, "place": "natatorium_pool"})
 	var lockers := Common.add_room(g, {"name": "lockers", "ceil": LOCKER_CEIL, "floor": "locker_floor",
 			"ceiling": "locker_ceiling", "wall": "locker_wall", "wall_low": "", "split": 0.0, "place": "natatorium_lockers"})
@@ -70,6 +81,9 @@ static func layout(stubs: Array, seed: int) -> Dictionary:
 	_block(g, BLEACHERS)
 	Common.reserve(g, BLEACHERS.grow(1))
 	Common.reserve(g, Rect2i(LOCKER_DOOR.x - 2, HALL.end.y - 3, 5, 4))
+	# The basin is a real drop now (build_steps/_basin): a pit nothing paths through, only the
+	# player steps into, so it comes out of the navigation mesh the same way the bleachers do.
+	_block(g, POOL)
 
 	# Entrances go on the north, south and east walls; the west wall is the bleachers' back.
 	var walls := [
@@ -151,7 +165,10 @@ static func layout(stubs: Array, seed: int) -> Dictionary:
 		underwater.append(Vector2(float(x) + 0.5, float(POOL.position.y) + 0.6))
 		underwater.append(Vector2(float(x) + 0.5, float(POOL.end.y) - 0.6))
 
-	var spawns := [Vector2i(HALL.position.x + 5, HALL.position.y + 2), Vector2i(POOL.get_center().x, POOL.get_center().y),
+	# The second spot used to be the pool's own centre; now that the basin is out of the nav mesh
+	# (see _block(g, POOL) above) a spawn there would strand whatever spawns on it, so it sits on
+	# the deck just north of the pool instead -- central to the room, same as before.
+	var spawns := [Vector2i(HALL.position.x + 5, HALL.position.y + 2), Vector2i(POOL.get_center().x, POOL.position.y - 3),
 			Vector2i(HALL.end.x - 3, HALL.end.y - 8), Vector2i(LOCKERS.get_center().x, LOCKERS.get_center().y)]
 	return {"kind": "natatorium", "size": Vector2i(g.w, g.h), "grid": g, "rows": Common.rows(g), "ports": ports,
 			"ropes": ropes, "blocks": blocks, "flags": flags, "stands": stands, "drums": drums, "store": store,
@@ -230,10 +247,33 @@ static func build_steps(lay: Dictionary, origin: Vector2i, out: Dictionary, root
 		return geo.commit_steps(root, ctx))
 	steps.append(func():
 		var body: StaticBody3D = ctx.body
-		var inter := Rect2(Vector2(HALL.position) * T + Vector2(ow.x, ow.z), Vector2(HALL.size) * T)
-		Common.collider(body, Transform3D(Basis(), Vector3(inter.get_center().x, -0.2, inter.get_center().y)), Vector3(inter.size.x, 0.4, inter.size.y))
-		Common.collider(body, Transform3D(Basis(), Vector3(inter.get_center().x, CEIL + 0.2, inter.get_center().y)), Vector3(inter.size.x, 0.4, inter.size.y)))
+		var to_rect := func(r: Rect2i) -> Rect2:
+			return Rect2(Vector2(r.position) * T + Vector2(ow.x, ow.z), Vector2(r.size) * T)
+		var inter: Rect2 = to_rect.call(HALL)
+		Common.collider(body, Transform3D(Basis(), Vector3(inter.get_center().x, CEIL + 0.2, inter.get_center().y)), Vector3(inter.size.x, 0.4, inter.size.y))
+		# The deck floor as a ring around the basin (HALL minus POOL): four slabs, none overlapping,
+		# each covering its own slice the way the north/south/west/east strips of a picture frame do.
+		var ring := [
+			Rect2i(HALL.position.x, HALL.position.y, HALL.size.x, POOL.position.y - HALL.position.y),
+			Rect2i(HALL.position.x, POOL.end.y, HALL.size.x, HALL.end.y - POOL.end.y),
+			Rect2i(HALL.position.x, POOL.position.y, POOL.position.x - HALL.position.x, POOL.size.y),
+			Rect2i(POOL.end.x, POOL.position.y, HALL.end.x - POOL.end.x, POOL.size.y),
+		]
+		for r: Rect2i in ring:
+			var wr: Rect2 = to_rect.call(r)
+			Common.collider(body, Transform3D(Basis(), Vector3(wr.get_center().x, -0.2, wr.get_center().y)), Vector3(wr.size.x, 0.4, wr.size.y))
+		# The basin floor, POOL_DEPTH below the deck.
+		var pr: Rect2 = to_rect.call(POOL)
+		Common.collider(body, Transform3D(Basis(), Vector3(pr.get_center().x, -POOL_DEPTH - 0.2, pr.get_center().y)), Vector3(pr.size.x, 0.4, pr.size.y))
+		# The basin walls: a sheer drop all round (well past player.gd's floor_max_angle, so it
+		# reads as a wall, not a slope you can walk up), flush with the deck at the top so walking
+		# toward the pool never catches on a lip -- you only fall in once you're past the edge.
+		var wall_t := 0.2
+		for side in [-1, 1]:
+			Common.collider(body, Transform3D(Basis(), Vector3(pr.get_center().x, -POOL_DEPTH * 0.5, pr.position.y if side < 0 else pr.end.y)), Vector3(pr.size.x, POOL_DEPTH, wall_t))
+			Common.collider(body, Transform3D(Basis(), Vector3(pr.position.x if side < 0 else pr.end.x, -POOL_DEPTH * 0.5, pr.get_center().y)), Vector3(wall_t, POOL_DEPTH, pr.size.y)))
 	steps.append(func(): _water(root, lay, world))
+	steps.append(func(): _basin(root, world, geo))
 	steps.append(func(): _coping(root, world, paint))
 	steps.append(func(): _ropes(props, lay, world))
 	steps.append(func(): _flags(root, props, lay, world, steel))
@@ -337,7 +377,8 @@ static func _wall_tile_tex() -> Texture2D:
 # ---- the water ---------------------------------------------------------------
 
 ## The surface: one still, translucent plane over the whole pool, lit from beneath. No collider —
-## you wade through it, which is the whole point of the room.
+## the basin underneath is what you actually stand on (see _basin); this plane is purely the look
+## of the water, unmoved by how deep the basin below it is.
 static func _water(root: Node3D, _lay: Dictionary, world: Callable) -> void:
 	var a: Vector3 = world.call(Vector2(POOL.position), WATER_Y)
 	var size := Vector2(POOL.size) * T
@@ -363,7 +404,37 @@ static func _water(root: Node3D, _lay: Dictionary, world: Callable) -> void:
 	root.add_child(mi)
 
 
-## The coping: the raised tiled lip around the pool, so the edge reads even though the floor is flat.
+## The basin: the pool floor sunk POOL_DEPTH below the deck, closed in on all four sides by real
+## walls (their collision is built alongside the deck's own, in build_steps). Common.build_surfaces
+## draws every room's floor flat at y=0 with no way to sink one room relative to its neighbours (see
+## pocket_common.gd), so this is bespoke geometry layered into the water room's footprint instead of
+## grid-driven -- the same kind of one-off the coping and bleachers already are. Reuses the water
+## room's own floor and wall-tile materials (registered in build_steps' first step) so it reads as
+## the same tile, just lower.
+static func _basin(root: Node3D, world: Callable, geo: Common.Geo) -> void:
+	var mb := Common.MeshBuilder.new()
+	var floor_mat: Material = geo.mats.get("pool_floor")
+	var wall_mat: Material = geo.mats.get("pool_tile_wall")
+	var a: Vector3 = world.call(Vector2(POOL.position))
+	var b: Vector3 = world.call(Vector2(POOL.end))
+	var cx := (a.x + b.x) * 0.5
+	var cz := (a.z + b.z) * 0.5
+	var w := b.x - a.x
+	var d := b.z - a.z
+	mb.box("f", floor_mat, Transform3D(Basis(), Vector3(cx, -POOL_DEPTH, cz)), Vector3(w, 0.02, d))
+	for side in [-1, 1]:
+		mb.box("w", wall_mat, Transform3D(Basis(), Vector3(cx, -POOL_DEPTH * 0.5, a.z if side < 0 else b.z)), Vector3(w, POOL_DEPTH, 0.05))
+		mb.box("w", wall_mat, Transform3D(Basis(), Vector3(a.x if side < 0 else b.x, -POOL_DEPTH * 0.5, cz)), Vector3(0.05, POOL_DEPTH, d))
+	var mi := MeshInstance3D.new()
+	mi.name = "Basin"
+	mi.mesh = mb.commit()
+	root.add_child(mi)
+
+
+## The coping: the raised tiled lip around the pool. Purely cosmetic (no collider of its own,
+## unchanged since before the basin had depth) -- it sits right where the deck floor meets the top
+## of the basin wall (_basin's colliders, built in build_steps), so it now caps a real ledge instead
+## of just implying one.
 static func _coping(root: Node3D, world: Callable, paint: Material) -> void:
 	var mb := Common.MeshBuilder.new()
 	var a: Vector3 = world.call(Vector2(POOL.position))
