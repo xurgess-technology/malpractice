@@ -416,6 +416,12 @@ Game-side API for monsters:
   line of sight AND the point is lit, by any player's flashlight cone or by a ceiling fixture
   that is currently on. Fixtures: `game.level_info["lights"]`, each `{position, mode, node}`
   where `node` is the fixture whose child `OmniLight3D` named `Bulb` carries the live energy.
+  **One thing observes without being anybody** (POCKET_SPACES_2 phase 3): a lit votive candle from
+  the Chapel counts every point within `Trinkets.CANDLE_RADIUS` of it as observed, and that test
+  runs at the very top of `observed_any`, **before** the "is anybody alive to look" early-out. The
+  Night Nurse therefore freezes inside a placed candle with nobody in the room, and because it is
+  the predicate rather than her brain, it holds everywhere the predicate is asked -- her `_vanish()`
+  will not pick a hiding place inside one either.
 
 Noise the game already emits on the host: footsteps (walk 0.25, sprint 0.8), containers 0.5,
 pickups 0.15, drops 0.4, breaking glass 0.9, shoves 0.6, surgery monitors 0.6 while someone
@@ -1227,6 +1233,26 @@ game.economy.request_order({kind: sets})      # this machine's player orders (ho
 game.economy.open_fax_ui() / .fax_ui          # the order form (scripts/economy/fax_order_ui.gd)
 ```
 
+### Anesthetic substitutes (POCKET_SPACES_2 phase 3)
+
+`Items.ANESTHETIC_KINDS` is `kind -> share of a real dose`: `anesthetic` 1.0, `communion_wine` 0.55.
+Anything in it satisfies a procedure step that asks for `"anesthetic"` and re-doses a strapped
+monster, at that share of the dose, so a substitute is a **weak dose that wears off sooner** rather
+than a separate mechanic. Phase 5's top-shelf tequila is meant to be one more line in it.
+
+```gdscript
+Items.step_accepts(want, held) -> bool     # held satisfies a step asking for want
+Items.anesthetic_strength(kind) -> float   # 1.0 for anything that is not a substitute
+Items.held_for_step(p, want, need) -> String   # the kind in their hands that will do, or ""
+```
+
+Three call sites, and **the injection minigame is not one of them** -- it reports the sedation it
+always did and never learns a substitute was used. `surgery_system.can_begin` accepts a substitute
+in the selected slot; `game.surgery_step_done` spends the kind actually held and multiplies the
+arcade's `sedation` by its strength; `dissection._anesthetic_slot` / `redose` scale `dose_amount`
+the same way. `ItemSpawner._legal` also honours an optional `rooms` key on an item definition, which
+is how the wine is only ever found in the Chapel; an item without one is found anywhere.
+
 ### Trinkets (docs/ITEMS_AND_ICONS.md chunk B, 2026-09-18)
 
 `scripts/trinkets/trinkets.gd` (`Trinkets`), a child **"Trinkets"** of Game on every machine
@@ -1248,7 +1274,18 @@ trinkets.use_prompt(p) -> String                 # every machine, ~10 Hz: the cr
 Trinkets.is_spent(slot_or_item) -> bool          # static: a used-up one-use trinket
 Trinkets.scrap_value(kind) -> int                # what a spent one sells for
 trinkets.last_result                             # host, for tests: {what, kind?, id?}
+
+# POCKETS 2 phase 3, the votive candle. Lighting it IS the use: it is set down already spent, so
+# one candle is one safe zone in one place. Replicated as "cd" (item id -> world_time it goes out).
+trinkets.candle_watches(points: Array) -> bool   # every machine: any point inside a burning candle
+trinkets.candle_left(item_id) -> float           # seconds of burn left, 0 when out
+trinkets.lit_candles() -> Array                  # world item ids currently burning
+Trinkets.CANDLE_SECONDS / CANDLE_RADIUS          # ~120 s, and how far its regard reaches
 ```
+
+A burning candle also carries a real `OmniLight3D` named `Bulb`, appended to
+`game.level_info["lights"]` with a `candle` key and removed when it goes out, so it lights the room
+and counts as a fixture for `Perception.fixture_lit` by exactly the rule a ceiling light does.
 
 **Used up.** A spent one-use trinket (`ONE_USE`: `laptop`, `defibrillator`, `epipen`) gets `used: true`
 on its hand slot and its `v` drops to `SCRAP[kind]`. The HUD greys it and draws a crack

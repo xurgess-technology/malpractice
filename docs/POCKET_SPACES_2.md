@@ -197,6 +197,16 @@ top-shelf tequila should be one more line in that dictionary.
 - `tools/trinkettest.tscn`: **PASS**, with eleven new candle checks — including *she is frozen,
   observed with the room empty*, that a step outside the radius ends it, and that burning out ends
   it too.
+- **The smoke look mattered here more than any of the above**, and is worth a line because a
+  headless suite cannot see a dark room. `tools/gameshot.tscn -- --pocket=chapel` (shots in
+  `tools/game_shots/p_chapel_*.png`) caught, in order: **no votive rack had ever been placed** —
+  their free-tile test was grown by one and so reached into the outer wall they stand against, and
+  every rack in the building was refused without a word; the pooled lights were tuned to a single
+  candle's brightness when each stands in for a bank of them, so from the narthex the nave was
+  black with one orange dot 60 m away; there was no light down the nave at all, only on the aisle
+  walls; and the volumetric fog was so dense that the 24 m vault, the one thing the space is meant
+  to lose in the dark, was a bright olive ceiling. All four are fixed and the shots now read as a
+  cathedral. **Every one of these passed every headless check while it was broken.**
 - **`tools/perfprobe` was run**, on a real window, minimized and never activated
   (`tools/pocketperf.ps1`). At **medium (q1)** every Chapel view holds the bar: the whole nave from
   the narthex, which is the designed worst frame (every rack, every stand, both arcades, all the
