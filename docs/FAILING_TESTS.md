@@ -152,6 +152,15 @@ How to run things is at the bottom of this file.
 The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe`
 (the `.exe` in that path is a folder). From Git Bash, run from the project root.
 
+- **A headless run starts from `Settings.DEFAULTS`, not from this machine's settings.** Every
+  `tools/*test.tscn`, nettest's child processes and windows opened onto a scene in `res://tools/`
+  boot on the defaults and never read or write `user://settings.cfg`, so a test measures the code
+  rather than whoever owns the machine. (Slots seed their save folder from Zach's, which says
+  `camera="shoulder"`; that read his view preference into four separate tests in one day.) Nothing
+  to opt into and nothing to restore -- a run that crashes leaves the saved settings alone, because
+  they were never opened. A test that genuinely wants settings behaviour calls
+  `Settings.use_path("user://mytest_settings.cfg")` on a scratch file of its own, as
+  `tools/settingstest.gd` and `tools/carrycamtest.gd` do. See `_machine_run` in `scripts/settings.gd`.
 - Import first after pulling or adding assets: `godot --headless --path . --import`
 - **Always add `--fixed-fps 60`** to headless test scenes (about 12x faster).
 - **Run headless tests one at a time per checkout.** Parallel runs in the same directory segfault.

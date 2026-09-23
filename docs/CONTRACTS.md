@@ -1064,8 +1064,17 @@ Settings.set_value(key, v)       # clamps / validates, applies, emits, saves ~0.
 signal changed(key: String, value)   # only when the value really changed
 Settings.save_now()  Settings.reset_to_defaults()
 Settings.use_path(p)  Settings.reload()   # test seams: point at a scratch file, re-read it
+Settings.machine_run                     # true when this process booted on DEFAULTS (below)
 static func slider_to_db(v) -> float     # 0..1 slider to dB (squared amplitude, 0 = -80)
 ```
+
+**A machine run starts from `DEFAULTS`.** A headless process (every `tools/*test.tscn`, nettest's
+children, `--import`) or a window opened straight onto a scene in `res://tools/` boots on the
+defaults and points `path` at `user://settings_machine.cfg`; `user://settings.cfg` is never read
+and never written, so a test measures the code rather than whoever owns the machine, and a run that
+dies mid-test leaves the saved settings alone. A review window (`--review=`) is somebody playing,
+so it keeps their settings. The opt-out is `use_path()` on a scratch file, which loads and saves
+normally: `tools/settingstest.gd` and `tools/carrycamtest.gd` use it.
 
 | Key | Type, range | Default | Applied by |
 | --- | --- | --- | --- |
