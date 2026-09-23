@@ -317,6 +317,12 @@ this machine at this resolution on `main` as well; that is not phase 2's.
    kind before the first and only `start_session` and prints its table. (That path still hits the same
    renderer bug on the way out, *after* the numbers are printed, for the Factory as well as for the
    Natatorium.)
+   **Fixed 2026-09-23 (`fix-perfprobe`).** `--pockets` is now `tools\perfprobe.ps1`'s loop rather
+   than the probe's: one process per kind, each on the `--pocket=<kind>` path (plus `--pocket=none`
+   for the bare-hospital baseline), with the tables stitched into one. Letting the renderer settle
+   before the restart was measured and does **not** help, so the loop routes around the engine bug
+   rather than racing it; see docs/FAILING_TESTS.md. The at-exit crash above is unchanged and still
+   harmless. **Phase 7 can run the whole sweep with one command.**
 2. **`perfprobe` in a GUI window on the `main` checkout** floods `main.gd:673` and `main.gd:707` with
    Nil-property script errors every frame — a 110 MB log and not one measurement. It does not do this
    in a slot, so it is something about that checkout's settings rather than the code, but it is worth

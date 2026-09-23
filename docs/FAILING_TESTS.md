@@ -66,6 +66,48 @@ an arrival.
   edge. `4b7a431` ("Operator rooted at the table") was **not** involved — the lead named in the old
   section was a dead end.
 
+**Sections 3 and 1l went the same way on 2026-09-23 and have both been removed.** They were one bug
+written up twice by two tasks who never met: `tools\perfprobe.ps1 -Extra "--pockets"` printed a burst
+of `ERROR: BUG, indexing did not unpair geometries from light` from `renderer_scene_cull.cpp`, then
+`CrashHandlerException: Program crashed with signal 11`, straight after `[warmup] built and drew
+everything once`, and not one scenario row was ever measured. Reproduced here on `fix-perfprobe` at
+`f82a3bb` before anything was touched: the same twelve errors, the same place.
+
+- **It was never any one pocket space, and never ours.** Three independent confirmations, kept
+  because they rule out three different things: POCKET_SPACES_2 phase 3 got the identical crash (the
+  same twelve errors, the same 67-line log) with the Chapel taken back out of `PocketSpaces.LAYOUTS`
+  and the kind loop pinned to the old `["none", "factory", "restaurant"]`; phase 2 got it with the
+  Natatorium out of `PocketPlan.KINDS`; phase 4 got it on a **detached checkout of plain `main`
+  (`3b30969`)** with only `tools/perfprobe.ps1` brought over, no Laundromat in the tree at all.
+- **It was the restart.** `_run_pockets` called `game.start_session()` once per kind, tearing a whole
+  level and all its lights down and building another, and the first of those landed immediately after
+  the one-time warmup. docs/KNOWN_ISSUES.md already had that renderer error down as a Godot bug seen
+  in windowed runs ("Seen during this work and not ours"); doing it once per kind turned an error
+  into a crash.
+- **It is not a race, which is the one new measurement.** The obvious fix -- let the renderer settle
+  before tearing down -- does nothing. `RenderingServer.force_sync()`, sixty frames, then
+  `force_sync()` again, between the measuring and the `start_session`, crashes in exactly the same
+  place with exactly the same twelve errors. So there was never a window to wait for, and any fix
+  that timed the teardown would have been luck.
+- **Our teardown was not at fault.** `game._clear_level` tears a pocket down and `queue_free()`s the
+  level node; nothing frees a light by hand or keeps a `RID` past the node, and `WingLoader` does not
+  touch lights. The engine's own light/geometry pairing index is what does not survive it.
+- **The fix routes around it instead of racing it.** `--pockets` is now **`tools\perfprobe.ps1`'s**
+  loop, not the probe's: one Godot process per kind, each running the `--pocket=<kind>` path that
+  already worked (plus `--pocket=none` for the bare-hospital baseline), and the wrapper stitches their
+  tables into one. Nothing restarts a session, so the engine bug is never reached. The kinds are read
+  out of `PocketPlan.KINDS` in `scripts/level/pockets/pocket_plan.gd`, so a new space joins the sweep
+  by itself. `_run_pockets` is gone; `_pocket_views` is now the one views list, with the four views
+  only `_run_pockets` had (the factory catwalk, the restaurant kitchen, the seam from the pocket side,
+  and the two mirrored teammates) folded back into it, so nothing stopped being measured.
+- **What the next person should know.** `perfprobe.tscn -- --pockets` on its own now prints a line
+  telling you to use the wrapper and quits 2 -- the loop cannot live in one process. Per-kind logs are
+  `.godot\perfprobe-<kind>.log` and the whole sweep is concatenated into `.godot\perfprobe.log` as
+  before. **The at-exit crash is still there** (the same engine bug, on the teardown at `quit()`), and
+  is still harmless: it now happens strictly *after* the table has printed, and the wrapper judges a
+  kind by the rows it parsed, never by an exit code, so a crashing exit cannot fail a good run. Fixing
+  that one is Godot's job, not ours.
+
 How to run things is at the bottom of this file.
 
 ---
@@ -189,57 +231,6 @@ How to run things is at the bottom of this file.
   **not** in `Items.SURGICAL`, and `Items.SURGICAL` is the list `ItemSpawner.plan`'s needed/herring
   split actually iterates. It also declares `"found": {"trauma_bag": 0.4, "station_drawers": 0.35,
   "drawer_unit": 0.25}` and no `"loose"`, so it can only ever appear inside a container.
-
-
-## 3. perfprobe --pockets crashes after the warmup, before it measures anything
-
-- **Command:** `tools\perfprobe.ps1 -Extra "--pockets"` (a real window that renders but never
-  takes focus — SW_SHOWNOACTIVATE, not minimized: a minimized window does not render and its frame
-  times mean nothing)
-- **Result:** twelve `BUG, indexing did not unpair geometries from light` errors from
-  `renderer_scene_cull.cpp`, then `CrashHandlerException: Program crashed with signal 11`. The log
-  stops at the warmup line and **not one scenario is measured**.
-- **Found independently by two tasks on 2026-09-22** (POCKET_SPACES_2 phases 2 and 3) and
-  **confirmed pre-existing by both**: phase 3 reproduced it exactly -- the same crash, the same
-  twelve errors, the same 67-line log -- with the Chapel taken back out of `PocketSpaces.LAYOUTS`
-  and perfprobe's kind loop pinned to the old `["none", "factory", "restaurant"]`. It is the
-  restart, not any one space.
-- **Where the fault is.** `perfprobe._run_pockets()` calls `game.start_session()` again, once per
-  kind, and the first of those restarts lands immediately after the one-time warmup. Tearing that
-  down while the renderer still holds the warmup shelf's light-geometry pairings is what trips the
-  engine bug. Plain `perfprobe` (one session, no restart) completes all 27 scenarios on the same
-  machine and only crashes **at exit**, after the summary table has printed, which is harmless and
-  has presumably been happening for a while.
-- **The way round it, which works today:** `-- --pocket=<kind>` forces the kind *before* the one
-  and only `start_session` and measures that space in the session already built. Both tasks landed
-  on this independently; it is what the Natatorium's and the Chapel's numbers were taken with
-  (`tools\perfprobe.ps1 -Extra "--pocket=chapel"`, which uses SW_SHOWNOACTIVATE -- a minimized
-  window does not render and its frame times mean nothing).
-- **Where to look:** whether `_run_pockets` can wait out the renderer (a few frames, or
-  `RenderingServer.force_sync()`) before restarting, or whether it should simply be rebuilt on top
-  of `--pocket` and run one process per kind.
-
-
-## 1l. perfprobe --pockets crashes before it measures anything (signal 11)
-
-- **Command:** `tools\perfprobe.ps1 -Extra "--pockets"` (or the same flags on `perfprobe.tscn` in
-  any windowed run).
-- **Result:** a burst of `ERROR: BUG, indexing did not unpair geometries from light` from
-  `renderer_scene_cull.cpp`, then `CrashHandlerException: Program crashed with signal 11`, straight
-  after `[warmup] built and drew everything once`. Not one scenario row is printed.
-- **Not ours, and not any one pocket space.** Found independently by POCKET_SPACES_2 phase 2 and
-  phase 4. Phase 4 verified it on 2026-09-22 on a detached checkout of **`main` (3b30969)** with
-  only `tools/perfprobe.ps1` brought over: identical crash, identical place, with no Laundromat in
-  the tree at all. Phase 2 saw the same with the Natatorium taken back out of `PocketPlan.KINDS`.
-- **Why:** `_run_pockets` calls `game.start_session()` once per kind, tearing down and rebuilding a
-  whole level with all its lights. docs/KNOWN_ISSUES.md already records that renderer error as a
-  Godot bug seen in windowed runs ("Seen during this work and not ours"); doing it once per kind
-  turns it from an error into a crash.
-- **The way round, for measuring one space:** `--pocket=<kind>` forces the kind before the first
-  session is built and never restarts it, so nothing is torn down. Both phases arrived at it; it is
-  how every pocket space's numbers in docs/POCKET_SPACES_2.md were taken.
-- **Where to look:** `tools/perfprobe.gd` `_run_pockets`, and whatever frees lights in
-  `game._clear_level` / `WingLoader` ahead of a `start_session`.
 
 ---
 

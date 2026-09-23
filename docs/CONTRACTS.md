@@ -1218,7 +1218,9 @@ the one place footstep loudness was already chosen.
   containers and anchors in reach), `tools/pockettest.tscn` (also the next shift's rebuild; `-- --frames` windowed
   frame times), `tools/looptest.tscn -- --pocket=factory`, nettest `pockets` (also the next shift's rebuild on every
   machine), `tools/gameshot.tscn --
-  --pocket=factory|restaurant`, `tools/perfprobe.tscn -- --pockets`, devtest's pocket panel checks.
+  --pocket=factory|restaurant`, `tools\perfprobe.ps1 -Extra "--pockets"` (one windowed process per
+  kind; a single process measures one kind with `perfprobe.tscn -- --pocket=<kind>`), devtest's
+  pocket panel checks.
 
 ## Settings (settings worker, sweep 2)
 
