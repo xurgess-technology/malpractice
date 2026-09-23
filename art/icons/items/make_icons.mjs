@@ -268,6 +268,28 @@ add("ultrasound", "Portable ultrasound", "loot", { body: `
 <rect x="44" y="192" width="80" height="12" rx="5" fill="#8a969c"/>
 <circle cx="192" cy="198" r="9" fill="${TEAL}" stroke="${O}" stroke-width="5"/>` });
 
+// POCKETS 2 phase 4: the Laundromat's plain loot.
+add("quarter_bucket", "Bucket of quarters", "loot", { count: "x4", body: `
+<path d="M70 96 Q70 86 82 86 L174 86 Q186 86 186 96 L172 196 Q170 208 156 208 L100 208 Q86 208 84 196 Z" fill="${GOLD}" stroke="${O}" stroke-width="9"/>
+<path d="M62 84 L194 84 Q200 84 200 92 Q200 100 194 100 L62 100 Q56 100 56 92 Q56 84 62 84 Z" fill="${GOLD_DK}" stroke="${O}" stroke-width="7"/>
+<path d="M74 84 Q80 40 128 40 Q176 40 182 84" fill="none" stroke="${O}" stroke-width="13"/>
+<path d="M74 84 Q80 40 128 40 Q176 40 182 84" fill="none" stroke="#8a969c" stroke-width="6"/>
+<g stroke="${O}" stroke-width="5">
+<ellipse cx="104" cy="118" rx="24" ry="9" fill="${STEEL}"/>
+<ellipse cx="152" cy="116" rx="23" ry="9" fill="${STEEL_HI}"/>
+<ellipse cx="128" cy="136" rx="25" ry="9" fill="${STEEL}"/>
+<ellipse cx="96" cy="152" rx="21" ry="8" fill="${STEEL_HI}"/>
+<ellipse cx="158" cy="150" rx="21" ry="8" fill="${STEEL}"/></g>` });
+
+add("warm_scrubs", "Warm scrubs", "loot", { body: `
+<path d="M48 176 L208 176 Q216 176 216 186 L216 202 Q216 212 206 212 L50 212 Q40 212 40 202 L40 186 Q40 176 48 176 Z" fill="#1f4646" stroke="${O}" stroke-width="9"/>
+<path d="M52 136 L204 136 Q212 136 212 146 L212 164 Q212 174 202 174 L54 174 Q44 174 44 164 L44 146 Q44 136 52 136 Z" fill="#2f6b68" stroke="${O}" stroke-width="9"/>
+<path d="M58 96 L198 96 Q206 96 206 106 L206 124 Q206 134 196 134 L60 134 Q50 134 50 124 L50 106 Q50 96 58 96 Z" fill="#3c8481" stroke="${O}" stroke-width="9"/>
+<path d="M104 96 L128 124 L152 96" fill="none" stroke="${O}" stroke-width="8"/>
+<g opacity="0.55" stroke="#bfe6e2" stroke-width="4"><path d="M70 96 L70 134 M96 96 L96 134 M160 96 L160 134 M186 96 L186 134"/></g>
+<g fill="none" stroke="#e8e2d2" stroke-width="7" stroke-linecap="round" opacity="0.85">
+<path d="M104 56 Q114 44 104 32 Q94 20 104 10"/><path d="M128 60 Q138 48 128 36 Q118 24 128 14"/><path d="M152 56 Q162 44 152 32 Q142 20 152 10"/></g>` });
+
 // ---- Trinkets ----
 add("desk_phone", "Desk phone", "trinket", { body: `
 <path d="M50 176 L66 108 L190 108 L206 176 Q206 194 188 194 L68 194 Q50 194 50 176 Z" fill="#cfc9b8" stroke="${O}" stroke-width="9"/>
@@ -318,6 +340,16 @@ add("epipen", "EpiPen", "trinket", { body: `
 <rect x="24" y="112" width="40" height="32" rx="10" fill="${BLUE}" stroke="${O}" stroke-width="9"/>
 <path d="M176 114 L214 118 Q226 128 214 138 L176 142 Z" fill="#e8742a" stroke="${O}" stroke-width="9"/>
 </g>` });
+
+// POCKETS 2 phase 4: the Laundromat's trinket.
+add("fabric_softener", "Fabric softener", "trinket", { body: `
+<path d="M78 112 Q78 100 90 100 L166 100 Q178 100 178 112 L178 202 Q178 216 164 216 L92 216 Q78 216 78 202 Z" fill="${BLUE}" stroke="${O}" stroke-width="9"/>
+<path d="M98 100 L98 74 Q98 64 110 64 L146 64 Q158 64 158 74 L158 100" fill="${BLUE}" stroke="${O}" stroke-width="9"/>
+<rect x="108" y="30" width="40" height="38" rx="8" fill="${WHITE}" stroke="${O}" stroke-width="9"/>
+<path d="M178 122 Q214 122 214 152 Q214 182 178 182" fill="none" stroke="${O}" stroke-width="22"/>
+<path d="M178 126 Q208 126 208 152 Q208 178 178 178" fill="none" stroke="${BLUE}" stroke-width="11"/>
+<rect x="92" y="128" width="72" height="56" rx="7" fill="#f2efe2" stroke="${O}" stroke-width="7"/>
+<path d="M128 140 Q146 160 146 170 Q146 182 128 182 Q110 182 110 170 Q110 160 128 140 Z" fill="${PALE}" stroke="${O}" stroke-width="5"/>` });
 
 // ---- Write files and a contact sheet ----
 // Two versions of each icon: framed (slot, border, a sample count badge) for sheets, the database

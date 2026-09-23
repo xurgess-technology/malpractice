@@ -24,7 +24,7 @@ var _hitch := false
 var _orscreen := false
 var _models := false
 var _abilities := false   # the two abilities (--abilities)
-var _pockets := false  # POCKETS: --pockets, the Factory and the Restaurant against the corridor baseline
+var _pockets := false  # POCKETS: --pockets, every pocket space against the corridor baseline
 var _doors := false    # DOORS HOOK
 var _hands := false    # HANDS HOOK
 var _humans := false   # HUMAN HOOK
@@ -312,7 +312,7 @@ func _measure(label: String, q: int) -> void:
 func _run_pockets() -> void:
 	var Plan := preload("res://scripts/level/pockets/pocket_plan.gd")
 	var Stub := preload("res://scripts/level/pockets/stub.gd")
-	for kind in ["none", "factory", "restaurant"]:
+	for kind in ["none", "factory", "restaurant", "laundromat"]:
 		Plan.force_kind = kind
 		game.start_session(_seed)
 		await get_tree().process_frame
@@ -339,6 +339,12 @@ func _run_pockets() -> void:
 			views.append({"name": "factory: hall, corner to corner", "setup": func(): _look(w.call(Vector2(13, 13)), w.call(Vector2(70, 52), C.EYE_H))})
 			views.append({"name": "factory: down a production line", "setup": func(): _look(w.call(Vector2(14, 27)), w.call(Vector2(70, 23), C.EYE_H))})
 			views.append({"name": "factory: from the catwalk", "setup": func(): _look(w.call(Vector2(40, 12), 6.0), w.call(Vector2(40, 45), 1.0))})
+		elif kind == "laundromat":
+			# POCKETS 2 phase 4: the worst of it is the long axis, where every washer island and both
+			# dryer banks are in shot at once, under a ceiling full of fluorescent tubes.
+			views.append({"name": "laundromat: the length of the room", "setup": func(): _look(w.call(Vector2(12.5, 18.5)), w.call(Vector2(48, 18), C.EYE_H))})
+			views.append({"name": "laundromat: corner to corner", "setup": func(): _look(w.call(Vector2(12, 12)), w.call(Vector2(48, 25), C.EYE_H))})
+			views.append({"name": "laundromat: down an aisle", "setup": func(): _look(w.call(Vector2(13, 18.5)), w.call(Vector2(48, 20.5), 1.2))})
 		else:
 			views.append({"name": "restaurant: dining room", "setup": func(): _look(w.call(Vector2(12.5, 25.5)), w.call(Vector2(38, 12), C.EYE_H))})
 			views.append({"name": "restaurant: bar", "setup": func(): _look(w.call(Vector2(33, 23)), w.call(Vector2(41, 13), C.EYE_H))})

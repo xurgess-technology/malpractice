@@ -305,7 +305,10 @@ Fix-ups and conversions (all derived files stay CC0):
 - **X-ray**: the 1929 x 2207 radiograph downscaled to 224 x 256 JPEG.
 - Kenney characters, the defibrillator, the bottle and television_02 are unmodified.
 
-Kinds with no CC0 model, still primitives: `pulse_oximeter`, `epipen`, `reflex_hammer`. Searched: poly.pizza (only CC-BY stethoscopes by
+Kinds with no CC0 model, still primitives: `pulse_oximeter`, `epipen`, `reflex_hammer`, and
+(POCKETS 2 phase 4) `quarter_bucket`, `warm_scrubs`, `fabric_softener` — searched the same vetted
+CC0 sources below for a mop bucket, a coin pile, folded clothing and a detergent jug, and found
+nothing usable; all three are simple enough shapes that primitives are the honest answer. Searched: poly.pizza (only CC-BY stethoscopes by
 Poly by Google), Poly Haven, Kenney, Quaternius, OpenGameArt CC0 3D (nothing for any of them;
 the ring models there are `.blend` only or have no model file), Smithsonian Open Access 3D (no
 results). Not a CC0 source, not used: Atomic Realm's "Hospital Assets" (no redistribution),
@@ -399,17 +402,28 @@ recorded above, looked up through `Assets` and degrading to flat colours when a 
 | `mat/concrete` | Factory floor, lower walls, columns, office roof slab (world-triplanar, tinted) |
 | `mat/metal` | Factory machines, conveyors, catwalk grating, racks, beams; restaurant kitchen steel |
 | `mat/floor`, `mat/wall`, `mat/ceiling` | Factory site offices; restaurant stucco (tinted terracotta) and back-room ceilings |
-| `mat/tile_floor`, `mat/wall_tile` | Restaurant kitchen and restrooms (tinted) |
+| `mat/tile_floor`, `mat/wall_tile` | Restaurant kitchen and restrooms (tinted); the Laundromat's back rooms and its dado |
 | `mat/linoleum`, `mat/ceiling`, `mat/wall` | the pocket copy of each entrance stub (the hospital's hallway materials) |
 | `hosp/fridge_kitchen`, `hosp/sink_cabinet` | the restaurant kitchen |
 | `hosp/toilet`, `hosp/sink_wall`, `hosp/mirror` | the restaurant restrooms |
 | `hosp/plant` | the restaurant's corners and front door |
+| `mat/metal` (again) | the Laundromat's trough sink, water heater and folding tables |
+| `mat/wall` (again) | the Laundromat's painted block walls, utility room and office |
 | existing container scripts | pegboards, drawer units, a medicine fridge, trauma bags, station drawers |
 
-Generated at runtime, in-house (no third-party source): the Factory's corrugated cladding, and the
-Restaurant's saltillo floor tiles, Talavera wainscot tiles, wood planks and four small paintings
-(`Image` pixel loops in `factory.gd` / `restaurant.gd`), plus the sign and menu text textures
-(`legacy_builder.gd` `_text_texture`).
+Generated at runtime, in-house (no third-party source): the Factory's corrugated cladding, the
+Restaurant's saltillo floor tiles, Talavera wainscot tiles, wood planks and four small paintings,
+and (POCKETS 2 phase 4) the Laundromat's speckled sheet vinyl and perforated acoustic ceiling tile
+(`Image` pixel loops in `factory.gd` / `restaurant.gd` / `laundromat.gd`), plus the sign, menu and
+price-list text textures (`legacy_builder.gd` `_text_texture`).
+
+**The Laundromat (2026-09-22, POCKETS 2 phase 4) adds no downloaded assets either.** Its washers,
+dryers, folding tables, moulded chairs, change machine, trough sink and fluorescent fittings are all
+merged box and cylinder meshes over the keys above. Its three items (`quarter_bucket`,
+`warm_scrubs`, `fabric_softener`) are primitives in `scripts/economy/loot_models.gd` — see the
+primitive-only list above, which they join. Its two sounds are generated, not recorded:
+`quarters_scatter` (`tools/gen_audio_items.mjs`) and `trinkets_softener`
+(`tools/gen_audio_trinkets.mjs`).
 ## Doors (doors worker, 2026-09-14)
 
 No model files. Every door is built procedurally in `scripts/doors/door_models.gd` with the

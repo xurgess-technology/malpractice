@@ -113,6 +113,16 @@
       "category": "loot",
       "glow": null
     },
+    "quarter_bucket": {
+      "name": "Bucket of quarters",
+      "category": "loot",
+      "glow": null
+    },
+    "warm_scrubs": {
+      "name": "Warm scrubs",
+      "category": "loot",
+      "glow": null
+    },
     "desk_phone": {
       "name": "Desk phone",
       "category": "trinket",
@@ -140,6 +150,11 @@
     },
     "epipen": {
       "name": "EpiPen",
+      "category": "trinket",
+      "glow": null
+    },
+    "fabric_softener": {
+      "name": "Fabric softener",
       "category": "trinket",
       "glow": null
     }

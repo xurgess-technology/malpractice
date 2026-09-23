@@ -101,7 +101,19 @@ const SETUPS := {
 	# at your feet. The vats have always been ordinary bulky items; their bench's collider used to
 	# bury them, so E never saw them at all.
 	"vats": {"seed": 4242, "stage": "_vats"},
+	# POCKETS 2 phase 4 (docs/POCKET_SPACES_2.md): standing in the Laundromat with its three items
+	# in hand and a Sonographer already hunting you in the room. The point is that it cannot hear
+	# you walk in here: walk at it, then walk back out through a seam and listen to it find you.
+	"laundromat": {"seed": 4242, "stage": "_laundromat", "pocket": "laundromat"},
 }
+
+
+## POCKETS: force the pocket kind a setup asks for, before the map is generated (scripts/main.gd).
+## Setups that do not name one leave the roll alone.
+static func force_pocket(name: String) -> void:
+	var kind := String((SETUPS.get(name, {}) as Dictionary).get("pocket", ""))
+	if kind != "":
+		(load("res://scripts/level/pockets/pocket_plan.gd") as GDScript).set("force_kind", kind)
 
 
 ## The setup name asked for on the command line ("" for none).
@@ -681,10 +693,11 @@ static func _trinkets(game: Game) -> void:
 	give(game, "reflex_hammer", 1, 20)
 	p.selected = 0
 	p.flashlight_on = true
-	var row := ["desk_phone", "laptop", "epipen", "defibrillator"]
-	var value := [20, 80, 30, 120]
+	# POCKETS 2 phase 4: the fabric softener jug joins the row (the Laundromat's trinket).
+	var row := ["desk_phone", "laptop", "epipen", "defibrillator", "fabric_softener"]
+	var value := [20, 80, 30, 120, 22]
 	for i in row.size():
-		floor_item(game, row[i], base + out * 2.4 + side * (float(i) - 1.5) * 0.7, 1, value[i])
+		floor_item(game, row[i], base + out * 2.4 + side * (float(i) - 2.0) * 0.7, 1, value[i])
 	await tree.physics_frame
 	# A Hive, out in front. It starts idle and, once it spots you, it will come -- but `calm` means
 	# it cannot land a hit for the first half minute, so you get to look at the phone and the laptop
@@ -1099,3 +1112,46 @@ static func _vats(game: Game) -> void:
 	await tree.physics_frame
 	floor_item(game, "eye_hive", game._floor_at(at + out * 1.6), 1, 100)
 	game.say("E takes a vat off the bench (both hands). With the eye selected, E puts it in instead; V takes it back out.", 10.0)
+
+
+## POCKETS 2 phase 4 (docs/POCKET_SPACES_2.md): the Laundromat. You start well inside the room with
+## the three items in hand, and a Sonographer is already hunting a few metres away. The whole space
+## is one mechanic -- its ambient noise floor is above a walking footstep -- so the review is: walk
+## about in here and watch it fail to find you, sprint and watch it get interested, throw a handful
+## of quarters across the room and watch it go there instead, then walk out through a seam into the
+## hospital and hear it pick you straight up.
+static func _laundromat(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("monsters_off", {"on": true})   # only the one staged below
+	game.dev.request("clear_patient")
+	var pk = game.pockets
+	if pk != null and pk.busy:
+		pk.finish_now()
+	if pk == null or not pk.active():
+		push_warning("[review] the laundromat setup got no pocket; showing the hospital instead")
+		return
+	# Well inside the room, looking down its length.
+	var spawn: Vector3 = pk.pocket.spawn
+	var rect: Rect2 = pk.pocket.rect
+	var along := Vector3(1.0, 0.0, 0.0) if rect.size.x >= rect.size.y else Vector3(0.0, 0.0, 1.0)
+	place(game, game._floor_at(spawn - along * 6.0), spawn + along * 6.0 + Vector3(0, 0.05, 0))
+	clear_hands(game)
+	give(game, "quarter_bucket", 4, 52)
+	give(game, "fabric_softener", 1, 22)
+	give(game, "warm_scrubs", 1, 30)
+	p.selected = 0
+	p.flashlight_on = true
+	await tree.physics_frame
+	# A Sonographer down the room, calm for long enough that the first thing you do is look at it
+	# rather than run from it. After that it hunts normally -- and in here it hunts by a sense that
+	# does not work.
+	var m = game._add_monster("sonographer", game._floor_at(spawn + along * 9.0))
+	if m != null:
+		m.calm = 20.0
+	await tree.physics_frame

@@ -2360,6 +2360,13 @@ func recent_noises(max_age: float = 1.5) -> Array:
 	return out
 
 
+## How loud a footstep is to something that hunts by sound. POCKETS 2 phase 4 tunes the Laundromat's
+## AMBIENT_NOISE_LEVEL directly against these two numbers (its floor has to be above the walking one
+## to swallow it whole), and tools/pockettest.gd reads them from here rather than retyping them.
+const FOOTSTEP_LOUDNESS := 0.25
+const FOOTSTEP_SPRINT_LOUDNESS := 0.8
+
+
 func _tick_noise(delta: float) -> void:
 	var cut := world_time - NOISE_MEMORY
 	while not _noises.is_empty() and float(_noises[0].time) < cut:
@@ -2376,7 +2383,7 @@ func _tick_noise(delta: float) -> void:
 		var interval := 0.3 if p.sprinting else 0.5
 		if acc >= interval:
 			acc = 0.0
-			emit_noise(p.global_position, 0.8 if p.sprinting else 0.25, "footstep")
+			emit_noise(p.global_position, FOOTSTEP_SPRINT_LOUDNESS if p.sprinting else FOOTSTEP_LOUDNESS, "footstep")
 		_footstep_acc[p.peer_id] = acc
 
 

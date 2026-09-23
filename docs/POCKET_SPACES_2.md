@@ -146,18 +146,109 @@ lit them. Candlelight is the room's light.
   shorter sedation, stirs sooner. Patients and strapped monsters.
 - COLLECTION PLATE: loot, gold-watch tier.
 
-## Phase 4 — the Laundromat
+## Phase 4 — the Laundromat — DONE 2026-09-22, branch `pockets-laundromat`
 Coin-op, fluorescent, every machine running with nothing inside.
-ambient_noise_level tuned so the drone genuinely masks footsteps
-from the Sonographer — built entirely from the Phase 1 knob.
-- BUCKET OF QUARTERS: loot; charged throw scatters a clattering
-  handful as a directional noisemaker.
-- WARM SCRUBS: cosmetics unlock pickup (scrub pattern for the
-  personnel mirror). If the mirror isn't ready, bank the unlock in
-  the host save and note it.
-- FABRIC SOFTENER JUG: trinket. Drink it (E from hands): footsteps
-  quieted ~60s (crouch noise multiplier at full speed). Sells as
-  plain loot too.
+Built entirely from the phase 1 knob, as planned: the space adds no
+sound system and no monster rule, only `AMBIENT_NOISE_LEVEL = 0.30`.
+
+`scripts/level/pockets/laundromat.gd`, origin (800, 2000). A 38 x 15
+hall with back-to-back washer islands down the middle (~90 of them,
+broken by cross aisles), stacked dryer banks along both long walls
+(62), folding tables, a row of moulded chairs, a change machine, and
+a utility room and attendant's office off the back wall. 3 of 3
+entrances placed on every seed tried.
+
+### The masking, measured
+The claim "tuned so the drone genuinely masks footsteps" is arithmetic
+over numbers that already existed, not a guess:
+- `Game.FOOTSTEP_LOUDNESS` **0.25** walking, `FOOTSTEP_SPRINT_LOUDNESS`
+  **0.8** sprinting (they were inline literals in `_tick_noise`; this
+  phase named them so the test reads them instead of retyping them).
+- `SonographerBrain.HEAR_PER_LOUDNESS` **22 m per unit of loudness**,
+  and the floor is subtracted before it (phase 1's `_hear`).
+
+At **0.30**:
+- a walking step masks to **0.0** and carries **0 m** — unheard in the
+  room at any range, with 0.05 of headroom over the 0.25 it has to
+  swallow (a floor of exactly 0.25 also works, but on a knife edge);
+- outside, the same step is untouched and carries **5.5 m**;
+- a sprint masks to 0.50 and carries **11 m** instead of 17.6, and
+  drops under the brain's `LOUD` (0.8), so sprinting in here fills
+  suspicion instead of pinning you outright;
+- a thrown handful of quarters (`Game.QUARTER_NOISE`, 0.9) masks to
+  0.60 and still carries **13 m** in the room, 19.8 m outside — which
+  is what keeps it worth throwing where you found it.
+
+Phase 7's acceptance test is written and passing already, in
+`tools/pockettest.gd` `_footstep_masking`: the arithmetic above, read
+from the two source files rather than retyped, **plus a live half** —
+a real Sonographer 4 m from a real walking player, once inside and
+once out in the hospital, asking the brain what it heard. Inside:
+nothing. Outside: the footsteps.
+
+### The three items
+`Laundromat.ITEM_KINDS` declares the set (see "the item set" below).
+All three give the `laundromat` / `laundromat_back` room kinds a weight
+in `loot_table.gd` and **no `"*"` weight**, so they are found here and
+nowhere else. All three are primitives in `loot_models.gd` (no CC0
+model exists for any of them; searched, recorded in ASSETS.md).
+
+- **BUCKET OF QUARTERS** (`quarter_bucket`): stacked loot, 3-5
+  handfuls. A **charged throw** flings one handful, which bursts where
+  it lands rather than settling as a pickup, and emits the noise
+  *there* — the directional part. A tap sets the bucket down normally.
+  It reuses the placebo-pill throw pattern exactly (a branch in
+  `game.drop_selected`, a meta flag, and a resolver on `game`); the one
+  new thing is a per-kind branch in `world_item.gd`'s settle block,
+  which had no hook of any kind before.
+- **WARM SCRUBS** (`warm_scrubs`): loot that also unlocks a scrub
+  pattern. **The spec's "if the mirror isn't ready" fallback was
+  obsolete but its premise was still wrong**: the mirror and its four
+  patterns shipped in 0.10.12/0.10.14, but there was no *unlock*
+  concept anywhere in the game — every pattern was available to
+  everyone from the first shift, so there was nothing to grant. So
+  this phase added the smallest one that works: a per-machine bitmask
+  in `settings.cfg` (`patterns_unlocked`), a fifth pattern **Gingham**
+  appended to `Customization.PATTERNS` behind it, and a branch in the
+  cloth shader to draw it. Holding a set of warm scrubs grants it, on
+  the holder's own machine, for good.
+  **The multiplayer trap, avoided deliberately**: `sanitize()` runs on
+  every *remote* player's unpacked look, so gating there would strip a
+  teammate's earned pattern on a machine that had not earned it. The
+  gate is in `cycle()` only, which is the sole way a look is chosen.
+- **FABRIC SOFTENER JUG** (`fabric_softener`): a one-use trinket in
+  the 0.10.24 system (`trinkets.gd`), scrap value 4. **The spec says
+  "E from hands"; that predates the trinket system, where every
+  trinket is left mouse.** It is left mouse, like the other six.
+  Drinking it suppresses the footstep *noise event* for 60 s at full
+  speed. "Crouch noise multiplier" turned out to be a suppression
+  rather than a multiplier — `game._tick_noise` skips a crouching
+  player entirely — so `Player.silent_steps` makes it skip a drinker
+  the same way. That is the existing multiplier reused, not a second
+  quiet mode. You still hear your own steps at -12 dB, so you can tell
+  it is working; nothing that hunts by sound hears anything.
+
+### The item set (for the "bleeding out" follow-up)
+A pocket's items can also spawn in ordinary hospital rooms within a
+radius of that pocket's entrance — a separate task. **No convention
+for "this space's item kinds" existed**: the Factory and the
+Restaurant contribute no kinds of their own, and loot is keyed by
+`room_kind` in `loot_table.gd`. The smallest one that works is a
+`const ITEM_KINDS` on the layout script, next to `AMBIENT_NOISE_LEVEL`,
+which is what the Laundromat declares. Phases 2 and 3 should match it.
+Warm scrubs is in the set, but whether a permanent cosmetic unlock
+*should* bleed into a corridor is the follow-up's call, not this one's.
+
+### One shared-file fix, which phases 2 and 3 also need
+`LootSpawner._draw_trinkets` drew the shift's 3-5 trinkets from every
+trinket kind, knowing nothing about the level. A pocket-only trinket
+has no `"*"` room weight, so on a shift without its space the draw
+burned one of those few slots, and the swap pass at the end of `plan()`
+then parachuted it into a hospital room it must never appear in. The
+draw now only offers kinds the level has a positive-weight, fitting
+location for (`_can_place`). Every hospital kind has a `"*"` weight, so
+this is a no-op for everything that existed. **The Natatorium's whistle
+and the Chapel's candle need exactly this**, so expect to meet here.
 
 ## Phase 5 — items for the existing spaces
 Factory:
@@ -220,7 +311,8 @@ it by going TOWARD it.
   carried bodies, noise mirroring, shift rebuild).
 - Headless bot walk through every entrance of each new space.
 - Sonographer: standing footsteps unheard inside the Laundromat at
-  the tuned threshold, heard outside.
+  the tuned threshold, heard outside. **Done in phase 4** —
+  `tools/pockettest.gd` `_footstep_masking`, both halves.
 - Night Nurse: frozen in a placed candle radius with no player
   looking; moves when it burns out.
 - Onlooker: the monster_lab scenarios above.
