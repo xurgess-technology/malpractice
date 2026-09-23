@@ -48,6 +48,9 @@ const SCENARIOS := [
 	{"name": "combat", "scenario": "combat", "clients": 2, "timeout": 300},
 	# SWEEP 3 HOOK (monsters): sedation, hits, dragged_by and waking reach a client.
 	{"name": "monsters", "scenario": "monsters", "clients": 1, "timeout": 240},
+	# POCKETS 2 phase 6: a hop has to arrive as a JUMP on the client, never as a walk. Short hops
+	# on purpose -- a long one is snapped by the 6 m heuristic and would pass with the bug in.
+	{"name": "onlooker", "scenario": "onlooker", "clients": 1, "timeout": 240},
 	# docs/SONOGRAPHER.md chunk B: a client sees the neck, the charge, the fan and the deafen, and is
 	# imaged and hunted correctly.
 	{"name": "sono", "scenario": "sono", "clients": 1, "timeout": 300},

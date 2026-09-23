@@ -105,6 +105,16 @@ var hit_count: int = 0          ## bumps on every take_hit; replicated so every 
 ## and is the only part of it a client works out for itself.
 var present: bool = false
 var presence: float = 0.0
+## How many times the host has PUT it somewhere (mirrored from its brain's `placements`),
+## replicated as `tp`. A client snaps to the reported position whenever this changes rather than
+## trusting the 6 m displacement heuristic in `_physics_process`: that heuristic measures how far
+## the body moved from where the CLIENT has it, and two placements can land within 6 m of each
+## other, so the host teleports while every client watches it glide. A counter and not a flag,
+## because a one-frame bool is missed by a 20 Hz snapshot and a longer-lived one is applied twice.
+## `_teleports_seen` is the last value this machine acted on; -1 means "no snapshot yet", so the
+## first one always snaps -- which is exactly what a client joining mid-encounter wants.
+var teleports: int = 0
+var _teleports_seen: int = -1
 
 var agent: NavigationAgent3D
 var model: Node3D
@@ -299,6 +309,8 @@ func _physics_process(delta: float) -> void:
 			if kind == SONOGRAPHER:
 				sono_susp = float(brain.suspicion)
 				sono_charge = float(brain.charge)
+			elif kind == ONLOOKER:
+				teleports = int(brain.placements)
 		if dragged_by != 0:
 			_apply_pin()
 		# TRINKETS chunk B: a reflex-hammer turn has the last word on the yaw while it runs, over
@@ -1333,10 +1345,11 @@ func report() -> Dictionary:
 		"gp": grab_peer,   # the Night Nurse's grab: who she holds
 		# The Sonographer: the suspicion meter its neck shows, and the charge in throat then wand.
 		"ss": snappedf(sono_susp, 1.0 / 64.0), "sc": snappedf(sono_charge, 1.0 / 64.0),
-		# The Onlooker: is it standing there this second. One bool carries every hop, every banish
-		# and every cooldown -- the place it hops TO rides the ordinary `pos`, which clients already
-		# snap rather than lerp past 6 m (see _physics_process), so a hop arrives as a jump for free.
-		"pr": present,
+		# The Onlooker: is it standing there this second, and how many times it has been put
+		# somewhere. `tp` is what makes a hop arrive as a JUMP on a client: the 6 m displacement
+		# heuristic in _physics_process is not enough on its own, because a short hop moves the body
+		# less than that and gets lerped -- the host teleports, every client sees it take a walk.
+		"pr": present, "tp": teleports,
 	}
 
 
@@ -1360,6 +1373,21 @@ func apply_remote(s: Dictionary) -> void:
 	sono_susp = float(s.get("ss", sono_susp))
 	sono_charge = float(s.get("sc", sono_charge))
 	present = bool(s.get("pr", present))
+	# POCKETS 2 phase 6: the Onlooker was PUT somewhere since the last snapshot, so put it there --
+	# do not let the remote lerp walk it across the floor. Done here rather than by setting a flag
+	# for _physics_process to read, so the position it snaps to is the one that came in the SAME
+	# snapshot as the counter; a flag consumed a frame later can be paired with a newer `pos`.
+	# Gated on the kind: every other monster reports 0 for ever and must keep lerping as it always
+	# has. -1 means this machine has seen no snapshot yet, so a client that joins mid-encounter
+	# snaps to wherever it already is instead of sliding in from the origin.
+	if kind == ONLOOKER:
+		var tp := int(s.get("tp", teleports))
+		if tp != _teleports_seen:
+			_teleports_seen = tp
+			teleports = tp
+			if is_inside_tree():
+				global_position = _target_pos
+				rotation.y = _target_yaw
 	var gp := int(s.get("gp", 0))
 	if gp != grab_peer:
 		grab_peer = gp

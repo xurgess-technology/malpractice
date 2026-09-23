@@ -493,11 +493,21 @@ the monster. `OnlookerWatch.force` (`""` / `"on"` / `"off"`) overrides the roll,
 and the dev panel.
 
 **Replication is the ordinary entity path and nothing else.** It lives in `game.monsters`, reports
-through `report()` and arrives through `apply_remote()` like every other monster. The one added
-field is `"pr"` -> `Monster.present`: is it standing there this second. The place it hops TO rides
-the ordinary `pos`, which clients already snap rather than interpolate past 6 m, so a hop arrives
-as a jump for free. `Monster.presence` (0 gone, 1 there) is the pop-in ease and is the only part a
-client works out for itself. **The same node and the same entity id live for the whole
+through `report()` and arrives through `apply_remote()` like every other monster. Two added fields:
+`"pr"` -> `Monster.present` (is it standing there this second) and `"tp"` -> `Monster.teleports`
+(how many times the host has put it somewhere, mirrored from the brain's `placements`).
+`Monster.presence` (0 gone, 1 there) is the pop-in ease and is the only part a client works out for
+itself.
+
+**`tp` is what makes a hop arrive as a jump, and the 6 m displacement heuristic is not enough on
+its own.** That heuristic measures how far the body moved from where the *client* has it, while
+placement only constrains distance to the *mark*, so two placements within 6 m of each other get
+lerped -- the host teleports and every client watches it walk. A client snaps to the reported
+position whenever `tp` differs from the last value it acted on. A counter and not a flag, because a
+one-frame bool is missed by a 20 Hz snapshot and a longer-lived one is applied twice (same reasoning
+as the rocket-boot ignition count). The snap happens inside `apply_remote` so it uses the position
+from the same snapshot as the counter, and `_teleports_seen` starts at -1 so a client joining
+mid-encounter snaps on its first snapshot. Other kinds report 0 for ever and are untouched. **The same node and the same entity id live for the whole
 encounter** -- it toggles `present` rather than being freed and re-added per hop, because an id
 handed out twice is the 0.10.26 bug where a client keeps driving a stale node.
 

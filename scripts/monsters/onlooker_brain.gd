@@ -115,6 +115,25 @@ var empty_for := 0.0
 ## Host-side lifetime flag: the watcher frees the monster once this is true.
 var finished := false
 
+## **Every time it is put somewhere new this goes up by one, and it rides the wire.**
+##
+## A client cannot tell a teleport from a walk by looking at the distance. `monster.gd`'s remote
+## lerp snaps only when the body moves more than 6 m in one frame, and that measures displacement
+## from where the CLIENT currently has it -- while `_place` only ever constrains distance to the
+## *mark*, never to where it was standing before. Two placements can easily land within 6 m of each
+## other, routinely so in the Chapel's nave, and then the host teleports while every client watches
+## it GLIDE across the floor. For the one monster whose whole identity is that it never takes a
+## step, on the co-op beat where a teammate tells you it moved, that is the illusion gone.
+##
+## A counter rather than a one-frame "I jumped" flag, which is the established idiom here and is
+## about dropped packets: a bool set for a single frame is missed by a 20 Hz snapshot, and a bool
+## held longer gets delivered twice. A counter can be neither lost nor duplicated -- the client
+## compares it with the last value it saw and snaps when it differs. Same reasoning as the
+## rocket-boot ignition count, and the same family of bug as 0.10.26.
+##
+## It counts **placements, not hops**: `_try_appear` moves it exactly as far as `_hop` does, so a
+## pop-in after a banish would slide in precisely the same way if only hops were counted.
+var placements := 0
 ## Counters the lab reads.
 var hops := 0
 var banished := 0
@@ -237,6 +256,7 @@ func _hop(g: Node, pk, mark: Node) -> void:
 		placements_failed += 1
 		return   # nowhere to go that is still in their view: stay where it is and try again later
 	hops += 1
+	placements += 1   # replicated: this is what makes a client SNAP rather than slide (see above)
 	m.global_position = spot
 	m.velocity = Vector3.ZERO
 	m.face_dir(mark.global_position - spot, 1.0, 1.0)
@@ -259,6 +279,7 @@ func _try_appear(g: Node, pk) -> void:
 		away_left = RETRY_SECONDS
 		return
 	started = true
+	placements += 1   # a pop-in is a teleport too, and slides on a client without this
 	mark_peer = int(mark.peer_id)
 	m.global_position = spot
 	m.velocity = Vector3.ZERO

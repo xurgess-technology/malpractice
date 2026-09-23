@@ -1489,6 +1489,48 @@ func _scenario_onlooker() -> void:
 		await wait(1.5)
 		check("Onlooker: the same pocket does not roll a second one", watch.current() == null and int(watch.rolls) == 2)
 
+	# ---- the wire: a hop has to arrive as a JUMP on a client, not a walk.
+	# Driven through apply_remote with game.host = false, which is exactly what a client does. The
+	# distances are 4 m on purpose: that is UNDER the 6 m displacement heuristic in
+	# _physics_process, so it is the replicated counter or nothing. This is the shape of the bug --
+	# the host teleports, every client watches it glide -- and it is invisible to whoever is
+	# hosting, which is why every other check here passed while it was happening.
+	await clear_monsters()
+	place_player(cor(32.0), cor(63.0), false)
+	var was_host: bool = game.host
+	var c: Node = spawn("onlooker", cor(40.0))
+	# Host off BEFORE anything runs: with the brain alive it places itself somewhere of its own
+	# choosing mid-test, which is what made the first two of these checks fail on my own fixture
+	# rather than on the code. This sub-test is purely the client path.
+	game.host = false
+	await wait(0.05)
+	var base: Dictionary = c.report()
+	base["pos"] = cor(40.0)
+	base["pr"] = true
+	# The first snapshot a machine ever sees snaps, so a client joining mid-encounter does not
+	# slide in from wherever the node was built.
+	c.apply_remote(base)
+	await wait(0.02)
+	check("Onlooker: a client's first snapshot snaps", c.global_position.distance_to(cor(40.0)) < 0.01)
+	# An ordinary position correction, counter unchanged: still interpolated, like every monster.
+	var walk_to: Vector3 = cor(36.0)
+	var d1: Dictionary = base.duplicate()
+	d1["pos"] = walk_to
+	c.apply_remote(d1)
+	await wait(0.02)
+	var left: float = c.global_position.distance_to(walk_to)
+	check("Onlooker: an ordinary correction is still interpolated", left > 0.5, "%.1f m still to go" % left)
+	await wait(0.8)
+	# The same 4 m move with the counter bumped: it is a hop, and it is there the instant it lands.
+	var hop_to: Vector3 = cor(40.0)
+	var d2: Dictionary = base.duplicate()
+	d2["pos"] = hop_to
+	d2["tp"] = int(base.get("tp", 0)) + 1
+	c.apply_remote(d2)
+	var off: float = c.global_position.distance_to(hop_to)
+	check("Onlooker: a hop shorter than 6 m arrives as a JUMP on a client", off < 0.01, "%.3f m off" % off)
+	game.host = was_host
+
 	OnlookerWatch.force = ""
 	game.pockets = null
 	watch.queue_free()
