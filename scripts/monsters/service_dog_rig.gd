@@ -34,6 +34,9 @@ extends Node3D
 ##   rides the `head` bone the same way.
 
 const Shapes := preload("res://scripts/monsters/shapes.gd")
+## The brain's timings (REAR_RISE, REAR_DROP, OFFER_TIME): a one-shot clip is played at whatever rate
+## makes it last exactly as long as the state it shows, whatever length the art authored it at.
+const DogBrain := preload("res://scripts/monsters/service_dog_brain.gd")
 
 const KEY := "monster/service_dog"
 ## The art track's own poser for that GLB (service-dog-art: a SkeletonModifier3D `DogPoser` with the
@@ -492,13 +495,16 @@ func _tick_glb() -> void:
 		rate = 0.0
 	elif rising and rear < 0.98:
 		clip = "rear_up"
+		rate = _fit(clip, DogBrain.REAR_RISE)
 	elif falling and rear > 0.02:
 		clip = "drop_down"
+		rate = _fit(clip, DogBrain.REAR_DROP)
 	elif rear >= 0.98:
 		clip = "upright_walk" if moving else "drain_idle"
 		rate = clampf(speed / 1.8, 0.6, 2.0) if moving else 1.0
 	elif head_down > 0.3 and not moving and Assets.anim_name(KEY, "place") != "":
 		clip = "place"   # the art's PlaceItem: setting an item down, or nosing one up
+		rate = _fit(clip, DogBrain.OFFER_TIME)
 	elif growl > 0.3 and not moving and Assets.anim_name(KEY, "growl") != "":
 		clip = "growl"
 	elif moving:
@@ -507,6 +513,15 @@ func _tick_glb() -> void:
 	if Assets.anim_name(KEY, clip) == "":
 		clip = "walk" if moving else "idle"
 	_model.play(clip, rate, 0.15)
+
+
+## The rate that makes the logical clip `clip` last `seconds` (1.0 when the clip is missing).
+func _fit(clip: String, seconds: float) -> float:
+	var anim: AnimationPlayer = _model.anim if _model != null else null
+	var real := Assets.anim_name(KEY, clip)
+	if anim == null or real == "" or not anim.has_animation(real) or seconds <= 0.0:
+		return 1.0
+	return clampf(anim.get_animation(real).length / seconds, 0.25, 4.0)
 
 
 ## Flat metres from the body's middle to its mouth, standing on all fours with its head up. Measured

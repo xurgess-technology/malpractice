@@ -47,6 +47,8 @@ var t := 0.0
 var _done := false
 var _failures: Array = []
 var _modes_seen: Array = []
+## The real model only (the art's GLB): every logical clip that played, and the clip sequence.
+var _clips_seen: Array = []
 var client: Node = null
 var client_game: ClientGame = null
 
@@ -95,6 +97,10 @@ func _physics_process(delta: float) -> void:
 	if dog != null and is_instance_valid(dog):
 		if _modes_seen.is_empty() or int(_modes_seen[-1]) != int(dog.mode):
 			_modes_seen.append(int(dog.mode))
+		if dog.model != null and dog.model.dog != null and bool(dog.model.dog.glb):
+			var c := String(dog.model.current())
+			if _clips_seen.is_empty() or String(_clips_seen[-1]) != c:
+				_clips_seen.append(c)
 		if client != null and is_instance_valid(client):
 			client.apply_remote(_snapshot(dog.report()))
 	if t > 900.0 and not _done:
@@ -318,6 +324,16 @@ func _run() -> void:
 			print("[dogtest]   ray h%.1f -> %s" % [hgt, str(hit.get("position")) + " " + (str(hit.collider.get_path()) if not hit.is_empty() else "clear")])
 	var found := await _until(func(): return String(dog.dog_carry) != "", 40.0)
 	_check(found and ["defibrillator", "heart_monitor"].has(String(dog.dog_carry)), "empty-mouthed, it finds another two-handed item and takes it (%s)" % dog.dog_carry)
+
+	if dog.model.dog.glb:
+		# The art's model: every clip the brain's states map to actually played at some point.
+		var want := ["idle", "walk", "rear_up", "drain_idle", "upright_walk", "drop_down"]
+		var missing := want.filter(func(c): return not _clips_seen.has(c))
+		_check(missing.is_empty(), "the real model played every mapped clip (missing %s; sequence %s)" % [str(missing), str(_clips_seen.slice(0, 40))])
+		_check(dog.model.dog.poser != null and dog.model.dog.orb != null and dog.model.dog.orb.get_parent().name == "OrbAttach",
+			"it drives the art's own DogPoser and its Orb")
+	else:
+		print("[dogtest] (placeholder body: no GLB clips to check)")
 
 	# ---------------------------------------------------------------- round 5: the saw
 	print("[dogtest] --- round 5: on all fours the saw kills it, and pays nothing ---")
