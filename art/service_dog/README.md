@@ -1,7 +1,7 @@
 # The Service Dog: Blender sources
 
-**Built 2026-09-24, art side of the Service Dog feature; revised five times the same day after
-Zach's reviews (see "Revision 1" through "Revision 5" below).** The model is
+**Built 2026-09-24, art side of the Service Dog feature; revised six times the same day after
+Zach's reviews (see "Revision 1" through "Revision 6" below).** The model is
 `assets/models/monsters/service_dog/service_dog.glb` (asset key `monster/service_dog`; skinned mesh,
 2 objects, 6 materials, 7 clips), registered in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is
 its `SkeletonModifier3D` (head-tracking, idle "wrongness"), following the Night Nurse / Hive
@@ -212,6 +212,36 @@ the same reason: a hard, measured boundary the geometry cannot cross, not a nudg
   laid on top and gets its own from-scratch check): `godot_shots/dog_vest_leg_clear_idle_left/
   right.png`, `_walk_left/right.png`, `_standup_left/right.png` -- no clipping in any of the six.
 
+## Revision 6 (2026-09-24, re-fit the shrunk vest and move the cross to a flush centre decal)
+
+Zach approved Revision 5's approach, then asked for two follow-ups now that the vest's covered
+zone is smaller:
+
+1. **Re-fit the vest to its new, smaller span.** Revision 5 kept every internal proportion
+   (the girth strap's y, the chest strap's three points) as fractions of the *old*, larger
+   `CHEST`/`NECK1`-based span, just clamped to not exceed the new `FRONT_Y`. That left several of
+   them bunched at or past the new edge -- the chest strap's `top_y` and `strap_mid.y` had both
+   collapsed onto the exact same value (`FRONT_Y`), which is a flat, squished-looking strap, not a
+   diagonal one. Replaced every position in `build_vest` with a fraction `t` of the vest's actual
+   `[REAR_Y, FRONT_Y]` span via a small `_y(t)` helper (`t=0` at the rear edge, `t=1` at `FRONT_Y`),
+   so the body, the girth strap and the chest strap's three points are spread out properly across
+   whatever span the vest actually has, however large or small that turns out to be -- re-fitting
+   it once, structurally, instead of patching each collapsed number individually.
+2. **Cross patches moved to the centre and made flush.** Back to one centred cross (not the
+   Revision 3 flanks), and no longer a raised appliqué: two overlapping `add_patch` boxes (the
+   Revision 3/5 construction) left a visible dark seam where their surfaces crossed, which read as a
+   carved shape rather than paint. Added `Part.add_flat_poly`, a generic thin decal from any 2D
+   outline, and built the cross as ONE twelve-point "+" outline through it -- a single continuous
+   surface with no internal seam, at a third of the earlier patches' thickness so it reads as
+   painted/printed rather than sewn on. The badge kept its box shape but was thinned the same amount
+   for a consistent flush treatment.
+
+Checked from both sides at idle, mid-walk and the fully reared standup pose again (the vest is
+different geometry now, not just resized, so it earns a fresh clearance check, not just eyeballing
+that the earlier one still looks fine): `godot_shots/dog_vest_leg_clear_idle_left/right.png`,
+`_walk_left/right.png`, `_standup_left/right.png` -- no clipping in any of the six. New close-up of
+the centred, flush cross: `godot_shots/dog_vest_closeup.png` and `dog_vest_cross_patch.png`.
+
 ## Folder
 
 | Path | What |
@@ -395,7 +425,7 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
 
 ## Stats
 
-- **Triangles:** `Dog_Body` 986 + `Dog_Vest` 348 = **1,334** for the whole model (no bake source, so
+- **Triangles:** `Dog_Body` 986 + `Dog_Vest` 324 = **1,310** for the whole model (no bake source, so
   no separate high-poly count).
 - **Materials:** 6 flat Principled BSDF (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`, `Dog_Vest_Worn`,
   `Dog_Vest_Cross`, `Dog_Vest_Badge`), no textures.

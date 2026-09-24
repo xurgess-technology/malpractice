@@ -171,9 +171,9 @@ func _run_shots() -> void:
 	await _play_and_settle("Idle", 0.2)
 	await _shot("vest_closeup")
 
-	# A three-quarter angle low on the chest, aimed at the chest bone, framing both the near-side
-	# cross patch and (past the model's far side) the badge, plus the vest's front edge clearing
-	# the neck.
+	# A three-quarter angle low on the chest, aimed at the chest bone, framing the centred cross
+	# decal (Revision 6: back to the middle of the vest, flush/painted rather than a raised patch)
+	# and the badge, plus the vest's front edge clearing the neck.
 	var chest_bi: int = model.skeleton.find_bone("chest")
 	var chest_world: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(chest_bi).origin if chest_bi >= 0 else Vector3(0, 1.05, 0.2)
 	_look_from(chest_world + Vector3(0.45, -0.35, 0.15), chest_world + Vector3(0.0, 0.05, -0.05))

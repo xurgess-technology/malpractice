@@ -255,6 +255,37 @@ class Part:
             for k in ATTRS:
                 self.attr[k].append(0.0)
 
+    def add_flat_poly(self, center, right, up, points2d, thickness, weight, mat_index):
+        """A thin, arbitrary-outline decal (Revision 6's cross patch is a single "+" outline
+        through this, replacing two crossed rectangular `add_patch` boxes -- their overlap left a
+        visible dark seam where the two separate surfaces intersected, which read as an odd carved
+        shape rather than one flush painted mark). `points2d` is the outline, counter-clockwise as
+        seen from the outward normal (`right.cross(up)`), in `right`/`up` units from `center`;
+        `thickness` should be small enough to read as paint, not an applique."""
+        right = right.normalized()
+        up = up.normalized()
+        normal = right.cross(up).normalized()
+        n = len(points2d)
+        base = len(self.v)
+        bottom = [center + right * px + up * py for px, py in points2d]
+        top = [c + normal * thickness for c in bottom]
+        self.v += bottom + top
+        faces = []
+        for i in range(1, n - 1):
+            faces.append((base + n, base + n + i, base + n + i + 1))       # top cap, outward
+            faces.append((base, base + i + 1, base + i))                    # bottom cap, inward
+        for i in range(n):
+            j = (i + 1) % n
+            faces.append((base + i, base + j, base + n + j, base + n + i))  # side wall
+        for f in faces:
+            self.f.append(f)
+            self.fuv.append([(0.0, 0.0)] * len(f))
+            self.face_mat.append(mat_index)
+        for _ in range(2 * n):
+            self.w.append(dict(weight))
+            for k in ATTRS:
+                self.attr[k].append(0.0)
+
     def tris(self):
         return sum(len(f) - 2 for f in self.f)
 
@@ -447,13 +478,23 @@ def build_vest(nseg=16):
     # SHOULDER.y and ELBOW.y with a margin, not guessed, exactly like NECK1 was in Revision 3.
     LEG_CLEAR_Y = min(SHOULDER.y, ELBOW.y) - 0.05
     FRONT_Y = min(CHEST.y + 0.07, LEG_CLEAR_Y)
+    REAR_Y = SPINE1.y
+    SPAN = FRONT_Y - REAR_Y
 
-    # Vest body: one continuous wrap from just behind the front legs to short of the neck AND
-    # short of the front legs' own junction, covering the ribcage the way the reference vests do
-    # (their mesh/fabric body, not just a strip down the spine) without reaching the y range where
-    # the front legs actually attach -- a real vest's chest strap (below) is what crosses near the
-    # legs; the body itself mostly sits over the ribcage behind them.
-    ys = [SPINE1.y, SPINE1.y * 0.55 + FRONT_Y * 0.45, SPINE1.y * 0.15 + FRONT_Y * 0.85, FRONT_Y]
+    def _y(t):
+        """A point t (0 = rear edge, 1 = front edge) along the vest's actual [REAR_Y, FRONT_Y]
+        span -- Revision 6: every position in this function is one of these, not a fraction of the
+        old (much larger) CHEST/NECK1-based span Revision 5 left behind, which put the girth strap,
+        the chest strap and its own top/mid points all bunched within the last few percent of the
+        new, shorter range (in one case two of them landed on literally the same y). Re-deriving
+        everything against the real span is what actually re-fits the vest to it."""
+        return REAR_Y + SPAN * t
+
+    # Vest body: one continuous wrap covering the whole [REAR_Y, FRONT_Y] span evenly, the ribcage
+    # coverage the reference vests show (their mesh/fabric body, not just a strip down the spine)
+    # without reaching the y range where the front legs actually attach -- the chest strap below is
+    # what a real vest routes near the legs; the body sits over the ribcage behind them.
+    ys = [_y(0.0), _y(0.33), _y(0.66), _y(1.0)]
     rx_list, rz_list = [], []
     for y in ys:
         cx, cz = _coat_radius(min(y, NECK1.y))
@@ -467,57 +508,59 @@ def build_vest(nseg=16):
     p.add_tube(body_pts, rx_list, rz_list, nseg, bw, cap_start=True, cap_end=True, uv_v_range=(0.0, 0.5))
 
     # Girth strap: a thin band a hair proud of the vest body (not the bare coat), under the belly
-    # and round the sides -- the buckle strap visible in both reference photos. Also kept behind
-    # LEG_CLEAR_Y so its underside can't reach into the front legs either.
-    gy = min(CHEST.y * 0.7 + SPINE1.y * 0.3, LEG_CLEAR_Y - 0.02)
+    # and round the sides -- the buckle strap visible in both reference photos. Sits a little past
+    # the body's midpoint, toward the front, matching where both reference photos show it.
+    gy = _y(0.62)
     gcx, gcz = _coat_radius(gy)
-    girth_pts = [Vector((0, gy - 0.018, CHEST.z)), Vector((0, gy, CHEST.z)), Vector((0, gy + 0.018, CHEST.z))]
+    girth_pts = [Vector((0, gy - 0.016, CHEST.z)), Vector((0, gy, CHEST.z)), Vector((0, gy + 0.016, CHEST.z))]
     grx = [gcx + MARGIN + 0.007] * 3
     grz = [gcz + MARGIN + 0.007] * 3
     gw = [{'spine1': 0.4, 'chest': 0.6}] * 3
     p.add_tube(girth_pts, grx, grz, nseg, gw, cap_start=False, cap_end=False, uv_v_range=(0.5, 0.65))
 
-    # Chest strap: a thin band from the top of the vest, down each side, to the girth strap in
-    # front of the shoulder -- the second strap both reference vests show, tying the body down.
-    # Kept at/behind FRONT_Y (i.e. behind LEG_CLEAR_Y too) and weighted only to 'chest', for the
-    # same clearance reason as the body above.
-    top_y = min(CHEST.y * 0.4 + FRONT_Y * 0.6, FRONT_Y)
+    # Chest strap: a thin band from near the top-front of the vest, down each side, to the girth
+    # strap -- the second strap both reference vests show, tying the body down. Its three points
+    # are spread across the front third of the span instead of bunching at/near FRONT_Y, so it
+    # reads as a strap crossing the body at an angle rather than a flat sliver at the very edge.
+    top_y = _y(0.92)
     top_cx, top_cz = _coat_radius(top_y)
+    mid_y = _y(0.78)
+    mid_cx, mid_cz = _coat_radius(mid_y)
     strap_top = Vector((0.0, top_y, CHEST.z + top_cz + MARGIN))
-    strap_mid = Vector((0.0, min(CHEST.y, FRONT_Y), CHEST.z + _coat_radius(min(CHEST.y, FRONT_Y))[1] * 0.35))
+    strap_mid = Vector((0.0, mid_y, CHEST.z + mid_cz * 0.35))
     strap_bot = Vector((0.0, gy, CHEST.z - (gcz + MARGIN + 0.004)))
     for side in ('L', 'R'):
         sx = 1.0 if side == 'L' else -1.0
         pts = [strap_top + Vector((sx * top_cx * 0.55, 0, 0)),
-               strap_mid + Vector((sx * _coat_radius(min(CHEST.y, FRONT_Y))[0] * 0.85, 0, 0)),
+               strap_mid + Vector((sx * mid_cx * 0.85, 0, 0)),
                strap_bot + Vector((sx * gcx * 0.5, 0, 0))]
         srx = [0.010, 0.010, 0.010]
         srz = [0.016, 0.016, 0.016]
         sw = [{'chest': 1.0}, {'chest': 1.0}, {'chest': 0.6, 'spine1': 0.4}]
         p.add_tube(pts, srx, srz, 8, sw, cap_start=True, cap_end=True, uv_v_range=(0.65, 0.8))
 
-    # First-aid iconography, sewn flush onto the vest body's own surface (image refs 5/6: patches
-    # follow the vest's contour, they don't float above it). Zach: two crosses, mirrored on the
-    # left and right flanks (not one on top/centre) -- each sits on the vest body's own side face,
-    # facing outward, kept behind FRONT_Y (not CHEST.y, which is now past the vest's own front edge)
-    # so a patch can't end up sitting past the vest's own coverage, floating in the leg's clash zone.
-    cross_y = FRONT_Y - 0.02
+    # First-aid iconography. Revision 6, per Zach: back to the middle of the vest (not the flanks),
+    # and painted/printed rather than a raised appliqué -- flush with the surface, decal-thin
+    # (`thickness` a third of Revision 3's already-thin patches), centred on top of the body at its
+    # own local radius so it still follows the vest's curve instead of floating above it.
+    cross_y = _y(0.45)
     ccx, ccz = _coat_radius(cross_y)
-    for side in ('L', 'R'):
-        sx = 1.0 if side == 'L' else -1.0
-        cross_normal = Vector((sx, 0.0, 0.0))
-        cross_right = Vector((0.0, 1.0, 0.0))
-        cross_up = cross_normal.cross(cross_right).normalized()
-        cross_center = Vector((sx * (ccx + MARGIN), cross_y, CHEST.z))
-        p.add_patch(cross_center, cross_right, cross_up, 0.026, 0.009, 0.004, {'chest': 1.0}, VEST_CROSS_MAT)
-        p.add_patch(cross_center, cross_right, cross_up, 0.009, 0.026, 0.004, {'chest': 1.0}, VEST_CROSS_MAT)
-    badge_y = FRONT_Y - 0.05
+    cross_center = Vector((0.0, cross_y, CHEST.z + ccz + MARGIN))
+    cross_right = Vector((1.0, 0.0, 0.0))
+    cross_up = Vector((0.0, 1.0, 0.0))
+    DECAL = 0.0016
+    w, big = 0.011, 0.029   # plus-sign arm half-width, half-length: one solid "+" outline, not
+    # two crossed boxes (their overlap left a visible seam -- see `add_flat_poly`'s docstring).
+    plus = [(big, w), (w, w), (w, big), (-w, big), (-w, w), (-big, w),
+            (-big, -w), (-w, -w), (-w, -big), (w, -big), (w, -w), (big, -w)]
+    p.add_flat_poly(cross_center, cross_right, cross_up, plus, DECAL, {'chest': 1.0}, VEST_CROSS_MAT)
+    badge_y = _y(0.20)
     bcx, bcz = _coat_radius(badge_y)
     badge_normal = Vector((0.75, 0.0, 0.66)).normalized()   # forward-and-out, the vest's side face
     badge_right = Vector((0.0, 1.0, 0.0))
     badge_up = badge_normal.cross(badge_right).normalized()
     badge_center = Vector((bcx * 0.78, badge_y, CHEST.z + bcz * 0.35)) + badge_normal * MARGIN
-    p.add_patch(badge_center, badge_right, badge_up, 0.026, 0.026, 0.004, {'chest': 1.0}, VEST_BADGE_MAT)
+    p.add_patch(badge_center, badge_right, badge_up, 0.024, 0.024, DECAL, {'chest': 1.0}, VEST_BADGE_MAT)
 
     # Deterministic wear mask, kept to a minority of the surface so the garment itself always
     # reads clearly first: dirtiest low on the girth strap (brushes the ground) and along the vest
