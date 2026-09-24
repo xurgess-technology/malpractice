@@ -27,6 +27,7 @@ CHEST = Vector((0.0, 0.20, 1.06))
 NECK1 = Vector((0.0, 0.42, 1.10))
 NECK2 = Vector((0.0, 0.58, 1.27))
 HEAD = Vector((0.0, 0.72, 1.43))
+CRANIUM = Vector((0.0, 0.78, 1.44))   # the skull's own rounded volume, between the neck and the muzzle
 SKULL_MID = Vector((0.0, 0.92, 1.43))
 HEAD_TIP = Vector((0.0, 1.14, 1.37))
 JAW_MID = Vector((0.0, 0.92, 1.33))
@@ -53,8 +54,8 @@ TAIL = [
     PELVIS + Vector((0.0, -0.82, 0.00)),
 ]
 
-EAR_BASE = HEAD + Vector((0.045, -0.05, 0.10))
-EAR_TIP = HEAD + Vector((0.075, -0.08, 0.26))
+EAR_BASE = CRANIUM + Vector((0.040, -0.03, 0.06))   # on the cranium bulge, not floating off bare neck
+EAR_TIP = CRANIUM + Vector((0.070, -0.06, 0.22))
 
 # Where the vest sits: a girth band round the chest and a back panel from the withers to the
 # shoulders (skeleton space, used again by dog_rig for nothing but kept here for one source of truth).
@@ -286,13 +287,15 @@ def build_body(nseg=10, nseg_small=8):
     w = chain_weights(len(spine_pts), breaks)
     p.add_tube(spine_pts, spine_rx, spine_rz, nseg, w, cap_start=True, cap_end=False, uv_v_range=(0.0, 0.5))
 
-    # ---- skull: head base -> mid -> tip, with sunken eye sockets carved at the mid ring -------
-    skull_pts = [HEAD, SKULL_MID, HEAD_TIP]
-    skull_rx = [0.044, 0.034, 0.010]
-    skull_rz = [0.050, 0.036, 0.012]
-    w2 = [{'head': 1.0}, {'head': 1.0}, {'head': 1.0}]
+    # ---- skull: a real rounded cranium between the neck and the muzzle (there was none before --
+    # the neck ran straight into the tapering snout with nothing linking them, and the ears had
+    # nothing to visibly attach to), then mid -> tip, with sunken eye sockets carved at the mid ring.
+    skull_pts = [HEAD, CRANIUM, SKULL_MID, HEAD_TIP]
+    skull_rx = [0.046, 0.060, 0.034, 0.010]
+    skull_rz = [0.054, 0.072, 0.036, 0.012]
+    w2 = [{'head': 1.0}] * 4
     p.add_tube(skull_pts, skull_rx, skull_rz, nseg_small, w2, cap_start=False, cap_end=True,
-               dip=lambda i, th: _socket_dip(i, th, sock_ring=1), uv_v_range=(0.5, 0.75))
+               dip=lambda i, th: _socket_dip(i, th, sock_ring=2), uv_v_range=(0.5, 0.75))
 
     # ---- lower jaw: a thin loft from under the head to the jaw tip, hinged conceptually at 'jaw' -
     jaw_pts = [HEAD + Vector((0.0, 0.0, -0.036)), JAW_MID, JAW_TIP]
@@ -318,10 +321,15 @@ def build_body(nseg=10, nseg_small=8):
 
     # ---- legs: front L/R, hind L/R ----------------------------------------------------------
     def leg(side, sign, shoulder, elbow, wrist, paw, toe, upper_bone, lower_bone, pastern_bone, toe_bone,
-            r0=0.040, r1=0.026, r2=0.022, r3=0.020, r4=0.010):
-        pts_upper = [shoulder, shoulder.lerp(elbow, 0.5), elbow]
-        p.add_tube(pts_upper, [r0, (r0 + r1) * 0.5, r1], [r0, (r0 + r1) * 0.5, r1], nseg_small,
-                   [{upper_bone: 1.0}, {upper_bone: 1.0}, {upper_bone: 0.6, lower_bone: 0.4}],
+            r0=0.040, r1=0.026, r2=0.022, r3=0.020, r4=0.010, flare_rx=0.062, flare_rz=0.076):
+        # A flared root, not a bare cylinder butted against the coat: one extra ring pulled in
+        # toward the spine axis (so it sits inside the torso's own silhouette) at a radius wider
+        # than the leg itself, so the leg reads as growing out of a proper shoulder/hip join
+        # instead of a tube poking into or resting on top of the body.
+        root_flare = Vector((shoulder.x * 0.4, shoulder.y, shoulder.z))
+        pts_upper = [root_flare, shoulder, shoulder.lerp(elbow, 0.5), elbow]
+        p.add_tube(pts_upper, [flare_rx, r0, (r0 + r1) * 0.5, r1], [flare_rz, r0, (r0 + r1) * 0.5, r1], nseg_small,
+                   [{upper_bone: 1.0}, {upper_bone: 1.0}, {upper_bone: 1.0}, {upper_bone: 0.6, lower_bone: 0.4}],
                    cap_start=True, cap_end=False, uv_v_range=(0.0, 0.3))
         pts_lower = [elbow, elbow.lerp(wrist, 0.5), wrist]
         p.add_tube(pts_lower, [r1, (r1 + r2) * 0.5, r2], [r1, (r1 + r2) * 0.5, r2], nseg_small,
@@ -340,9 +348,10 @@ def build_body(nseg=10, nseg_small=8):
     leg('R', -1.0, mirror(SHOULDER), mirror(ELBOW), mirror(WRIST), mirror(FPAW), mirror(FTOE),
         'upperarm.R', 'forearm.R', 'pastern.R', 'toe.R')
     leg('L', 1.0, HIP, KNEE, HOCK, HPAW, HTOE, 'thigh.L', 'shin.L', 'hock.L', 'htoe.L',
-        r0=0.046, r1=0.028, r2=0.022, r3=0.020, r4=0.010)
+        r0=0.046, r1=0.028, r2=0.022, r3=0.020, r4=0.010, flare_rx=0.068, flare_rz=0.082)
     leg('R', -1.0, mirror(HIP), mirror(KNEE), mirror(HOCK), mirror(HPAW), mirror(HTOE),
-        'thigh.R', 'shin.R', 'hock.R', 'htoe.R', r0=0.046, r1=0.028, r2=0.022, r3=0.020, r4=0.010)
+        'thigh.R', 'shin.R', 'hock.R', 'htoe.R', r0=0.046, r1=0.028, r2=0.022, r3=0.020, r4=0.010,
+        flare_rx=0.068, flare_rz=0.082)
 
     return p
 
@@ -390,22 +399,29 @@ def build_vest(nseg=16):
     touches a minority of it."""
     p = Part('Dog_Vest', 'vest')
     MARGIN = 0.011   # how far the fabric stands off the coat: snug, not a floating panel
+    # How far forward (toward the neck) the vest is allowed to reach. Revision 2 took it almost to
+    # NECK1 and weighted the front rings partly to 'neck1', which clipped through the neck at any
+    # pose where the neck bends away from the chest (idle's tilt, walk's pitch, and especially the
+    # big standup bend all rotate neck1 well clear of a vest ring still assuming it moves with it).
+    # Keeping the whole vest -- body, straps and patches -- at y <= FRONT_Y and rigidly weighted to
+    # 'chest' only (no 'neck1' anywhere) means it physically cannot follow the neck into a clash:
+    # it stays with the torso, comfortably behind wherever the neck swings.
+    FRONT_Y = CHEST.y + 0.07
 
-    # Vest body: one continuous wrap from just behind the front legs to the base of the neck,
+    # Vest body: one continuous wrap from just behind the front legs to short of the neck,
     # covering the ribcage the way the reference vests do (their mesh/fabric body, not just a
     # strip down the spine).
-    ys = [SPINE1.y, SPINE1.y * 0.3 + CHEST.y * 0.7, CHEST.y, CHEST.y * 0.45 + NECK1.y * 0.55, NECK1.y - 0.02]
+    ys = [SPINE1.y, SPINE1.y * 0.3 + CHEST.y * 0.7, CHEST.y, CHEST.y * 0.6 + FRONT_Y * 0.4, FRONT_Y]
     rx_list, rz_list = [], []
     for y in ys:
-        cx, cz = _coat_radius(y)
+        cx, cz = _coat_radius(min(y, NECK1.y))
         rx_list.append(cx + MARGIN)
         rz_list.append(cz + MARGIN)
     # The loft's centreline sits at the torso's own height (CHEST.z) at every ring: the coat's
     # centreline is also flat in z along this stretch (the spine loft's height variation here is
     # small), so this is a close enough approximation without needing the full spine centreline.
     body_pts = [Vector((0.0, y, CHEST.z)) for y in ys]
-    bw = [{'spine1': 0.7, 'chest': 0.3}, {'spine1': 0.3, 'chest': 0.7}, {'chest': 1.0},
-          {'chest': 0.6, 'neck1': 0.4}, {'chest': 0.3, 'neck1': 0.7}]
+    bw = [{'spine1': 0.7, 'chest': 0.3}, {'spine1': 0.3, 'chest': 0.7}] + [{'chest': 1.0}] * 3
     p.add_tube(body_pts, rx_list, rz_list, nseg, bw, cap_start=True, cap_end=True, uv_v_range=(0.0, 0.5))
 
     # Girth strap: a thin band a hair proud of the vest body (not the bare coat), under the belly
@@ -420,7 +436,8 @@ def build_vest(nseg=16):
 
     # Chest strap: a thin band from the top of the vest, down each side, to the girth strap in
     # front of the shoulder -- the second strap both reference vests show, tying the body down.
-    top_y = CHEST.y * 0.5 + NECK1.y * 0.5
+    # Kept at/behind FRONT_Y and weighted only to 'chest', for the same neck-clearance reason.
+    top_y = min(CHEST.y * 0.4 + FRONT_Y * 0.6, FRONT_Y)
     top_cx, top_cz = _coat_radius(top_y)
     strap_top = Vector((0.0, top_y, CHEST.z + top_cz + MARGIN))
     strap_mid = Vector((0.0, CHEST.y, CHEST.z + _coat_radius(CHEST.y)[1] * 0.35))
@@ -432,20 +449,23 @@ def build_vest(nseg=16):
                strap_bot + Vector((sx * gcx * 0.5, 0, 0))]
         srx = [0.010, 0.010, 0.010]
         srz = [0.016, 0.016, 0.016]
-        sw = [{'chest': 0.5, 'neck1': 0.5}, {'chest': 1.0}, {'chest': 0.6, 'spine1': 0.4}]
+        sw = [{'chest': 1.0}, {'chest': 1.0}, {'chest': 0.6, 'spine1': 0.4}]
         p.add_tube(pts, srx, srz, 8, sw, cap_start=True, cap_end=True, uv_v_range=(0.65, 0.8))
 
     # First-aid iconography, sewn flush onto the vest body's own surface (image refs 5/6: patches
-    # follow the vest's contour, they don't float above it) -- a red cross on top near the withers
-    # and a small badge on the front-side face, both barely raised (thickness half what Revision 1
-    # used, and centred exactly on the vest body's own radius at that point, not a fixed height).
-    cross_y = CHEST.y * 0.6 + NECK1.y * 0.4
+    # follow the vest's contour, they don't float above it). Zach: two crosses, mirrored on the
+    # left and right flanks (not one on top/centre) -- each sits on the vest body's own side face,
+    # facing outward, well behind FRONT_Y so it can't clip the neck either.
+    cross_y = CHEST.y - 0.01
     ccx, ccz = _coat_radius(cross_y)
-    cross_center = Vector((0.0, cross_y, CHEST.z + ccz + MARGIN))
-    p.add_patch(cross_center, Vector((1, 0, 0)), Vector((0, 1, 0)), 0.040, 0.013, 0.004,
-                {'chest': 0.5, 'neck1': 0.5}, VEST_CROSS_MAT)
-    p.add_patch(cross_center, Vector((1, 0, 0)), Vector((0, 1, 0)), 0.013, 0.040, 0.004,
-                {'chest': 0.5, 'neck1': 0.5}, VEST_CROSS_MAT)
+    for side in ('L', 'R'):
+        sx = 1.0 if side == 'L' else -1.0
+        cross_normal = Vector((sx, 0.0, 0.0))
+        cross_right = Vector((0.0, 1.0, 0.0))
+        cross_up = cross_normal.cross(cross_right).normalized()
+        cross_center = Vector((sx * (ccx + MARGIN), cross_y, CHEST.z))
+        p.add_patch(cross_center, cross_right, cross_up, 0.026, 0.009, 0.004, {'chest': 1.0}, VEST_CROSS_MAT)
+        p.add_patch(cross_center, cross_right, cross_up, 0.009, 0.026, 0.004, {'chest': 1.0}, VEST_CROSS_MAT)
     badge_y = CHEST.y - 0.03
     bcx, bcz = _coat_radius(badge_y)
     badge_normal = Vector((0.75, 0.0, 0.66)).normalized()   # forward-and-out, the vest's side face

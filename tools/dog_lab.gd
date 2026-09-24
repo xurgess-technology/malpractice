@@ -165,17 +165,31 @@ func _run_shots() -> void:
 		await _shot("bite_closed")
 	_check("Bite plays", model.anim.has_animation("Bite"))
 
-	# A close vest shot: pulled back enough to read the strap/panel silhouette and both patches.
+	# A close vest shot: pulled back enough to read the strap/panel silhouette, the near-side cross
+	# patch, and the clearance behind the neck.
 	_look_from(Vector3(0.85, 1.15, 1.05), Vector3(0.0, 1.05, 0.20))
 	await _play_and_settle("Idle", 0.2)
 	await _shot("vest_closeup")
 
-	# A top-back angle to catch the back panel's red-cross patch, aimed at the neck-base bone
-	# (the patch sits just above it) rather than a guessed world point.
-	var neck_bi: int = model.skeleton.find_bone("neck1")
-	var neck_world: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(neck_bi).origin if neck_bi >= 0 else Vector3(0, 1.1, 0.4)
-	_look_from(neck_world + Vector3(0.5, -0.05, 0.35), neck_world + Vector3(0.0, 0.0, 0.05))
+	# A three-quarter angle low on the chest, aimed at the chest bone, framing both the near-side
+	# cross patch and (past the model's far side) the badge, plus the vest's front edge clearing
+	# the neck.
+	var chest_bi: int = model.skeleton.find_bone("chest")
+	var chest_world: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(chest_bi).origin if chest_bi >= 0 else Vector3(0, 1.05, 0.2)
+	_look_from(chest_world + Vector3(0.45, -0.35, 0.15), chest_world + Vector3(0.0, 0.05, -0.05))
 	await _shot("vest_cross_patch")
+
+	# A head-on-neck closeup: the skull volume between the neck and the jaw, the ears attached to
+	# it, and the jaw/mouth line -- the piece Zach asked to see explicitly.
+	var head_bi: int = model.skeleton.find_bone("head")
+	var head_world2: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(head_bi).origin if head_bi >= 0 else Vector3(0, 1.4, 0.7)
+	_look_from(head_world2 + Vector3(0.32, -0.24, 0.05), head_world2 + Vector3(0.0, 0.10, 0.02))
+	await _shot("head_closeup")
+
+	# A clear full-body shot at idle, close enough to read all four leg-to-torso junctions at once.
+	await _play_and_settle("Idle", 0.2)
+	_look_from(Vector3(1.35, 1.0, 1.75), Vector3(0, 0.9, 0.15))
+	await _shot("leg_junctions")
 
 	print("[dog_lab] ------------------------------------------")
 	print("[dog_lab] result: ", "PASS" if ok else "FAIL")

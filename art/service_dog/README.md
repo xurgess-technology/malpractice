@@ -1,7 +1,7 @@
 # The Service Dog: Blender sources
 
-**Built 2026-09-24, art side of the Service Dog feature; revised twice the same day after Zach's
-reviews (see "Revision 1" and "Revision 2" below).** The model is
+**Built 2026-09-24, art side of the Service Dog feature; revised three times the same day after
+Zach's reviews (see "Revision 1", "Revision 2" and "Revision 3" below).** The model is
 `assets/models/monsters/service_dog/service_dog.glb` (asset key `monster/service_dog`; skinned mesh,
 2 objects, 6 materials, 7 clips), registered in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is
 its `SkeletonModifier3D` (head-tracking, idle "wrongness"), following the Night Nurse / Hive
@@ -114,6 +114,43 @@ Two more fixes:
    right. New shot: `godot_shots/dog_standup_ground_sideon.png`, a level side view against a visible
    ground plane (`dog_lab.gd` now draws one) framed on the hind paws' own position specifically to
    show the contact.
+
+## Revision 3 (2026-09-24, after Zach approved Revision 2's direction, four more small fixes)
+
+Zach signed off on the ground contact and the form-fitting vest direction from Revision 2, then
+asked for four more:
+
+1. **The vest clipped through the neck.** Revision 2's vest body reached almost to `NECK1` and
+   still weighted its front rings partly to `neck1`, so it clipped whenever the neck rotated away
+   from the chest (idle's tilt, walk's pitch, and especially the big standup bend). Fixed by adding
+   a hard `FRONT_Y` limit (`CHEST.y + 0.07`, well short of `NECK1`) that the vest body, both straps
+   and every patch now respect, and by weighting the whole vest 100% to `chest` (no `neck1`
+   anywhere) so it physically cannot follow the neck into a clash -- it stays with the torso no
+   matter how the neck bends. Checked at idle (including the head-tilt extreme), mid-walk and the
+   fully reared standup pose; see `godot_shots/dog_vest_closeup.png`, `dog_vest_cross_patch.png` and
+   `dog_standup_ground_sideon.png` -- clear daylight between the coat's neck colour and the vest in
+   all three.
+2. **The cross patches moved from top-centre to the flanks.** Zach wanted them mirrored on the
+   vest's left and right sides, not one on top. `build_vest` now places a cross patch on each side,
+   facing outward (`cross_normal = (+/-1, 0, 0)`), instead of one centred on top.
+3. **The legs didn't read as attached to the torso.** This was already flagged as a known rough
+   edge ("legs meet the body at a bare tube junction") and Zach confirmed it was bothering him. Each
+   leg's `add_tube` call now starts with an extra ring pulled inward toward the spine axis
+   (`root_flare = (shoulder.x * 0.4, shoulder.y, shoulder.z)`) at a radius noticeably wider than the
+   leg itself and sized closer to the torso's own local radius there, so the leg visibly flares into
+   a shoulder/hip join instead of butting a uniform cylinder against the coat. Applied to all four
+   legs (front legs default to a smaller flare, hind legs to a bigger one, since the hip region is
+   naturally broader). See `godot_shots/dog_leg_junctions.png`.
+4. **No real skull volume.** Also flagged by Zach after looking again: the neck ran straight into
+   the tapering muzzle with nothing between them, and the ears had no head mass to visibly attach
+   to. Added a `CRANIUM` control point to the skull loft (`HEAD -> CRANIUM -> SKULL_MID -> HEAD_TIP`,
+   was just `HEAD -> SKULL_MID -> HEAD_TIP`) with a noticeably larger radius than either neighbour,
+   giving the skull a real rounded bulge between the neck and the muzzle before it narrows again.
+   `EAR_BASE`/`EAR_TIP` now anchor off `CRANIUM` instead of `HEAD` directly, so the ears sit on that
+   bulge rather than floating off a bare taper. It is weighted entirely to the `head` bone like the
+   rest of the skull, so it inherits the same pale `Dog_Skull` material automatically -- no separate
+   color call needed, it reads as one continuous pale head structure by construction. See
+   `godot_shots/dog_head_closeup.png`.
 
 ## Folder
 
@@ -270,8 +307,11 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
   (see `godot_shots/dog_standup_35.png` / `_65.png`) is still not graceful frame-by-frame, and
   `Run`'s stride reads as a dynamic lunge more than a controlled sprint. Both would benefit from
   another pass with fresh eyes before they ship as final.
-- **Legs meet the body at a bare tube junction**, same limitation the Seal's README calls out for
-  its flipper root: no modelled shoulder/hip socket, just one loft pushed into another.
+- **Legs now flare into a shoulder/hip join (Revision 3)** instead of the bare tube junction the
+  Seal's README calls out for its own flipper root -- an extra wide ring pulled toward the spine
+  axis at the top of each leg, rather than a true modelled socket. Reads much better than a plain
+  cylinder butted against the coat, but it is still a procedural approximation, not sculpted
+  anatomy, and up close (not at gameplay distance) it is a visible flare, not a seamless blend.
 - **The vest is a snug wrap plus thin strap accents, not a cloth sim.** It now hugs the ribcage and
   follows the coat's own contour (Revision 2), which is the shape that matters, but the geometry
   itself is still simple lofts and thin raised boxes, not tailored/simulated cloth -- it won't fold
@@ -287,7 +327,7 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
 
 ## Stats
 
-- **Triangles:** `Dog_Body` 778 + `Dog_Vest` 356 = **1,134** for the whole model (no bake source, so
+- **Triangles:** `Dog_Body` 858 + `Dog_Vest` 380 = **1,238** for the whole model (no bake source, so
   no separate high-poly count).
 - **Materials:** 6 flat Principled BSDF (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`, `Dog_Vest_Worn`,
   `Dog_Vest_Cross`, `Dog_Vest_Badge`), no textures.
