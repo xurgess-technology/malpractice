@@ -8,7 +8,7 @@ extends RefCounted
 ##                  player's pickup, and the stack rides in `carried` (and on the wire as `ck`).
 ##   DOG_APPROACH   carrying something, it has SEEN a surgeon (a Hive-style cone and a clear line):
 ##                  it walks up to them at a walk, not a run, head held a little too high.
-##   DOG_OFFER      stops OFFER_DIST short, lowers its head and sets the item on the floor at their
+##   DOG_OFFER      stops with its mouth OFFER_BEYOND_MOUTH short of them, lowers its head and sets the item on the floor at their
 ##                  feet (a fresh WorldItem, tagged with this offer's `offer_tag`).
 ##   DOG_WARN       stands and watches. Growls once, maybe twice. FETCH_WINDOW seconds on the clock
 ##                  (`offer_left`, on the wire as `ol`; never drawn -- the growls and its stare are the
@@ -48,10 +48,11 @@ const SPEED_SEEK := 1.4
 const SPEED_APPROACH := 1.5      ## a walk: it is not charging you, and that is the unsettling part
 const SPEED_RETRIEVE := 2.6      ## a happy trot
 
-## Where it stops to put the item down, metres from the surgeon (horizontal).
-## (From its middle: its head is over a metre ahead of that, so this leaves the item at your feet
-## and its face about an arm's length from yours.)
-const OFFER_DIST := 2.3
+## Where it stops to put the item down: its MOUTH this far from the surgeon (horizontal). Distances
+## that depend on how far its mouth reaches ahead of its middle use Monster.dog_reach(), measured
+## off whatever body it has (about 1.35 m on the placeholder's long neck, 0.8 m on the art's model),
+## so neither body's proportions are baked in here.
+const OFFER_BEYOND_MOUTH := 1.0
 ## The set-down: head lowers over OFFER_TIME, the item leaves its mouth at OFFER_DROP_AT.
 const OFFER_TIME := 1.3
 const OFFER_DROP_AT := 0.85
@@ -93,9 +94,8 @@ const CONTENT_TIME := 20.0
 ## Walking toward the surgeon it gives up if it has not seen them for this long.
 const APPROACH_LOST := 6.0
 const APPROACH_MAX := 30.0
-## Taking an item in its mouth: close enough, and the item slow enough.
-## (From its middle: its mouth is a metre and more ahead of it on that long neck.)
-const TAKE_REACH := 1.6
+## Taking an item in its mouth: its mouth within this of the item (and the item slow enough).
+const TAKE_BEYOND_MOUTH := 0.3
 ## An item it could not get to is left alone this long before it tries it again.
 const SKIP_TIME := 60.0
 const TAKE_TIME := 0.5
@@ -276,7 +276,7 @@ func _seek(delta: float) -> void:
 			_start_wander()
 		return
 	var left: float = _flat(at)
-	if left <= TAKE_REACH:
+	if left <= _take_reach():
 		_take = TAKE_TIME
 		m.stop()
 		return
@@ -306,7 +306,8 @@ func _approach(delta: float) -> void:
 		_give_up()
 		return
 	var d := _flat(last_seen)
-	if d <= OFFER_DIST and _flat(p.global_position) <= OFFER_DIST + 0.6 and m.clear_line(m.global_position + Vector3.UP * 0.6, p.global_position + Vector3.UP * 0.6):
+	var offer_dist: float = m.dog_reach() + OFFER_BEYOND_MOUTH
+	if d <= offer_dist and _flat(p.global_position) <= offer_dist + 0.6 and m.clear_line(m.global_position + Vector3.UP * 0.6, p.global_position + Vector3.UP * 0.6):
 		m.stop()
 		_set_mode(M.Mode.DOG_OFFER)
 		timer = OFFER_TIME
@@ -477,7 +478,7 @@ func _retrieve(delta: float) -> void:
 			_start_wander()
 		return
 	var flying: bool = not bool(it.freeze) and (it.linear_velocity as Vector3).length() > 1.2
-	if _flat(at) <= TAKE_REACH and not flying and absf(at.y - m.global_position.y) < 1.4:
+	if _flat(at) <= _take_reach() and not flying and absf(at.y - m.global_position.y) < 1.4:
 		_take = TAKE_TIME
 		m.stop()
 		return
@@ -659,6 +660,10 @@ func _target() -> Node:
 		if "peer_id" in p and int(p.peer_id) == target_id:
 			return p
 	return null
+
+
+func _take_reach() -> float:
+	return m.dog_reach() + TAKE_BEYOND_MOUTH
 
 
 func _flat(at: Vector3) -> float:

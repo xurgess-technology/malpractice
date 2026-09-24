@@ -96,6 +96,8 @@ var _last_rear := 0.0
 ## The art track's DogPoser (dog_rig.gd) when the GLB was built through it, else null.
 var poser: Node = null
 var _look_w := 0.0
+## How far the mouth reaches ahead of the body's middle on all fours, measured (see reach()).
+var _reach := -1.0
 var glb := false
 
 var _hips: Node3D
@@ -415,6 +417,7 @@ func _make_leg(parent: Node3D, at: Vector3, skin: Material, side: float, front: 
 
 func tick(delta: float) -> void:
 	_t += delta
+	_measure_reach()
 	_tick_orb()
 	_tick_lying()
 	if glb:
@@ -504,6 +507,22 @@ func _tick_glb() -> void:
 	if Assets.anim_name(KEY, clip) == "":
 		clip = "walk" if moving else "idle"
 	_model.play(clip, rate, 0.15)
+
+
+## Flat metres from the body's middle to its mouth, standing on all fours with its head up. Measured
+## off the body itself whenever it is in that pose (so the art's model and the placeholder each give
+## their own), and a sensible guess until it has been.
+func reach() -> float:
+	return _reach if _reach > 0.0 else 1.35
+
+
+func _measure_reach() -> void:
+	if rear > 0.01 or head_down > 0.01 or lying > 0.01 or daze > 0.01 or mouth == null or not mouth.is_inside_tree():
+		return
+	var o: Vector3 = (_model as Node3D).global_position if _model != null else global_position
+	var mw: Vector3 = mouth_world().origin
+	var r := Vector2(mw.x - o.x, mw.z - o.z).length()
+	_reach = r if _reach < 0.0 else lerpf(_reach, r, 0.1)
 
 
 ## The art poser's own inputs (dog_rig.gd): the head tracks its surgeon, ears pin back while it

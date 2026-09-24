@@ -1484,6 +1484,14 @@ func _dog_hold(rg) -> void:
 	_dog_held = holder
 
 
+## How far its mouth reaches ahead of its middle on all fours (flat metres), as measured off the body
+## it actually has (service_dog_rig.gd reach()). The brain's offer and pick-up distances use it.
+func dog_reach() -> float:
+	if model != null and model.dog != null and model.dog.has_method("reach"):
+		return float(model.dog.reach())
+	return 1.35
+
+
 ## Host (the brain puts an item down from here): its mouth, this frame.
 func dog_mouth_world() -> Vector3:
 	if model != null and model.dog != null:

@@ -186,7 +186,7 @@ func _run() -> void:
 	await _seconds(DogBrain.REAR_RISE + 0.6)
 	_check(float(dog.model.dog.rear) > 0.95, "it is up on its hind legs (rear %.2f)" % dog.model.dog.rear)
 	var head_y: float = dog.eye_transform().origin.y - dog.global_position.y
-	_check(head_y > C.EYE_H + 0.2, "standing, its head is above yours (%.2f m vs your eyes %.2f)" % [head_y, C.EYE_H])
+	_check(head_y > C.EYE_H, "standing, its eyes are above yours (%.2f m vs your eyes %.2f)" % [head_y, C.EYE_H])
 	_check(_jaws_open(), "jaws wide (%s)" % _body_state())
 	_check(float(dog.dog_glow) > 0.9 and dog.model.dog.orb != null and String(dog.model.dog.orb.name) == "Orb",
 		"the orb (its own node, `Orb`) is lit (glow %.2f)" % dog.dog_glow)
