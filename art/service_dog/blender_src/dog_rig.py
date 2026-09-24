@@ -405,25 +405,36 @@ def run_pose(f, n=30):
     return p
 
 
+## Revision 11: `biped_drain_pose`'s own, smaller spine1/chest additions (a body-forward lean, not
+## `biped_stand_pose`'s 0.14 / 0.10) -- see the pose's own docstring for why. Front-leg cancellation
+## below has to use THIS cumulative pitch, not the shared `BIPED_CHEST_PITCH` (which is derived from
+## `biped_stand_pose`'s own, larger, spine1/chest and would leave the arms hanging wrong once the
+## torso itself pitches less).
+DRAIN_SPINE1_PITCH = 0.06
+DRAIN_CHEST_PITCH = 0.05
+DRAIN_CHEST_TOTAL = BIPED_PELVIS_PITCH + DRAIN_SPINE1_PITCH + DRAIN_CHEST_PITCH
+
+
 def biped_drain_pose():
     """Soul-drain reared pose (Zach: the attack is now a dementor-style drain, not a chase/bite).
-    Same weight-bearing hind-leg stance as `biped_stand_pose`, but the jaw is held wide open, and
-    the front legs hang loose at the sides instead of curling up tight against the chest -- a tidy
-    "tucked forepaws" read is wrong for something looming and draining. This is the shared base for
-    RearUp's end state, DrainIdle, UprightWalk and DropDown's start state.
+    Same weight-bearing hind-leg stance as `biped_stand_pose` (pelvis pitch, hind-leg bend and
+    `_pelvis_loc` grounding all unchanged, so `GROUND_DROP` still applies), but the jaw is held wide
+    open, the front legs hang loose at the sides instead of curling up tight against the chest, and
+    the torso leans slightly forward rather than standing bolt upright -- see below.
 
-    The neck/head cancellation angles below are copied EXACTLY from `biped_stand_pose` (-0.15 /
-    -0.10 / +0.10), not halved or otherwise re-tuned: `chest`'s cumulative world-space pitch here is
-    the same ~1.79 rad as `biped_stand_pose`'s, and it is `neck1`/`neck2`/`head`'s job to cancel
-    enough of that pitch back out that the head reads as upright, level and facing forward instead
-    of carrying the torso's backward lean all the way up into an over-extended backbend. A first
-    pass here used smaller (-0.05 / -0.05 / +0.05) values on the theory that the head should be
-    "level, not lowered" for the look-track layer -- that under-cancelled the torso's pitch and
-    read exactly as the backward arc Zach flagged (see Revision 10)."""
+    Revision 10 matched `neck1`/`neck2`/`head` exactly to `biped_stand_pose`'s (-0.15 / -0.10 /
+    +0.10) to stop the head over-rotating into a backward arc; that fixed the worst of it but Zach
+    found the pose still leaned back, just less. Rather than push the neck cancellation even
+    further (fighting the torso's pitch with an ever-larger counter-rotation, which is what created
+    the original bug), this pose gives `spine1`/`chest` their OWN, smaller additions
+    (`DRAIN_SPINE1_PITCH`/`DRAIN_CHEST_PITCH`, 0.06/0.05 instead of `biped_stand_pose`'s 0.14/0.10)
+    on top of the same pelvis pitch -- a genuine forward lean of the upper body, not just a neck
+    trick -- so the same neck/head angles now land a few degrees past level (a slight, deliberate
+    forward lean) instead of needing to cancel as much pitch in the first place."""
     p = {}
     add(p, 'pelvis', ('X', BIPED_PELVIS_PITCH))
-    add(p, 'spine1', ('X', 0.14))
-    add(p, 'chest', ('X', 0.10))
+    add(p, 'spine1', ('X', DRAIN_SPINE1_PITCH))
+    add(p, 'chest', ('X', DRAIN_CHEST_PITCH))
     add(p, 'neck1', ('X', -0.15))
     add(p, 'neck2', ('X', -0.10))
     add(p, 'head', ('X', 0.10))
@@ -436,9 +447,9 @@ def biped_drain_pose():
         add(p, 'shin.' + side, ('X', msign * 1.05))
         add(p, 'hock.' + side, ('X', msign * -0.35))
         add(p, 'htoe.' + side, ('X', msign * 0.15))
-        # Loose hang, not a tight curl: cancel the chest's cumulative pitch down to just past
-        # vertical, then only a slight, relaxed elbow/wrist bend -- limp, not tucked.
-        add(p, 'upperarm.' + side, ('X', msign * (-BIPED_CHEST_PITCH + 0.15)))
+        # Loose hang, not a tight curl: cancel THIS pose's own (smaller) chest pitch down to just
+        # past vertical, then only a slight, relaxed elbow/wrist bend -- limp, not tucked.
+        add(p, 'upperarm.' + side, ('X', msign * (-DRAIN_CHEST_TOTAL + 0.15)))
         add(p, 'forearm.' + side, ('X', msign * -0.35))
         add(p, 'pastern.' + side, ('X', msign * 0.15))
     add(p, 'tail1', ('X', -0.35))

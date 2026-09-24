@@ -310,6 +310,27 @@ func _run_shots() -> void:
 			_look_from(head_world4 - fwd * 0.55 + side * 0.15 + Vector3(0, 0.05, 0), head_world4)
 			await get_tree().process_frame
 			await _shot("orb_behind_%s" % tag)
+			# A second, more realistic "behind" check: a human-eye-height (1.6 m), several-metres-back
+			# camera looking at the dog's back/head from ground level -- not the close, head-height
+			# camera above, which can catch the open gap from angles a real player standing behind and
+			# below the (much taller, reared) dog never would.
+			_look_from(head_world4 - fwd * 2.2 + side * 0.4 + Vector3(0, 1.6 - head_world4.y, 0), head_world4)
+			await get_tree().process_frame
+			await _shot("orb_behind_far_%s" % tag)
+		poser.set_drain_glow(0.0)
+
+		# Revision 11: Zach flagged the orb as reading like it sat on the neck's exterior rather than
+		# inside the mouth. Print the raw bone/orb world positions and take a shot looking straight
+		# into the open mouth, close, from below and to the side, to confirm it is actually recessed
+		# inside the jaw opening.
+		poser.set_drain_glow(1.0)
+		var jaw_bi5: int = model.skeleton.find_bone("jaw")
+		var jaw_world5: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(jaw_bi5).origin
+		var orb_world5: Vector3 = orb.global_position if orb != null else Vector3.ZERO
+		print("[dog_lab] head_world=", head_world4, " jaw_world=", jaw_world5, " orb_world=", orb_world5)
+		_look_from(orb_world5 + fwd * 0.20 + side * 0.05 + Vector3(0, -0.28, 0), orb_world5 + fwd * 0.03)
+		await get_tree().process_frame
+		await _shot("orb_into_mouth")
 		poser.set_drain_glow(0.0)
 
 	print("[dog_lab] ------------------------------------------")

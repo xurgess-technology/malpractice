@@ -125,9 +125,12 @@ func _build_orb(sk: Skeleton3D) -> void:
 	mi.name = "Orb"
 	mi.mesh = mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# Recessed into the throat, behind the jaw hinge (negative along the bone's own length axis) and
-	# down into the mouth cavity -- deep enough that the skull mass blocks it from a rear view.
-	mi.position = Vector3(0, -0.015, -0.075)
+	# Recessed a small way into the jaw's own open gap (measured empirically off the built rig, not
+	# guessed): far enough forward, along the jaw bone's own length axis, to sit visibly inside the
+	# opening from the front rather than on the throat's exterior surface, but still tucked under
+	# the upper skull's overhang from a normal (human-eye-height, several metres back) viewing
+	# angle -- see art/service_dog/README.md Revision 11 for the front/into-mouth confirmation shots.
+	mi.position = Vector3(0, -0.015, 0.10)
 	attach.add_child(mi)
 
 

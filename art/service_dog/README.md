@@ -3,8 +3,9 @@
 **Built 2026-09-24, art side of the Service Dog feature; revised eight times the same day after
 Zach's reviews (see "Revision 1" through "Revision 8" below), then given a ninth pass the same day
 for a design change (see "Revision 9" below): the attack is now a dementor-style soul-drain, not a
-chase/bite; and a tenth pass fixing three problems Zach found in that pass (see "Revision 10"
-below).** The model is `assets/models/monsters/service_dog/service_dog.glb` (asset key
+chase/bite; a tenth pass fixing three problems Zach found in that pass (see "Revision 10" below);
+and an eleventh pass fixing two more (see "Revision 11" below).** The model is
+`assets/models/monsters/service_dog/service_dog.glb` (asset key
 `monster/service_dog`; skinned mesh, 2 objects, 6 materials, 11 clips), registered in
 `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is its `SkeletonModifier3D` (head-tracking, idle
 "wrongness", continuous tail wag, the throat orb's glow hook), following the Night Nurse / Hive
@@ -397,6 +398,42 @@ Zach reviewed Revision 9's drain sequence and flagged three real problems, all f
 Checked with `dog_orb_glow_off.png`/`_on.png` (front, at rest and lit) and `dog_orb_behind_off.png`/
 `_on.png` (directly behind, at rest and lit -- the orb is not visible in either), plus the corrected
 `dog_rear_up_00/50/100.png` sequence, `dog_drain_idle.png` and the standard `monster_lab.tscn`
+179-check regression (0 failed).
+
+## Revision 11 (2026-09-24, the orb read as sitting on the neck, and RearUp still leaned back)
+
+Zach looked at Revision 10 again and flagged two more problems:
+
+1. **The orb read as sitting on the back of the neck, not inside the mouth.** Checked directly by
+   printing the `jaw` bone's own world position and the orb's, and by adding a debug probe at the
+   `jaw` bone's exact pivot with zero offset: the pivot itself sits at the base of the mouth's own
+   hinge, but Revision 10's offset (`Vector3(0, -0.015, -0.075)`) moved AWAY from the visible opening
+   (recessed toward the throat, past the point where the jaw's two prongs separate), which is why it
+   read as sitting on the closed exterior skin below the jaw rather than inside the open gap. Fixed
+   by moving it the other way along the jaw bone's own length axis (empirically confirmed which local
+   axis that is, by comparing a few test offsets' world positions against the bone's own pivot) to
+   `Vector3(0, -0.015, 0.10)`, which sits it visibly inside the mouth's own opening. Confirmed with a
+   new `dog_orb_into_mouth.png` shot, framed from below and looking up into the open jaws (roughly how
+   a player, now shorter than the reared dog, would actually see it) -- the orb sits tucked under the
+   jaw's own overhang rather than floating on a flat exterior surface. This position is close enough
+   to the opening that a close, head-height "directly behind" test camera can catch a faint glimpse of
+   it at a steep grazing angle (`dog_orb_behind_on.png`); a second, more realistic behind check at
+   human eye height and several metres back (`dog_orb_behind_far_*.png`, the distance and elevation an
+   actual player standing behind this now-much-taller reared dog would be at) does not.
+2. **`RearUp` still leaned back, just less than Revision 10's fix.** Rather than tune the neck
+   cancellation angles even further (which is what caused the original bug -- see Revision 10),
+   `biped_drain_pose()` now gives `spine1`/`chest` their OWN, smaller additions
+   (`DRAIN_SPINE1_PITCH`/`DRAIN_CHEST_PITCH`, 0.06/0.05 rad instead of `biped_stand_pose()`'s
+   0.14/0.10) on top of the same pelvis pitch: a genuine forward lean of the torso, not a neck trick,
+   per Zach's suggestion. `neck1`/`neck2`/`head` keep the same angles as `biped_stand_pose()`'s
+   (unchanged from Revision 10), and now land a few degrees past level -- a slight, deliberate forward
+   lean instead of a backward arc. The front-leg cancellation, which depends on the chest's cumulative
+   pitch, now uses this pose's own `DRAIN_CHEST_TOTAL` rather than the shared `BIPED_CHEST_PITCH`
+   constant (which is still `biped_stand_pose()`'s own, different, value), so the arms still hang
+   correctly relative to the new lean.
+
+Checked with the corrected `dog_rear_up_00/50/100.png` sequence (now a genuine forward lean, not a
+backbend, at the top of the rise) and the orb shots above, plus the standard `monster_lab.tscn`
 179-check regression (0 failed).
 
 ## Folder
