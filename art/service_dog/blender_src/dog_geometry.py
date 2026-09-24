@@ -539,17 +539,26 @@ def build_vest(nseg=16):
         sw = [{'chest': 1.0}, {'chest': 1.0}, {'chest': 0.6, 'spine1': 0.4}]
         p.add_tube(pts, srx, srz, 8, sw, cap_start=True, cap_end=True, uv_v_range=(0.65, 0.8))
 
-    # First-aid iconography. Revision 6, per Zach: back to the middle of the vest (not the flanks),
-    # and painted/printed rather than a raised appliqué -- flush with the surface, decal-thin
-    # (`thickness` a third of Revision 3's already-thin patches), centred on top of the body at its
-    # own local radius so it still follows the vest's curve instead of floating above it.
+    # First-aid iconography. Revision 6 made this a flush decal (per Zach: back to the middle of
+    # the vest, painted/printed rather than a raised appliqué); Revision 7 fixes two bugs that
+    # combination introduced and made the cross effectively invisible in Zach's actual screenshots:
+    # (1) the decal's own bottom face sat EXACTLY on the vest body's surface (both at
+    # `ccz + MARGIN`), so the two coincident surfaces z-fought instead of the cross cleanly sitting
+    # on top -- `STANDOFF` below lifts the decal a hair clear of the surface it is painted onto, and
+    # (2) `Dog_Vest_Cross` shared the exact same red channel as `Dog_Vest_Clean` (0.62 in both),
+    # differing only in green/blue, which washed out under directional lighting (fixed in
+    # dog_materials.py: a true bright red now, higher red channel than the vest, near-zero
+    # green/blue). Kept flush rather than a thick appliqué, but erred toward legibility over an
+    # imperceptibly-thin decal: `DECAL` is back near Revision 3's original, clearly-visible
+    # thickness, and the cross itself is a little larger.
     cross_y = _y(0.45)
     ccx, ccz = _coat_radius(cross_y)
-    cross_center = Vector((0.0, cross_y, CHEST.z + ccz + MARGIN))
+    STANDOFF = 0.0015
+    cross_center = Vector((0.0, cross_y, CHEST.z + ccz + MARGIN + STANDOFF))
     cross_right = Vector((1.0, 0.0, 0.0))
     cross_up = Vector((0.0, 1.0, 0.0))
-    DECAL = 0.0016
-    w, big = 0.011, 0.029   # plus-sign arm half-width, half-length: one solid "+" outline, not
+    DECAL = 0.005
+    w, big = 0.014, 0.036   # plus-sign arm half-width, half-length: one solid "+" outline, not
     # two crossed boxes (their overlap left a visible seam -- see `add_flat_poly`'s docstring).
     plus = [(big, w), (w, w), (w, big), (-w, big), (-w, w), (-big, w),
             (-big, -w), (-w, -w), (-w, -big), (w, -big), (w, -w), (big, -w)]
@@ -559,7 +568,7 @@ def build_vest(nseg=16):
     badge_normal = Vector((0.75, 0.0, 0.66)).normalized()   # forward-and-out, the vest's side face
     badge_right = Vector((0.0, 1.0, 0.0))
     badge_up = badge_normal.cross(badge_right).normalized()
-    badge_center = Vector((bcx * 0.78, badge_y, CHEST.z + bcz * 0.35)) + badge_normal * MARGIN
+    badge_center = Vector((bcx * 0.78, badge_y, CHEST.z + bcz * 0.35)) + badge_normal * (MARGIN + STANDOFF)
     p.add_patch(badge_center, badge_right, badge_up, 0.024, 0.024, DECAL, {'chest': 1.0}, VEST_BADGE_MAT)
 
     # Deterministic wear mask, kept to a minority of the surface so the garment itself always

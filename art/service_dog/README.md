@@ -1,7 +1,7 @@
 # The Service Dog: Blender sources
 
-**Built 2026-09-24, art side of the Service Dog feature; revised six times the same day after
-Zach's reviews (see "Revision 1" through "Revision 6" below).** The model is
+**Built 2026-09-24, art side of the Service Dog feature; revised seven times the same day after
+Zach's reviews (see "Revision 1" through "Revision 7" below).** The model is
 `assets/models/monsters/service_dog/service_dog.glb` (asset key `monster/service_dog`; skinned mesh,
 2 objects, 6 materials, 7 clips), registered in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is
 its `SkeletonModifier3D` (head-tracking, idle "wrongness"), following the Night Nurse / Hive
@@ -242,6 +242,32 @@ that the earlier one still looks fine): `godot_shots/dog_vest_leg_clear_idle_lef
 `_walk_left/right.png`, `_standup_left/right.png` -- no clipping in any of the six. New close-up of
 the centred, flush cross: `godot_shots/dog_vest_closeup.png` and `dog_vest_cross_patch.png`.
 
+## Revision 7 (2026-09-24, the Revision 6 cross was not actually visible)
+
+Zach confirmed Revision 6's cross was not a rendering fluke -- it genuinely could not be seen in
+`dog_vest_closeup.png` or `dog_vest_cross_patch.png`. Two real bugs, found by actually looking at
+close-up renders rather than trusting that the geometry existed:
+
+1. **`Dog_Vest_Cross`'s colour shared the exact same red channel as `Dog_Vest_Clean`'s** -- `(0.62,
+   0.03, 0.02)` against the vest's `(0.62, 0.24, 0.05)`. They only differed in green/blue, which
+   washed out under directional lighting; from a normal viewing angle the two were nearly the same
+   brightness of the same hue. Fixed in `dog_materials.py`: a true bright red, `(0.85, 0.04, 0.03)`
+   -- a higher red channel than the vest itself, not just a darker version of it.
+2. **The decal's own bottom face sat exactly on the vest body's surface.** Revision 6's `cross_center`
+   used `CHEST.z + ccz + MARGIN` -- precisely the vest's own outer radius there -- so the patch's
+   bottom cap and the vest's surface beneath it were two coincident polygons z-fighting for the same
+   pixels, which on top of `DECAL`'s already-thin extrusion could lose the fight entirely. Added a
+   `STANDOFF` (0.0015 m) so the decal sits a hair clear of the surface it is painted onto, and
+   brought `DECAL` back up near Revision 3's original, clearly-visible thickness (Zach: "if flush and
+   visible are in tension, err toward visibility") -- still much thinner than an appliqué, but no
+   longer imperceptible. Made the cross itself a little larger for the same reason.
+
+The camera in `tools/dog_lab.gd`'s `vest_cross_patch` shot was also part of the problem: it framed
+the vest side-on, level with the chest bone, while the cross sits on TOP of the vest at roughly the
+chest bone's height plus the vest's own local radius -- out of frame regardless of how visible the
+decal itself was. Retargeted at that actual position. See the new
+`godot_shots/dog_vest_cross_patch.png`: the cross is unambiguous.
+
 ## Folder
 
 | Path | What |
@@ -425,7 +451,7 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
 
 ## Stats
 
-- **Triangles:** `Dog_Body` 986 + `Dog_Vest` 324 = **1,310** for the whole model (no bake source, so
+- **Triangles:** `Dog_Body` 986 + `Dog_Vest` 344 = **1,330** for the whole model (no bake source, so
   no separate high-poly count).
 - **Materials:** 6 flat Principled BSDF (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`, `Dog_Vest_Worn`,
   `Dog_Vest_Cross`, `Dog_Vest_Badge`), no textures.

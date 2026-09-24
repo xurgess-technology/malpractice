@@ -171,12 +171,14 @@ func _run_shots() -> void:
 	await _play_and_settle("Idle", 0.2)
 	await _shot("vest_closeup")
 
-	# A three-quarter angle low on the chest, aimed at the chest bone, framing the centred cross
-	# decal (Revision 6: back to the middle of the vest, flush/painted rather than a raised patch)
-	# and the badge, plus the vest's front edge clearing the neck.
+	# Looking down onto the top of the vest, where the centred cross decal actually sits (Revision
+	# 7: it is on TOP of the vest body, roughly chest-bone height plus the vest's own local radius,
+	# not level with the chest bone itself -- framing it side-on like the old shot left it out of
+	# frame, which is part of why it read as "not there" even once the colour/thickness were fixed).
 	var chest_bi: int = model.skeleton.find_bone("chest")
 	var chest_world: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(chest_bi).origin if chest_bi >= 0 else Vector3(0, 1.05, 0.2)
-	_look_from(chest_world + Vector3(0.45, -0.35, 0.15), chest_world + Vector3(0.0, 0.05, -0.05))
+	var cross_target: Vector3 = chest_world + Vector3(0.0, 0.16, 0.0)
+	_look_from(cross_target + Vector3(0.30, 0.30, 0.14), cross_target)
 	await _shot("vest_cross_patch")
 
 	# A head-on-neck closeup: the skull volume between the neck and the jaw, the ears attached to

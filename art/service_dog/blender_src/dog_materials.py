@@ -57,7 +57,12 @@ def vest_worn_material():
 
 
 def vest_cross_material():
-    return _principled('Dog_Vest_Cross', (0.62, 0.03, 0.02), 0.5)
+    # Revision 7: the old (0.62, 0.03, 0.02) shared the exact same red channel as
+    # Dog_Vest_Clean's (0.62, 0.24, 0.05) -- the two colours only differed in green/blue, which
+    # washed out under directional lighting and made the cross unreadable at any distance. A true
+    # bright red (higher red channel than the vest, near-zero green/blue) is unambiguous against
+    # the vest's orange regardless of lighting.
+    return _principled('Dog_Vest_Cross', (0.85, 0.04, 0.03), 0.45)
 
 
 def vest_badge_material():
