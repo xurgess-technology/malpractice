@@ -187,7 +187,7 @@ func _run() -> void:
 	_check(float(dog.model.dog.rear) > 0.95, "it is up on its hind legs (rear %.2f)" % dog.model.dog.rear)
 	var head_y: float = dog.eye_transform().origin.y - dog.global_position.y
 	_check(head_y > C.EYE_H + 0.2, "standing, its head is above yours (%.2f m vs your eyes %.2f)" % [head_y, C.EYE_H])
-	_check(float(dog.model.dog._jaw.rotation.x) > 0.8, "jaws wide (%.2f rad)" % dog.model.dog._jaw.rotation.x)
+	_check(_jaws_open(), "jaws wide (%s)" % _body_state())
 	_check(float(dog.dog_glow) > 0.9 and dog.model.dog.orb != null and String(dog.model.dog.orb.name) == "Orb",
 		"the orb (its own node, `Orb`) is lit (glow %.2f)" % dog.dog_glow)
 	_check(dog.dog_draining() and dog._dog_thread != null and dog._dog_thread.visible, "the thread runs from your mouth to its throat")
@@ -237,7 +237,7 @@ func _run() -> void:
 	var hp2: int = me.hp
 	await _seconds(1.0)
 	_check(me.hp == hp2 and fx != null and float(fx.amount) == 0.0, "no more hearts go, and your effects have cleared (fx %.2f)" % (fx.amount if fx != null else -1.0))
-	_check(float(dog.model.dog.rear) < 0.05 and float(dog.model.dog._jaw.rotation.x) < 0.3, "it is back on all fours, jaws shut (rear %.2f)" % dog.model.dog.rear)
+	_check(float(dog.model.dog.rear) < 0.05 and not _jaws_open(), "it is back on all fours, jaws shut (rear %.2f, %s)" % [dog.model.dog.rear, _body_state()])
 	await _seconds(0.6)
 	_check(float(dog.dog_glow) < 0.3, "the orb dims (glow %.2f)" % dog.dog_glow)
 	fetched = await _until(func(): return String(dog.dog_carry) == "heart_monitor", 25.0)
@@ -350,6 +350,22 @@ func _static_checks() -> void:
 	rep = probe.report()
 	_check(not rep.has("ck"), "...and no other monster pays for them")
 	probe.free()
+
+
+## Jaws wide, whichever body it has: the placeholder's jaw pivot, or (the real model) a standing clip
+## playing, whose jaws the art opens.
+func _jaws_open() -> bool:
+	var rg = dog.model.dog
+	if bool(rg.glb):
+		return ["rear_up", "drain_idle", "upright_walk"].has(String(dog.model.current()))
+	return float(rg._jaw.rotation.x) > 0.8
+
+
+func _body_state() -> String:
+	var rg = dog.model.dog
+	if bool(rg.glb):
+		return "real model, clip '%s'" % dog.model.current()
+	return "placeholder, jaw %.2f rad" % rg._jaw.rotation.x
 
 
 ## On all fours: a shove stuns it like a Hive (so the needle is offered), and it gets up again.

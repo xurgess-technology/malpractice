@@ -1368,8 +1368,10 @@ func _dog_visual(delta: float) -> void:
 		cbt.stun_pose(self, rg, e)
 	rg.set_drain_glow(dog_glow)
 	var look := 0.0
+	rg.look_target = Vector3.INF
 	if target_node != null:
 		look = yaw_to(target_node.global_position)
+		rg.look_target = target_node.global_position + Vector3.UP * C.EYE_H
 	rg.look_yaw = lerpf(float(rg.look_yaw), look, clampf(delta * 5.0, 0.0, 1.0))
 	rg.tick(delta)
 	_dog_hold(rg)

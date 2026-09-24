@@ -36,6 +36,10 @@ extends Node3D
 const Shapes := preload("res://scripts/monsters/shapes.gd")
 
 const KEY := "monster/service_dog"
+## The art track's own poser for that GLB (service-dog-art: a SkeletonModifier3D `DogPoser` with the
+## throat orb, the tail wag, the head-look). When the file is there, the GLB is built through it and
+## this node drives it; when it is not, the GLB (if any) is built generically below.
+const ART_RIG := "res://scripts/monsters/dog_rig.gd"
 
 ## Proportions (metres). Hips a hair lower than the shoulders; everything too long.
 const HIP_Y := 1.03
@@ -69,6 +73,9 @@ var rear := 0.0
 var head_down := 0.0
 var growl := 0.0
 var look_yaw := 0.0
+## World point the head looks at (its surgeon's face), Vector3.INF for none. The art poser tracks it
+## with bones; the placeholder only uses look_yaw.
+var look_target := Vector3.INF
 var carrying := false
 var lying := 0.0
 var daze := 0.0
@@ -86,6 +93,9 @@ var _orb_mesh: MeshInstance3D = null
 var _orb_mat: StandardMaterial3D = null
 var _orb_light: OmniLight3D = null
 var _last_rear := 0.0
+## The art track's DogPoser (dog_rig.gd) when the GLB was built through it, else null.
+var poser: Node = null
+var _look_w := 0.0
 var glb := false
 
 var _hips: Node3D
@@ -117,6 +127,8 @@ static func build(model: Node3D) -> Node3D:
 func _try_glb(model: Node3D) -> bool:
 	if not Assets.has(KEY):
 		return false
+	if ResourceLoader.exists(ART_RIG) and _try_art_rig(model):
+		return true
 	var root: Node3D = Assets.spawn(KEY)
 	if root == null:
 		return false
@@ -153,6 +165,32 @@ func _try_glb(model: Node3D) -> bool:
 	head.name = "Head"
 	head.rotation.y = PI   # Head's +Z is the face; the model faces -Z
 	(hb if hb != null else self).add_child(head)
+	return true
+
+
+## The art track's build: its dog_rig.gd spawns the GLB, points model.rig / skeleton / anim at it and
+## adds its DogPoser (the orb, `Head`). Its root is then moved under this node so the lying roll
+## applies to it, and this node takes the poser's orb and head as its own sockets.
+func _try_art_rig(model: Node3D) -> bool:
+	var art: GDScript = load(ART_RIG) as GDScript
+	if art == null or not bool(art.call("build", model)):
+		return false
+	glb = true
+	var root: Node3D = model.rig
+	if root != null and root.get_parent() != self:
+		root.reparent(self, false)
+	var sk: Skeleton3D = model.skeleton
+	poser = sk.get_node_or_null("DogPoser") if sk != null else null
+	orb = poser.get_node_or_null("OrbAttach/Orb") as Node3D if poser != null else null
+	if orb == null and root != null:
+		orb = root.find_child("Orb", true, false) as Node3D
+	head = sk.get_node_or_null("Head") as Node3D if sk != null else null
+	var site := root.find_child("Site_mouth", true, false) as Node3D if root != null else null
+	mouth = site if site != null else _bone_node(sk, ["jaw", "head"], "MouthBone")
+	if mouth == null:
+		mouth = Node3D.new()
+		mouth.position = Vector3(0.0, 1.2, -0.9)
+		add_child(mouth)
 	return true
 
 
@@ -324,6 +362,8 @@ func _add_orb_light(parent: Node3D) -> void:
 ## 0..1: the orb's brightness (Monster sets it every frame from the replicated `og`).
 func set_drain_glow(v: float) -> void:
 	drain_glow = clampf(v, 0.0, 1.0)
+	if poser != null and poser.has_method("set_drain_glow"):
+		poser.set_drain_glow(drain_glow)   # the art's own orb material
 
 
 ## Where the orb is this frame (the thread's far end).
@@ -438,6 +478,7 @@ func _tick_lying() -> void:
 func _tick_glb() -> void:
 	if _model == null or not _model.has_method("play"):
 		return
+	_tick_poser()
 	var rising := rear > _last_rear + 0.0001
 	var falling := rear < _last_rear - 0.0001
 	_last_rear = rear
@@ -453,12 +494,31 @@ func _tick_glb() -> void:
 	elif rear >= 0.98:
 		clip = "upright_walk" if moving else "drain_idle"
 		rate = clampf(speed / 1.8, 0.6, 2.0) if moving else 1.0
+	elif head_down > 0.3 and not moving and Assets.anim_name(KEY, "place") != "":
+		clip = "place"   # the art's PlaceItem: setting an item down, or nosing one up
+	elif growl > 0.3 and not moving and Assets.anim_name(KEY, "growl") != "":
+		clip = "growl"
 	elif moving:
 		clip = "walk"
 		rate = clampf(speed / 1.4, 0.5, 2.5)
 	if Assets.anim_name(KEY, clip) == "":
 		clip = "walk" if moving else "idle"
 	_model.play(clip, rate, 0.15)
+
+
+## The art poser's own inputs (dog_rig.gd): the head tracks its surgeon, ears pin back while it
+## growls or stands, and a low constant tremor (the art's "wrong stillness").
+func _tick_poser() -> void:
+	if poser == null:
+		return
+	var sk: Skeleton3D = _model.skeleton if _model != null else null
+	var want := 1.0 if look_target.is_finite() and lying < 0.5 else 0.0
+	_look_w = move_toward(_look_w, want, 0.05)
+	if look_target.is_finite() and sk != null:
+		poser.look_at = sk.global_transform.affine_inverse() * look_target   # skeleton space
+	poser.look_weight = _look_w * (1.0 - head_down)
+	poser.ear_alert = maxf(growl, rear)
+	poser.twitch = 0.35 * (1.0 - lying)
 
 
 func mouth_world() -> Transform3D:
