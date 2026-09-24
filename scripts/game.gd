@@ -1583,7 +1583,7 @@ func player_faceplanted(p: Node) -> void:
 ## (toss()) and the item replicates like any other drop. A charged placebo pill is special: only
 ## one pill leaves the bottle (the rest stays in hand) and it is tracked for a mid-air hit.
 const THROW_MIN_SPEED := 1.2
-const THROW_MAX_SPEED := 11.0
+const THROW_MAX_SPEED := 18.0
 const THROW_MIN_UP := 0.6
 const THROW_MAX_UP := 2.6
 
