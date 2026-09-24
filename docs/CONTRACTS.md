@@ -638,6 +638,19 @@ lanky (shoulders ~1.1 m, head ~1.5 m, ~2.4 m standing). `build(model)` prefers a
 is a node named `Orb` (or `Site_orb` / a `throat` bone as its socket, where ours goes); the mouth is
 `Site_mouth` or a BoneAttachment on bone `jaw`/`head`.
 
+**With the art track's model** (`service-dog-art`: `dog_rig.gd`'s `DogPoser`, checked against
+its Revision 11): when `res://scripts/monsters/dog_rig.gd` exists, `service_dog_rig.gd` builds the
+GLB through that script's `build(model)`, reparents the GLB under itself (so the lying roll applies),
+takes the poser's `OrbAttach/Orb` and `Head` as its sockets (`set_drain_glow` forwards to the
+poser's orb material), feeds the poser `look_at` (skeleton space) / `look_weight` / `ear_alert` /
+`twitch`, and plays the art's `place` / `growl` clips where they fit. One-shot clips (`rear_up`,
+`drop_down`, `place`) are time-scaled to the brain's `REAR_RISE` / `REAR_DROP` / `OFFER_TIME`
+whatever length they were authored at. Offer and pick-up distances come from the body's measured
+mouth reach (`reach()`, `Monster.dog_reach()`), not the placeholder's neck. `model.dog` is always
+this wrapper, never the poser: merging `service-dog-art` means taking this branch's side of
+`monster_model.gd` and dropping the art's own `DogRig.build` case in `setup()` (keep its
+`eye_offset` line).
+
 **No HUD, on purpose** (Zach, 2026-09-24): no prompt text and no countdown on screen. The tells are
 the dog's: the item set at your feet, the growl, its stare, standing up, the orb and the thread.
 **Doors**: it noses hinged doors open in any travelling mode. **Sounds**: `monsters_dog_growl`,
