@@ -125,6 +125,11 @@ const SETUPS := {
 	# at your feet. The vats have always been ordinary bulky items; their bench's collider used to
 	# bury them, so E never saw them at all.
 	"vats": {"seed": 4242, "stage": "_vats"},
+	# SERVICE DOG (placeholder body): a wing corridor, empty hands, and the Service Dog a few metres
+	# off with a heart monitor in its mouth, looking at you. It walks up and sets it at your feet;
+	# pick it up and THROW it (hold the drop key, not a tap) before the clock runs out, or it rears.
+	# A defibrillator lies nearby for its next round. `-Count 2`: your teammate's throw counts too.
+	"service_dog": {"seed": 4242, "stage": "_service_dog"},
 }
 
 
@@ -1379,3 +1384,49 @@ static func _bleed(game: Game) -> void:
 			break
 	place(game, spot, look)
 	print("[review] bleed: standing at %v, %.1f m from it" % [spot, spot.distance_to(at)])
+
+
+## SERVICE DOG: standing in a wing corridor (a monster spawn, so a hallway the dog may wander) with
+## empty hands, the Service Dog a few metres down it facing you, a heart monitor in its mouth. It
+## comes up, puts it down in front of you and growls; the fetch clock is at the top of the screen.
+## A charged throw (hold the drop key) of that heart monitor satisfies it; let the clock run out and
+## it rears up and comes for you until someone throws it. You cannot lose the run (no game over);
+## you CAN be hit. A defibrillator on the floor behind you is the next thing it will go and fetch.
+static func _service_dog(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game._clear_monsters()
+	await tree.physics_frame
+	var base: Vector3 = game.clock_pos()
+	var spawns: Array = game.level_info.get("monster_spawns", [])
+	if not spawns.is_empty():
+		base = spawns[0]
+	var out := open_direction(game, base + Vector3.UP * 1.2, 14.0)
+	var stand: Vector3 = game._floor_at(base)
+	place(game, stand, stand + out * 6.0 + Vector3.UP * 1.2)
+	clear_hands(game)
+	p.set_flashlight(true)
+	var at: Vector3 = game._floor_at(base + out * 7.0)
+	if not game._point_is_clear(at + Vector3.UP * 1.0):
+		at = game._floor_at(base + out * 4.5)
+	var dog = game._add_monster("service_dog", at)
+	dog.rotation.y = atan2(out.x, out.z)   # models face -Z: this has it facing back up the corridor at you
+	dog.brain.give({"kind": "heart_monitor", "count": 1, "v": 90})
+	# Somewhere clear on this side of it (behind you is often a wall: spawns sit near corridor ends).
+	var side := out.cross(Vector3.UP).normalized()
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	for c in [base - out * 2.0, base + side * 1.1, base - side * 1.1, base + out * 2.5 + side * 0.9, base + out * 2.5]:
+		var f: Vector3 = game._floor_at(c)
+		var q := PhysicsRayQueryParameters3D.create(stand + Vector3.UP * 0.5, f + Vector3.UP * 0.5)
+		q.collision_mask = C.L_WORLD
+		if absf(f.y - stand.y) < 0.3 and game._point_is_clear(f + Vector3.UP * 0.5) and space.intersect_ray(q).is_empty():
+			floor_item(game, "defibrillator", f, 1, 110)
+			break
+	await tree.physics_frame
+	print("[review] service_dog: the dog %.1f m down the corridor with a heart monitor" % stand.distance_to(at))
+	game.say("It wants to play. Pick up what it brings you and THROW it (hold the drop key).", 9.0)

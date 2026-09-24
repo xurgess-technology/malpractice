@@ -45,6 +45,11 @@ var _scan_banner_until := -1.0
 var _scan_banner_name := ""
 var _card_seen: Dictionary = {}
 const ABILITY_LABEL := {"echo": "Echo", "hive_in": "Hive Eyes"}
+## SERVICE DOG: the fetch clock (scripts/monsters/service_dog_brain.gd). Modes and FETCH_WINDOW.
+const DogBrain := preload("res://scripts/monsters/service_dog_brain.gd")
+const DogModes := preload("res://scripts/monsters/modes.gd")
+## Teammates this close to a dog see its clock too (so they can make the throw for you).
+const DOG_HUD_RANGE := 16.0
 const ABILITY_COST := {"echo": "LOUD", "hive_in": ""}
 const ABILITY_DESC := {
 	"echo": "A shriek that outlines everything nearby through walls for a few seconds.",
@@ -113,6 +118,7 @@ func _draw() -> void:
 		_draw_scan_banner(w, h)
 		_draw_ability_card(w, h)
 		_draw_laptop_map(w, h, me)   # TRINKETS chunk B
+		_draw_dog_fetch(w, h, me)   # SERVICE DOG
 	if me != null and not in_surgery:
 		_draw_money(w, h, me)
 	if me != null and not me.alive:
@@ -955,6 +961,46 @@ func _draw_dead_banner(w: float) -> void:
 	if watching != null and watching != game.local_player():
 		text = ("Watching %s. You clock in at the next shift." if waiting else "Watching %s. You are back next shift.") % watching.player_name
 	_text(Vector2(0, 102), text, 13, Color("c9d1d9"), HORIZONTAL_ALIGNMENT_CENTER, w)
+
+
+## SERVICE DOG: a dog is waiting for a throw (the fetch clock draining) or up on its hind legs
+## (no clock; throw it NOW). Shown to the surgeon it chose wherever they are, and to anyone within
+## DOG_HUD_RANGE of it, because anybody's charged throw of that item settles it.
+func _draw_dog_fetch(w: float, h: float, me) -> void:
+	if game == null or not ("monsters" in game):
+		return
+	var y := 128.0
+	for m in (game.monsters as Dictionary).values():
+		if m == null or not is_instance_valid(m) or String(m.kind) != "service_dog":
+			continue
+		var md := int(m.mode)
+		if md != DogModes.Mode.DOG_WARN and md != DogModes.Mode.DOG_REAR:
+			continue
+		var mine: bool = int(m.dog_target) == int(me.peer_id)
+		if not mine and (m.global_position as Vector3).distance_to(me.global_position) > DOG_HUD_RANGE:
+			continue
+		var what := Items.display_name(String(m.dog_offer_kind)).to_upper() if String(m.dog_offer_kind) != "" else "IT"
+		var who := ""
+		if not mine:
+			var t = (game.players as Dictionary).get(int(m.dog_target))
+			who = String(t.player_name) if t != null and is_instance_valid(t) else "someone"
+		drawn.append("dog_fetch")
+		var cx := w * 0.5
+		if md == DogModes.Mode.DOG_WARN:
+			var k: float = clampf(float(m.dog_left) / DogBrain.FETCH_WINDOW, 0.0, 1.0)
+			var col := Color("ffc24a").lerp(Color("ff3b30"), 1.0 - k)
+			var title := ("THROW THE %s" % what) if mine else ("IT WANTS %s TO THROW THE %s" % [who.to_upper(), what])
+			draw_rect(Rect2(cx - 170, y - 22, 340, 44), Color(0, 0, 0, 0.62))
+			_text(Vector2(0, y - 4), title, 15, Color("f4ead2"), HORIZONTAL_ALIGNMENT_CENTER, w)
+			draw_rect(Rect2(cx - 160, y + 6, 320, 8), Color(0.15, 0.12, 0.1, 0.9))
+			draw_rect(Rect2(cx - 160, y + 6, 320 * k, 8), col)
+			_text(Vector2(cx + 166, y + 14), "%d" % ceili(float(m.dog_left)), 13, col)
+		else:
+			var pulse := 0.6 + 0.4 * sin(_t * 9.0)
+			draw_rect(Rect2(cx - 190, y - 22, 380, 44), Color(0.25, 0, 0, 0.55 + 0.2 * pulse))
+			var t2 := ("IT'S COMING FOR YOU. THROW THE %s" % what) if mine else ("IT'S ON %s. THROW THE %s" % [who.to_upper(), what])
+			_text(Vector2(0, y + 5), t2, 15, Color(1.0, 0.45 + 0.3 * pulse, 0.4), HORIZONTAL_ALIGNMENT_CENTER, w)
+		y += 54.0
 
 
 ## Hold-E progress for the time clock and for lifting a downed teammate.
