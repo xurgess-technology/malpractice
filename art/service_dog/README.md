@@ -1,7 +1,7 @@
 # The Service Dog: Blender sources
 
-**Built 2026-09-24, art side of the Service Dog feature; revised four times the same day after
-Zach's reviews (see "Revision 1" through "Revision 4" below).** The model is
+**Built 2026-09-24, art side of the Service Dog feature; revised five times the same day after
+Zach's reviews (see "Revision 1" through "Revision 5" below).** The model is
 `assets/models/monsters/service_dog/service_dog.glb` (asset key `monster/service_dog`; skinned mesh,
 2 objects, 6 materials, 7 clips), registered in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is
 its `SkeletonModifier3D` (head-tracking, idle "wrongness"), following the Night Nurse / Hive
@@ -183,6 +183,35 @@ built the same way. This revision replaces that with one real fix instead of ano
   hind junction, close up, from each side) -- all four junctions read the same way, and the left and
   right shots of the same junction match.
 
+## Revision 5 (2026-09-24, the vest clips the front legs after Revision 4)
+
+A new issue Revision 4's own fix exposed: the vest now clips into the front legs. Measured, not
+guessed, before touching anything: `_leg_junction(SHOULDER, 0.040)`'s rings all sit at
+`y = SHOULDER.y = 0.24` (the whole junction blend happens at one Y, only varying X and radius --
+see `_leg_junction`'s own docstring), and by ring 3 (at `SHOULDER` itself) the leg's outer edge
+reaches `x = 0.175`. The vest's own radius at that same y was only `~0.079`. Worse, `ELBOW.y` is
+`0.20` -- identical to `CHEST.y`, the torso's own widest point -- so the front leg's solid upper-arm
+tube occupies almost exactly the same y range (0.20-0.24) as the vest body's peak coverage. There is
+no vest radius that clears the leg there without the vest ballooning to a comically oversized shape,
+so (as Zach offered as one of two acceptable approaches) this pulls the vest's coverage back instead
+of trying to reshape around the leg -- the same shape of fix as Revision 3's neck clearance, and for
+the same reason: a hard, measured boundary the geometry cannot cross, not a nudged number.
+
+- Added `LEG_CLEAR_Y = min(SHOULDER.y, ELBOW.y) - 0.05`, measured directly off those two landmarks
+  (not eyeballed), and folded it into `FRONT_Y` (`min(CHEST.y + 0.07, LEG_CLEAR_Y)`), so the vest
+  body, the girth strap, the chest strap and every patch all stay behind it. In practice this means
+  the vest body now stops short of the torso's own widest point and the front legs entirely, and the
+  chest strap -- which used to cross right where the legs attach -- now stays behind them too, rather
+  than risk brushing the leg on its way past.
+- This does trade away a little accuracy against the reference photos (their chest strap visibly
+  crosses right at the front legs); flagged below as the deliberate cost of guaranteeing zero
+  clipping, and the one place in the vest a future pass might want to put back if a real strap can be
+  routed around the leg's actual geometry instead of just avoiding its whole y range.
+- Checked at idle, mid-walk and the fully reared standup pose, **from both sides** (the leg-junction
+  mesh only needed checking once its symmetry was fixed in Revision 4, but the vest is new geometry
+  laid on top and gets its own from-scratch check): `godot_shots/dog_vest_leg_clear_idle_left/
+  right.png`, `_walk_left/right.png`, `_standup_left/right.png` -- no clipping in any of the six.
+
 ## Folder
 
 | Path | What |
@@ -349,6 +378,13 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
   itself is still simple lofts and thin raised boxes, not tailored/simulated cloth -- it won't fold
   or crease, and the patches, while flush, are still slightly-raised boxes up close rather than
   truly embroidered/printed detail.
+- **The vest no longer reaches the front legs at all (Revision 5).** Necessary to guarantee zero
+  clipping against Revision 4's wider leg junctions (see "Revision 5" above), but it means the vest
+  body and chest strap now stop noticeably short of the torso's own widest point and the front legs,
+  which is less accurate to the reference photos than earlier revisions in that one respect (their
+  chest strap visibly crosses right at the front legs). The next real improvement here would be
+  routing the chest strap around the leg's actual measured geometry instead of just staying behind
+  its whole y range.
 - **`Dog_Vest_Worn`'s "pseudo-noise"** is a sum of sines of the vertex position, not real noise —
   fine at this triangle density, would tile visibly at higher resolution.
 - **The mouth is a hair open even at rest.** The jaw loft's static offset below the skull (needed so
@@ -359,7 +395,7 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
 
 ## Stats
 
-- **Triangles:** `Dog_Body` 986 + `Dog_Vest` 380 = **1,366** for the whole model (no bake source, so
+- **Triangles:** `Dog_Body` 986 + `Dog_Vest` 348 = **1,334** for the whole model (no bake source, so
   no separate high-poly count).
 - **Materials:** 6 flat Principled BSDF (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`, `Dog_Vest_Worn`,
   `Dog_Vest_Cross`, `Dog_Vest_Badge`), no textures.

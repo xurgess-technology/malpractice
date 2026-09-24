@@ -214,6 +214,30 @@ func _run_shots() -> void:
 		_look_from(thigh_w + side_dir * 0.35 + Vector3(0, 0.05, 0.05), thigh_w)
 		await _shot("leg_junction_hind_%s" % side_name)
 
+	# Vest-vs-front-leg clearance, from both sides, at idle, mid-walk and the fully reared standup
+	# pose (Zach: the vest now clips the leg junctions Revision 4 widened; this is exactly the kind
+	# of thing that can look fine on one side/pose and not another, so check all of them).
+	for side_name in ["left", "right"]:
+		var side_dir: Vector3 = to_left if side_name == "left" else to_right
+		var shoulder_bone := "upperarm.L" if side_name == "left" else "upperarm.R"
+		var shoulder_bi: int = model.skeleton.find_bone(shoulder_bone)
+
+		await _play_and_settle("Idle", 0.2)
+		var sw: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(shoulder_bi).origin
+		_look_from(sw + side_dir * 0.4 + Vector3(0, 0.1, 0.08), sw)
+		await _shot("vest_leg_clear_idle_%s" % side_name)
+
+		await _play_and_settle("Walk", model.anim.get_animation("Walk").length * 0.35)
+		sw = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(shoulder_bi).origin
+		_look_from(sw + side_dir * 0.4 + Vector3(0, 0.1, 0.08), sw)
+		await _shot("vest_leg_clear_walk_%s" % side_name)
+
+		if model.anim.has_animation("StandUp"):
+			await _play_and_settle("StandUp", model.anim.get_animation("StandUp").length)
+			sw = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(shoulder_bi).origin
+			_look_from(sw + side_dir * 0.4 + Vector3(0, 0.1, 0.08), sw)
+			await _shot("vest_leg_clear_standup_%s" % side_name)
+
 	print("[dog_lab] ------------------------------------------")
 	print("[dog_lab] result: ", "PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)

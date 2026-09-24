@@ -431,19 +431,29 @@ def build_vest(nseg=16):
     touches a minority of it."""
     p = Part('Dog_Vest', 'vest')
     MARGIN = 0.011   # how far the fabric stands off the coat: snug, not a floating panel
-    # How far forward (toward the neck) the vest is allowed to reach. Revision 2 took it almost to
-    # NECK1 and weighted the front rings partly to 'neck1', which clipped through the neck at any
-    # pose where the neck bends away from the chest (idle's tilt, walk's pitch, and especially the
-    # big standup bend all rotate neck1 well clear of a vest ring still assuming it moves with it).
-    # Keeping the whole vest -- body, straps and patches -- at y <= FRONT_Y and rigidly weighted to
-    # 'chest' only (no 'neck1' anywhere) means it physically cannot follow the neck into a clash:
-    # it stays with the torso, comfortably behind wherever the neck swings.
-    FRONT_Y = CHEST.y + 0.07
+    # How far forward (toward the neck AND the front legs) the vest is allowed to reach.
+    #
+    # Revision 2 took it almost to NECK1 and weighted the front rings partly to 'neck1', which
+    # clipped through the neck at any pose where the neck bends away from the chest (fixed in
+    # Revision 3 with a hard limit short of NECK1). Revision 4's leg-junction rebuild then exposed
+    # a second, purely geometric clash: the front leg's junction blend (see `_leg_junction`) sits
+    # at y = SHOULDER.y and swings out to as much as x = 0.175 there (measured directly off the
+    # built rig -- SHOULDER=(0.135, 0.24, ...), junction ring reach = shoulder.x + leg r0, well
+    # past the vest's own ~0.08 m radius at that y), and the upper-arm tube continues that same
+    # off-axis position down to ELBOW.y. Because SHOULDER/ELBOW.y (0.24 / 0.20) sit almost exactly
+    # ON the chest's own widest point (CHEST.y = 0.20), there is no vest radius that clears the leg
+    # there without ballooning absurdly, so the fix is the same shape as Revision 3's neck fix:
+    # stop the vest well short of the leg's y range instead. `LEG_CLEAR_Y` is measured against
+    # SHOULDER.y and ELBOW.y with a margin, not guessed, exactly like NECK1 was in Revision 3.
+    LEG_CLEAR_Y = min(SHOULDER.y, ELBOW.y) - 0.05
+    FRONT_Y = min(CHEST.y + 0.07, LEG_CLEAR_Y)
 
-    # Vest body: one continuous wrap from just behind the front legs to short of the neck,
-    # covering the ribcage the way the reference vests do (their mesh/fabric body, not just a
-    # strip down the spine).
-    ys = [SPINE1.y, SPINE1.y * 0.3 + CHEST.y * 0.7, CHEST.y, CHEST.y * 0.6 + FRONT_Y * 0.4, FRONT_Y]
+    # Vest body: one continuous wrap from just behind the front legs to short of the neck AND
+    # short of the front legs' own junction, covering the ribcage the way the reference vests do
+    # (their mesh/fabric body, not just a strip down the spine) without reaching the y range where
+    # the front legs actually attach -- a real vest's chest strap (below) is what crosses near the
+    # legs; the body itself mostly sits over the ribcage behind them.
+    ys = [SPINE1.y, SPINE1.y * 0.55 + FRONT_Y * 0.45, SPINE1.y * 0.15 + FRONT_Y * 0.85, FRONT_Y]
     rx_list, rz_list = [], []
     for y in ys:
         cx, cz = _coat_radius(min(y, NECK1.y))
@@ -453,12 +463,13 @@ def build_vest(nseg=16):
     # centreline is also flat in z along this stretch (the spine loft's height variation here is
     # small), so this is a close enough approximation without needing the full spine centreline.
     body_pts = [Vector((0.0, y, CHEST.z)) for y in ys]
-    bw = [{'spine1': 0.7, 'chest': 0.3}, {'spine1': 0.3, 'chest': 0.7}] + [{'chest': 1.0}] * 3
+    bw = [{'spine1': 0.7, 'chest': 0.3}, {'spine1': 0.35, 'chest': 0.65}] + [{'chest': 1.0}] * 2
     p.add_tube(body_pts, rx_list, rz_list, nseg, bw, cap_start=True, cap_end=True, uv_v_range=(0.0, 0.5))
 
     # Girth strap: a thin band a hair proud of the vest body (not the bare coat), under the belly
-    # and round the sides -- the buckle strap visible in both reference photos.
-    gy = CHEST.y * 0.7 + SPINE1.y * 0.3
+    # and round the sides -- the buckle strap visible in both reference photos. Also kept behind
+    # LEG_CLEAR_Y so its underside can't reach into the front legs either.
+    gy = min(CHEST.y * 0.7 + SPINE1.y * 0.3, LEG_CLEAR_Y - 0.02)
     gcx, gcz = _coat_radius(gy)
     girth_pts = [Vector((0, gy - 0.018, CHEST.z)), Vector((0, gy, CHEST.z)), Vector((0, gy + 0.018, CHEST.z))]
     grx = [gcx + MARGIN + 0.007] * 3
@@ -468,16 +479,17 @@ def build_vest(nseg=16):
 
     # Chest strap: a thin band from the top of the vest, down each side, to the girth strap in
     # front of the shoulder -- the second strap both reference vests show, tying the body down.
-    # Kept at/behind FRONT_Y and weighted only to 'chest', for the same neck-clearance reason.
+    # Kept at/behind FRONT_Y (i.e. behind LEG_CLEAR_Y too) and weighted only to 'chest', for the
+    # same clearance reason as the body above.
     top_y = min(CHEST.y * 0.4 + FRONT_Y * 0.6, FRONT_Y)
     top_cx, top_cz = _coat_radius(top_y)
     strap_top = Vector((0.0, top_y, CHEST.z + top_cz + MARGIN))
-    strap_mid = Vector((0.0, CHEST.y, CHEST.z + _coat_radius(CHEST.y)[1] * 0.35))
+    strap_mid = Vector((0.0, min(CHEST.y, FRONT_Y), CHEST.z + _coat_radius(min(CHEST.y, FRONT_Y))[1] * 0.35))
     strap_bot = Vector((0.0, gy, CHEST.z - (gcz + MARGIN + 0.004)))
     for side in ('L', 'R'):
         sx = 1.0 if side == 'L' else -1.0
         pts = [strap_top + Vector((sx * top_cx * 0.55, 0, 0)),
-               strap_mid + Vector((sx * _coat_radius(CHEST.y)[0] * 0.85, 0, 0)),
+               strap_mid + Vector((sx * _coat_radius(min(CHEST.y, FRONT_Y))[0] * 0.85, 0, 0)),
                strap_bot + Vector((sx * gcx * 0.5, 0, 0))]
         srx = [0.010, 0.010, 0.010]
         srz = [0.016, 0.016, 0.016]
@@ -487,8 +499,9 @@ def build_vest(nseg=16):
     # First-aid iconography, sewn flush onto the vest body's own surface (image refs 5/6: patches
     # follow the vest's contour, they don't float above it). Zach: two crosses, mirrored on the
     # left and right flanks (not one on top/centre) -- each sits on the vest body's own side face,
-    # facing outward, well behind FRONT_Y so it can't clip the neck either.
-    cross_y = CHEST.y - 0.01
+    # facing outward, kept behind FRONT_Y (not CHEST.y, which is now past the vest's own front edge)
+    # so a patch can't end up sitting past the vest's own coverage, floating in the leg's clash zone.
+    cross_y = FRONT_Y - 0.02
     ccx, ccz = _coat_radius(cross_y)
     for side in ('L', 'R'):
         sx = 1.0 if side == 'L' else -1.0
@@ -498,7 +511,7 @@ def build_vest(nseg=16):
         cross_center = Vector((sx * (ccx + MARGIN), cross_y, CHEST.z))
         p.add_patch(cross_center, cross_right, cross_up, 0.026, 0.009, 0.004, {'chest': 1.0}, VEST_CROSS_MAT)
         p.add_patch(cross_center, cross_right, cross_up, 0.009, 0.026, 0.004, {'chest': 1.0}, VEST_CROSS_MAT)
-    badge_y = CHEST.y - 0.03
+    badge_y = FRONT_Y - 0.05
     bcx, bcz = _coat_radius(badge_y)
     badge_normal = Vector((0.75, 0.0, 0.66)).normalized()   # forward-and-out, the vest's side face
     badge_right = Vector((0.0, 1.0, 0.0))
