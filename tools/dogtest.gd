@@ -5,14 +5,21 @@ extends Node
 ##
 ##   godot --headless --fixed-fps 60 --path . tools/dogtest.tscn
 ##
+## Round 0  on all fours it is a Hive: a shove stuns it (the needle is offered), and it gets up again.
 ## Round 1  it walks up, sets the heart monitor down at your feet, growls, the clock starts; a TAP of
 ##          the item does nothing; a charged throw satisfies it; it fetches the item and wanders.
-## Round 2  it offers again; the full FETCH_WINDOW runs out; it rears up and hits you, more than once;
-##          a TEAMMATE's charged throw of that same item stands it down, and it fetches it back.
-## Round 3  it offers again and rears; its surgeon going down ends it; it fetches its item back.
-## Round 4  the offered item disappears (it leaves the world with nobody holding it): it gives up.
-## Plus immunity (no hurt, no sedation, no stun, no shove, no drag, no capture), the roster, and a
-## client copy fed only report() showing the same carry, clock, growl and rear.
+## Round 2  it offers again. The drain does NOT start before the full FETCH_WINDOW; then it stands up,
+##          jaws wide, orb lit, the thread out to you (host and client), your screen going grey. It
+##          takes a heart without taking your hands. Standing, shove / saw / needle do nothing. A tap,
+##          and a throw under the cutoff, do not end it; a TEAMMATE's real throw does: thread gone,
+##          your effects clear, down on all fours, it fetches the item.
+## Round 3  it offers and drains again until your hearts run out: you go down, it drops and fetches
+##          its item. Back on all fours a shove stuns it again; it can be put under, and drops what it
+##          carries.
+## Round 4  the offered item disappears (it leaves the world with nobody holding it): it gives up,
+##          then goes and finds another two-handed item.
+## Round 5  on all fours the saw kills it, it drops what it carries, and the kill pays nothing.
+## Plus the roster, and a client copy fed only report() showing the carry, clock, growl, drain.
 ## Exits 0 when every check passes.
 
 const MonsterScript := preload("res://scripts/monster.gd")
@@ -106,8 +113,8 @@ func _run() -> void:
 	if dog == null:
 		return
 	_static_checks()
-	_immunity()
 	_client_mirror()
+	await _on_all_fours("at the start")
 	await _frames(2)
 	_check(String(dog.dog_carry) == "heart_monitor", "it starts with the heart monitor in its mouth (ck %s)" % dog.dog_carry)
 	_check(client != null and String(client.dog_carry) == "heart_monitor" and client._dog_held != null,
@@ -160,8 +167,8 @@ func _run() -> void:
 	_check(int(dog.mode) == Modes.Mode.WANDER or int(dog.mode) == Modes.Mode.IDLE, "...and goes back to wandering (mode %d)" % dog.mode)
 	_check(game.dog_tagged_item(1) == null and not game.dog_tag_exists(1), "the old offer's tag is gone with the pickup")
 
-	# ---------------------------------------------------------------- round 2: the clock runs out
-	print("[dogtest] --- round 2: the clock runs out, it rears and attacks; a teammate's throw saves you ---")
+	# ---------------------------------------------------------------- round 2: the drain
+	print("[dogtest] --- round 2: the clock runs out and it drains you; a teammate's throw ends it ---")
 	await _come_back()
 	dog.brain.content = 0.0
 	warned = await _until(func(): return int(dog.mode) == Modes.Mode.DOG_WARN, 40.0)
@@ -170,29 +177,53 @@ func _run() -> void:
 	me.bot_invulnerable = false
 	me.invuln = 0.0
 	var hp0: int = me.hp
-	var reared := await _until(func(): return int(dog.mode) == Modes.Mode.DOG_REAR, DogBrain.FETCH_WINDOW + 3.0)
+	await _seconds(DogBrain.FETCH_WINDOW - 0.5)
+	_check(int(dog.mode) == Modes.Mode.DOG_WARN and me.hp == hp0, "half a second before the clock runs out it is still only waiting (mode %d)" % dog.mode)
+	var drained := await _until(func(): return int(dog.mode) == Modes.Mode.DOG_DRAIN, 3.0)
 	var waited := t - warn_t
-	_check(reared and absf(waited - DogBrain.FETCH_WINDOW) < 0.5, "with no throw it rears after the full %.0f s (%.1f s)" % [DogBrain.FETCH_WINDOW, waited])
-	_check(int(dog.state) == Modes.State.CHASE and int(dog.dog_target) == int(me.peer_id), "...and it is after you")
-	await _seconds(DogBrain.REAR_RISE + 0.1)
+	_check(drained and absf(waited - DogBrain.FETCH_WINDOW) < 0.5, "the drain starts when the full %.0f s run out (%.1f s)" % [DogBrain.FETCH_WINDOW, waited])
+	_check(int(dog.dog_target) == int(me.peer_id), "...and it is draining you")
+	await _seconds(DogBrain.REAR_RISE + 0.6)
 	_check(float(dog.model.dog.rear) > 0.95, "it is up on its hind legs (rear %.2f)" % dog.model.dog.rear)
-	_check(client != null and float(client.model.dog.rear) > 0.95, "...on the client too (rear %.2f)" % (client.model.dog.rear if client != null else 0.0))
-	var hit1 := await _until(func(): return me.hp < hp0, 10.0)
-	_check(hit1, "it hits you (hp %d -> %d)" % [hp0, me.hp])
+	var head_y: float = dog.eye_transform().origin.y - dog.global_position.y
+	_check(head_y > C.EYE_H + 0.2, "standing, its head is above yours (%.2f m vs your eyes %.2f)" % [head_y, C.EYE_H])
+	_check(float(dog.model.dog._jaw.rotation.x) > 0.8, "jaws wide (%.2f rad)" % dog.model.dog._jaw.rotation.x)
+	_check(float(dog.dog_glow) > 0.9 and dog.model.dog.orb != null and String(dog.model.dog.orb.name) == "Orb",
+		"the orb (its own node, `Orb`) is lit (glow %.2f)" % dog.dog_glow)
+	_check(dog.dog_draining() and dog._dog_thread != null and dog._dog_thread.visible, "the thread runs from your mouth to its throat")
+	_check(client != null and client.dog_draining() and client._dog_thread != null and client._dog_thread.visible and float(client.model.dog.rear) > 0.95,
+		"...and the client sees it standing, lit, with the thread (glow %.2f)" % (client.dog_glow if client != null else -1.0))
+	var fx: Node = game.get_node_or_null("DogDrainFx")
+	await _seconds(1.0)
+	_check(fx != null and float(fx.amount) > 0.05, "your own screen and ears are going (drain fx %.2f)" % (fx.amount if fx != null else -1.0))
+	# Standing, it is untouchable.
+	_upright_immunity()
+	# It takes a heart, and leaves your hands alone.
+	var hurt := await _until(func(): return me.hp < hp0, DogBrain.DRAIN_GRACE + 1.0)
+	_check(hurt and me.held_by < 0, "a heart goes (hp %d -> %d) and it is not holding you" % [hp0, me.hp])
+	var it2: Node = game.dog_tagged_item(int(dog.brain.offer_tag))
+	if it2 != null:
+		me.teleport(game._floor_at(it2.global_position + Vector3(0.4, 0, 0.4)))
+		game.pickup_item(me, it2)
+		await _frames(1)
+	_check(me.holding("heart_monitor"), "being drained, you can still pick the item up")
+	game.drop_selected(me, 0.0)
+	await _frames(3)
+	_check(int(dog.mode) == Modes.Mode.DOG_DRAIN, "a TAP does not end the drain")
+	it2 = game.dog_tagged_item(int(dog.brain.offer_tag))
+	game.pickup_item(me, it2)
+	await _frames(1)
+	game.drop_selected(me, DogBrain.THROW_MIN_CHARGE * 0.5)
+	await _frames(3)
+	_check(int(dog.mode) == Modes.Mode.DOG_DRAIN, "nor does a throw under the %.2f charge cutoff" % DogBrain.THROW_MIN_CHARGE)
 	me.hp = me.max_hp
-	me.invuln = 0.0
-	var hp1: int = me.hp
-	var hit2 := await _until(func(): return me.hp < hp1, 10.0)
-	_check(hit2 and int(dog.mode) == Modes.Mode.DOG_REAR, "and keeps at it (a second hit, still reared)")
-	me.hp = me.max_hp
-	me.bot_invulnerable = true
 	# The teammate: Dr. Botsworth picks the heart monitor up off the floor and throws it.
 	var bot_id: int = dev.spawn_bot("bot", me, "Dr. Botsworth", game._floor_at(me.global_position + Vector3(0.8, 0, 0.8)))
 	dev.order_bot(bot_id, "stay")
 	var bot: Player = game.players.get(bot_id)
 	await _frames(3)
 	it = game.dog_tagged_item(int(dog.brain.offer_tag))
-	_check(it != null and bot != null, "set-up: the offered item is still on the floor and a teammate is here")
+	_check(it != null and bot != null, "set-up: the offered item is on the floor and a teammate is here")
 	if it != null and bot != null:
 		bot.teleport(game._floor_at(it.global_position + Vector3(0.3, 0, 0.3)))
 		game.pickup_item(bot, it)
@@ -200,37 +231,56 @@ func _run() -> void:
 		_check(int(bot.selected_stack().get("dg", 0)) == int(dog.brain.offer_tag), "the teammate is holding the tagged item")
 		game.drop_selected(bot, 0.3)
 		await _frames(3)
-	_check(int(dog.mode) == Modes.Mode.DOG_RETRIEVE, "the TEAMMATE's charged throw stands it down (mode %d)" % dog.mode)
+	_check(int(dog.mode) == Modes.Mode.DOG_RETRIEVE, "the TEAMMATE's real throw ends the drain (mode %d)" % dog.mode)
+	await _frames(2)
+	_check(not dog.dog_draining() and (dog._dog_thread == null or not dog._dog_thread.visible), "the thread snaps")
 	var hp2: int = me.hp
-	me.bot_invulnerable = false
-	me.invuln = 0.0
-	await _seconds(1.5)
-	_check(me.hp == hp2, "it stops attacking you")
-	me.bot_invulnerable = true
-	_check(float(dog.model.dog.rear) < 0.05, "and drops back onto all fours (rear %.2f)" % dog.model.dog.rear)
+	await _seconds(1.0)
+	_check(me.hp == hp2 and fx != null and float(fx.amount) == 0.0, "no more hearts go, and your effects have cleared (fx %.2f)" % (fx.amount if fx != null else -1.0))
+	_check(float(dog.model.dog.rear) < 0.05 and float(dog.model.dog._jaw.rotation.x) < 0.3, "it is back on all fours, jaws shut (rear %.2f)" % dog.model.dog.rear)
+	await _seconds(0.6)
+	_check(float(dog.dog_glow) < 0.3, "the orb dims (glow %.2f)" % dog.dog_glow)
 	fetched = await _until(func(): return String(dog.dog_carry) == "heart_monitor", 25.0)
 	_check(fetched and int(dog.brain.fetches) == 2, "it fetches the item back again (fetches %d)" % dog.brain.fetches)
 	if bot_id != 0:
 		dev.remove_bot(bot_id)   # so round 3's surgeon is you
 		await _frames(3)
 
-	# ---------------------------------------------------------------- round 3: its surgeon goes down
-	print("[dogtest] --- round 3: its surgeon goes down; it stops and fetches its item ---")
+	# ---------------------------------------------------------------- round 3: your hearts run out
+	print("[dogtest] --- round 3: it drains you until you go down; it fetches; on all fours it is a Hive again ---")
 	await _come_back()
 	dog.brain.content = 0.0
+	me.bot_invulnerable = true
 	warned = await _until(func(): return int(dog.mode) == Modes.Mode.DOG_WARN, 40.0)
 	_check(warned, "it offers a third time")
 	dog.brain.offer_left = 0.1
-	reared = await _until(func(): return int(dog.mode) == Modes.Mode.DOG_REAR, 2.0)
-	_check(reared, "set-up: it rears")
-	await _seconds(DogBrain.REAR_RISE + 0.2)
-	game.knock_down_player(me, "test")
+	drained = await _until(func(): return int(dog.mode) == Modes.Mode.DOG_DRAIN, 2.0)
+	_check(drained, "set-up: it drains")
+	me.bot_invulnerable = false
+	me.invuln = 0.0
+	me.hp = me.max_hp
+	var start := t
+	var down := await _until(func(): return bool(me.downed), 30.0)
+	_check(down and int(dog.brain.hearts) >= 4, "your hearts run out and you go down (%.1f s, %d hearts taken in all)" % [t - start, dog.brain.hearts])
 	await _frames(3)
-	_check(bool(me.downed) and int(dog.mode) == Modes.Mode.DOG_RETRIEVE, "its surgeon down, it drops the attack and goes to fetch (mode %d)" % dog.mode)
+	_check(int(dog.mode) == Modes.Mode.DOG_RETRIEVE, "it drops the drain and goes to fetch (mode %d)" % dog.mode)
 	fetched = await _until(func(): return String(dog.dog_carry) == "heart_monitor", 25.0)
 	_check(fetched and int(dog.brain.fetches) == 3, "...and has it back in its mouth (fetches %d): the loop loops" % dog.brain.fetches)
 	me.revive_full()
+	me.bot_invulnerable = true
 	await _frames(3)
+	await _on_all_fours("after the drain")
+	var cb = game.combat
+	dog.shoved(Vector3.FORWARD, 1.0)
+	_check(dog.can_sedate() and cb.can_sedate(dog) and dog.sedate(20.0) and dog.is_sedated(), "shoved on all fours, the needle puts it under")
+	await _frames(2)
+	_check(String(dog.dog_carry) == "" and game.world_items.values().any(func(w): return String(w.kind) == "heart_monitor" and int(w.dog_tag) == 0),
+		"it drops what it was carrying where it lies")
+	await _seconds(1.0)
+	_check(float(dog.model.dog.lying) > 0.9, "on its side (lying %.2f)" % dog.model.dog.lying)
+	dog.wake()
+	await _seconds(2.5)
+	_check(not dog.is_sedated() and int(dog.mode) != Modes.Mode.STUNNED, "it wakes and gets up (mode %d)" % dog.mode)
 
 	# ---------------------------------------------------------------- round 4: the item vanishes
 	print("[dogtest] --- round 4: the offered item leaves the world; it gives up ---")
@@ -267,7 +317,21 @@ func _run() -> void:
 			var hit := sp.intersect_ray(q)
 			print("[dogtest]   ray h%.1f -> %s" % [hgt, str(hit.get("position")) + " " + (str(hit.collider.get_path()) if not hit.is_empty() else "clear")])
 	var found := await _until(func(): return String(dog.dog_carry) != "", 40.0)
-	_check(found and String(dog.dog_carry) == "defibrillator", "empty-mouthed, it finds another two-handed item and takes it (%s)" % dog.dog_carry)
+	_check(found and ["defibrillator", "heart_monitor"].has(String(dog.dog_carry)), "empty-mouthed, it finds another two-handed item and takes it (%s)" % dog.dog_carry)
+
+	# ---------------------------------------------------------------- round 5: the saw
+	print("[dogtest] --- round 5: on all fours the saw kills it, and pays nothing ---")
+	var money0: int = game.money
+	var carried := String(dog.dog_carry)
+	var mid: int = dog.monster_id
+	_check(dog.take_hit(Vector3.FORWARD, 1, "test") == "stagger", "a saw hit on all fours lands")
+	_check(dog.take_hit(Vector3.FORWARD, 1, "test") == "killed", "the second kills it (%d hp)" % MonsterScript.max_hp_for("service_dog"))
+	game.kill_monster(dog)
+	await _frames(3)
+	_check(not game.monsters.has(mid), "it is gone")
+	_check(carried == "" or game.world_items.values().any(func(w): return String(w.kind) == carried), "what it carried (%s) is left on the floor" % carried)
+	_check(game.money == money0, "the kill pays nothing ($%d -> $%d)" % [money0, game.money])
+	dog = null
 
 
 func _static_checks() -> void:
@@ -278,7 +342,7 @@ func _static_checks() -> void:
 	_check(MonsterScript.display_name("service_dog") == "Service Dog", "its name")
 	var st: Dictionary = game._build_state()
 	var mo: Dictionary = st.mo.get(int(dog.monster_id), {})
-	_check(mo.has("ck") and mo.has("dt") and mo.has("ol") and mo.has("gr") and mo.has("ok"), "the snapshot's `mo` section carries its fields")
+	_check(mo.has("ck") and mo.has("dt") and mo.has("ol") and mo.has("gr") and mo.has("ok") and mo.has("og"), "the snapshot's `mo` section carries its fields")
 	var probe: Node = MonsterScript.new_monster(990, "hive", Vector3(0, -50, 0))
 	var rep: Dictionary = {}
 	add_child(probe)
@@ -288,16 +352,26 @@ func _static_checks() -> void:
 	probe.free()
 
 
-func _immunity() -> void:
-	print("[dogtest] --- immunity ---")
+## On all fours: a shove stuns it like a Hive (so the needle is offered), and it gets up again.
+func _on_all_fours(when: String) -> void:
 	var cb = game.combat
-	_check(not dog.can_be_hurt() and dog.take_hit(Vector3.FORWARD, 5, "test") == "immune", "the saw does nothing")
-	_check(not MonsterScript.is_capturable("service_dog") and not cb._capturable(dog), "not capturable (no needle, no table, no dissection)")
+	_check(dog.can_be_hurt() and dog.capturable_now() and cb._capturable(dog), "%s, on all fours: hurtable and capturable" % when)
 	var mode0 := int(dog.mode)
+	dog.shoved(Vector3.FORWARD)
+	_check(int(dog.mode) == Modes.Mode.STUNNED and dog.can_sedate() and cb.can_sedate(dog), "%s, a shove stuns it and the needle is offered" % when)
+	await _seconds(DogBrain.SHOVE_STUN + 0.3)
+	_check(int(dog.mode) != Modes.Mode.STUNNED, "%s, it gets up again (mode %d -> %d)" % [when, mode0, dog.mode])
+
+
+## Standing and draining: shove, saw and needle do nothing.
+func _upright_immunity() -> void:
+	var cb = game.combat
+	var hp: int = dog.hp
+	_check(not dog.can_be_hurt() and dog.take_hit(Vector3.FORWARD, 5, "test") == "immune" and dog.hp == hp, "standing, the saw does nothing")
+	dog.shoved(Vector3.FORWARD)
 	dog.shoved(Vector3.FORWARD, 1.0)
-	_check(int(dog.mode) == mode0 and not dog.can_sedate() and not cb.can_sedate(dog), "a shove does not stun it, so the needle is never offered")
-	_check(not dog.sedate(30.0) and not dog.is_sedated(), "sedate() refuses it")
-	_check(cb.dragging(me) < 0 and int(dog.dragged_by) == 0, "nobody can be dragging it")
+	_check(int(dog.mode) == Modes.Mode.DOG_DRAIN, "standing, a shove (tapped or charged) does nothing")
+	_check(not dog.capturable_now() and not cb._capturable(dog) and not dog.can_sedate() and not dog.sedate(30.0), "standing, the needle will not go in")
 
 
 func _client_mirror() -> void:
@@ -374,7 +448,6 @@ func _finish() -> void:
 		return
 	_done = true
 	print("[dogtest] ------------------------------------------")
-	print("[dogtest] fetches=%d attacks=%d" % [dog.brain.fetches if dog != null else 0, dog.brain.attacks if dog != null else 0])
 	print("[dogtest] result=%s failures=%d" % ["PASS" if _failures.is_empty() else "FAIL", _failures.size()])
 	get_tree().quit(0 if _failures.is_empty() else 1)
 

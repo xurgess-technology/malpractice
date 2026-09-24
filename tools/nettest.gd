@@ -65,10 +65,11 @@ extends Node
 ##                    client 2 follow, client 2 sees client 1's laser dot; client 1 walks away and
 ##                    everyone is signed out and back HOME
 ##   service_dog      host + 1 client: the Service Dog carries a heart monitor up to client 1, sets it
-##                    down and growls; client 1 sees the carry, the clock (never drawn), the growl and
-##                    the rear. Then CLIENT 1 picks the item up and throws it with a charge over the
-##                    wire: the host's dog stands down, fetches it and carries it again, and client 1
-##                    sees that too
+##                    down and growls; client 1 sees the carry, the clock (never drawn) and the growl.
+##                    The clock runs out and it DRAINS client 1: client 1 sees it standing, the orb
+##                    lit and the thread, feels its own screen go (local only) and loses a heart. Then
+##                    CLIENT 1 picks the item up and throws it with a charge over the wire: the host's
+##                    dog drops, fetches it and carries it again; client 1's effects clear
 ##
 ## Shifts start the way the loop does (sweep 2): the host clocks in, skips the grace period,
 ## answers the phone, and the paramedics wheel the patient onto a table.
@@ -1961,19 +1962,23 @@ func _sc_service_dog():
 		if not await _until(func(): return _count_msgs("dog_saw_warn") > 0 or _count_msgs("fail") > 0, 30.0, "client 1 to see the offer"):
 			return
 		dog.brain.offer_left = 0.2
-		if not await _until(func(): return int(dog.mode) == DogModes.Mode.DOG_REAR, 5.0, "the dog to rear"):
+		if not await _until(func(): return int(dog.mode) == DogModes.Mode.DOG_DRAIN, 5.0, "the dog to start draining"):
 			return
-		if not await _until(func(): return _count_msgs("dog_saw_rear") > 0 or _count_msgs("fail") > 0, 30.0, "client 1 to see it rear"):
+		# Client 1 is hurtable while it drains (the host keeps everyone else invulnerable).
+		_hurtable = c1.peer_id
+		c1.invuln = 0.0
+		if not await _until(func(): return _count_msgs("dog_saw_drain") > 0 or _count_msgs("fail") > 0, 30.0, "client 1 to see the drain"):
 			return
 		# Client 1 now throws the item from its own machine; nothing on this side touches it.
-		if not await _until(func(): return int(dog.mode) == DogModes.Mode.DOG_RETRIEVE or _count_msgs("fail") > 0, 60.0, "client 1's throw to stand the dog down"):
+		if not await _until(func(): return int(dog.mode) == DogModes.Mode.DOG_RETRIEVE or _count_msgs("fail") > 0, 60.0, "client 1's throw to end the drain"):
 			return
-		_say("client 1's charged throw stood the dog down")
+		_hurtable = -1
+		_say("client 1's charged throw ended the drain (%d heart(s) taken)" % int(dog.brain.hearts))
 		if not await _until(func(): return String(dog.dog_carry) == "heart_monitor", 40.0, "the dog to fetch the heart monitor back"):
 			return
 		if not await _until(func(): return _count_msgs("dog_saw_fetch") > 0 or _count_msgs("fail") > 0, 30.0, "client 1 to see it fetched"):
 			return
-		await _finish_together("the dog offered to client 1, reared, and a throw from client 1's machine stood it down; it fetched the item")
+		await _finish_together("the dog offered to client 1, drained it, and a throw from client 1's machine ended it; it fetched the item")
 		return
 	if not await _wait_shift_as_client():
 		return
@@ -1996,9 +2001,18 @@ func _sc_service_dog():
 		return _end(false, "the offer on my machine: clock %.2f -> %.2f, growls %d, offer '%s', hud %s" % [left0, d.dog_left, d.dog_growls, d.dog_offer_kind, str(hud_ok)])
 	_say("the offer on my machine: clock %.1f s and running, %d growl(s), nothing on the HUD" % [d.dog_left, d.dog_growls])
 	_send("dog_saw_warn", {})
-	if not await _until(func(): return int(d.mode) == DogModes.Mode.DOG_REAR and d.model.dog != null and float(d.model.dog.rear) > 0.9, 20.0, "it up on its hind legs on my machine"):
+	var hp0: int = me.hp
+	var fx_seen := {"amount": 0.0}
+	var watch := func():
+		var fx = game.get_node_or_null("DogDrainFx")
+		if fx != null:
+			fx_seen.amount = maxf(float(fx_seen.amount), float(fx.amount))
+	if not await _do_until(watch, func(): return d.dog_draining() and d._dog_thread != null and d._dog_thread.visible \
+			and float(d.model.dog.rear) > 0.95 and float(d.dog_glow) > 0.9 and int(d.dog_target) == int(me.peer_id) \
+			and me.hp < hp0 and float(fx_seen.amount) > 0.05, 25.0, "it draining me on my machine (standing, orb lit, thread, a heart gone, my screen going)"):
 		return
-	_send("dog_saw_rear", {})
+	_say("drained on my machine: glow %.2f, thread up, hp %d -> %d, my fx %.2f" % [d.dog_glow, hp0, me.hp, fx_seen.amount])
+	_send("dog_saw_drain", {})
 	# Pick the heart monitor up off the floor and throw it (a partial charge) -- the real client path.
 	var pick := func():
 		var it = game.world_items.get(_nearest_item("heart_monitor"))
@@ -2014,10 +2028,13 @@ func _sc_service_dog():
 	me.drop_count += 1
 	if not await _until(func(): return int(d.mode) == DogModes.Mode.DOG_RETRIEVE or int(d.mode) == DogModes.Mode.WANDER, 20.0, "my throw to stand it down (on my machine)"):
 		return
+	if not await _until(func(): return not d.dog_draining() and (d._dog_thread == null or not d._dog_thread.visible) \
+			and float(game.get_node("DogDrainFx").amount) == 0.0, 5.0, "the thread gone and my effects cleared"):
+		return
 	if not await _until(func(): return String(d.dog_carry) == "heart_monitor" and d._dog_held != null and float(d.model.dog.rear) < 0.05, 40.0, "it back on all fours with the heart monitor"):
 		return
 	_send("dog_saw_fetch", {})
-	await _finish_together("saw the dog carry, offer, growl, count down and rear; my throw stood it down and it fetched")
+	await _finish_together("saw the dog carry, offer, growl, count down and drain me; my throw ended it, my effects cleared and it fetched")
 
 
 ## The flattest horizontal direction out of `m` with clear floor space behind it, so a knockback

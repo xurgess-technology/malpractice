@@ -187,9 +187,22 @@ func set_deafen(amount01: float) -> void:
 	_apply_muffle()
 
 
+## The Service Dog's drain (scripts/monsters/dog_drain_fx.gd): the drained surgeon's world goes
+## distant, deeper the longer it lasts. Same low-pass as the fog and the deafen, whichever is deepest.
+var drain_muffle := 0.0
+
+
+func set_drain_muffle(amount01: float) -> void:
+	amount01 = clampf(amount01, 0.0, 1.0)
+	if is_equal_approx(amount01, drain_muffle):
+		return
+	drain_muffle = amount01
+	_apply_muffle()
+
+
 func _apply_muffle() -> void:
 	_ensure_fog_filters()
-	var hz := minf(lerpf(20000.0, 400.0, fog_muffle), lerpf(20000.0, 500.0, deafen))
+	var hz := minf(minf(lerpf(20000.0, 400.0, fog_muffle), lerpf(20000.0, 500.0, deafen)), lerpf(20000.0, 650.0, drain_muffle))
 	if _fog_lpf_sfx != null:
 		_fog_lpf_sfx.cutoff_hz = hz
 	if _fog_lpf_amb != null:

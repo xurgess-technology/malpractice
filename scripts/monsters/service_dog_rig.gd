@@ -6,23 +6,32 @@ extends Node3D
 ##
 ## `build(model)` prefers the GLB when Assets has it (Assets.has(KEY), i.e. the art branch has added
 ## the key and the file), and only then falls back to the primitives. Either way the Monster talks to
-## it through the same few inputs and one socket, and nothing else assumes a shape:
+## it through the same few inputs and sockets, and nothing else assumes a shape:
 ##   speed      m/s over the ground (the gait's rate)
 ##   moving     whether it is walking at all
-##   rear       0..1  on all fours -> up on its hind legs
+##   rear       0..1  on all fours -> standing on its hind legs, jaws wide (the drain)
 ##   head_down  0..1  nose to the floor (setting an item down, picking one up)
 ##   growl      0..1  jaw open, head shaking; set by the Monster when a growl plays
-##   lunge      0..1  a swipe while reared
 ##   look_yaw   radians the head turns toward whoever it is looking at (positive: its left)
 ##   carrying   an item is in its mouth (the jaw stays a little open)
-## `mouth` is the socket the carried item rides (origin between the jaws, -Z along the snout);
-## mouth_world() is where it is this frame. `Head` is the node Monster.eye_transform looks for.
+##   lying      0..1  sedated, on its side
+##   daze, rise, stagger   the shove's stun window (combat.stun_pose writes them, as for the Hive)
+##   set_drain_glow(v)     0..1 the orb at the back of its throat
+## Sockets: `mouth` (the carried item; origin between the jaws, -Z along the snout; mouth_world()),
+## `orb` (a node named `Orb`: its own mesh, NOT part of the head's material, so a later task can take
+## it out of the body; orb_world()), and `Head` (Monster.eye_transform).
 ##
 ## GLB contract for the art branch (what this file does with a real model, and all it needs):
-## the model spawns under the MonsterModel with its AnimationPlayer; clips are picked through
-## Assets.anim_name(KEY, logical) for "idle", "walk", "run", "rear", "attack" (missing ones fall
-## back to idle/walk); the mouth socket is a node named `Site_mouth` if the model has one, else a
-## BoneAttachment3D on a bone named `jaw` or `head`; `Head` rides the `head` bone the same way.
+##   clips through Assets.anim_name(KEY, logical): "idle", "walk" (on all fours; the retrieve trot is
+##     "walk" played faster), "rear_up" (all fours -> standing, jaws opening, ~0.6-0.8 s), "drain_idle"
+##     (standing, jaws wide, head on the target, throat pulsing), "upright_walk" (slow stiff biped walk),
+##     "drop_down" (standing -> all fours, jaws closing, ~0.4 s). A missing clip falls back to
+##     idle/walk. The tail's slow wag is the art's, in every clip.
+##   the orb: a node named `Orb` (a MeshInstance3D, or a node with one under it), anywhere in the
+##     model; set_drain_glow drives its emission. A `Site_orb` node or a bone `throat` works as the
+##     socket if the mesh is somewhere else.
+##   the mouth socket: a `Site_mouth` node, else a BoneAttachment3D on bone `jaw` or `head`; `Head`
+##   rides the `head` bone the same way.
 
 const Shapes := preload("res://scripts/monsters/shapes.gd")
 
@@ -42,6 +51,14 @@ const BOW_TILT := 0.22
 ## Ground covered per full gait cycle.
 const STRIDE := 1.35
 
+## The orb: pale, a little green, like something at the bottom of a pool.
+const ORB_COLOR := Color(0.78, 0.96, 0.9)
+const ORB_R := 0.03
+## Emission at glow 0 and at glow 1, and the throat pulse (cycles a second) while it drains.
+const ORB_DIM := 0.5
+const ORB_BRIGHT := 9.0
+const ORB_PULSE_HZ := 1.1
+
 const SKIN := Color("b9aea4")
 const VEST := Color("5a1c1c")
 const PATCH := Color("d8d2c4")
@@ -51,12 +68,24 @@ var moving := false
 var rear := 0.0
 var head_down := 0.0
 var growl := 0.0
-var lunge := 0.0
 var look_yaw := 0.0
 var carrying := false
+var lying := 0.0
+var daze := 0.0
+var rise := 0.0
+var stagger := 0.0
+var drain_glow := 0.0
+## Kept so a Monster written for the old rig can still set it; nothing reads it now.
+var lunge := 0.0
 
 var mouth: Node3D = null
 var head: Node3D = null
+## The throat orb (named `Orb`), its mesh and material, and the small light it throws on its jaws.
+var orb: Node3D = null
+var _orb_mesh: MeshInstance3D = null
+var _orb_mat: StandardMaterial3D = null
+var _orb_light: OmniLight3D = null
+var _last_rear := 0.0
 var glb := false
 
 var _hips: Node3D
@@ -103,6 +132,22 @@ func _try_glb(model: Node3D) -> bool:
 		mouth = Node3D.new()
 		mouth.position = Vector3(0.0, 1.2, -0.9)
 		add_child(mouth)
+	orb = root.find_child("Orb", true, false) as Node3D
+	if orb == null:
+		orb = root.find_child("Site_orb", true, false) as Node3D
+	if orb == null:
+		orb = _bone_node(model.skeleton, ["throat", "jaw", "head"], "OrbBone")
+	_orb_mesh = orb as MeshInstance3D if orb is MeshInstance3D else (orb.find_children("*", "MeshInstance3D", true, false).front() if orb != null and not orb.find_children("*", "MeshInstance3D", true, false).is_empty() else null)
+	if _orb_mesh == null and orb != null:
+		_make_orb(orb)   # the model has a socket but no orb of its own: ours goes there
+	elif _orb_mesh != null:
+		_orb_mat = StandardMaterial3D.new()
+		_orb_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_orb_mat.albedo_color = ORB_COLOR
+		_orb_mat.emission_enabled = true
+		_orb_mat.emission = ORB_COLOR
+		_orb_mesh.material_override = _orb_mat
+		_add_orb_light(orb)
 	var hb := _bone_node(model.skeleton, ["head"], "HeadBone")
 	head = Node3D.new()
 	head.name = "Head"
@@ -222,6 +267,13 @@ func _make() -> void:
 	mouth.position = Vector3(0.0, -0.03, -0.2)
 	_skull.add_child(mouth)
 
+	# The orb: at the back of the throat, where the jaw hinges, so it shows when the jaws open wide.
+	var socket := Node3D.new()
+	socket.name = "OrbSocket"
+	socket.position = Vector3(0.0, -0.058, -0.085)
+	_skull.add_child(socket)
+	_make_orb(socket)
+
 	head = Node3D.new()
 	head.name = "Head"
 	head.position = Vector3(0.0, 0.0, -0.02)
@@ -231,6 +283,66 @@ func _make() -> void:
 	for n in find_children("*", "MeshInstance3D", true, false):
 		(n as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	tick(0.0)
+
+
+## The orb itself: its own node and material (never baked into the head), so it can be taken out
+## of the body later. A dim glow at rest; set_drain_glow brings it up.
+func _make_orb(parent: Node3D) -> void:
+	var mi := MeshInstance3D.new()
+	mi.name = "Orb"
+	var sm := SphereMesh.new()
+	sm.radius = ORB_R
+	sm.height = ORB_R * 2.0
+	sm.radial_segments = 12
+	sm.rings = 6
+	mi.mesh = sm
+	_orb_mat = StandardMaterial3D.new()
+	_orb_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_orb_mat.albedo_color = ORB_COLOR
+	_orb_mat.emission_enabled = true
+	_orb_mat.emission = ORB_COLOR
+	_orb_mat.emission_energy_multiplier = ORB_DIM
+	mi.material_override = _orb_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	orb = mi
+	_orb_mesh = mi
+	_add_orb_light(parent)
+
+
+func _add_orb_light(parent: Node3D) -> void:
+	_orb_light = OmniLight3D.new()
+	_orb_light.name = "OrbLight"
+	_orb_light.light_color = ORB_COLOR
+	_orb_light.omni_range = 1.4
+	_orb_light.light_energy = 0.0
+	_orb_light.shadow_enabled = false
+	_orb_light.visible = false
+	parent.add_child(_orb_light)
+
+
+## 0..1: the orb's brightness (Monster sets it every frame from the replicated `og`).
+func set_drain_glow(v: float) -> void:
+	drain_glow = clampf(v, 0.0, 1.0)
+
+
+## Where the orb is this frame (the thread's far end).
+func orb_world() -> Vector3:
+	if orb != null and orb.is_inside_tree():
+		return orb.global_position
+	return mouth_world().origin
+
+
+func _tick_orb() -> void:
+	if _orb_mat == null:
+		return
+	var pulse := 1.0 + 0.3 * sin(_t * TAU * ORB_PULSE_HZ) * drain_glow
+	_orb_mat.emission_energy_multiplier = lerpf(ORB_DIM, ORB_BRIGHT, drain_glow) * pulse
+	if _orb_mesh != null:
+		_orb_mesh.scale = Vector3.ONE * (1.0 + 0.18 * drain_glow * sin(_t * TAU * ORB_PULSE_HZ))
+	if _orb_light != null:
+		_orb_light.visible = drain_glow > 0.2
+		_orb_light.light_energy = 0.9 * drain_glow * pulse
 
 
 func _make_leg(parent: Node3D, at: Vector3, skin: Material, side: float, front: bool, phase: float) -> Array:
@@ -263,20 +375,23 @@ func _make_leg(parent: Node3D, at: Vector3, skin: Material, side: float, front: 
 
 func tick(delta: float) -> void:
 	_t += delta
+	_tick_orb()
+	_tick_lying()
 	if glb:
 		_tick_glb()
 		return
 	if _hips == null:
 		return
-	var gait := clampf(speed / 2.6, 0.0, 1.0) if moving else 0.0
+	var gait := clampf(speed / 2.6, 0.0, 1.0) if moving and lying < 0.5 else 0.0
 	_phase = wrapf(_phase + delta * maxf(speed, 0.0) / STRIDE * TAU, 0.0, TAU)
 	var up := rear * rear * (3.0 - 2.0 * rear)
-	var bow := head_down * (1.0 - up)
+	var bow := maxf(head_down, daze * 0.85) * (1.0 - up)
 	var tilt := up * REAR_TILT - bow * BOW_TILT
 	# Upright it bobs with its steps; standing still it breathes, slowly, not quite in rhythm.
 	var bob := sin(_phase * 2.0) * 0.025 * gait + sin(_t * 1.3) * 0.006
 	_hips.rotation.x = tilt + sin(_phase * 2.0) * 0.02 * gait
-	_hips.position.y = HIP_Y + bob - bow * 0.08
+	_hips.position.y = HIP_Y + bob - bow * 0.08 - daze * 0.22
+	_hips.rotation.z = sin(_t * 19.0) * 0.08 * stagger
 	for leg in _legs:
 		var pivot: Node3D = leg[0]
 		var knee: Node3D = leg[1]
@@ -285,10 +400,10 @@ func tick(delta: float) -> void:
 		var swing := sin(ph) * 0.42 * gait
 		var lift := maxf(0.0, cos(ph)) * 0.7 * gait
 		if front:
-			# Up on its hind legs the front legs hang, then reach and rake while it lunges.
-			var hang := -tilt + lerpf(0.35, 1.35, lunge) + sin(_t * 9.0 + float(leg[2])) * 0.12 * lunge
+			# Standing, the front legs hang a little limp off its chest, swaying with it.
+			var hang := -tilt + 0.3 + sin(_t * 1.7 + float(leg[2])) * 0.05
 			pivot.rotation.x = lerpf(-0.12 + swing + bow * 0.5, hang, up)
-			knee.rotation.x = lerpf(0.25 + lift + bow * 0.9, lerpf(-0.9, -0.2, lunge), up)
+			knee.rotation.x = lerpf(0.25 + lift + bow * 0.9, -0.45, up)
 		else:
 			# Hind legs stay under it whatever the body does.
 			var biped_step := sin(_phase) * 0.35 * gait
@@ -301,28 +416,49 @@ func tick(delta: float) -> void:
 	var neck_pitch := lerpf(0.0, -1.45, bow) - up * (REAR_TILT + 0.35) - 0.12 * growl
 	_neck.rotation = Vector3(neck_pitch, clampf(look_yaw, -0.9, 0.9) * (1.0 - bow * 0.7), shake)
 	# The head's pitch in the world: level on all fours, nose down over you reared, to the floor bowed.
-	var head_world := -0.35 * up - 0.9 * bow + 0.08 * growl
+	var head_world := -0.3 * up - 0.9 * bow + 0.08 * growl
 	_skull.rotation.x = head_world - (tilt + neck_pitch)
 	_skull.rotation.z = sin(_t * 0.7) * 0.05 * (1.0 - growl)   # a slow tilt, like it is trying to work you out
 	var jaw := 0.14 if carrying else 0.0
 	jaw = maxf(jaw, 0.38 * growl + sin(_t * 23.0) * 0.05 * growl)
-	jaw = maxf(jaw, 0.55 * lunge)
+	# Standing, the jaws open wide as it rises and stay open: the orb shows in the throat.
+	jaw = maxf(jaw, 0.95 * up)
 	_jaw.rotation.x = jaw
 	_tail.rotation = Vector3(-0.35 + up * 0.9 + sin(_t * 2.1) * 0.05, sin(_t * (1.0 if up > 0.5 else 6.0)) * 0.12 * (1.0 - growl), 0.0)
+
+
+## Sedated: on its side. The whole body rolls about its long axis and settles on the floor (every
+## machine, GLB or not; the Monster's collider lies down on its own).
+func _tick_lying() -> void:
+	var e := lying
+	rotation.z = -e * PI * 0.5
+	position = Vector3(-e * 0.62, e * 0.2, 0.0)
 
 
 func _tick_glb() -> void:
 	if _model == null or not _model.has_method("play"):
 		return
+	var rising := rear > _last_rear + 0.0001
+	var falling := rear < _last_rear - 0.0001
+	_last_rear = rear
 	var clip := "idle"
-	if rear > 0.5:
-		clip = "attack" if lunge > 0.3 else "rear"
+	var rate := 1.0
+	if lying > 0.5:
+		clip = "idle"
+		rate = 0.0
+	elif rising and rear < 0.98:
+		clip = "rear_up"
+	elif falling and rear > 0.02:
+		clip = "drop_down"
+	elif rear >= 0.98:
+		clip = "upright_walk" if moving else "drain_idle"
+		rate = clampf(speed / 1.8, 0.6, 2.0) if moving else 1.0
 	elif moving:
-		clip = "run" if speed > 2.2 else "walk"
-	var key := KEY
-	if Assets.anim_name(key, clip) == "":
+		clip = "walk"
+		rate = clampf(speed / 1.4, 0.5, 2.5)
+	if Assets.anim_name(KEY, clip) == "":
 		clip = "walk" if moving else "idle"
-	_model.play(clip, clampf(speed / 1.4, 0.5, 2.5) if moving else 1.0, 0.2)
+	_model.play(clip, rate, 0.15)
 
 
 func mouth_world() -> Transform3D:

@@ -2600,6 +2600,34 @@ func dog_tag_exists(tag: int) -> bool:
 	return false
 
 
+## Host: whatever carries `tag` in the world is nobody's offer any more (its dog was killed or put
+## under). Hands keep their "dg"; with no dog asking for it, a throw of it satisfies nothing.
+func dog_release_tag(tag: int) -> void:
+	if tag == 0:
+		return
+	for it in world_items.values():
+		if is_instance_valid(it) and int(it.dog_tag) == tag:
+			it.dog_tag = 0
+
+
+## Host: the Service Dog's drain takes one heart off `p` (service_dog_brain.gd, on the Onlooker's
+## pacing). NOT damage_player: that drops everything in their hands and cancels a wind-up, and the
+## whole point of the drain is that the counter -- pick the item up, throw it -- stays open to them
+## while it goes on. No knockback, no hands dropped; at 0 they go down as they would from anything.
+func dog_drain_heart(m: Node, p: Node) -> void:
+	if not is_host() or p == null or not is_instance_valid(p) or not p.alive or p.downed or p.invuln > 0.0:
+		return
+	if dev_on() and dev.is_god(p):
+		return  # DEV HOOK: god mode
+	p.hp = maxi(0, int(p.hp) - 1)
+	if p.has_method("flinch"):
+		p.flinch()
+	_broadcast("hit", {"id": p.peer_id, "hp": p.hp, "knock": Vector3.ZERO})
+	Audio.play("hurt", p.global_position)
+	if p.hp <= 0:
+		down_player(p, "monster:%s" % String(m.kind) if m != null else "monster:service_dog")
+
+
 ## Host: a stack tagged `tag` just went out as a charged throw. The dog that offered it is satisfied.
 func dog_item_thrown(tag: int) -> void:
 	for m in monsters.values():
@@ -3090,6 +3118,8 @@ func kill_monster(m: Node) -> void:
 			q.teleport(q.held_from)
 	if combat != null:
 		combat.on_monster_removed(m)   # SWEEP 3 HOOK
+	if m.brain != null and m.brain.has_method("released"):
+		m.brain.released()   # SERVICE DOG: what it carried drops; its offer is nobody's now
 	var data := {"kind": m.kind, "pos": m.global_position, "y": m.rotation.y}
 	m.queue_free()
 	dev.monster_died_fx(data)

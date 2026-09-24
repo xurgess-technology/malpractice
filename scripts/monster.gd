@@ -19,7 +19,7 @@ enum State { WANDER, CHASE, STUNNED, SEDATED }
 ## What the monster is visibly doing. Replicated; drives animation and sound. Append only.
 ## The DOG_* tail is the Service Dog's (scripts/monsters/service_dog_brain.gd).
 enum Mode { IDLE, WANDER, LISTEN, RUSH, SEARCH, STALK, STUNNED, RETREAT, SEDATED, CHARGE, ECHO, WAIL,
-	DOG_SEEK, DOG_APPROACH, DOG_OFFER, DOG_WARN, DOG_REAR, DOG_RETRIEVE }
+	DOG_SEEK, DOG_APPROACH, DOG_OFFER, DOG_WARN, DOG_REAR_RETIRED, DOG_RETRIEVE, DOG_DRAIN }
 
 const SONOGRAPHER := "sonographer"
 const NIGHT_NURSE := "night_nurse"
@@ -29,8 +29,9 @@ const HIVE := "hive"
 const ONLOOKER := "onlooker"
 ## The Service Dog (scripts/monsters/service_dog_brain.gd): carries a two-handed item about, sets it
 ## down in front of a surgeon it sees and wants it thrown (a charged throw of that same item) before
-## its clock runs out; if not, it rears up and goes for them. Immune, like the Night Nurse. One per
-## shift from shift 2 (`roster()`), on its own count outside MAX_MONSTERS.
+## its clock runs out; if not, it stands up on its hind legs and drains them. Vulnerable on all fours
+## like a Hive, untouchable while it drains. One per shift from shift 2 (`roster()`), on its own count
+## outside MAX_MONSTERS.
 const SERVICE_DOG := "service_dog"
 const KINDS := [HIVE, SONOGRAPHER, NIGHT_NURSE, ONLOOKER, SERVICE_DOG]
 ## The Sonographer and the Night Nurse together.
@@ -142,6 +143,10 @@ var dog_target: int = 0
 var dog_left: float = 0.0
 var dog_growls: int = 0
 var dog_offer_kind: String = ""
+## The orb at the back of its throat, 0..1 (`og`): dim at rest, full while it drains someone.
+var dog_glow: float = 0.0
+var _dog_thread: MeshInstance3D = null
+var _dog_lie := 0.0
 var _dog_growls_seen := -1
 var _dog_head := 0.0
 var _dog_step_t := 0.0
@@ -236,14 +241,26 @@ static func hive_count(shift: int, player_count: int) -> int:
 
 
 ## Can it be sedated, strapped and dissected (it has a brain)?
+## The Service Dog is, like a Hive -- but only on all fours: see capturable_now() for this second.
 static func is_capturable(monster_kind: String) -> bool:
-	return monster_kind == HIVE or monster_kind == SONOGRAPHER
+	return monster_kind == HIVE or monster_kind == SONOGRAPHER or monster_kind == SERVICE_DOG
+
+
+## This monster, right now: its kind is capturable and nothing about this moment says otherwise.
+## The Service Dog is not while it stands draining (combat asks this before it offers the needle).
+func capturable_now() -> bool:
+	if not is_capturable(kind):
+		return false
+	if kind == SERVICE_DOG and brain != null and brain.upright():
+		return false
+	return true
 
 
 static func max_hp_for(monster_kind: String) -> int:
 	match monster_kind:
 		HIVE: return 2
 		SONOGRAPHER: return 4
+		SERVICE_DOG: return 2
 	return 0
 
 
@@ -404,9 +421,11 @@ func _apply_pin() -> bool:
 ## The Onlooker joins the Night Nurse here: the saw, the needle and a shove all do nothing to it.
 ## The counter is walking at it (onlooker_brain.gd BANISH_RANGE), and a weapon that also worked
 ## would quietly replace that with the fight every other monster already is.
-## The Service Dog is in the same category (immune; the counter is the fetch).
+## The Service Dog only while it is on all fours: standing and draining, the saw does nothing.
 func can_be_hurt() -> bool:
-	return kind != NIGHT_NURSE and kind != ONLOOKER and kind != SERVICE_DOG
+	if kind == SERVICE_DOG:
+		return mode != Mode.DOG_DRAIN
+	return kind != NIGHT_NURSE and kind != ONLOOKER
 
 
 ## A blow from `source` ("saw:<player name>", "dev", ...) travelling along `dir`.
@@ -467,12 +486,12 @@ func knock_back(dir: Vector3, metres: float) -> float:
 
 ## Stunned right now (the shove window) and it has a brain worth taking.
 func can_sedate() -> bool:
-	return is_capturable(kind) and not is_sedated() and mode == Mode.STUNNED
+	return capturable_now() and not is_sedated() and mode == Mode.STUNNED
 
 
 ## Host: falls down and lies still; the brain stops. Wakes when `seconds` run out.
 func sedate(seconds: float) -> bool:
-	if not is_capturable(kind) or is_sedated() or seconds <= 0.0:
+	if not capturable_now() or is_sedated() or seconds <= 0.0:
 		return false
 	sedation_left = seconds
 	mode = Mode.SEDATED
@@ -974,9 +993,6 @@ func _update_visual(delta: float) -> void:
 	if kind == ONLOOKER:
 		_onlooker_visual(delta)
 		return
-	if kind == SERVICE_DOG:
-		_dog_visual(delta)
-		return
 	var frozen := kind == NIGHT_NURSE and observed and grab_peer == 0
 	if grab_peer != 0:
 		grab_t += delta
@@ -998,6 +1014,9 @@ func _update_visual(delta: float) -> void:
 		_shape.rotation.x = PI * 0.5 if lying else 0.0
 		_shape.position = Vector3(0.0, r if lying else height * 0.5, 0.0)
 	_lie = move_toward(_lie, 1.0 if lying else 0.0, delta * (2.2 if lying else 1.4))
+	if kind == SERVICE_DOG:
+		_dog_visual(delta)
+		return
 
 	if model == null:
 		return
@@ -1289,20 +1308,23 @@ func _onlooker_visual(delta: float) -> void:
 			rg.tick(delta, viewer.global_position + Vector3.UP * C.EYE_H if viewer != null else Vector3.INF)
 
 
-## The Service Dog's body (service_dog_rig.gd), every machine, from the replicated mode alone:
-##   DOG_REAR       up onto its hind legs over DogBrain.REAR_RISE; back down over REAR_DROP after
+## The Service Dog's body (service_dog_rig.gd), every machine, from the replicated fields alone:
+##   DOG_DRAIN      up onto its hind legs over DogBrain.REAR_RISE (`rear_up`), jaws wide, the orb at
+##                  `og`; back down over REAR_DROP (`drop_down`) when it ends
 ##   DOG_OFFER      head down to the floor by OFFER_DROP_AT (the item leaves its mouth), then back up
 ##   DOG_SEEK / DOG_RETRIEVE, standing still   nose at the floor, taking the item
+##   STUNNED        the shove's slump (combat's stun window, as the Hive gets)
+##   SEDATED        on its side
 ##   a growl        (`gr` went up) jaw open and the head shaking for about a second
-##   the look       its head turns to whoever it is offering to or going for (`dt`)
-## and the carried item (`ck`) rides the mouth socket. No clip, no shaper: the rig is its own poser.
+##   the look       its head turns to whoever it is offering to or draining (`dt`)
+## plus the thread from its surgeon's mouth to the orb, and the carried item (`ck`) on the mouth
+## socket. No clip, no shaper: the rig is its own poser.
 func _dog_visual(delta: float) -> void:
 	if mode != _dog_mode_seen:
 		_dog_mode_seen = mode
 		_dog_mode_t = 0.0
 	_dog_mode_t += delta
-	lunge_t = maxf(0.0, lunge_t - delta)
-	_lunge_amt = move_toward(_lunge_amt, 1.0 if lunge_t > 0.0 else 0.0, delta * (7.0 if lunge_t > 0.0 else 2.5))
+	lunge_t = 0.0
 	if game != null and not game.is_host() and mode == Mode.DOG_WARN:
 		dog_left = maxf(0.0, dog_left - delta)   # the host's clock, counted on between snapshots
 	if _dog_growls_seen < 0:
@@ -1313,8 +1335,8 @@ func _dog_visual(delta: float) -> void:
 		if _near_viewer(24.0):
 			Audio.play("monsters_dog_growl", eye_transform().origin, 0.0, 0.06)
 	_dog_growl = maxf(0.0, _dog_growl - delta / 1.3)
-	var reared := mode == Mode.DOG_REAR
-	_dog_rear = move_toward(_dog_rear, 1.0 if reared else 0.0, delta / (DogBrain.REAR_RISE if reared else DogBrain.REAR_DROP))
+	var up := mode == Mode.DOG_DRAIN
+	_dog_rear = move_toward(_dog_rear, 1.0 if up else 0.0, delta / (DogBrain.REAR_RISE if up else DogBrain.REAR_DROP))
 	var want_head := 0.0
 	match mode:
 		Mode.DOG_OFFER:
@@ -1323,6 +1345,11 @@ func _dog_visual(delta: float) -> void:
 		Mode.DOG_SEEK, Mode.DOG_RETRIEVE:
 			want_head = 1.0 if not moving and _dog_rear < 0.1 and _dog_mode_t > 0.2 else 0.0
 	_dog_head = move_toward(_dog_head, want_head, delta * 3.5)
+	var e := _lie * _lie * (3.0 - 2.0 * _lie)
+	# (_flinch, _stagger and _lie are the shared ones, worked out in _update_visual before it got here.)
+	var target_node: Node3D = _dog_target_node()
+	_dog_thread_tick(target_node)
+	_dog_local_fx()
 	if model == null or model.dog == null:
 		return
 	var rg = model.dog
@@ -1331,16 +1358,106 @@ func _dog_visual(delta: float) -> void:
 	rg.rear = _dog_rear
 	rg.head_down = _dog_head
 	rg.growl = sin(minf(_dog_growl, 1.0) * PI * 0.5)
-	rg.lunge = _lunge_amt
 	rg.carrying = dog_carry != ""
+	rg.lying = e
+	rg.stagger = maxf(_stagger * 0.6, _flinch) * (1.0 - e)
+	# HANDS HOOK (scripts/combat/stun_window.gd): the shove's stun window -- down hard, then a twitching
+	# rise -- exactly as it drives the Hive's poser (`daze`, `rise`, `stagger`).
+	var cbt = game.get("combat") if game != null else null
+	if cbt != null and cbt.has_method("stun_pose"):
+		cbt.stun_pose(self, rg, e)
+	rg.set_drain_glow(dog_glow)
 	var look := 0.0
-	if dog_target != 0 and game != null and "players" in game:
-		var p = (game.players as Dictionary).get(dog_target)
-		if p != null and is_instance_valid(p):
-			look = yaw_to(p.global_position)
+	if target_node != null:
+		look = yaw_to(target_node.global_position)
 	rg.look_yaw = lerpf(float(rg.look_yaw), look, clampf(delta * 5.0, 0.0, 1.0))
 	rg.tick(delta)
 	_dog_hold(rg)
+
+
+## The surgeon it is offering to or draining, on this machine, or null.
+func _dog_target_node() -> Node3D:
+	if dog_target == 0 or game == null or not ("players" in game):
+		return null
+	var p = (game.players as Dictionary).get(dog_target)
+	return p if p != null and is_instance_valid(p) else null
+
+
+## Is it draining `dog_target` this second? Every machine works it out from the replicated fields:
+## upright in DOG_DRAIN, and the orb lit (the host only turns it up while the target is in range with
+## a clear line, so `og` carries the range check without a field of its own).
+func dog_draining() -> bool:
+	return kind == SERVICE_DOG and mode == Mode.DOG_DRAIN and _dog_rear > 0.95 and dog_glow > DRAIN_LIT
+
+
+const DRAIN_LIT := 0.7
+
+
+## The thread: a thin pale line from the drained surgeon's mouth to the orb, seen by everyone near.
+## It exists only while dog_draining(); the instant that stops (a throw, their fall) it is gone.
+func _dog_thread_tick(p: Node3D) -> void:
+	var on := dog_draining() and p != null and model != null and model.dog != null
+	if not on:
+		if _dog_thread != null:
+			_dog_thread.visible = false
+		return
+	if _dog_thread == null:
+		_dog_thread = MeshInstance3D.new()
+		_dog_thread.name = "DrainThread"
+		_dog_thread.top_level = true
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.007
+		cyl.bottom_radius = 0.007
+		cyl.height = 1.0
+		cyl.radial_segments = 5
+		cyl.rings = 1
+		_dog_thread.mesh = cyl
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = Color(0.72, 1.0, 0.88, 0.85)   # the orb's colour, so it reads against its pale body
+		mat.emission_enabled = true
+		mat.emission = Color(0.6, 1.0, 0.85)
+		mat.emission_energy_multiplier = 3.5
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_dog_thread.material_override = mat
+		_dog_thread.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(_dog_thread)
+	var mouth := _mouth_of(p)
+	var orb: Vector3 = model.dog.orb_world()
+	# Stretched between two points: a unit cylinder along +Y, scaled to the gap.
+	var d := orb - mouth
+	var l := d.length()
+	if l < 0.01:
+		_dog_thread.visible = false
+		return
+	var y := d / l
+	var x := y.cross(Vector3.FORWARD if absf(y.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT).normalized()
+	var z := x.cross(y).normalized()
+	# A faint shiver along it, so it reads as something alive rather than a wire.
+	var wob := 1.0 + 0.35 * sin(Time.get_ticks_msec() * 0.023)
+	_dog_thread.global_transform = Transform3D(Basis(x * wob, y * l, z * wob), (mouth + orb) * 0.5)
+	_dog_thread.visible = true
+
+
+## Where a surgeon's mouth is: just under and in front of their eyes, whichever way their head faces.
+static func _mouth_of(p: Node3D) -> Vector3:
+	var head = p.get("head")
+	if head is Node3D and (head as Node3D).is_inside_tree():
+		var hb: Basis = (head as Node3D).global_transform.basis
+		return (head as Node3D).global_position - hb.z * 0.13 - Vector3.UP * 0.11
+	return p.global_position + Vector3.UP * (C.EYE_H - 0.11)
+
+
+## The drained surgeon's own screen and ears (scripts/monsters/dog_drain_fx.gd): local only, from
+## `dt` on this machine. One node per machine, made by whichever dog gets here first.
+func _dog_local_fx() -> void:
+	if game == null or not game.is_inside_tree():
+		return
+	if game.get_node_or_null("DogDrainFx") == null:
+		var fx: Node = (load("res://scripts/monsters/dog_drain_fx.gd") as GDScript).new()
+		fx.name = "DogDrainFx"
+		game.add_child(fx)
 
 
 ## The item in its mouth, on every machine: rebuilt when `ck` changes, parented to the mouth socket.
@@ -1378,26 +1495,22 @@ func _near_viewer(dist: float) -> bool:
 
 
 ## Its sounds, every machine. The growl itself plays from _dog_visual when the counter moves.
-##   up on its hind legs   a snarl, once, as it rises
-##   a swipe               a shorter snarl
-##   walking               a dry click of long nails on lino per footfall; nothing at all when still
+##   knocked down (a shove)   a pained snarl
+##   walking on all fours     a dry click of long nails on lino per footfall
+##   upright and draining     NOTHING. It follows you in silence; the silence is the tell.
 func _dog_sound(delta: float) -> void:
 	if not _near_viewer(30.0):
 		_last_mode = mode
 		return
 	if mode != _last_mode:
-		if mode == Mode.DOG_REAR:
-			Audio.play("monsters_dog_snarl", eye_transform().origin, 0.0, 0.05)
+		if mode == Mode.STUNNED:
+			Audio.play("monsters_dog_snarl", eye_transform().origin, -2.0, 0.08)
 		_last_mode = mode
-	var lunging := lunge_t > 0.0
-	if lunging and not _last_lunge:
-		Audio.play("monsters_dog_snarl", eye_transform().origin, -4.0, 0.12)
-	_last_lunge = lunging
 	_dog_step_t -= delta
-	if moving and _dog_step_t <= 0.0:
+	if moving and mode != Mode.DOG_DRAIN and _dog_rear < 0.2 and _dog_step_t <= 0.0:
 		# Four feet: a click per foot, so a quarter of the gait's cycle (service_dog_rig.gd STRIDE).
 		_dog_step_t = clampf(0.25 * 1.35 / maxf(speed, 0.4), 0.12, 0.45) * _rng.randf_range(0.85, 1.15)
-		Audio.play("monsters_dog_step", global_position + Vector3.UP * 0.05, -9.0 if _dog_rear < 0.5 else -5.0, 0.12)
+		Audio.play("monsters_dog_step", global_position + Vector3.UP * 0.05, -9.0, 0.12)
 
 
 ## Dev mode's settings for the Night Nurse (dev_controller.gd `nurse_settings()`): {ignore_watch,
@@ -1426,9 +1539,6 @@ func _update_sound(delta: float) -> void:
 		# whole rule is that the only tell is visual, so the fear is checking your own sightlines.
 		# This early return is the feature. Do not give it a footstep, a breath or a pop.
 		return
-	if kind == SERVICE_DOG:
-		_dog_sound(delta)
-		return
 	var viewer: Node = game.viewed_player() if game.has_method("viewed_player") else null
 	var near_viewer: bool = viewer == null or viewer.global_position.distance_to(global_position) < 30.0
 
@@ -1436,6 +1546,9 @@ func _update_sound(delta: float) -> void:
 		_last_hits = hit_count
 		if near_viewer:
 			Audio.play("monsters_flesh_hit", global_position + Vector3.UP * 1.2, -1.0, 0.1)
+	if kind == SERVICE_DOG:
+		_dog_sound(delta)
+		return
 	if mode != _last_mode:
 		if kind == SONOGRAPHER and near_viewer and (mode == Mode.CHARGE or mode == Mode.ECHO or mode == Mode.RUSH):
 			# The charge is clicks rising into a whine; the echo is a deep sonar ping with scan
@@ -1535,7 +1648,7 @@ func alert_to(pos: Vector3) -> void:
 func shoved(dir: Vector3, charge := -1.0) -> void:
 	if is_sedated():
 		return
-	if charge > 0.0 and is_capturable(kind) and brain.has_method("stun"):
+	if charge > 0.0 and capturable_now() and brain.has_method("stun"):
 		brain.stun(dir, lerpf(2.0, 3.5, clampf(charge, 0.0, 1.0)), lerpf(1.05, 1.9, clampf(charge, 0.0, 1.0)))
 		return
 	brain.shoved(dir)
@@ -1573,6 +1686,7 @@ func report() -> Dictionary:
 		d["ol"] = snappedf(dog_left, 0.25)
 		d["gr"] = dog_growls
 		d["ok"] = dog_offer_kind
+		d["og"] = snappedf(dog_glow, 1.0 / 32.0)
 	return d
 
 
@@ -1618,6 +1732,7 @@ func apply_remote(s: Dictionary) -> void:
 			dog_left = float(s.ol)   # counted down locally in _dog_visual between snapshots
 		dog_growls = int(s.get("gr", dog_growls))
 		dog_offer_kind = String(s.get("ok", dog_offer_kind))
+		dog_glow = float(s.get("og", dog_glow))
 	var gp := int(s.get("gp", 0))
 	if gp != grab_peer:
 		grab_peer = gp

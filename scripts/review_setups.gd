@@ -127,7 +127,7 @@ const SETUPS := {
 	"vats": {"seed": 4242, "stage": "_vats"},
 	# SERVICE DOG (placeholder body): a wing corridor, empty hands, and the Service Dog a few metres
 	# off with a heart monitor in its mouth, looking at you. It walks up and sets it at your feet;
-	# pick it up and THROW it (hold the drop key, not a tap) before the clock runs out, or it rears.
+	# pick it up and THROW it (hold the drop key, not a tap) before the clock runs out, or it stands up and drains you.
 	# A defibrillator lies nearby for its next round. `-Count 2`: your teammate's throw counts too.
 	"service_dog": {"seed": 4242, "stage": "_service_dog"},
 }
@@ -1388,10 +1388,10 @@ static func _bleed(game: Game) -> void:
 
 ## SERVICE DOG: standing in a wing corridor (a monster spawn, so a hallway the dog may wander) with
 ## empty hands, the Service Dog a few metres down it facing you, a heart monitor in its mouth. It
-## comes up, puts it down in front of you and growls; the fetch clock is at the top of the screen.
+## comes up, puts it down in front of you and growls (the fetch clock is not shown anywhere).
 ## A charged throw (hold the drop key) of that heart monitor satisfies it; let the clock run out and
-## it rears up and comes for you until someone throws it. You cannot lose the run (no game over);
-## you CAN be hit. A defibrillator on the floor behind you is the next thing it will go and fetch.
+## it stands up and drains your hearts until someone throws it. You cannot lose the run (no game over);
+## you CAN lose hearts. A defibrillator on the floor nearby is the next thing it will go and fetch.
 static func _service_dog(game: Game) -> void:
 	var tree := game.get_tree()
 	var p = game.local_player()

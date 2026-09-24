@@ -486,6 +486,8 @@ func _hurtable(m: Node) -> bool:
 
 
 func _capturable(m: Node) -> bool:
+	if m.has_method("capturable_now"):
+		return bool(m.capturable_now())   # SERVICE DOG: not while it stands draining
 	var s = m.get_script()
 	if s != null and s.has_method("is_capturable"):
 		return bool(s.is_capturable(String(m.kind)))
@@ -547,6 +549,8 @@ static func monster_name(kind: String) -> String:
 			return "Night Nurse"
 		"sonographer":
 			return "Sonographer"
+		"service_dog":
+			return "Service Dog"
 	return kind.capitalize()
 
 

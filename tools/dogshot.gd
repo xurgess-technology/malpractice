@@ -68,11 +68,14 @@ func _ready() -> void:
 	await _seconds(3.0)
 	await _shoot("4_warn_clock")
 	dog.brain.offer_left = 0.2
-	await _until(func(): return int(dog.mode) == Modes.Mode.DOG_REAR, 3.0)
-	await _seconds(DogBrain.REAR_RISE + 0.4)
-	await _shoot("5_reared")
-	await _seconds(0.6)
-	await _shoot("6_reared_attack")
+	await _until(func(): return int(dog.mode) == Modes.Mode.DOG_DRAIN, 3.0)
+	await _seconds(DogBrain.REAR_RISE * 0.55)
+	await _shoot("5_rear_up")
+	await _seconds(DogBrain.REAR_RISE * 0.45 + 1.0)
+	await _shoot("6_drain_start")
+	# Let it go on: the drained surgeon's screen greys, their torch dims (local only).
+	await _seconds(5.0)
+	await _shoot("7_drain_deep")
 	# Save it: a charged throw of the item it offered (a teammate would do the same).
 	var it: Node = game.dog_tagged_item(int(dog.brain.offer_tag))
 	if it != null:
@@ -81,10 +84,10 @@ func _ready() -> void:
 		await _frames(2)
 		game.drop_selected(me, 0.5)
 	await _seconds(0.4)
-	await _shoot("7_satisfied_drops")
+	await _shoot("8_thrown_drops")
 	await _until(func(): return String(dog.dog_carry) != "", 20.0)
 	await _seconds(0.3)
-	await _shoot("8_retrieved")
+	await _shoot("9_retrieved")
 	print("[dogshot] wrote %d shots: %s" % [shots.size(), str(shots)])
 	get_tree().quit(0)
 
@@ -95,6 +98,10 @@ func _physics_process(delta: float) -> void:
 
 ## Two views of this moment: through your eyes, and from the side at about 4 m.
 func _shoot(label: String) -> void:
+	# Look at its head, wherever it has got to.
+	var to: Vector3 = dog.eye_transform().origin - (me.global_position + Vector3.UP * C.EYE_H)
+	me.bot_yaw = atan2(-to.x, -to.z)
+	me.bot_pitch = clampf(atan2(to.y, Vector2(to.x, to.z).length()) - 0.15, -1.0, 1.0)
 	for i in 3:
 		await get_tree().process_frame
 	_save("dog_%s_eyes" % label)
@@ -143,7 +150,8 @@ func _save(name: String) -> void:
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	img.save_png(path)
 	shots.append(path)
-	print("[dogshot] %s  mode=%d rear=%.2f carry='%s' left=%.1f" % [path, dog.mode, dog.model.dog.rear, dog.dog_carry, dog.dog_left])
+	var fx = game.get_node_or_null("DogDrainFx")
+	print("[dogshot] %s  mode=%d rear=%.2f glow=%.2f carry='%s' left=%.1f fx=%.2f" % [path, dog.mode, dog.model.dog.rear, dog.dog_glow, dog.dog_carry, dog.dog_left, fx.amount if fx != null else 0.0])
 
 
 func _until(cond: Callable, seconds: float) -> bool:

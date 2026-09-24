@@ -14,20 +14,24 @@ extends RefCounted
 ##                  (`offer_left`, on the wire as `ol`; never drawn -- the growls and its stare are the
 ##                  only tells). A charged throw of THAT
 ##                  item by anybody (game.dog_item_thrown -> item_thrown) satisfies it.
-##   DOG_REAR       the clock ran out: it rises onto its hind legs (REAR_RISE) and goes for the
-##                  surgeon it offered to (`target_id`), and keeps going -- hit, back off, come again
-##                  -- until they are down, gone, or ANYBODY throws that same item with a charge.
-##   DOG_RETRIEVE   satisfied (or its target is down): back on all fours, it trots to wherever the
+##   DOG_DRAIN      the clock ran out: it rises onto its hind legs (REAR_RISE), jaws wide, a glowing orb
+##                  at the back of its throat, and DRAINS the surgeon it offered to (`target_id`, no
+##                  one else): inside DRAIN_RANGE with a clear line, hearts go on the Onlooker's
+##                  pacing (a grace, then ticks that shorten). It does not hold them -- they can walk,
+##                  pick up and throw -- and it follows upright, silently, at walking pace. It ends when
+##                  ANYBODY throws that same item with a charge, or when its surgeon is down or gone.
+##   DOG_RETRIEVE   satisfied (or its surgeon is out): down on all fours, it trots to wherever the
 ##                  item ended up, takes it back in its mouth, and goes back to wandering. It stays
 ##                  CONTENT_TIME seconds before it will offer anything again.
+##   STUNNED        a shove (on all fours only): down for SHOVE_STUN, then back to what it was doing;
+##                  the fetch clock does not run while it is down. Sedated, it drops what it carries.
 ##
 ## Identity is the item, not the thrower: a pickup destroys the WorldItem node and a throw spawns a
 ## new one, so the offer's identity is a tag (`offer_tag`) that rides the stack through a hand slot
 ## ("dg") and back out onto the new WorldItem (game.gd "Service Dog"). Whoever throws it, it counts.
 ##
-## Immune like the Night Nurse and the Onlooker: no saw, no needle, no shove, no drag, no table.
-## Monster.can_be_hurt / is_capturable say so, and every hook below that the combat code calls is a
-## no-op for it.
+## Vulnerable on all fours, like a Hive: shove (stun), needle, drag, saw (Monster.can_be_hurt /
+## capturable_now). Upright and draining it is none of those: shove, saw and needle do nothing.
 
 const M := preload("res://scripts/monsters/modes.gd")
 
@@ -43,8 +47,6 @@ const SPEED_WANDER := 1.1
 const SPEED_SEEK := 1.4
 const SPEED_APPROACH := 1.5      ## a walk: it is not charging you, and that is the unsettling part
 const SPEED_RETRIEVE := 2.6      ## a happy trot
-const SPEED_REAR := 3.1          ## on its hind legs; a surgeon walks 3.4, so running away works, briefly
-const SPEED_BACKOFF := 1.6
 
 ## Where it stops to put the item down, metres from the surgeon (horizontal).
 ## (From its middle: its head is over a metre ahead of that, so this leaves the item at your feet
@@ -61,15 +63,31 @@ const GROWL2_AT := Vector2(2.2, 3.4)
 const GROWL2_CHANCE := 0.6
 ## While the clock runs it stays near its surgeon: further than this and it pads after them.
 const WARN_FOLLOW := 5.5
-## Rising onto its hind legs before it moves.
-const REAR_RISE := 0.9
-## Dropping back to all fours before it trots off to fetch.
-const REAR_DROP := 0.6
-const LUNGE_RANGE := 1.25
-## Reared, it stops walking at this range (metres from its middle) and swipes from there.
-const REAR_CLOSE := 1.0
-const HIT_REACH := 1.05
-const BACKOFF_TIME := 0.75
+## Rising onto its hind legs (the `rear_up` clip is 0.6-0.8 s), and dropping back (`drop_down`, ~0.4 s).
+const REAR_RISE := 0.7
+const REAR_DROP := 0.4
+## The drain: only its own surgeon, only this close (flat metres from its middle) and with a clear line
+## from its throat to their face.
+const DRAIN_RANGE := 4.0
+## Upright it walks after them at a little under a surgeon's walk (C.WALK_SPEED 3.4): walking away
+## keeps the gap, sprinting opens it. It stops this far off, standing over them.
+const SPEED_DRAIN := 3.1
+const DRAIN_STAND := 2.2
+## The Onlooker's pacing (onlooker_brain.gd GRACE / TICK_*), shorter: the fetch clock was the grace.
+## Seconds of drain in range before the first heart; then each gap is RAMP times the last, floored.
+## 2.5 -> 4.5 -> 3.4 -> 2.5 -> 2.0: three hearts go in about 10 s of standing in it.
+const DRAIN_GRACE := 2.5
+const DRAIN_TICK_FIRST := 4.5
+const DRAIN_TICK_RAMP := 0.75
+const DRAIN_TICK_MIN := 2.0
+## Out of range the meter bleeds back down at this many seconds per second (the Onlooker's look-away).
+const DRAIN_DECAY := 0.5
+## The orb's glow (replicated as `og`, 0..1): dim at rest, full while it drains someone in range.
+const GLOW_REST := 0.12
+const GLOW_OUT_OF_RANGE := 0.45
+const GLOW_RATE := 2.0
+## A shove on all fours, like the Hive's.
+const SHOVE_STUN := 2.0
 ## After a fetch (or a give-up) it will not offer again for this long.
 const CONTENT_TIME := 20.0
 ## Walking toward the surgeon it gives up if it has not seen them for this long.
@@ -84,10 +102,10 @@ const TAKE_TIME := 0.5
 const RETRIEVE_GIVE_UP := 25.0
 ## How often it checks the tagged item still exists somewhere (a player could sell it).
 const EXIST_INTERVAL := 1.0
-## The throw that counts: any charge past a tap. game.drop_selected already reports a tap as charge 0
-## (Player.DROP_TAP_MAX is the SECONDS of hold that count as a tap, not a charge), so this is only
-## the same small floor the placebo pill's charged throw uses. It does not need to be a full charge.
-const THROW_MIN_CHARGE := 0.02
+## The throw that counts: `charge` as game.drop_selected(p, charge) gets it, 0..1, above this. A tap
+## reports charge 0 there (Player.DROP_TAP_MAX is SECONDS of hold that count as a tap, not a charge,
+## and is never compared with a charge). Zach: ~0.1 for this mechanic, not a full charge. Tune here.
+const THROW_MIN_CHARGE := 0.1
 
 var m: CharacterBody3D
 var rng := RandomNumberGenerator.new()
@@ -114,7 +132,14 @@ var satisfied := false
 var growls := 0
 var _growl2_at := -1.0
 var _rise := 0.0
-var _backoff := 0.0
+## The drain meter (seconds in range, bleeding down out of range), the next heart, and the orb.
+var drain_t := 0.0
+var tick_left := 0.0
+var ticks := 0
+var glow := GLOW_REST
+var in_range := false
+## What it goes back to when a stun ends.
+var _resume := -1
 var _take := 0.0
 var _stuck_check := 0.0
 var _stuck_from := Vector3.ZERO
@@ -123,7 +148,7 @@ var _skip := {}
 var _clock := 0.0
 ## How many fetches it has had (tests; also shows in the log).
 var fetches := 0
-var attacks := 0
+var hearts := 0
 
 
 func _init(monster: CharacterBody3D) -> void:
@@ -140,9 +165,13 @@ func _init(monster: CharacterBody3D) -> void:
 # =========================================================================
 
 func think(delta: float) -> void:
-	content = maxf(0.0, content - delta)
 	timer -= delta
 	_clock += delta
+	if m.mode == M.Mode.STUNNED:
+		_stunned(delta)
+		_publish()
+		return
+	content = maxf(0.0, content - delta)
 	match m.mode:
 		M.Mode.DOG_SEEK:
 			_seek(delta)
@@ -152,8 +181,8 @@ func think(delta: float) -> void:
 			_offer(delta)
 		M.Mode.DOG_WARN:
 			_warn(delta)
-		M.Mode.DOG_REAR:
-			_rear(delta)
+		M.Mode.DOG_DRAIN:
+			_drain(delta)
 		M.Mode.DOG_RETRIEVE:
 			_retrieve(delta)
 		M.Mode.WANDER:
@@ -170,17 +199,30 @@ func think(delta: float) -> void:
 			if timer <= 0.0:
 				_start_wander()
 			_scan(delta)
+	if m.mode != M.Mode.DOG_DRAIN:
+		_rise = maxf(0.0, _rise - delta * (REAR_RISE / REAR_DROP))
+		in_range = false
+	glow = move_toward(glow, _glow_want(), delta * GLOW_RATE)
 	_publish()
+
+
+func _glow_want() -> float:
+	if m.mode != M.Mode.DOG_DRAIN:
+		return GLOW_REST
+	if _rise < REAR_RISE:
+		return lerpf(GLOW_REST, GLOW_OUT_OF_RANGE, _rise / REAR_RISE)
+	return 1.0 if in_range else GLOW_OUT_OF_RANGE
 
 
 ## What every machine needs to see, onto the Monster (report() sends it).
 func _publish() -> void:
 	m.dog_carry = String(carried.get("kind", ""))
 	m.dog_target = target_id if (m.mode == M.Mode.DOG_APPROACH or m.mode == M.Mode.DOG_OFFER \
-			or m.mode == M.Mode.DOG_WARN or m.mode == M.Mode.DOG_REAR) else 0
+			or m.mode == M.Mode.DOG_WARN or m.mode == M.Mode.DOG_DRAIN) else 0
 	m.dog_left = offer_left if m.mode == M.Mode.DOG_WARN else 0.0
 	m.dog_growls = growls
 	m.dog_offer_kind = _last_offer_kind if offer_tag != 0 else ""
+	m.dog_glow = glow
 
 
 ## The kind of the item it last put down (replicated as `ok`).
@@ -323,16 +365,18 @@ func _warn(delta: float) -> void:
 	if offer_tag == 0:
 		return   # the item is gone for good (_check_exists gave up)
 	if offer_left <= 0.0:
-		_set_mode(M.Mode.DOG_REAR)
+		_set_mode(M.Mode.DOG_DRAIN)
 		m.state = M.State.CHASE
 		_rise = 0.0
-		_backoff = 0.0
+		drain_t = 0.0
+		tick_left = 0.0
+		ticks = 0
 
 
 var growls_this_offer := 0
 
 
-func _rear(delta: float) -> void:
+func _drain(delta: float) -> void:
 	m.state = M.State.CHASE
 	if satisfied:
 		_fetch_back()
@@ -344,42 +388,73 @@ func _rear(delta: float) -> void:
 	_check_exists(delta)
 	if offer_tag == 0:
 		return
+	var to: Vector3 = p.global_position - m.global_position
 	if _rise < REAR_RISE:
-		# Up onto its hind legs, looking at them the whole way.
+		# Up onto its hind legs in front of them, jaws opening, looking at them the whole way.
 		_rise += delta
 		m.stop()
-		m.face_dir(p.global_position - m.global_position, delta, 6.0)
+		m.face_dir(to, delta, 6.0)
 		return
-	m.calm = maxf(0.0, m.calm - delta)
-	if _backoff > 0.0:
-		_backoff -= delta
-		var away: Vector3 = m.global_position - p.global_position
-		away.y = 0.0
-		away = away.normalized() if away.length() > 0.05 else m.global_transform.basis.z
-		m.step_toward(m.global_position + away, SPEED_BACKOFF, delta, false)
-		m.face_dir(-away, delta, 6.0)
-		return
-	var d := _flat(p.global_position)
-	if d > REAR_CLOSE:
-		m.nav_move(p.global_position, SPEED_REAR, delta)
+	_drain_follow(p, delta)
+	var throat: Vector3 = m.dog_mouth_world()
+	var face: Vector3 = p.global_position + Vector3.UP * (C.EYE_H - 0.12)
+	in_range = _flat(p.global_position) <= DRAIN_RANGE and m.clear_line(throat, face)
+	if in_range:
+		drain_t += delta
 	else:
-		# Close enough to reach: it stands over you and swipes rather than walking into you.
+		drain_t = maxf(0.0, drain_t - delta * DRAIN_DECAY)
+	# The Onlooker's clock: at zero below the grace line, so the FIRST heart lands the moment the
+	# meter passes it; each gap after that is shorter than the last.
+	if drain_t >= DRAIN_GRACE and in_range:
+		tick_left -= delta
+		if tick_left <= 0.0:
+			tick_left = maxf(DRAIN_TICK_MIN, DRAIN_TICK_FIRST * pow(DRAIN_TICK_RAMP, float(ticks)))
+			ticks += 1
+			hearts += 1
+			if m.game.has_method("dog_drain_heart"):
+				m.game.dog_drain_heart(m, p)
+	elif drain_t < DRAIN_GRACE:
+		tick_left = 0.0
+		ticks = 0
+
+
+## Upright it keeps after them: a slow, stiff walk, never faster than a surgeon's walk, no lunge, no
+## sound. Its own function so a different way of following (a glide) can replace it later.
+func _drain_follow(p: Node, delta: float) -> void:
+	var to: Vector3 = p.global_position - m.global_position
+	if _flat(p.global_position) > DRAIN_STAND:
+		m.nav_move(p.global_position, SPEED_DRAIN, delta)
+		m.face_dir(to, delta, 8.0)   # the head never leaves them, even round a corner
+	else:
 		m.stop()
-		m.face_dir(p.global_position - m.global_position, delta, 8.0)
-	if d <= LUNGE_RANGE and m.lunge_t <= 0.0:
-		m.lunge_t = 0.5
-	if d <= m.body_radius + C.PLAYER_RADIUS + HIT_REACH * 0.5 and m.calm <= 0.0:
-		m.face_dir(p.global_position - m.global_position, 1.0, 1.0)
-		attacks += 1
-		m.calm = maxf(m.calm, 0.5)   # a hit that did not land (invulnerable, god mode) still waits
-		m.game.monster_hit_player(m, p)   # calls recoil_after_hit() below
+		m.face_dir(to, delta, 6.0)
+
+
+## A shove put it down (only ever on all fours). Back to what it was doing when the time is up.
+func _stunned(_delta: float) -> void:
+	m.state = M.State.STUNNED
+	m.stop()
+	if timer > 0.0:
+		return
+	var back := _resume if _resume >= 0 else M.Mode.WANDER
+	_resume = -1
+	var keep_timer := timer
+	m.mode = back
+	m._repath = 0.0
+	if back == M.Mode.DOG_RETRIEVE or back == M.Mode.DOG_SEEK:
+		timer = RETRIEVE_GIVE_UP if back == M.Mode.DOG_RETRIEVE else 20.0
+	elif back == M.Mode.DOG_OFFER:
+		timer = 0.0   # finish the set-down at once
+	elif back == M.Mode.IDLE:
+		timer = rng.randf_range(0.5, 1.5)
+	else:
+		timer = keep_timer
 
 
 func _retrieve(delta: float) -> void:
 	m.state = M.State.WANDER
 	if _rise > 0.0:
-		# Back down onto all fours first.
-		_rise = maxf(0.0, _rise - delta * (REAR_RISE / REAR_DROP))
+		# Back down onto all fours first (think() drops _rise; the `drop_down` clip).
 		m.stop()
 		return
 	var it: Node = m.game.dog_tagged_item(offer_tag) if offer_tag != 0 else null
@@ -457,7 +532,8 @@ func _fetch_back() -> void:
 	target_id = 0
 	offer_left = 0.0
 	satisfied = false
-	m.calm = 0.0
+	in_range = false
+	drain_t = 0.0
 	m.lunge_t = 0.0
 	_set_mode(M.Mode.DOG_RETRIEVE)
 
@@ -508,8 +584,6 @@ func _check_exists(delta: float) -> void:
 	if offer_tag == 0 or not m.game.has_method("dog_tag_exists") or m.game.dog_tag_exists(offer_tag):
 		return
 	_forget_offer()
-	m.calm = 0.0
-	_rise = 0.0
 	content = maxf(content, CONTENT_TIME)
 	_start_wander()
 
@@ -610,25 +684,76 @@ func _stuck(delta: float, window: float) -> bool:
 func item_thrown(tag: int) -> bool:
 	if tag == 0 or tag != offer_tag:
 		return false
-	if m.mode != M.Mode.DOG_WARN and m.mode != M.Mode.DOG_REAR and m.mode != M.Mode.DOG_OFFER:
+	# Waiting, draining, still setting it down, or knocked down part way through any of those.
+	var mode: int = _resume if m.mode == M.Mode.STUNNED else int(m.mode)
+	if mode != M.Mode.DOG_WARN and mode != M.Mode.DOG_DRAIN and mode != M.Mode.DOG_OFFER:
 		return false
 	satisfied = true
 	return true
 
 
-## Its surgeon hit: back off a step (still up on its hind legs), then come again.
+## True while it is up on its hind legs draining: shove, saw and needle do nothing to it then.
+func upright() -> bool:
+	return m.mode == M.Mode.DOG_DRAIN
+
+
+## It never lands a blow (the drain is its only harm), so there is nothing to recoil from.
 func recoil_after_hit() -> void:
-	_backoff = BACKOFF_TIME
-	m.calm = BACKOFF_TIME + 0.4
-
-
-## Immune. A shove, a saw, a needle and a knock-down do nothing to it; it does not even look.
-func shoved(_dir: Vector3) -> void:
 	pass
 
 
-func stun(_dir: Vector3, _seconds: float, _push := 0.0, _then = null) -> void:
-	pass
+## On all fours, a shove puts it down like a Hive's; upright it does nothing.
+func shoved(dir: Vector3) -> void:
+	stun(dir, SHOVE_STUN, 1.0)
+
+
+## Knocked off its feet for `seconds` (Monster.shoved's charged shove, the dev knock-down). Upright and
+## draining it does not budge. `then_hunt` is ignored: it does not hunt.
+func stun(dir: Vector3, seconds: float, push := 0.6, _then = null) -> void:
+	if upright() or m.mode == M.Mode.SEDATED or seconds <= 0.0:
+		return
+	dir.y = 0.0
+	if dir.length() > 0.01 and push > 0.0:
+		m.move_and_collide(dir.normalized() * push)
+	if m.mode != M.Mode.STUNNED:
+		_resume = int(m.mode)
+		timer = seconds
+	else:
+		timer = maxf(timer, seconds)
+	_take = 0.0
+	m.mode = M.Mode.STUNNED
+	m.state = M.State.STUNNED
+	m.lunge_t = 0.0
+
+
+## Put under: what it carried drops where it lies, and its offer (if one is out) is nobody's now.
+func sedated() -> void:
+	released()
+
+
+## It is being taken out of the game (killed, or asleep): nothing of it stays in anyone's hands.
+func released() -> void:
+	if not carried.is_empty() and m.game.has_method("dog_place_item"):
+		var at := Transform3D(Basis(), m.global_position + Vector3.UP * 0.6 - m.global_transform.basis.z * 0.6)
+		m.game.dog_place_item(carried, at, Vector3.UP * 0.5, 0)
+	carried = {}
+	if offer_tag != 0 and m.game.has_method("dog_release_tag"):
+		m.game.dog_release_tag(offer_tag)
+	_forget_offer()
+	goal_item = null
+	satisfied = false
+	in_range = false
+	_rise = 0.0
+	_resume = -1
+	_publish()
+
+
+func woke(_hunt_pos) -> void:
+	_resume = M.Mode.WANDER
+	m.mode = M.Mode.STUNNED
+	m.state = M.State.STUNNED
+	timer = 1.2
+	content = maxf(content, CONTENT_TIME)
 
 
 func alert_to(_pos: Vector3) -> void:
