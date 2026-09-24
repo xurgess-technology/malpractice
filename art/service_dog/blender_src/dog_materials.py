@@ -124,7 +124,8 @@ class _NB:
 
 
 def _grimy_material(name, base_color, roughness, *, grime_color, blood_color=None,
-                     grime_seed=0.0, blood_seed=7.0, ground_bias=True, blood_amount=0.05):
+                     grime_seed=0.0, blood_seed=7.0, ground_bias=True, blood_amount=0.05,
+                     blood_scale=2.2):
     """A Principled BSDF whose Base Color is base_color with patchy fur-clump micro-noise, blotchy
     grime (concentrated low on the body/legs when `ground_bias`, since that is where a real animal
     actually picks up dirt) and, if `blood_color` is given, a scatter of small dried-blood stains
@@ -166,17 +167,15 @@ def _grimy_material(name, base_color, roughness, *, grime_color, blood_color=Non
     out_color = dirtied.outputs['Color']
 
     if blood_color is not None:
-        # Dried-blood stains: raise a low-frequency noise to a high power so only its highest peaks
-        # survive -- a robust way to get "a few small stains, not a wash" without hand-tuning a
-        # razor-thin colour-ramp threshold against an unknown noise distribution (an early pass
-        # here did exactly that and swung between "invisible" and "half the body" for a few percent
-        # change in threshold). The surviving peaks' own falloff (from `power`) doubles as a soft,
-        # organic stain edge -- soaked-in, not painted-on.
-        blood_n = b.noise(2.2, detail=3.0, roughness=0.55, w=blood_seed)
-        peaked = b.math('POWER', blood_n, 9.0)
-        # `blood_amount` (roughly 0..0.1) is a coverage knob, not a raw factor -- `peaked` is tiny
-        # almost everywhere, so it needs a large multiplier to bring its rare high spots up near 1.0.
-        blood_fac = b.math('MULTIPLY', peaked, blood_amount * 40.0)
+        # Dried-blood coverage: same technique as before (a low-frequency noise raised to a power,
+        # so the mask has a soft, organic, soaked-in edge instead of a hard-thresholded one) -- but
+        # Revision 15 (Zach: "a lot more blood... genuinely covered, not a stain or two") uses a much
+        # lower power so far more of the noise's own range survives, not just its rare highest peaks.
+        blood_n = b.noise(blood_scale, detail=3.0, roughness=0.55, w=blood_seed)
+        peaked = b.math('POWER', blood_n, 1.7)
+        # `blood_amount` is a coverage knob, not a raw factor -- scaled so the values below actually
+        # saturate large areas to the blood colour instead of leaving it as scattered spots.
+        blood_fac = b.math('MULTIPLY', peaked, blood_amount * 3.0)
         out_color = b.mix_color(blood_fac, out_color, blood_color)
 
     b.link(out_color, bsdf.inputs['Base Color'])
@@ -193,40 +192,49 @@ def coat_material():
     # zero-luminance coat, "even darker" is invisible (this is what actually made Revision 13's
     # grime read as nothing at all, not just subtle). Real dirt is dusty and LIGHTER/warmer than wet
     # black fur, so the grime colour now reads as a visible warm-grey smudge, not more black-on-black.
+    # Revision 15 (Zach: much more blood, genuinely covered -- body, vest, face, everywhere, not a
+    # subtle touch-up): blood_amount and blood_color both pushed substantially further than
+    # Revision 14's "a visible stain or two" pass.
     return _grimy_material('Dog_Coat', (0.028, 0.026, 0.030), 0.78,
-                            grime_color=(0.11, 0.09, 0.07), blood_color=(0.42, 0.03, 0.022),
-                            grime_seed=1.0, blood_seed=4.0, blood_amount=0.09)
+                            grime_color=(0.11, 0.09, 0.07), blood_color=(0.50, 0.035, 0.025),
+                            grime_seed=1.0, blood_seed=4.0, blood_amount=0.55)
 
 
 def skull_material():
-    # Pale, gaunt bone-white for the skull and jaw only. A lighter touch than the coat (Zach's
-    # brief calls for grime/blood generally; the skull is the model's single strongest tonal image,
-    # so this stays a SUBTLE smudge/stain rather than the coat's fuller grime treatment) plus one
-    # dried-blood stain concentrated toward the jaw (low Z, the mouth's own end of the skull mesh).
+    # Pale, gaunt bone-white for the skull and jaw. Revision 15 (Zach: "make sure the face/skull
+    # gets real coverage too, not just the body/legs like the last pass"): the skull's own blood
+    # coverage now matches the coat's, not a lighter touch -- the palest surface on the model is
+    # exactly where blood should read most starkly against the base colour.
+    # blood_scale raised well above the other materials': the skull is a small, confined area in
+    # object space, and the default low-frequency blood noise (tuned for the much bigger coat/vest)
+    # was landing the ENTIRE skull inside a single low-noise cell -- rendering as plain white with no
+    # blood at all regardless of blood_amount, even though the same noise field visibly worked
+    # elsewhere. A higher-frequency noise actually varies across the skull's own small footprint.
     return _grimy_material('Dog_Skull', (0.72, 0.69, 0.63), 0.55,
-                            grime_color=(0.38, 0.36, 0.32), blood_color=(0.45, 0.05, 0.035),
-                            grime_seed=2.0, blood_seed=9.0, ground_bias=True, blood_amount=0.10)
+                            grime_color=(0.38, 0.36, 0.32), blood_color=(0.48, 0.045, 0.032),
+                            grime_seed=2.0, blood_seed=9.0, ground_bias=True, blood_amount=0.9,
+                            blood_scale=7.0)
 
 
 def vest_clean_material():
-    # Bright, saturated safety-vest orange, with the same fur-material grime/blood treatment kept
-    # deliberately light here (`_grimy_material`'s grime_fac cap already limits how much shows) so
-    # the garment itself still reads unmistakably first, per Zach's original "make the vest itself
-    # unmistakable" note -- this is the worn-in canvas texture on top of that, not a redesign.
+    # Bright, saturated safety-vest orange; the base garment's own colour still reads unmistakably
+    # first per Zach's original note (the grime channel's own cap still limits how much of THAT
+    # shows), but Revision 15's blood coverage is deliberately NOT capped the same way -- Zach wants
+    # the vest genuinely bloodied, not just lightly worn, and a saturated red reads unmistakably
+    # against the orange regardless.
     return _grimy_material('Dog_Vest_Clean', (0.62, 0.24, 0.05), 0.6,
-                            grime_color=(0.18, 0.09, 0.03), blood_color=(0.38, 0.025, 0.020),
-                            grime_seed=3.0, blood_seed=13.0, blood_amount=0.12)
+                            grime_color=(0.18, 0.09, 0.03), blood_color=(0.55, 0.015, 0.015),
+                            grime_seed=3.0, blood_seed=13.0, blood_amount=1.1)
 
 
 def vest_worn_material():
     # Darker, greyer and a little desaturated: grime and old stains, not fresh canvas. Kept to a
     # minority of the vest by dog_geometry.py's stain mask so it never competes with the base
-    # garment's readability. Revision 13: this was already the "dirty" material, so its own texture
-    # treatment leans harder into grime (more visible patchiness) but a lighter blood touch (the
-    # stain mask already concentrates it where wear reads naturally).
+    # garment's readability. Revision 15: blood coverage raised to match the other three materials
+    # (Zach: "everywhere", not just the body/legs).
     return _grimy_material('Dog_Vest_Worn', (0.28, 0.14, 0.08), 0.85,
-                            grime_color=(0.09, 0.05, 0.03), blood_color=(0.30, 0.02, 0.015),
-                            grime_seed=5.0, blood_seed=17.0, blood_amount=0.10)
+                            grime_color=(0.09, 0.05, 0.03), blood_color=(0.42, 0.02, 0.015),
+                            grime_seed=5.0, blood_seed=17.0, blood_amount=1.0)
 
 
 def vest_cross_material():

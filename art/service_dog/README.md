@@ -7,9 +7,11 @@ chase/bite; a tenth pass fixing three problems Zach found in that pass (see "Rev
 eleventh pass fixing two more (see "Revision 11" below); a twelfth pass fixing the real bug
 underneath all of that, found by a real cross-branch integration test (see "Revision 12" below);
 a thirteenth, styling pass once Zach approved the base model (baked-texture grime/blood detail,
-a real two-layer crystal-ball orb -- see "Revision 13" below); and a fourteenth pass fixing
+a real two-layer crystal-ball orb -- see "Revision 13" below); a fourteenth pass fixing
 Revision 13's grime/blood texture, which turned out to be genuinely invisible on screen (see
-"Revision 14" below).**
+"Revision 14" below); and a fifteenth pass pushing the blood coverage much further, per Zach's
+direct ask for the dog to read as genuinely covered, not lightly stained (see "Revision 15"
+below).**
 The model is `assets/models/monsters/service_dog/service_dog.glb` (asset key
 `monster/service_dog`; skinned mesh, 2 objects, 6 materials, 2 baked textures, 11 clips), registered
 in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is its `SkeletonModifier3D` (head-tracking,
@@ -603,6 +605,36 @@ this time: `dog_idle.png` and `dog_vest_leg_clear_idle_left.png` show an unmista
 grime pattern up the legs against the near-black torso, and `dog_leg_junction_hind_left.png` shows a
 clearly visible dark-red dried-blood stain at the shoulder, right where the front leg meets the
 vest strap -- a specific, pointable patch, not a texture-atlas crop.
+
+Validated with the same full loop: rebuild, reimport, `tools/dog_lab.tscn` (structure check +
+`--shots`), `tools/monster_lab.tscn`'s 179-check regression (0 failed).
+
+## Revision 15 (2026-09-24, much more blood: genuinely covered, not a stain or two)
+
+Zach: Revision 14's blood was the right technique but far too little of it -- he wants the dog
+genuinely covered (body, vest, face, everywhere), not a stain here and there. Same masking technique
+as Revision 14 (a low-frequency noise raised to a power for a soft, soaked-in edge), pushed
+substantially harder in three ways:
+
+- The power exponent dropped from 9 (Revision 13) already down to a moderate value in Revision 14,
+  now down further (1.7) so far more of the noise's own range clears the mask, not just its rare
+  peaks -- the difference between "a few isolated spots" and "a wash".
+- `blood_amount` roughly tripled to quintupled across all four materials (`Dog_Coat`/`Dog_Skull`
+  0.09/0.10 -> 0.55, `Dog_Vest_Clean`/`Dog_Vest_Worn` 0.12/0.10 -> 1.1/1.0), with `blood_color`
+  pushed toward a more saturated red on top.
+- **The skull needed a separate fix, not just a bigger number.** Turning up `blood_amount` alone left
+  the skull/face completely white -- no blood at all -- even though the coat right next to it was
+  visibly soaked. Root cause: the skull is a small, confined area in object space, and the blood
+  noise's frequency (tuned for the much bigger coat/vest) was low enough that the ENTIRE skull sat
+  inside a single low-noise cell, so no amount of scaling that one value up could push it over the
+  mask threshold. Added a per-material `blood_scale` knob and gave the skull a much higher one (7.0
+  vs the default 2.2) so the noise actually varies across its own small footprint instead of sampling
+  it as one uniform (low) value.
+
+Confirmed on a fresh render, not the texture atlas: `dog_idle.png` and `dog_vest_closeup.png` read as
+heavily bloodied at a glance -- the coat, legs and vest are all a deep, saturated red-brown, not a
+subtle tint -- and `dog_head_closeup.png` shows the skull/snout carrying the same coverage as the
+body (previously pure white with nothing on it).
 
 Validated with the same full loop: rebuild, reimport, `tools/dog_lab.tscn` (structure check +
 `--shots`), `tools/monster_lab.tscn`'s 179-check regression (0 failed).
