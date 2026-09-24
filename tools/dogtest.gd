@@ -135,7 +135,9 @@ func _run() -> void:
 	_check(client != null and float(client._dog_growl) > 0.0, "the client plays the growl (its jaw is open: %.2f)" % (client._dog_growl if client != null else 0.0))
 	await _frames(2)
 	var hud = get_tree().get_first_node_in_group("hud")
-	_check(hud != null and (hud.drawn as PackedStringArray).has("dog_fetch"), "the HUD shows the fetch clock (drawn %s)" % (str(hud.drawn) if hud != null else "no hud"))
+	# 2026-09-24 (Zach): NO on-screen clock or prompt. The dog's growl, its stare and the item at
+	# your feet are the only tells; the clock is real but never drawn.
+	_check(hud != null and not (hud.drawn as PackedStringArray).has("dog_fetch"), "the HUD draws no fetch clock or prompt (drawn %s)" % (str(hud.drawn) if hud != null else "no hud"))
 	# Pick it up (the tag goes into the hand), tap it down: nothing.
 	game.pickup_item(me, it)
 	await _frames(1)

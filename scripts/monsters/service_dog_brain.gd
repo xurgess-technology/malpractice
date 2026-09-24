@@ -11,7 +11,8 @@ extends RefCounted
 ##   DOG_OFFER      stops OFFER_DIST short, lowers its head and sets the item on the floor at their
 ##                  feet (a fresh WorldItem, tagged with this offer's `offer_tag`).
 ##   DOG_WARN       stands and watches. Growls once, maybe twice. FETCH_WINDOW seconds on the clock
-##                  (`offer_left`, on the wire as `ol`; the HUD shows it). A charged throw of THAT
+##                  (`offer_left`, on the wire as `ol`; never drawn -- the growls and its stare are the
+##                  only tells). A charged throw of THAT
 ##                  item by anybody (game.dog_item_thrown -> item_thrown) satisfies it.
 ##   DOG_REAR       the clock ran out: it rises onto its hind legs (REAR_RISE) and goes for the
 ##                  surgeon it offered to (`target_id`), and keeps going -- hit, back off, come again
@@ -182,7 +183,7 @@ func _publish() -> void:
 	m.dog_offer_kind = _last_offer_kind if offer_tag != 0 else ""
 
 
-## The kind of the item it last put down (the HUD names it while the offer stands).
+## The kind of the item it last put down (replicated as `ok`).
 var _last_offer_kind := ""
 
 

@@ -136,7 +136,7 @@ var _teleports_seen: int = -1
 ## what it carries in its mouth (`ck`, an item kind or ""), the surgeon it is offering to or going for
 ## (`dt`, a peer id, 0 nobody), the seconds left on the fetch clock (`ol`, counted down locally between
 ## snapshots), how many times it has growled (`gr`, a counter: every machine plays each growl once),
-## and the kind of the item it put down (`ok`, for the HUD).
+## and the kind of the item it put down (`ok`). None of it is drawn as UI: the clock has no readout.
 var dog_carry: String = ""
 var dog_target: int = 0
 var dog_left: float = 0.0

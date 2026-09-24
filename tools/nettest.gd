@@ -65,7 +65,7 @@ extends Node
 ##                    client 2 follow, client 2 sees client 1's laser dot; client 1 walks away and
 ##                    everyone is signed out and back HOME
 ##   service_dog      host + 1 client: the Service Dog carries a heart monitor up to client 1, sets it
-##                    down and growls; client 1 sees the carry, the clock (and its HUD), the growl and
+##                    down and growls; client 1 sees the carry, the clock (never drawn), the growl and
 ##                    the rear. Then CLIENT 1 picks the item up and throws it with a charge over the
 ##                    wire: the host's dog stands down, fetches it and carries it again, and client 1
 ##                    sees that too
@@ -1991,10 +1991,10 @@ func _sc_service_dog():
 	var left0 := float(d.dog_left)
 	await _wall_wait(1.0)
 	var hud = get_tree().get_first_node_in_group("hud")
-	var hud_ok: bool = hud != null and (hud.drawn as PackedStringArray).has("dog_fetch")
+	var hud_ok: bool = hud != null and not (hud.drawn as PackedStringArray).has("dog_fetch")   # no on-screen clock, by design
 	if float(d.dog_left) >= left0 or float(d.dog_left) <= 0.0 or int(d.dog_growls) < 1 or String(d.dog_offer_kind) != "heart_monitor" or not hud_ok:
 		return _end(false, "the offer on my machine: clock %.2f -> %.2f, growls %d, offer '%s', hud %s" % [left0, d.dog_left, d.dog_growls, d.dog_offer_kind, str(hud_ok)])
-	_say("the offer on my machine: clock %.1f s and running, %d growl(s), the HUD shows it" % [d.dog_left, d.dog_growls])
+	_say("the offer on my machine: clock %.1f s and running, %d growl(s), nothing on the HUD" % [d.dog_left, d.dog_growls])
 	_send("dog_saw_warn", {})
 	if not await _until(func(): return int(d.mode) == DogModes.Mode.DOG_REAR and d.model.dog != null and float(d.model.dog.rear) > 0.9, 20.0, "it up on its hind legs on my machine"):
 		return

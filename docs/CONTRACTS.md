@@ -598,7 +598,7 @@ placed at a `monster_spawns` point like the Sonographer and the Nurse.
 mouth, or ""), `"dt"` -> `dog_target` (peer id it is offering to or going for), `"ol"` ->
 `dog_left` (fetch clock, 0.25 s steps; a client counts down between snapshots), `"gr"` ->
 `dog_growls` (a counter: every machine plays each growl once; a machine that has seen no snapshot
-yet syncs without playing), `"ok"` -> `dog_offer_kind` (for the HUD). Rearing, head-down and the look
+yet syncs without playing), `"ok"` -> `dog_offer_kind` (the offered item's kind; nothing draws it since the HUD clock went). Rearing, head-down and the look
 are worked out on every machine from `md` / `mv` / `dt`.
 
 **The body** (`service_dog_rig.gd`) is a **placeholder**: primitives on a few pivots, tall and
@@ -608,9 +608,9 @@ lanky (shoulders ~1.1 m, head ~1.5 m, ~2.4 m reared). `build(model)` prefers a G
 socket. For the GLB: clips `idle`, `walk`, `run`, `rear`, `attack` through `Assets.anim_name`, the
 mouth is a `Site_mouth` node or a BoneAttachment on bone `jaw`/`head`.
 
-**HUD**: `hud.gd _draw_dog_fetch` (drawn id `dog_fetch`): the clock and the item's name to the
-surgeon it chose, wherever they are, and to anyone within `DOG_HUD_RANGE` of it; while it is reared,
-a pulsing "throw it" line instead. **Doors**: it noses hinged doors open in any travelling mode.
+**No HUD, on purpose** (Zach, 2026-09-24): no prompt text and no countdown on screen. The clock is
+real and replicated, but the only tells are the dog's: the item set at your feet, the growl (and a
+second one later), its stare, and rearing up. **Doors**: it noses hinged doors open in any travelling mode.
 **Sounds**: `monsters_dog_growl`, `monsters_dog_snarl` (rearing, each swipe), `monsters_dog_step`
 (tools/gen_audio_monsters.mjs). **Tests**: `tools/dogtest.tscn` (headless, the whole loop four
 times), nettest `service_dog` (a client's throw over the wire), `tools/dogshot.tscn` (the smoke look,
