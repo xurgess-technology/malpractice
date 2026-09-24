@@ -405,6 +405,91 @@ def run_pose(f, n=30):
     return p
 
 
+def biped_drain_pose():
+    """Soul-drain reared pose (Zach: the attack is now a dementor-style drain, not a chase/bite).
+    Same weight-bearing hind-leg stance as `biped_stand_pose`, but the jaw is held wide open, the
+    head stays level (not lowered) so the look-track layer in dog_rig.gd can lock it onto the
+    target, and the front legs hang loose at the sides instead of curling up tight against the
+    chest -- a tidy "tucked forepaws" read is wrong for something looming and draining. This is the
+    shared base for RearUp's end state, DrainIdle, UprightWalk and DropDown's start state."""
+    p = {}
+    add(p, 'pelvis', ('X', BIPED_PELVIS_PITCH))
+    add(p, 'spine1', ('X', 0.14))
+    add(p, 'chest', ('X', 0.10))
+    add(p, 'neck1', ('X', -0.05))
+    add(p, 'neck2', ('X', -0.05))
+    add(p, 'head', ('X', 0.05))
+    add(p, 'jaw', ('X', -1.65))
+    for side in ('L', 'R'):
+        # Same mirror-cancelling convention as biped_stand_pose (see its comment): every 'X' value
+        # below is pre-negated for the right side so both legs bend identically.
+        msign = 1.0 if side == 'L' else -1.0
+        add(p, 'thigh.' + side, ('X', msign * (-BIPED_PELVIS_PITCH - 0.55)))
+        add(p, 'shin.' + side, ('X', msign * 1.05))
+        add(p, 'hock.' + side, ('X', msign * -0.35))
+        add(p, 'htoe.' + side, ('X', msign * 0.15))
+        # Loose hang, not a tight curl: cancel the chest's cumulative pitch down to just past
+        # vertical, then only a slight, relaxed elbow/wrist bend -- limp, not tucked.
+        add(p, 'upperarm.' + side, ('X', msign * (-BIPED_CHEST_PITCH + 0.15)))
+        add(p, 'forearm.' + side, ('X', msign * -0.35))
+        add(p, 'pastern.' + side, ('X', msign * 0.15))
+    add(p, 'tail1', ('X', -0.35))
+    add(p, 'tail2', ('X', -0.25))
+    p['_pelvis_loc'] = Vector((0, 0.16, 0.30 - GROUND_DROP))
+    return p
+
+
+def rear_up_pose(f, n=45):
+    """Quadruped -> biped_drain: a deliberate rise onto the hind legs, NOT a jump (Zach), jaws
+    opening progressively as it rises since `stand_pose` has no jaw entry and `biped_drain_pose`'s
+    is wide open -- `lerp_pose` ramps that in step with everything else. ~0.75s at 60 fps."""
+    t = G.smooth01(f / n)
+    return lerp_pose(stand_pose(), biped_drain_pose(), t)
+
+
+def drop_down_pose(f, n=24):
+    """Biped_drain -> quadruped stand: the reverse of RearUp, jaws closing, but snappier -- an
+    abrupt "back to being a normal dog" snap rather than a mirrored deliberate rise. ~0.4s at
+    60 fps (half of RearUp's duration)."""
+    t = G.smooth01(f / n)
+    return lerp_pose(biped_drain_pose(), stand_pose(), t)
+
+
+def drain_idle_pose(f, n=120):
+    """Standing tall, jaws held wide, head locked on the target (the look-track layer in
+    dog_rig.gd handles the actual aiming) -- a slow throb through the jaw/throat and chest in time
+    with the orb's glow pulse (dog_rig.gd's `set_drain_glow` uses the same cadence), front legs
+    hanging loose. Cyclic."""
+    t = f / n
+    p = biped_drain_pose()
+    throb = 0.5 - 0.5 * math.cos(t * G.TAU)  # 0..1, eases through both ends like the orb's pulse
+    add(p, 'jaw', ('X', -0.12 * throb))
+    add(p, 'neck2', ('X', -0.04 * throb))
+    add(p, 'chest', ('X', 0.02 * throb))
+    return p
+
+
+def upright_walk_pose(f, n=64):
+    """A slow, stiff biped walk toward the target -- roughly human walking pace, deliberately NOT
+    fast or lunging (Zach). Head stays locked on via the look-track layer; jaws stay open; front
+    legs swing loosely at the sides like slack arms instead of pumping like `run_pose`'s folded
+    ones. Cyclic."""
+    ph = f / n * G.TAU
+    base = biped_drain_pose()
+    p = {k: list(v) for k, v in base.items() if k != '_pelvis_loc'}
+    bob = abs(math.sin(ph)) * 0.02
+    p['_pelvis_loc'] = base['_pelvis_loc'] + Vector((0, bob, 0))
+    for side, off in (('L', 0.0), ('R', math.pi)):
+        s = math.sin(ph + off)
+        add(p, 'thigh.' + side, ('X', 0.35 * s))
+        add(p, 'shin.' + side, ('X', -0.15 - 0.25 * max(0.0, -s)))
+        add(p, 'hock.' + side, ('X', 0.10 + 0.15 * max(0.0, s)))
+        add(p, 'upperarm.' + side, ('X', -0.20 * s))
+        add(p, 'forearm.' + side, ('X', 0.10 * max(0.0, s)))
+    add(p, 'tail1', ('X', -0.30), ('Z', 0.08 * math.sin(ph)))
+    return p
+
+
 def build_actions(arm):
     poser = Poser(arm)
 
@@ -430,5 +515,12 @@ def build_actions(arm):
     act('StandUp', 50, standup_pose, cyclic=False)
     act('Run', 30, run_pose, cyclic=True)
     act('Bite', 24, bite_pose, cyclic=False)
+    # Soul-drain sequence (Zach's design change: the attack is a dementor-style drain, not a
+    # chase/bite -- Bite/Run above are kept, unused for this, so nothing else that still calls
+    # them breaks). Naming contract shared with the brain-logic side on service-dog-brain.
+    act('RearUp', 45, rear_up_pose, cyclic=False)
+    act('DrainIdle', 120, drain_idle_pose, cyclic=True)
+    act('UprightWalk', 64, upright_walk_pose, cyclic=True)
+    act('DropDown', 24, drop_down_pose, cyclic=False)
     arm.animation_data.action = bpy.data.actions['Idle']
     return poser

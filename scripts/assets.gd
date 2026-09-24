@@ -181,6 +181,11 @@ const MODELS := {
 		"anims": {
 			"idle": "Idle", "walk": "Walk", "run": "Run", "attack": "Bite",
 			"place": "PlaceItem", "growl": "Growl", "standup": "StandUp",
+			# Soul-drain sequence (2026-09-24 design change: the attack is now a dementor-style
+			# drain, not a chase/bite -- naming contract shared with service-dog-brain). Bite/Run
+			# above are kept for compatibility but no longer used for the attack.
+			"rear_up": "RearUp", "drain_idle": "DrainIdle",
+			"upright_walk": "UprightWalk", "drop_down": "DropDown",
 		},
 		"note": "Service Dog, made for Malpractice with Blender scripts (art/service_dog/blender_src). No third-party licence.",
 	},

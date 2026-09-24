@@ -240,6 +240,65 @@ func _run_shots() -> void:
 			_look_from(sw + side_dir * 0.4 + Vector3(0, 0.1, 0.08), sw)
 			await _shot("vest_leg_clear_standup_%s" % side_name)
 
+	# Soul-drain sequence (2026-09-24 design change: the attack is now a dementor-style drain, not
+	# a chase/bite). Same naming contract as service-dog-brain: RearUp, DrainIdle, UprightWalk,
+	# DropDown, plus the throat orb's `set_drain_glow` hook.
+	var poser: Node = model.skeleton.get_node_or_null("DogPoser")
+	_check("DogPoser found", poser != null)
+
+	if model.anim.has_animation("RearUp"):
+		var rl: float = model.anim.get_animation("RearUp").length
+		_look_from(Vector3(1.55, 1.05, 1.75), Vector3(0, 1.35, 0.0))
+		for i in [0.0, 0.5, 1.0]:
+			await _play_and_settle("RearUp", rl * i)
+			await _shot("rear_up_%02d" % int(i * 100))
+	_check("RearUp plays", model.anim.has_animation("RearUp"))
+
+	if model.anim.has_animation("DrainIdle"):
+		await _play_and_settle("DrainIdle", model.anim.get_animation("DrainIdle").length * 0.25)
+		if poser != null:
+			poser.look_at = Vector3(0, 1.2, 2.0)
+			poser.look_weight = 1.0
+			poser.set_drain_glow(1.0)
+		await get_tree().process_frame
+		var head_bi3: int = model.skeleton.find_bone("head")
+		var head_world3: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(head_bi3).origin
+		_look_from(head_world3 + Vector3(0.65, -0.05, 0.35), head_world3 + Vector3(0.0, 0.05, 0.0))
+		await _shot("drain_idle")
+		if poser != null:
+			poser.look_weight = 0.0
+	_check("DrainIdle plays", model.anim.has_animation("DrainIdle"))
+
+	if model.anim.has_animation("UprightWalk"):
+		_look_from(Vector3(1.6, 1.15, 1.8), Vector3(0, 1.35, 0.0))
+		await _play_and_settle("UprightWalk", model.anim.get_animation("UprightWalk").length * 0.25)
+		await _shot("upright_walk_midstride")
+	_check("UprightWalk plays", model.anim.has_animation("UprightWalk"))
+
+	if model.anim.has_animation("DropDown"):
+		var dl: float = model.anim.get_animation("DropDown").length
+		_look_from(Vector3(1.55, 1.05, 1.75), Vector3(0, 1.0, 0.0))
+		for i in [0.0, 0.5, 1.0]:
+			await _play_and_settle("DropDown", dl * i)
+			await _shot("drop_down_%02d" % int(i * 100))
+	_check("DropDown plays", model.anim.has_animation("DropDown"))
+
+	# Orb glow control: a real emissive mesh, dim by default, brightened by set_drain_glow(1.0).
+	if poser != null:
+		var orb: Node = poser.get_node_or_null("../OrbAttach/Orb")
+		_check("Orb node found", orb != null)
+		await _play_and_settle("DrainIdle", 0.0)
+		var head_bi4: int = model.skeleton.find_bone("head")
+		var head_world4: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(head_bi4).origin
+		_look_from(head_world4 + Vector3(0.35, -0.02, 0.15), head_world4 + Vector3(0.0, -0.02, 0.0))
+		poser.set_drain_glow(0.0)
+		await get_tree().process_frame
+		await _shot("orb_glow_off")
+		poser.set_drain_glow(1.0)
+		await get_tree().process_frame
+		await _shot("orb_glow_on")
+		poser.set_drain_glow(0.0)
+
 	print("[dog_lab] ------------------------------------------")
 	print("[dog_lab] result: ", "PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)

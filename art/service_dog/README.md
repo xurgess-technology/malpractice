@@ -1,10 +1,12 @@
 # The Service Dog: Blender sources
 
 **Built 2026-09-24, art side of the Service Dog feature; revised eight times the same day after
-Zach's reviews (see "Revision 1" through "Revision 8" below).** The model is
-`assets/models/monsters/service_dog/service_dog.glb` (asset key `monster/service_dog`; skinned mesh,
-2 objects, 6 materials, 7 clips), registered in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is
-its `SkeletonModifier3D` (head-tracking, idle "wrongness"), following the Night Nurse / Hive
+Zach's reviews (see "Revision 1" through "Revision 8" below), then given a ninth pass the same day
+for a design change (see "Revision 9" below): the attack is now a dementor-style soul-drain, not a
+chase/bite.** The model is `assets/models/monsters/service_dog/service_dog.glb` (asset key
+`monster/service_dog`; skinned mesh, 2 objects, 6 materials, 11 clips), registered in
+`scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is its `SkeletonModifier3D` (head-tracking, idle
+"wrongness", continuous tail wag, the throat orb's glow hook), following the Night Nurse / Hive
 convention (`scripts/monsters/night_nurse_rig.gd`, `hive_rig.gd`). `tools/dog_lab.gd` /
 `tools/dog_lab.tscn` is its smoke-test viewer (see "Validate" below). This folder has a `.gdignore`,
 so Godot never imports it.
@@ -298,6 +300,64 @@ Checked against the exact screenshot Zach flagged (`godot_shots/dog_vest_cross_p
 angle) plus a fresh look at `dog_vest_closeup.png` and the standard idle/walk/standup, both-sides
 leg-clearance set, since any vest-geometry change earns that check again.
 
+## Revision 9 (2026-09-24, design change: the attack is a soul-drain, not a chase/bite)
+
+Zach's design change, relayed the same day: the dog's "attack" is no longer a physical chase/bite —
+it is a dementor-style soul-drain. This does not remove `Bite`/`Run` (kept, unpolished, in case
+something else ever wants them) but adds the sequence the new mechanic actually uses, under a naming
+contract shared with `service-dog-brain` (built in parallel on that branch against this same names):
+
+1. **Four new clips**, all in `blender_src/dog_rig.py`, sharing a new `biped_drain_pose()` base (the
+   same weight-bearing hind-leg stance as `biped_stand_pose()`, but jaws held wide, head level (not
+   lowered — the head-track layer in `dog_rig.gd` aims it), front legs hanging loose at the sides
+   instead of curled up tight like tucked forepaws):
+   - `RearUp` (45 f / 0.75 s, one-shot): quadruped `stand_pose()` -> `biped_drain_pose()` via
+     `lerp_pose` on an eased `smooth01` curve — a deliberate rise, not a jump. Since `stand_pose` has
+     no `jaw` entry and `biped_drain_pose`'s is wide open, the lerp itself makes the jaw open
+     progressively as it rises, with no separate curve needed.
+   - `DrainIdle` (120 f / 2 s loop): standing tall, jaws held wide, a slow throb through the jaw/neck/
+     chest (`0.5 - 0.5*cos`, the same easing shape `dog_rig.gd`'s glow hook is meant to pulse with)
+     layered on top of the base pose.
+   - `UprightWalk` (64 f / ~1 s loop): a slow, stiff biped walk cycle — small alternating hip/knee
+     swings and loosely swinging front legs, deliberately far short of `Run`'s big lunging strides,
+     roughly human walking pace.
+   - `DropDown` (24 f / 0.4 s, one-shot): `biped_drain_pose()` -> quadruped `stand_pose()`, the
+     reverse of `RearUp` but at half its duration — an abrupt "back to being a normal dog" snap
+     instead of a mirrored deliberate rise.
+
+   Registered in `scripts/assets.gd`'s `anims` dict as `rear_up`/`drain_idle`/`upright_walk`/
+   `drop_down`, alongside (not replacing) the existing logical names.
+
+2. **A continuous tail wag**, `dog_rig.gd`'s new `_wag()`, runs every frame regardless of
+   `look_weight`/`twitch`/`ear_alert` (previously the whole modifier early-returned when all three
+   were zero — restructured so `_wag` always runs and the rest of the function still short-circuits
+   when there is nothing else to layer). Small enough (0.16 rad peak, tapering out along `tail1` ->
+   `tail3`) to sit under a clip's own tail keyframes (e.g. `Walk`'s gait-tied tail motion) rather than
+   fighting them, and it is what keeps the tail moving through `RearUp`/`DrainIdle`/`UprightWalk`/
+   `DropDown`, none of which animate the tail themselves.
+
+3. **The throat orb** — a real, separate piece, not baked into the skull/jaw geometry and not a
+   texture trick, because it is meant to be harvestable in a future task. Built in
+   `dog_rig.gd`'s `_build_orb()` (Godot-side, not Blender-side — simpler, and satisfies "own distinct
+   mesh/node" without a Blender pipeline change): a small `SphereMesh` named `Orb`, its own
+   `StandardMaterial3D`, on a `BoneAttachment3D` (`OrbAttach`) parented to the `jaw` bone near its
+   head end — i.e. at the back of the mouth/throat, not the jaw tip. A sickly pale-green
+   (`Color(0.62, 1.0, 0.58)`), deliberately not the same hue as the white skull or dark coat, so it
+   reads as a distinct lit object rather than blending in. Dim (`albedo_color` at 35% of the emission
+   colour, `emission_energy_multiplier` at 0.05) by default; `set_drain_glow(v: float)` (0..1) drives
+   `emission_energy_multiplier` up to 2.6 — enough to read as a clear, saturating glow against the
+   scene lighting without blowing out to pure white. This poser does not decide when to drain; the
+   brain-logic side calls `set_drain_glow` from its own replicated state, and can reach the orb's
+   world position via `model.skeleton.get_node("DogPoser/OrbAttach/Orb").global_position`.
+
+Validated with the same loop as every prior revision: rebuild, reimport, `tools/dog_lab.tscn`
+(headless structure check, then `--shots`) plus `tools/monster_lab.tscn`'s full 179-check regression
+(0 failed, no changes needed there — this branch never touches gameplay/state-machine code).
+`dog_lab.gd` gained shot blocks for all four new clips (`dog_rear_up_00/50/100.png`,
+`dog_drain_idle.png`, `dog_upright_walk_midstride.png`, `dog_drop_down_00/50/100.png`) plus an orb
+glow comparison (`dog_orb_glow_off.png` vs `dog_orb_glow_on.png`, `set_drain_glow(0.0)` then `(1.0)`
+on the same frame/camera) and a `DogPoser`/`Orb` node-presence check.
+
 ## Folder
 
 | Path | What |
@@ -391,7 +451,12 @@ pipeline does not bake, so it has nothing to tune there (see "Known problems").
   - `Bite` (24 f / 0.8 s, one-shot): a lunging attack, reworked in Revision 1 — see below. The
     head/neck/body reach forward and hold while the jaw opens fast and snaps shut well before the
     head retracts, so there is a distinct held "gripping" frame (head still thrust forward, jaw
-    closed) between the snap and the pull-back, not one pose fading in and out together.
+    closed) between the snap and the pull-back, not one pose fading in and out together. **Kept but
+    no longer used for the attack** as of Revision 9 (see below) — the soul-drain sequence replaced
+    it for that purpose.
+  - `RearUp`/`DrainIdle`/`UprightWalk`/`DropDown`: the soul-drain sequence added in Revision 9 (see
+    below) — quadruped -> biped with jaws opening, a held wide-jawed idle with a slow throb, a slow
+    stiff biped walk, and the snap back down to quadruped.
 
 ## `scripts/monsters/dog_rig.gd`
 
@@ -399,10 +464,14 @@ The `SkeletonModifier3D` that layers procedural poses on top of whatever clip is
 pattern as `night_nurse_rig.gd`/`hive_rig.gd`):
 
 - `look_at` / `look_weight`: turns the head (and lets `ear_alert` turn the ears) toward a point in
-  skeleton space — the growl/warning beat's head-track the brief asked for.
+  skeleton space — the growl/warning beat's head-track the brief asked for, and the soul-drain
+  sequence's head-lock-on-target.
 - `twitch`: a low, constant, barely-there tremor through the spine/tail plus a rare ear flick —
   "wrong" stillness, not nervous energy, matching the "looming, too patient" tone.
 - `ear_alert`: ears pin back and orient toward `look_at`.
+- A continuous slow tail wag (Revision 9) runs every frame regardless of the three inputs above.
+- `set_drain_glow(v: float)` (Revision 9): 0..1, controls the throat orb's emission brightness —
+  see "Revision 9" above for what the orb is and where it lives.
 
 It does not yet plug into `MonsterModel`'s `dog` field beyond `setup()`/`_anim_key()`/`eye_offset()`
 (added on this branch so `monster_lab`-style validation works today); anything state-machine-driven
@@ -485,4 +554,7 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
   no separate high-poly count).
 - **Materials:** 6 flat Principled BSDF (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`, `Dog_Vest_Worn`,
   `Dog_Vest_Cross`, `Dog_Vest_Badge`), no textures.
-- **Bones:** 29 deform + `root`. **Clips:** Idle, Walk, PlaceItem, Growl, StandUp, Run, Bite.
+- **Bones:** 29 deform + `root`. **Clips:** Idle, Walk, PlaceItem, Growl, StandUp, Run, Bite,
+  RearUp, DrainIdle, UprightWalk, DropDown (11 total).
+- **Throat orb (Revision 9):** a Godot-side `SphereMesh` (`Orb`, on `BoneAttachment3D` "OrbAttach"
+  under `jaw`), not part of the Blender build's own triangle/material counts above.

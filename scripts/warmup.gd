@@ -256,8 +256,9 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	# first unshaded-plus-emission pair a shift draws. Without it the thing pops in with a hitch,
 	# and a hitch is a tell on a monster whose whole point is that it arrives in silence.
 	# "service_dog" (2026-09-24): its own Blender model and quadruped rig (art/service_dog/,
-	# dog_rig.gd). Warms its four flat materials so the first Service Dog of a session does not
-	# hitch on their shader compile.
+	# dog_rig.gd). Warms its four flat materials plus the throat orb's emissive material (the
+	# soul-drain sequence's harvestable piece, dog_rig.gd's `_build_orb`) so the first Service Dog
+	# of a session does not hitch on their shader compile.
 	for kind in ["night_nurse", "hive", "sonographer", "onlooker", "service_dog"]:  # SWEEP 3 HOOK (monsters)
 		var model: Node3D = MonsterModel.new()
 		shelf.add_child(model)
