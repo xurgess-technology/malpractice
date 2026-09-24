@@ -340,21 +340,38 @@ def biped_stand_pose():
     add(p, 'neck2', ('X', -0.10))
     add(p, 'head', ('X', 0.10))
     for side in ('L', 'R'):
+        # Poser.rot mirrors 'X' (and 'Z') for every ".R" bone (matches this rig's other poses,
+        # e.g. walk_pose's per-side sin phases already expect it) -- but here both legs are meant
+        # to bend IDENTICALLY (a symmetric standing pose, not a mirrored one), so every 'X' value
+        # below is pre-negated for the right side to cancel that mirroring out. Forgetting this is
+        # exactly what put the right hind paw up near head height in the previous revision.
+        msign = 1.0 if side == 'L' else -1.0
         # Cancel the pelvis's pitch, then bend the knee and hock as if crouched and weight-bearing.
-        add(p, 'thigh.' + side, ('X', -BIPED_PELVIS_PITCH - 0.55))
-        add(p, 'shin.' + side, ('X', 1.05))
-        add(p, 'hock.' + side, ('X', -0.35))
-        add(p, 'htoe.' + side, ('X', 0.15))
+        add(p, 'thigh.' + side, ('X', msign * (-BIPED_PELVIS_PITCH - 0.55)))
+        add(p, 'shin.' + side, ('X', msign * 1.05))
+        add(p, 'hock.' + side, ('X', msign * -0.35))
+        add(p, 'htoe.' + side, ('X', msign * 0.15))
         # Front legs curl up and in against the chest like tucked forepaws: cancel the chest's
         # cumulative pitch (so they don't get carried past vertical with the torso), fold the
         # "shoulder" forward and up, then curl the elbow and wrist in tight.
-        add(p, 'upperarm.' + side, ('X', -BIPED_CHEST_PITCH + 1.15), ('Z', 0.12 if side == 'L' else -0.12))
-        add(p, 'forearm.' + side, ('X', -1.55))
-        add(p, 'pastern.' + side, ('X', 0.75))
+        add(p, 'upperarm.' + side, ('X', msign * (-BIPED_CHEST_PITCH + 1.15)), ('Z', 0.12 if side == 'L' else -0.12))
+        add(p, 'forearm.' + side, ('X', msign * -1.55))
+        add(p, 'pastern.' + side, ('X', msign * 0.75))
     add(p, 'tail1', ('X', -0.35))
     add(p, 'tail2', ('X', -0.25))
-    p['_pelvis_loc'] = Vector((0, 0.16, 0.30))
+    # This is the number that actually plants the hind paws: with the leg bend above, the hind
+    # toe tips land 0.533 m above z = 0 (ground) at pelvis_loc = 0, measured directly off the rig
+    # (see the worked-out comment on GROUND_DROP below) -- so the pelvis has to come down by
+    # that much, not by eye.
+    p['_pelvis_loc'] = Vector((0, 0.16, 0.30 - GROUND_DROP))
     return p
+
+
+## Measured, not guessed: with `biped_stand_pose`'s hind-leg bend and `_pelvis_loc.z = 0`, the hind
+## toe tips (htoe's tail) sit at world z = 0.5327 (checked directly off the built rig -- see
+## art/service_dog/README.md, "Revision 2: getting the hind paws on the ground"). Subtracting this
+## from `_pelvis_loc.z` is what actually grounds them, rather than an eyeballed offset.
+GROUND_DROP = 0.5327
 
 
 def standup_pose(f, n=50):

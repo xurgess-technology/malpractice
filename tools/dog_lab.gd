@@ -43,6 +43,17 @@ func _ready() -> void:
 	cam = Camera3D.new()
 	add_child(cam)
 
+	# A visible ground plane, so the standup/run screenshots can show actual foot-to-ground
+	# contact rather than the model floating in empty space.
+	var ground := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(6, 6)
+	ground.mesh = pm
+	var gmat := StandardMaterial3D.new()
+	gmat.albedo_color = Color(0.11, 0.11, 0.12)
+	ground.material_override = gmat
+	add_child(ground)
+
 	model = MonsterModelScript.new()
 	add_child(model)
 	model.setup("service_dog")
@@ -117,6 +128,19 @@ func _run_shots() -> void:
 		for i in [0.0, 0.35, 0.65, 1.0]:
 			await _play_and_settle("StandUp", L * i)
 			await _shot("standup_%02d" % int(i * 100))
+		# A clean, level, straight-on side view of the final reared pose, framed on the hind
+		# paws' own world position so the ground plane under them is actually in frame (Zach:
+		# check the actual foot/paw contact, both feet at the same height, under the body).
+		await _play_and_settle("StandUp", L)
+		var toe_bi: int = model.skeleton.find_bone("htoe.L")
+		var toe_world: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(toe_bi).origin if toe_bi >= 0 else Vector3.ZERO
+		var toe_r_bi: int = model.skeleton.find_bone("htoe.R")
+		var toe_r_world: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(toe_r_bi).origin if toe_r_bi >= 0 else toe_world
+		_check("both hind paws on the ground and level (%.3f m, %.3f m above y = 0)" % [toe_world.y, toe_r_world.y],
+			absf(toe_world.y) < 0.03 and absf(toe_r_world.y) < 0.03 and absf(toe_world.y - toe_r_world.y) < 0.01)
+		var mid := (toe_world + toe_r_world) * 0.5
+		_look_from(mid + Vector3(2.2, 1.0, 0.15), mid + Vector3(0.0, 0.75, 0.0))
+		await _shot("standup_ground_sideon")
 	_check("StandUp plays", model.anim.has_animation("StandUp"))
 
 	if model.anim.has_animation("Run"):

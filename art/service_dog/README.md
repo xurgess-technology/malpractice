@@ -1,7 +1,7 @@
 # The Service Dog: Blender sources
 
-**Built 2026-09-24, art side of the Service Dog feature; revised the same day after Zach's first
-review (see "Revision 1" below).** The model is
+**Built 2026-09-24, art side of the Service Dog feature; revised twice the same day after Zach's
+reviews (see "Revision 1" and "Revision 2" below).** The model is
 `assets/models/monsters/service_dog/service_dog.glb` (asset key `monster/service_dog`; skinned mesh,
 2 objects, 6 materials, 7 clips), registered in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is
 its `SkeletonModifier3D` (head-tracking, idle "wrongness"), following the Night Nurse / Hive
@@ -72,6 +72,48 @@ Three fixes, all in `blender_src/`, no wiring changes:
    `jaw_open` opens fast and slams shut well before `reach` lets go, giving a held "gripping" frame
    (head still thrust forward, jaw shut) between the snap and the retract. See
    `godot_shots/dog_bite_open.png` / `dog_bite_closed.png`.
+
+## Revision 2 (2026-09-24, after Zach's second look, with real service-dog-vest reference photos)
+
+Two more fixes:
+
+1. **The vest needed to hug the torso, not stand off it.** Zach sent two real service-dog-vest
+   photos: a mesh harness that hugs the ribcage closely with a girth strap under the belly and a
+   chest strap in front, patches sewn flat onto the surface following its contour; a simpler red
+   harness, same idea, fabric conforming to the body's curve. Revision 1's vest -- a big raised
+   panel plus a wide standoff band -- was a "more visible" fix, not a "correctly shaped" one.
+   Rebuilt `build_vest` around a `_coat_radius(y)` helper that samples the coat's own half-width/
+   half-height along the torso (the same profile `build_body`'s spine loft uses) and adds a small
+   constant `MARGIN` (1.1 cm): the vest BODY is now a snug wrap that grows and shrinks with the
+   torso instead of an independently-sized shape, with the girth strap and chest strap as thin
+   accents a hair proud of *that* surface, not of the bare coat. The cross and badge patches are
+   flush (a third of Revision 1's thickness) and centred on the vest body's own local radius at
+   their position, not a fixed height, so they sit like sewn patches instead of floating tabs. See
+   `godot_shots/dog_vest_closeup.png` and `dog_vest_cross_patch.png`.
+2. **The reared pose's hind legs weren't reading as planted, weight-bearing legs.** Two compounding
+   bugs, found by actually querying the built rig's bone world positions (`htoe.L`/`.R`) instead of
+   judging by eye alone:
+   - **The real bug: `thigh.R`, `shin.R`, `hock.R`, `htoe.R` (and the front legs' `.R` equivalents)
+     were rotating the *opposite* way from their `.L` counterparts.** `Poser.rot` mirrors the `X`
+     axis for every bone ending in `.R` (so a single formula can drive both sides of a *mirrored*
+     motion, like a walk cycle's alternating strides) -- but `biped_stand_pose` wants both legs to
+     bend *identically* (a symmetric standing pose, not a mirrored one), and passed the same raw
+     angle for both sides without accounting for that automatic mirroring. Measured result before
+     the fix: `htoe.L`'s tail at world z = 0.53 m, `htoe.R`'s at z = 2.29 m -- the right hind "foot"
+     was floating up near head height, which is exactly Zach's "not reading as two planted legs."
+     Fixed with an explicit `msign` (1 for `.L`, -1 for `.R`) multiplied into every `X` angle in the
+     hind- and front-leg loop, cancelling the built-in mirroring so both legs actually match.
+   - **Pelvis height was a guess, not a measurement.** Once both legs bent identically, the hind toe
+     tips still landed at world z = 0.53 m -- 0.53 m above the ground -- because `_pelvis_loc`'s
+     height was chosen by eye in Revision 1. Fixed by measuring that exact number off the built rig
+     (`GROUND_DROP = 0.5327`, with the measurement documented next to the constant) and subtracting
+     it from `_pelvis_loc.z`, rather than nudging it and re-rendering until it looked close.
+   Both hind paws now land within 1 cm of world y = 0 (the ground) and within 1 cm of each other --
+   `tools/dog_lab.gd`'s `--shots` run checks this directly off the built rig every time
+   (`PASS  both hind paws on the ground and level`) rather than relying on a screenshot looking
+   right. New shot: `godot_shots/dog_standup_ground_sideon.png`, a level side view against a visible
+   ground plane (`dog_lab.gd` now draws one) framed on the hind paws' own position specifically to
+   show the contact.
 
 ## Folder
 
@@ -220,17 +262,21 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
 - **No baked texture pipeline.** Flat per-face materials only (see "Materials" above) — no fur
   variation, no normal map, no AO. The seal/night-nurse bake pipeline (`seal_materials.py` +
   `seal_build.py`'s bake step) would be the template to fork if this needs more surface detail later.
-- **StandUp and Run are a working first pass, not a polished one.** This is a genuinely novel
-  animation problem for the project (nothing else here blends a quadruped and a biped skeleton).
-  Revision 1 fixed the "balanced on one leg" reading (see above) so the hind legs now clearly plant
-  and bear weight and the front legs clearly curl up and tuck, but the transition (see
-  `godot_shots/dog_standup_35.png` / `_65.png`) is still not graceful frame-by-frame, and `Run`'s
-  stride reads as a dynamic lunge more than a controlled sprint. Both would benefit from another pass
-  with fresh eyes before they ship as final.
+- **StandUp and Run are a working pass, not a polished one.** This is a genuinely novel animation
+  problem for the project (nothing else here blends a quadruped and a biped skeleton). Revision 2
+  fixed the actual ground contact (both hind paws measured within 1 cm of the ground and of each
+  other -- see "Revision 2" above and `godot_shots/dog_standup_ground_sideon.png`), so the pose now
+  reads as genuinely standing rather than floating or balanced on one leg, but the transition itself
+  (see `godot_shots/dog_standup_35.png` / `_65.png`) is still not graceful frame-by-frame, and
+  `Run`'s stride reads as a dynamic lunge more than a controlled sprint. Both would benefit from
+  another pass with fresh eyes before they ship as final.
 - **Legs meet the body at a bare tube junction**, same limitation the Seal's README calls out for
   its flipper root: no modelled shoulder/hip socket, just one loft pushed into another.
-- **The vest is a strap wrap, not a cloth sim or a fitted thickness pass.** It reads clearly now
-  (Revision 1) but the geometry itself is still simple lofts and raised boxes, not tailored cloth.
+- **The vest is a snug wrap plus thin strap accents, not a cloth sim.** It now hugs the ribcage and
+  follows the coat's own contour (Revision 2), which is the shape that matters, but the geometry
+  itself is still simple lofts and thin raised boxes, not tailored/simulated cloth -- it won't fold
+  or crease, and the patches, while flush, are still slightly-raised boxes up close rather than
+  truly embroidered/printed detail.
 - **`Dog_Vest_Worn`'s "pseudo-noise"** is a sum of sines of the vertex position, not real noise —
   fine at this triangle density, would tile visibly at higher resolution.
 - **The mouth is a hair open even at rest.** The jaw loft's static offset below the skull (needed so
@@ -241,8 +287,8 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
 
 ## Stats
 
-- **Triangles:** `Dog_Body` 778 + `Dog_Vest` 420 = **1,198** for the whole model (no bake source, so
-  no separate high-poly count; Revision 1's bigger vest and two icon patches added about 300 tris).
+- **Triangles:** `Dog_Body` 778 + `Dog_Vest` 356 = **1,134** for the whole model (no bake source, so
+  no separate high-poly count).
 - **Materials:** 6 flat Principled BSDF (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`, `Dog_Vest_Worn`,
   `Dog_Vest_Cross`, `Dog_Vest_Badge`), no textures.
 - **Bones:** 29 deform + `root`. **Clips:** Idle, Walk, PlaceItem, Growl, StandUp, Run, Bite.
