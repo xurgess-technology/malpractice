@@ -113,27 +113,45 @@ func _run_shots() -> void:
 
 	if model.anim.has_animation("StandUp"):
 		var L: float = model.anim.get_animation("StandUp").length
-		_look_from(Vector3(2.3, 1.55, 2.6), Vector3(0, 1.55, 0.0))
+		_look_from(Vector3(1.55, 1.05, 1.75), Vector3(0, 1.35, 0.0))
 		for i in [0.0, 0.35, 0.65, 1.0]:
 			await _play_and_settle("StandUp", L * i)
 			await _shot("standup_%02d" % int(i * 100))
 	_check("StandUp plays", model.anim.has_animation("StandUp"))
 
 	if model.anim.has_animation("Run"):
-		_look_from(Vector3(2.4, 1.7, 2.7), Vector3(0, 1.55, 0.0))
+		_look_from(Vector3(1.6, 1.15, 1.8), Vector3(0, 1.35, 0.0))
 		await _play_and_settle("Run", model.anim.get_animation("Run").length * 0.25)
 		await _shot("run")
 	_check("Run plays", model.anim.has_animation("Run"))
 
-	_look_from(Vector3(1.15, 0.85, 1.55), Vector3(0, 0.85, 0.15))
-	await _play_and_settle("Bite", model.anim.get_animation("Bite").length * 0.3 if model.anim.has_animation("Bite") else 0.0)
-	await _shot("bite")
+	# Two frames through the bite: jaw open mid-lunge, then snapped shut while still reaching --
+	# the pair together is what makes it read as an attack instead of a static pose. Framed close
+	# on the head/neck, since that is where the whole clip's point is made.
+	if model.anim.has_animation("Bite"):
+		var bl: float = model.anim.get_animation("Bite").length
+		await _play_and_settle("Bite", bl * 0.16)
+		var head_i: int = model.skeleton.find_bone("head")
+		var head_world: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(head_i).origin
+		_look_from(head_world + Vector3(0.75, -0.1, 0.05), head_world + Vector3(0.0, 0.05, 0.0))
+		await _shot("bite_open")
+		await _play_and_settle("Bite", bl * 0.5)
+		head_world = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(head_i).origin
+		_look_from(head_world + Vector3(0.75, -0.1, 0.05), head_world + Vector3(0.0, 0.05, 0.0))
+		await _shot("bite_closed")
 	_check("Bite plays", model.anim.has_animation("Bite"))
 
-	# A close vest shot.
-	_look_from(Vector3(0.45, 0.95, 0.65), Vector3(0.0, 0.95, 0.15))
+	# A close vest shot: pulled back enough to read the strap/panel silhouette and both patches.
+	_look_from(Vector3(0.85, 1.15, 1.05), Vector3(0.0, 1.05, 0.20))
 	await _play_and_settle("Idle", 0.2)
 	await _shot("vest_closeup")
+
+	# A top-back angle to catch the back panel's red-cross patch, aimed at the neck-base bone
+	# (the patch sits just above it) rather than a guessed world point.
+	var neck_bi: int = model.skeleton.find_bone("neck1")
+	var neck_world: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(neck_bi).origin if neck_bi >= 0 else Vector3(0, 1.1, 0.4)
+	_look_from(neck_world + Vector3(0.5, -0.05, 0.35), neck_world + Vector3(0.0, 0.0, 0.05))
+	await _shot("vest_cross_patch")
 
 	print("[dog_lab] ------------------------------------------")
 	print("[dog_lab] result: ", "PASS" if ok else "FAIL")

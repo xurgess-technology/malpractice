@@ -19,7 +19,7 @@ SPINE = [
     ('neck1', tuple(G.CHEST), tuple(G.NECK1), 'chest'),
     ('neck2', tuple(G.NECK1), tuple(G.NECK2), 'neck1'),
     ('head', tuple(G.NECK2), tuple(G.HEAD_TIP), 'neck2'),
-    ('jaw', (G.HEAD.x, G.HEAD.y - 0.028, G.HEAD.z), tuple(G.JAW_TIP), 'head'),
+    ('jaw', (G.HEAD.x, G.HEAD.y, G.HEAD.z - 0.036), tuple(G.JAW_TIP), 'head'),
 ]
 
 TAIL = [
@@ -250,7 +250,7 @@ def place_pose(f, n=60):
     add(p, 'neck1', ('X', 0.55 * lower))
     add(p, 'neck2', ('X', 0.75 * lower))
     add(p, 'head', ('X', 0.35 * lower))
-    add(p, 'jaw', ('X', -0.55 * lower))
+    add(p, 'jaw', ('X', -0.85 * lower))
     add(p, 'thigh.L', ('X', 0.06 * lower))
     add(p, 'thigh.R', ('X', 0.06 * lower))
     p['_pelvis_loc'] = Vector((0, -0.02 * lower, 0))
@@ -266,7 +266,7 @@ def growl_pose(f, n=24):
     add(p, 'neck1', ('X', 0.12 * k))
     add(p, 'neck2', ('X', 0.10 * k))
     add(p, 'head', ('X', -0.05 * k))
-    add(p, 'jaw', ('X', -0.18 * k))
+    add(p, 'jaw', ('X', -0.30 * k))
     add(p, 'ear.L', ('X', -0.30 * k), ('Z', -0.10 * k))
     add(p, 'ear.R', ('X', 0.20 * k), ('Z', 0.10 * k))
     tremor = math.sin(t * G.TAU * 6) * 0.01 * k
@@ -274,49 +274,86 @@ def growl_pose(f, n=24):
     return p
 
 
-def bite_pose(f, n=18):
-    """A fast lunging bite: head snaps forward and down, jaw slams shut, weight drives through
-    the front legs. Not cyclic."""
+def bite_pose(f, n=24):
+    """A fast lunging bite, unambiguous as an attack (Zach: "should read as the dog lunging its
+    head/jaw at the target and biting -- jaw should visibly open and snap shut, ideally with a
+    forward head/neck lunge, not a static pose"). Two independent curves, not one: `reach` (the
+    head/neck/body driving forward) ramps up and HOLDS while `jaw` opens fast, then slams shut well
+    before the head retracts -- so there is a distinct held "gripping" frame (head still thrust
+    forward, jaw closed) between the snap and the pull-back, instead of the open and the lunge
+    peaking and fading together. Not cyclic."""
     t = f / n
-    strike = G.smooth01(t / 0.35) if t < 0.35 else max(0.0, 1.0 - G.smooth01((t - 0.35) / 0.25))
-    settle = G.smooth01((t - 0.55) / 0.45) if t > 0.55 else 0.0
+    if t < 0.22:
+        reach = G.smooth01(t / 0.22)
+    elif t < 0.62:
+        reach = 1.0
+    else:
+        reach = 1.0 - G.smooth01((t - 0.62) / 0.38)
+    if t < 0.16:
+        jaw_open = G.smooth01(t / 0.16)
+    elif t < 0.28:
+        jaw_open = 1.0 - G.smooth01((t - 0.16) / 0.12)
+    else:
+        jaw_open = 0.0
     p = stand_pose()
-    add(p, 'neck1', ('X', 0.35 * strike + 0.05 * settle))
-    add(p, 'neck2', ('X', 0.55 * strike))
-    add(p, 'head', ('X', 0.25 * strike))
-    jaw_open = max(0.0, strike - settle)
-    add(p, 'jaw', ('X', -0.9 * jaw_open + 0.1 * settle))
-    add(p, 'upperarm.L', ('X', 0.25 * strike))
-    add(p, 'upperarm.R', ('X', 0.25 * strike))
-    p['_pelvis_loc'] = Vector((0, -0.01 * strike, 0.05 * strike))
+    add(p, 'neck1', ('X', 0.50 * reach))
+    add(p, 'neck2', ('X', 0.75 * reach))
+    add(p, 'head', ('X', 0.30 * reach))
+    add(p, 'jaw', ('X', -1.95 * jaw_open))
+    add(p, 'upperarm.L', ('X', 0.30 * reach))
+    add(p, 'upperarm.R', ('X', 0.30 * reach))
+    add(p, 'thigh.L', ('X', 0.12 * reach))
+    add(p, 'thigh.R', ('X', 0.12 * reach))
+    p['_pelvis_loc'] = Vector((0, 0.09 * reach, -0.02 * reach))
     return p
 
 
 # --------------------------------------------------------------------------- biped poses
+## How much the pelvis pitches up in the biped pose (world-space 'X' rotation, see Poser.rot).
+BIPED_PELVIS_PITCH = 1.55
+## Cumulative world-space rotation carried down to 'chest' once pelvis + spine1 + chest all add
+## their own deltas on top of each other (each bone's delta composes with its parents', since
+## Poser.rot expresses every delta as a genuine world-space rotation about the same global axis --
+## rotations about the same axis simply add). Front-leg angles below are chosen relative to this,
+## not the pelvis pitch alone, since the arms hang off the chest, not the hips.
+BIPED_CHEST_PITCH = BIPED_PELVIS_PITCH + 0.14 + 0.10
+
+
 def biped_stand_pose():
-    """Reared onto the hind legs: hips pitched up under the spine, the hind legs straight and
-    under the body for support, the front legs folded up against the chest, the tail out for
-    balance. The end pose of StandUp and the rest pose of Run."""
+    """Reared onto the hind legs: hips pitched up under the spine, the hind legs bent and planted
+    under the body to bear the shifted weight (like a dog sitting up on its haunches, not a rigid
+    pivot), the front legs curled up and tucked against the chest like forepaws, the tail out for
+    balance. The end pose of StandUp and the rest pose of Run.
+
+    The hind legs matter most here (Zach: "two hind legs planted and weight-bearing, not the whole
+    body balanced on one leg"). `thigh` is a direct child of `pelvis`, and since every pose delta
+    below is a world-space rotation about a shared global axis, thigh's own delta needs to roughly
+    CANCEL the pelvis's pitch (so the leg doesn't get carried along for the ride and end up
+    pointing sideways) before adding the extra bend that makes it read as crouched and bearing
+    weight. `shin`/`hock` don't need that cancellation -- their parent (`thigh`) is back near its
+    own rest orientation once cancelled, so their deltas act like an ordinary standing bend."""
     p = {}
-    add(p, 'pelvis', ('X', 1.55))
-    add(p, 'spine1', ('X', 0.10))
-    add(p, 'chest', ('X', 0.08))
+    add(p, 'pelvis', ('X', BIPED_PELVIS_PITCH))
+    add(p, 'spine1', ('X', 0.14))
+    add(p, 'chest', ('X', 0.10))
     add(p, 'neck1', ('X', -0.15))
     add(p, 'neck2', ('X', -0.10))
     add(p, 'head', ('X', 0.10))
     for side in ('L', 'R'):
-        add(p, 'thigh.' + side, ('X', 1.50))
-        add(p, 'shin.' + side, ('X', -0.10))
-        add(p, 'hock.' + side, ('X', 0.35))
-        add(p, 'htoe.' + side, ('X', -0.10))
-        # Front legs fold up against the chest like a begging dog -- the strangest single pose
-        # in the set; flagged in the README as the part most worth a second pass.
-        add(p, 'upperarm.' + side, ('X', 1.65), ('Z', 0.15 if side == 'L' else -0.15))
-        add(p, 'forearm.' + side, ('X', -2.15))
-        add(p, 'pastern.' + side, ('X', 0.55))
+        # Cancel the pelvis's pitch, then bend the knee and hock as if crouched and weight-bearing.
+        add(p, 'thigh.' + side, ('X', -BIPED_PELVIS_PITCH - 0.55))
+        add(p, 'shin.' + side, ('X', 1.05))
+        add(p, 'hock.' + side, ('X', -0.35))
+        add(p, 'htoe.' + side, ('X', 0.15))
+        # Front legs curl up and in against the chest like tucked forepaws: cancel the chest's
+        # cumulative pitch (so they don't get carried past vertical with the torso), fold the
+        # "shoulder" forward and up, then curl the elbow and wrist in tight.
+        add(p, 'upperarm.' + side, ('X', -BIPED_CHEST_PITCH + 1.15), ('Z', 0.12 if side == 'L' else -0.12))
+        add(p, 'forearm.' + side, ('X', -1.55))
+        add(p, 'pastern.' + side, ('X', 0.75))
     add(p, 'tail1', ('X', -0.35))
     add(p, 'tail2', ('X', -0.25))
-    p['_pelvis_loc'] = Vector((0, 0.30, -0.08))
+    p['_pelvis_loc'] = Vector((0, 0.16, 0.30))
     return p
 
 
@@ -375,6 +412,6 @@ def build_actions(arm):
     act('Growl', 24, growl_pose, cyclic=False)
     act('StandUp', 50, standup_pose, cyclic=False)
     act('Run', 30, run_pose, cyclic=True)
-    act('Bite', 18, bite_pose, cyclic=False)
+    act('Bite', 24, bite_pose, cyclic=False)
     arm.animation_data.action = bpy.data.actions['Idle']
     return poser

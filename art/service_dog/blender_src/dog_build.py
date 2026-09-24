@@ -46,8 +46,8 @@ def part_object(part, mats, mat_index_fn):
     for mt in mats:
         me.materials.append(mt)
     idxs = []
-    for face in part.f:
-        idxs.append(mat_index_fn(face))
+    for face, forced in zip(part.f, part.face_mat):
+        idxs.append(forced if forced is not None else mat_index_fn(face))
     me.polygons.foreach_set('material_index', idxs)
     me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
     me.validate(clean_customdata=False)

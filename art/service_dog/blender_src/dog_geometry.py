@@ -203,6 +203,7 @@ class Part:
         self.fuv = []
         self.w = []    # per-vertex {bone: weight}
         self.attr = {k: [] for k in ATTRS}   # per-vertex float masks the shader reads (below)
+        self.face_mat = []   # per-face forced material index, or None to use the mask-average pick
 
     def add_tube(self, centerline, rx, rz, nseg, weights, cap_start=True, cap_end=True,
                  dip=None, uv_v_range=(0.0, 1.0)):
@@ -227,6 +228,31 @@ class Part:
         for face, fuv in zip(faces, face_uvs):
             self.f.append(tuple(base + idx for idx in face))
             self.fuv.append([(u, uv_v_range[0] + (uv_v_range[1] - uv_v_range[0]) * v) for u, v in fuv])
+            self.face_mat.append(None)
+
+    def add_patch(self, center, right, up, half_w, half_h, thickness, weight, mat_index):
+        """A small raised rectangular patch (a thin box), for appliques like the vest's cross and
+        badge: `center` on the surface, `right`/`up` its in-plane axes, offset outward along their
+        cross product (the surface normal) by `thickness`. `mat_index` forces the material on
+        every face of the patch, bypassing the usual per-face mask average."""
+        right = right.normalized()
+        up = up.normalized()
+        normal = right.cross(up).normalized()
+        base = len(self.v)
+        corners = [center + right * sx * half_w + up * sy * half_h for sx in (-1.0, 1.0) for sy in (-1.0, 1.0)]
+        self.v += corners
+        self.v += [c + normal * thickness for c in corners]
+        b0, b1, b2, b3 = base, base + 1, base + 2, base + 3
+        t0, t1, t2, t3 = base + 4, base + 5, base + 6, base + 7
+        faces = [(t0, t1, t3, t2), (b0, b2, b3, b1), (b0, b1, t1, t0), (b1, b3, t3, t1), (b3, b2, t2, t3), (b2, b0, t0, t2)]
+        for f in faces:
+            self.f.append(f)
+            self.fuv.append([(0.0, 0.0)] * len(f))
+            self.face_mat.append(mat_index)
+        for _ in range(8):
+            self.w.append(dict(weight))
+            for k in ATTRS:
+                self.attr[k].append(0.0)
 
     def tris(self):
         return sum(len(f) - 2 for f in self.f)
@@ -269,9 +295,9 @@ def build_body(nseg=10, nseg_small=8):
                dip=lambda i, th: _socket_dip(i, th, sock_ring=1), uv_v_range=(0.5, 0.75))
 
     # ---- lower jaw: a thin loft from under the head to the jaw tip, hinged conceptually at 'jaw' -
-    jaw_pts = [HEAD + Vector((0.0, -0.028, 0.0)), JAW_MID, JAW_TIP]
-    jaw_rx = [0.030, 0.020, 0.006]
-    jaw_rz = [0.026, 0.018, 0.006]
+    jaw_pts = [HEAD + Vector((0.0, 0.0, -0.036)), JAW_MID, JAW_TIP]
+    jaw_rx = [0.034, 0.022, 0.007]
+    jaw_rz = [0.030, 0.020, 0.007]
     w3 = [{'jaw': 1.0}] * 3
     p.add_tube(jaw_pts, jaw_rx, jaw_rz, nseg_small, w3, cap_start=False, cap_end=True, uv_v_range=(0.75, 0.85))
 
@@ -321,35 +347,87 @@ def build_body(nseg=10, nseg_small=8):
     return p
 
 
-def build_vest(nseg=14):
-    """A simple service-dog vest: a girth band round the chest and a back panel from the withers
-    forward. Zach has not signed off on clean vs. worn/dirty (see README); geometry-wise it is
-    plain so the material alone carries that call."""
+# Material indices dog_materials.build_all() returns them in (must stay in sync with that list).
+VEST_CROSS_MAT = 4
+VEST_BADGE_MAT = 5
+
+
+def build_vest(nseg=16):
+    """A real, clearly-readable service-dog vest: a wide girth strap wrapping the whole chest well
+    proud of the coat, a full body/saddle panel down the back from the withers to the hips, a
+    shoulder strap tying the two together over the front of the chest, a red-cross patch on the
+    back panel and a small badge on the girth strap -- the two pieces of iconography that make a
+    plain strap read as a service-dog vest at a glance rather than a colour block. Zach has not
+    signed off on clean vs. worn/dirty (see README); geometry-wise the base garment stays bold and
+    legible and the wear mask (below) only ever touches a minority of it."""
     p = Part('Dog_Vest', 'vest')
 
-    # Girth band: a flattened ring round the chest, sitting just proud of the coat.
-    band_pts = [CHEST + Vector((0, 0, -0.03)), CHEST, CHEST + Vector((0, 0, 0.03))]
-    rx = [0.086, 0.090, 0.086]
-    rz = [0.158, 0.162, 0.158]
-    w = [{'chest': 1.0}] * 3
-    p.add_tube(band_pts, rx, rz, nseg, w, cap_start=False, cap_end=False, uv_v_range=(0.0, 0.5))
+    # Girth strap: a wide flattened band round the whole chest, sitting well proud of the coat
+    # (coat half-height there is 0.145; the strap reaches 0.205, a clearly separate silhouette).
+    band_pts = [CHEST + Vector((0, -0.075, 0)), CHEST + Vector((0, -0.035, 0)), CHEST,
+                CHEST + Vector((0, 0.035, 0)), CHEST + Vector((0, 0.075, 0))]
+    rx = [0.100, 0.108, 0.112, 0.108, 0.100]
+    rz = [0.185, 0.200, 0.205, 0.200, 0.185]
+    w = [{'chest': 1.0}] * 5
+    p.add_tube(band_pts, rx, rz, nseg, w, cap_start=False, cap_end=False, uv_v_range=(0.0, 0.3))
 
-    # Back panel: a shallow flattened loft over the withers, from the chest to the neck base.
-    back_pts = [VEST_BACK_REAR, VEST_BACK_REAR.lerp(VEST_BACK_FRONT, 0.5), VEST_BACK_FRONT]
-    brx = [0.075, 0.068, 0.052]
-    brz = [0.020, 0.020, 0.018]
-    bw = [{'spine1': 0.5, 'chest': 0.5}, {'chest': 1.0}, {'chest': 0.6, 'neck1': 0.4}]
-    p.add_tube(back_pts, brx, brz, 10, bw, cap_start=True, cap_end=True, uv_v_range=(0.5, 1.0))
+    # Back / saddle panel: a full body panel from the hips to the withers, wide enough to clearly
+    # read as a vest body rather than a thin strip (coat half-width there is 0.06-0.09; the panel
+    # reaches 0.10-0.115, standing a couple of centimetres proud all along its length).
+    back_pts = [SPINE1 + Vector((0, -0.06, 0.045)), SPINE1.lerp(CHEST, 0.5) + Vector((0, 0, 0.05)),
+                CHEST + Vector((0, 0, 0.05)), CHEST.lerp(NECK1, 0.5) + Vector((0, 0, 0.045)),
+                VEST_BACK_FRONT]
+    brx = [0.085, 0.100, 0.115, 0.095, 0.060]
+    brz = [0.028, 0.032, 0.034, 0.030, 0.022]
+    bw = [{'spine1': 0.7, 'pelvis': 0.3}, {'spine1': 0.5, 'chest': 0.5}, {'chest': 1.0},
+          {'chest': 0.7, 'neck1': 0.3}, {'chest': 0.4, 'neck1': 0.6}]
+    p.add_tube(back_pts, brx, brz, 16, bw, cap_start=True, cap_end=True, uv_v_range=(0.3, 0.7))
 
-    # Deterministic wear mask: dirtiest low on the girth (brushes the ground, drags through
-    # whatever a service dog kneels in) and along the panel's edges (strap friction), with a
-    # touch of pseudo-noise (a sum of sines of the vertex position -- no RNG, so it is stable
-    # across rebuilds) so it does not read as a flat gradient. See README for the "worn" call.
+    # Shoulder strap: ties the back panel down over the front of the chest to the girth strap, the
+    # way a real service-dog vest's chest strap does, so the silhouette reads as one garment
+    # wrapping the torso rather than two unconnected patches.
+    strap_top = CHEST.lerp(NECK1, 0.35) + Vector((0.062, 0.0, 0.045))
+    strap_mid = CHEST + Vector((0.095, 0.0, 0.02))
+    strap_bot = CHEST + Vector((0.075, 0.0, -0.10))
+    for side in ('L', 'R'):
+        sx = 1.0 if side == 'L' else -1.0
+        pts = [Vector((sx * strap_top.x, strap_top.y, strap_top.z)),
+               Vector((sx * strap_mid.x, strap_mid.y, strap_mid.z)),
+               Vector((sx * strap_bot.x, strap_bot.y, strap_bot.z))]
+        srx = [0.018, 0.018, 0.018]
+        srz = [0.028, 0.028, 0.028]
+        sw = [{'chest': 0.6, 'neck1': 0.4}, {'chest': 1.0}, {'chest': 1.0}]
+        p.add_tube(pts, srx, srz, 8, sw, cap_start=True, cap_end=True, uv_v_range=(0.7, 0.85))
+
+    # First-aid iconography: a red cross patch on the back panel (the strongest "service animal"
+    # read at a glance) and a small badge on the girth strap's front.
+    # On top of the girth strap, facing straight up -- visible from the elevated 3/4 angle every
+    # screenshot in this project (and most gameplay cameras) actually uses, unlike the strap's
+    # side or the back panel's top which foreshorten away in exactly those views.
+    cross_center = CHEST + Vector((0.0, 0.0, 0.205))
+    cross_right = Vector((1.0, 0.0, 0.0))
+    cross_up = Vector((0.0, 1.0, 0.0))
+    p.add_patch(cross_center, cross_right, cross_up, 0.048, 0.016, 0.012, {'chest': 1.0}, VEST_CROSS_MAT)
+    p.add_patch(cross_center, cross_right, cross_up, 0.016, 0.048, 0.012, {'chest': 1.0}, VEST_CROSS_MAT)
+    # The badge sits on the front of the girth strap, facing forward and slightly up (the strap's
+    # outward normal there, not an arbitrary axis-aligned guess -- otherwise the patch's visible
+    # face ends up edge-on or hidden inside the strap).
+    badge_center = CHEST + Vector((0.0, 0.145, -0.06))
+    badge_normal = Vector((0.0, 0.85, 0.35)).normalized()
+    badge_right = Vector((1.0, 0.0, 0.0))
+    badge_up = badge_normal.cross(badge_right).normalized()
+    p.add_patch(badge_center, badge_right, badge_up, 0.030, 0.030, 0.009, {'chest': 1.0}, VEST_BADGE_MAT)
+
+    # Deterministic wear mask, kept to a minority of the surface so the garment itself always
+    # reads clearly first: dirtiest low on the girth strap (brushes the ground) and along the back
+    # panel's rear edge (strap friction near the hips), with a touch of pseudo-noise (a sum of
+    # sines of the vertex position -- no RNG, so it is stable across rebuilds) so it does not read
+    # as a flat gradient. See README for the "worn" call.
     for i, v in enumerate(p.v):
-        low = smooth01((CHEST.y - 0.05 - v.y) / 0.10)
-        edge = smooth01((abs(v.x) - 0.05) / 0.03)
+        low = smooth01((CHEST.z - 0.16 - v.z) / 0.08)
+        rear = smooth01((SPINE1.y + 0.05 - v.y) / 0.08)
         noise = 0.5 + 0.5 * math.sin(v.x * 53.0 + v.y * 91.0 + v.z * 37.0)
-        p.attr['stain'][i] = max(0.0, min(1.0, 0.55 * low + 0.30 * edge + 0.25 * noise - 0.10))
+        p.attr['stain'][i] = max(0.0, min(1.0, 0.45 * low + 0.25 * rear + 0.20 * noise - 0.25))
 
     return p
 

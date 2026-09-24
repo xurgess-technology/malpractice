@@ -1,8 +1,9 @@
 # The Service Dog: Blender sources
 
-**Built 2026-09-24, art side of the Service Dog feature.** The model is
+**Built 2026-09-24, art side of the Service Dog feature; revised the same day after Zach's first
+review (see "Revision 1" below).** The model is
 `assets/models/monsters/service_dog/service_dog.glb` (asset key `monster/service_dog`; skinned mesh,
-2 objects, 4 materials, 7 clips), registered in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is
+2 objects, 6 materials, 7 clips), registered in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is
 its `SkeletonModifier3D` (head-tracking, idle "wrongness"), following the Night Nurse / Hive
 convention (`scripts/monsters/night_nurse_rig.gd`, `hive_rig.gd`). `tools/dog_lab.gd` /
 `tools/dog_lab.tscn` is its smoke-test viewer (see "Validate" below). This folder has a `.gdignore`,
@@ -36,6 +37,41 @@ the tone; the read each contributed:
   ending in almost hoof-like feet.
 - A sketch: a pale skull-like head with no visible eyes at all, a dark wiry body. Its tentacle-tail
   was deliberately not used (too far past the brief); the blank-eyed head and dark wiry body were.
+
+## Revision 1 (2026-09-24, same day, after Zach's first look at the screenshots)
+
+Three fixes, all in `blender_src/`, no wiring changes:
+
+1. **The vest was unreadable.** The girth strap was barely proud of the coat and close enough in
+   tone to it that it read as a smudge, not a garment. Fixed by making it a genuinely different
+   garment, not a tweak: a wide strap standing clearly proud of the coat in a saturated safety-vest
+   orange (`Dog_Vest_Clean`, `dog_materials.py`), a much bigger back/saddle panel, a shoulder strap
+   tying the two together so the whole thing reads as one wrapped garment, and two pieces of
+   first-aid iconography (`dog_geometry.build_vest`'s `add_patch` calls) — a red cross on top of the
+   girth strap and a pale ID badge on its front. Both patches are forced onto their own material
+   (`Dog_Vest_Cross`, `Dog_Vest_Badge`) via the new `Part.face_mat` override, bypassing the usual
+   per-face mask average entirely. The wear mask still exists (`Dog_Vest_Worn`) but only ever
+   touches a minority of the surface now, so it can no longer compete with the base garment's
+   legibility. See `godot_shots/dog_vest_closeup.png` and `dog_vest_cross_patch.png`.
+2. **The StandUp/Run end pose read as balanced on one leg.** The cause: `thigh` is a direct child of
+   `pelvis`, and every pose delta in `dog_rig.Poser` is a world-space rotation about a shared global
+   axis, so `thigh`'s own delta was simply *added* to `pelvis`'s ~90 degree pitch instead of
+   cancelling it — the hind legs got carried along for the ride and ended up pointing sideways
+   instead of staying planted. Fixed by making `biped_stand_pose`'s hind-leg deltas cancel the
+   pelvis's pitch first (`-BIPED_PELVIS_PITCH`) before adding the crouch/weight-bearing bend on top
+   (documented in the pose function's docstring, with the reasoning spelled out since it is easy to
+   get backwards again). The front legs got the same treatment relative to the chest's cumulative
+   pitch, so they curl up and tuck rather than over-rotating past vertical. Re-rendered the same
+   4-frame sequence: `godot_shots/dog_standup_00/_35/_65/_100.png`.
+3. **The Bite clip didn't read as an attack.** Two bugs, one design fix: the jaw's hinge offset was
+   accidentally authored along the wrong axis (a leftover from the Y/Z frame fix below — it offset
+   the jaw *backward* by 2.8 cm instead of *downward*, so the mouth had almost no visible gap to
+   open), and `bite_pose`'s `reach` (head/neck/lunge) and `jaw_open` curves peaked and decayed
+   together, so the "open" and the "lunge" faded out as one move with no distinct snap. Fixed the
+   hinge axis, then rebuilt the timing as two independent curves: `reach` ramps up and holds while
+   `jaw_open` opens fast and slams shut well before `reach` lets go, giving a held "gripping" frame
+   (head still thrust forward, jaw shut) between the snap and the retract. See
+   `godot_shots/dog_bite_open.png` / `dog_bite_closed.png`.
 
 ## Folder
 
@@ -85,15 +121,17 @@ pipeline does not bake, so it has nothing to tune there (see "Known problems").
   call in the whole model; see "Open design calls" below, it is the one most worth Zach's eyes.
 - **Materials — a smaller step than the Seal/Night Nurse pipeline.** Those bake a procedural Cycles
   material to a PBR texture atlas (albedo/roughness/normal/AO) from a high-poly source. This model
-  skips that: `dog_materials.py` is four flat Principled BSDF materials (`Dog_Coat` dark charcoal,
-  `Dog_Skull` pale bone, `Dog_Vest_Clean`, `Dog_Vest_Worn`), and `dog_geometry.py` computes a
-  per-vertex `head` mask (from the same bone-weight blend used for skinning: near 1 on the skull and
-  jaw, 0 everywhere else) and a `stain` mask on the vest (low on the girth, along strap edges, plus a
-  deterministic sine-based pseudo-noise — no RNG). `dog_build.py` picks each face's material by
-  averaging its vertices' mask value, so the pale skull, dark body and clean/worn vest patches are
-  real per-face material choices with no bake step and no UV-packing risk. The trade: no fur
-  variation, no normal-mapped detail, no AO. Flagged as a place to invest more if the flat look reads
-  too clean in the finished lighting.
+  skips that: `dog_materials.py` is six flat Principled BSDF materials (`Dog_Coat` dark charcoal,
+  `Dog_Skull` pale bone, `Dog_Vest_Clean` a saturated safety-vest orange, `Dog_Vest_Worn`,
+  `Dog_Vest_Cross`, `Dog_Vest_Badge`), and `dog_geometry.py` computes a per-vertex `head` mask (from
+  the same bone-weight blend used for skinning: near 1 on the skull and jaw, 0 everywhere else) and a
+  `stain` mask on the vest (low on the girth, along the back panel's rear edge, plus a deterministic
+  sine-based pseudo-noise — no RNG). `dog_build.py` picks each face's material by averaging its
+  vertices' mask value, so the pale skull, dark body and clean/worn vest patches are real per-face
+  material choices with no bake step and no UV-packing risk. The vest's two icon patches
+  (`Part.add_patch`, small raised boxes) instead force their material directly, bypassing the mask
+  average entirely (`Part.face_mat`). The trade: no fur variation, no normal-mapped detail, no AO.
+  Flagged as a place to invest more if the flat look reads too clean in the finished lighting.
 - **Rig — the first quadruped skeleton in the project.** 29 deform bones: `pelvis` -> `spine1` ->
   `chest` -> `neck1` -> `neck2` -> `head` -> `jaw`; `tail1..4`; `ear.L`/`ear.R`; and per side
   `upperarm`/`forearm`/`pastern`/`toe` (front) and `thigh`/`shin`/`hock`/`htoe` (hind). Bone naming
@@ -118,14 +156,17 @@ pipeline does not bake, so it has nothing to tune there (see "Known problems").
   - `Growl` (24 f / 0.8 s, one-shot): ears pin, the jaw parts a hair, ~1 mm chest tremor. Short and
     subtle on purpose — the brief only asked for triggerable-on-demand, not long.
   - `StandUp` (50 f / 1.7 s, one-shot): quadruped -> biped. **The hardest single piece of this
-    task and the roughest — see "Open design calls."** `dog_rig.lerp_pose` blends the quadruped
-    `stand_pose()` into a new `biped_stand_pose()` (hips pitched ~90 degrees up, hind legs straight
-    under the body, front legs folded up against the chest like a begging dog, tail out for balance)
-    with an eased `smooth01` timing curve.
+    task** — see "Revision 1" below for the fix that made the hind legs actually plant and bear
+    weight instead of the whole body reading as balanced on one leg. `dog_rig.lerp_pose` blends the
+    quadruped `stand_pose()` into a new `biped_stand_pose()` (hips pitched up, hind legs bent and
+    under the body bearing weight, front legs curled up and tucked against the chest like forepaws,
+    tail out for balance) with an eased `smooth01` timing curve.
   - `Run` (30 f / 1 s loop, biped): built on `biped_stand_pose()`, big alternating hind-leg strides,
     the folded front legs pumping a little, torso pitched forward.
-  - `Bite` (18 f / 0.6 s, one-shot): a fast lunge — head snaps forward and down, jaw slams shut,
-    weight drives through the front legs.
+  - `Bite` (24 f / 0.8 s, one-shot): a lunging attack, reworked in Revision 1 — see below. The
+    head/neck/body reach forward and hold while the jaw opens fast and snaps shut well before the
+    head retracts, so there is a distinct held "gripping" frame (head still thrust forward, jaw
+    closed) between the snap and the pull-back, not one pose fading in and out together.
 
 ## `scripts/monsters/dog_rig.gd`
 
@@ -160,10 +201,12 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
 
 **Two calls Zach has not signed off on — flag these:**
 
-- **Vest condition.** `Dog_Vest_Worn`'s stain mask currently darkens the low girth, the strap edges
-  and a scattered pseudo-noise wear pattern; I leaned slightly worn/dirty given the horror tone, but
-  this was a judgement call, not a spec. `dog_geometry.build_vest`'s stain formula (three weighted
-  terms, commented inline) is the one knob to turn either direction.
+- **Vest condition.** The garment itself is locked in (bold safety-orange, cross + badge -- Zach's
+  Revision 1 note was "make the vest itself unmistakable first," which this now is). What's still a
+  judgement call is how dirty it gets: `Dog_Vest_Worn`'s stain mask darkens the low girth and the
+  back panel's rear edge, plus a scattered pseudo-noise pattern, kept deliberately to a minority of
+  the surface so it never competes with the base garment's visibility. `dog_geometry.build_vest`'s
+  stain formula (three weighted terms, commented inline) is the one knob to turn either direction.
 - **Blank eye sockets, no eyeball geometry.** The skull's sockets are sunken but otherwise plain
   coat-dark — no separate eye mesh, no glint, nothing for the game's eye-tracking/glow conventions
   (`Monster.eye_transform`, other monsters' `eye_glint`) to hang off visually. This is the strongest
@@ -177,24 +220,29 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
 - **No baked texture pipeline.** Flat per-face materials only (see "Materials" above) — no fur
   variation, no normal map, no AO. The seal/night-nurse bake pipeline (`seal_materials.py` +
   `seal_build.py`'s bake step) would be the template to fork if this needs more surface detail later.
-- **StandUp and Run are rough first passes.** This is a genuinely novel animation problem for the
-  project (nothing else here blends a quadruped and a biped skeleton), and it shows: the front-leg
-  "folded up like a begging dog" pose is the strangest single pose in the set, and the mid-transition
-  frames (see `godot_shots/dog_standup_35.png` / `_65.png`) are structurally correct (the whole spine
-  pivots up around world X, hind legs plant, front legs lift) but not yet graceful. `Run`'s stride
-  reads as a dynamic lunge more than a controlled sprint. Both would benefit from another pass with
-  fresh eyes before they ship as final.
+- **StandUp and Run are a working first pass, not a polished one.** This is a genuinely novel
+  animation problem for the project (nothing else here blends a quadruped and a biped skeleton).
+  Revision 1 fixed the "balanced on one leg" reading (see above) so the hind legs now clearly plant
+  and bear weight and the front legs clearly curl up and tuck, but the transition (see
+  `godot_shots/dog_standup_35.png` / `_65.png`) is still not graceful frame-by-frame, and `Run`'s
+  stride reads as a dynamic lunge more than a controlled sprint. Both would benefit from another pass
+  with fresh eyes before they ship as final.
 - **Legs meet the body at a bare tube junction**, same limitation the Seal's README calls out for
   its flipper root: no modelled shoulder/hip socket, just one loft pushed into another.
-- **The vest floats slightly proud of the coat** rather than being cloth-simulated or fitted with a
-  thickness pass; it reads as a strap/panel at gameplay distance, less so close up.
+- **The vest is a strap wrap, not a cloth sim or a fitted thickness pass.** It reads clearly now
+  (Revision 1) but the geometry itself is still simple lofts and raised boxes, not tailored cloth.
 - **`Dog_Vest_Worn`'s "pseudo-noise"** is a sum of sines of the vertex position, not real noise —
   fine at this triangle density, would tile visibly at higher resolution.
+- **The mouth is a hair open even at rest.** The jaw loft's static offset below the skull (needed so
+  the Bite clip has visible travel to open through) means the "closed" pose is a narrow, not zero,
+  gap. Reads fine at gameplay distance and arguably suits the "wrong dog" tone (a mouth that never
+  quite shuts), but it is a compromise, not a deliberate choice, and `dog_geometry.build_body`'s
+  jaw hinge offset (currently -0.036 m) is the knob if Zach wants it flush shut at rest.
 
 ## Stats
 
-- **Triangles:** `Dog_Body` 778 + `Dog_Vest` 116 = **894** for the whole model (no bake source, so
-  no separate high-poly count).
-- **Materials:** 4 flat Principled BSDF (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`,
-  `Dog_Vest_Worn`), no textures.
+- **Triangles:** `Dog_Body` 778 + `Dog_Vest` 420 = **1,198** for the whole model (no bake source, so
+  no separate high-poly count; Revision 1's bigger vest and two icon patches added about 300 tris).
+- **Materials:** 6 flat Principled BSDF (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`, `Dog_Vest_Worn`,
+  `Dog_Vest_Cross`, `Dog_Vest_Badge`), no textures.
 - **Bones:** 29 deform + `root`. **Clips:** Idle, Walk, PlaceItem, Growl, StandUp, Run, Bite.
