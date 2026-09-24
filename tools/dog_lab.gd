@@ -283,20 +283,33 @@ func _run_shots() -> void:
 			await _shot("drop_down_%02d" % int(i * 100))
 	_check("DropDown plays", model.anim.has_animation("DropDown"))
 
-	# Orb glow control: a real emissive mesh, dim by default, brightened by set_drain_glow(1.0).
+	# Orb glow control: a real, small, near-black-at-rest mesh, fading to a ghostly green when
+	# set_drain_glow(1.0) is called, and (Zach) only meant to read from in front of the dog -- so
+	# shoot it from the front AND from directly behind, at rest and while lit, four shots total.
+	# "Front"/"behind" are read off the skeleton's own head/jaw bones (not a guessed world axis), so
+	# this is correct regardless of the asset's registered yaw.
 	if poser != null:
 		var orb: Node = poser.get_node_or_null("../OrbAttach/Orb")
 		_check("Orb node found", orb != null)
 		await _play_and_settle("DrainIdle", 0.0)
 		var head_bi4: int = model.skeleton.find_bone("head")
 		var head_world4: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(head_bi4).origin
-		_look_from(head_world4 + Vector3(0.35, -0.02, 0.15), head_world4 + Vector3(0.0, -0.02, 0.0))
-		poser.set_drain_glow(0.0)
-		await get_tree().process_frame
-		await _shot("orb_glow_off")
-		poser.set_drain_glow(1.0)
-		await get_tree().process_frame
-		await _shot("orb_glow_on")
+		# "Front"/"behind" the DOG, not the head bone's own (pitched-back-when-reared) axis --
+		# Assets.spawn() guarantees every monster's forward is -Z in its own root's basis
+		# (assets.gd's spawn() doc comment), so this is correct regardless of the current pose.
+		var fwd: Vector3 = -model.rig.global_transform.basis.z
+		fwd.y = 0.0
+		fwd = fwd.normalized()
+		var side: Vector3 = fwd.cross(Vector3.UP).normalized()
+		for glow_v in [0.0, 1.0]:
+			var tag := "off" if glow_v < 0.5 else "on"
+			poser.set_drain_glow(glow_v)
+			_look_from(head_world4 + fwd * 0.55 + side * 0.15 + Vector3(0, 0.05, 0), head_world4)
+			await get_tree().process_frame
+			await _shot("orb_glow_%s" % tag)
+			_look_from(head_world4 - fwd * 0.55 + side * 0.15 + Vector3(0, 0.05, 0), head_world4)
+			await get_tree().process_frame
+			await _shot("orb_behind_%s" % tag)
 		poser.set_drain_glow(0.0)
 
 	print("[dog_lab] ------------------------------------------")

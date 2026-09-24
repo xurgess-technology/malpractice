@@ -3,7 +3,8 @@
 **Built 2026-09-24, art side of the Service Dog feature; revised eight times the same day after
 Zach's reviews (see "Revision 1" through "Revision 8" below), then given a ninth pass the same day
 for a design change (see "Revision 9" below): the attack is now a dementor-style soul-drain, not a
-chase/bite.** The model is `assets/models/monsters/service_dog/service_dog.glb` (asset key
+chase/bite; and a tenth pass fixing three problems Zach found in that pass (see "Revision 10"
+below).** The model is `assets/models/monsters/service_dog/service_dog.glb` (asset key
 `monster/service_dog`; skinned mesh, 2 objects, 6 materials, 11 clips), registered in
 `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is its `SkeletonModifier3D` (head-tracking, idle
 "wrongness", continuous tail wag, the throat orb's glow hook), following the Night Nurse / Hive
@@ -357,6 +358,46 @@ Validated with the same loop as every prior revision: rebuild, reimport, `tools/
 `dog_drain_idle.png`, `dog_upright_walk_midstride.png`, `dog_drop_down_00/50/100.png`) plus an orb
 glow comparison (`dog_orb_glow_off.png` vs `dog_orb_glow_on.png`, `set_drain_glow(0.0)` then `(1.0)`
 on the same frame/camera) and a `DogPoser`/`Orb` node-presence check.
+
+## Revision 10 (2026-09-24, RearUp's backbend, and the orb's size/colour/one-sidedness)
+
+Zach reviewed Revision 9's drain sequence and flagged three real problems, all fixed:
+
+1. **`RearUp` ended in a backward arc, not upright.** The bug was in the new `biped_drain_pose()`:
+   its `neck1`/`neck2`/`head` cancellation angles (`-0.05`/`-0.05`/`+0.05`) were half of
+   `biped_stand_pose()`'s (`-0.15`/`-0.10`/`+0.10`), on the theory that the head should be "level,
+   not lowered" for the look-track layer. But `chest`'s cumulative world-space pitch is the same
+   ~1.79 rad in both poses, and it is exactly `neck1`/`neck2`/`head`'s job to cancel that pitch back
+   out -- under-cancelling it left the head carrying most of the torso's backward lean, arcing back
+   over the body instead of standing up straight. Fixed by copying `biped_stand_pose()`'s neck/head
+   angles exactly, with a comment on `biped_drain_pose()` explaining why they have to match. The
+   look-track layer still aims the head from there when `look_weight` is set; it did not need its
+   own, different neck bend to do that.
+2. **The orb was too big, and pale-green (not black) at rest.** Shrunk (`SphereMesh` radius
+   0.032 m -> 0.014 m) and given a genuinely near-black rest colour (`ORB_REST_COLOR = Color(0.03,
+   0.03, 0.03)`, both `albedo_color` AND `emission_energy_multiplier` down to 0 at rest -- previously
+   only the emission was dim while the albedo stayed a lit pale-green, which is what read as "a
+   visible glowing dot even at low intensity"). `set_drain_glow` now lerps `albedo_color` from
+   `ORB_REST_COLOR` toward the glow colour as well as the emission, so a partial value reads as a
+   faint green ember rather than the same green surface just changing brightness.
+3. **The orb needed a ghostly green glow, visible from the front only, invisible from behind** (Zach
+   attached a reference: a glowing green pendant with a dark silhouette inside, spectral/ectoplasm
+   in mood -- colour and glow quality only, not the silhouette). Pulled the orb further back and down
+   into the mouth cavity (`position` z -0.05 -> -0.075, plus a small extra recess on y) so the
+   skull/jaw's own solid mesh occludes it from behind -- verified directly with `dog_lab.gd`'s new
+   front/behind shot pair (`dog_orb_glow_*.png` vs `dog_orb_behind_*.png`, both computed off the
+   model's own registered forward, `-model.rig.global_transform.basis.z`, not a guessed world axis
+   or the head bone's own pitch -- the latter degenerates once the neck points near-vertical in the
+   reared pose). Recoloured to a desaturated, low red/blue spectral green (`Color(0.12, 0.88, 0.34)`)
+   and capped `ORB_ENERGY_MAX` at 1.5 (down from 2.6): pushed higher, this engine's tonemapping drives
+   all three emission channels toward white together once bright enough, which erased the green read
+   entirely at the old energy level -- capping it lower keeps the brightest frame still visibly green
+   instead of clipping to white.
+
+Checked with `dog_orb_glow_off.png`/`_on.png` (front, at rest and lit) and `dog_orb_behind_off.png`/
+`_on.png` (directly behind, at rest and lit -- the orb is not visible in either), plus the corrected
+`dog_rear_up_00/50/100.png` sequence, `dog_drain_idle.png` and the standard `monster_lab.tscn`
+179-check regression (0 failed).
 
 ## Folder
 

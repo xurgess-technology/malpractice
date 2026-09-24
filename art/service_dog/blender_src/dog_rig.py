@@ -407,18 +407,26 @@ def run_pose(f, n=30):
 
 def biped_drain_pose():
     """Soul-drain reared pose (Zach: the attack is now a dementor-style drain, not a chase/bite).
-    Same weight-bearing hind-leg stance as `biped_stand_pose`, but the jaw is held wide open, the
-    head stays level (not lowered) so the look-track layer in dog_rig.gd can lock it onto the
-    target, and the front legs hang loose at the sides instead of curling up tight against the
-    chest -- a tidy "tucked forepaws" read is wrong for something looming and draining. This is the
-    shared base for RearUp's end state, DrainIdle, UprightWalk and DropDown's start state."""
+    Same weight-bearing hind-leg stance as `biped_stand_pose`, but the jaw is held wide open, and
+    the front legs hang loose at the sides instead of curling up tight against the chest -- a tidy
+    "tucked forepaws" read is wrong for something looming and draining. This is the shared base for
+    RearUp's end state, DrainIdle, UprightWalk and DropDown's start state.
+
+    The neck/head cancellation angles below are copied EXACTLY from `biped_stand_pose` (-0.15 /
+    -0.10 / +0.10), not halved or otherwise re-tuned: `chest`'s cumulative world-space pitch here is
+    the same ~1.79 rad as `biped_stand_pose`'s, and it is `neck1`/`neck2`/`head`'s job to cancel
+    enough of that pitch back out that the head reads as upright, level and facing forward instead
+    of carrying the torso's backward lean all the way up into an over-extended backbend. A first
+    pass here used smaller (-0.05 / -0.05 / +0.05) values on the theory that the head should be
+    "level, not lowered" for the look-track layer -- that under-cancelled the torso's pitch and
+    read exactly as the backward arc Zach flagged (see Revision 10)."""
     p = {}
     add(p, 'pelvis', ('X', BIPED_PELVIS_PITCH))
     add(p, 'spine1', ('X', 0.14))
     add(p, 'chest', ('X', 0.10))
-    add(p, 'neck1', ('X', -0.05))
-    add(p, 'neck2', ('X', -0.05))
-    add(p, 'head', ('X', 0.05))
+    add(p, 'neck1', ('X', -0.15))
+    add(p, 'neck2', ('X', -0.10))
+    add(p, 'head', ('X', 0.10))
     add(p, 'jaw', ('X', -1.65))
     for side in ('L', 'R'):
         # Same mirror-cancelling convention as biped_stand_pose (see its comment): every 'X' value

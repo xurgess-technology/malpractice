@@ -30,19 +30,26 @@ extends SkeletonModifier3D
 ## and ear_alert are all zero) -- see `_wag` below.
 ##
 ## Throat orb (harvestable in a future task, not built here): a real MeshInstance3D (`Orb`,
-## BoneAttachment3D-parented near the back of the jaw) with its own emissive material, dim by
-## default. `set_drain_glow(v)` (0..1, driven by replicated state on the brain-logic side) controls
-## its brightness; brain-side code can find its world position via
-## `model.skeleton.get_node("DogPoser/Orb")` (or search for a node named "Orb").
+## BoneAttachment3D-parented near the back of the jaw, tucked into the mouth cavity so the skull's
+## own solid mesh occludes it from behind -- it only reads from in front of the dog, through the
+## open mouth) with its own material. Basically inert (a small near-black ball) by default;
+## `set_drain_glow(v)` (0..1, driven by replicated state on the brain-logic side) fades it up to a
+## ghostly spectral green. Brain-side code can find its world position via
+## `model.skeleton.get_node("DogPoser/OrbAttach/Orb")` (or search for a node named "Orb").
 
 const KEY := "monster/service_dog"
 
-## Orb material tuning: dim, barely-there at rest; a soft, sickly pale-green light once drain
-## starts -- deliberately not the same white/grey as the skull and coat, so it reads as a distinct
-## lit object rather than blending into them.
-const ORB_EMISSION := Color(0.62, 1.0, 0.58)
-const ORB_ENERGY_MIN := 0.05
-const ORB_ENERGY_MAX := 2.6
+## Orb material tuning: near-black and inert at rest (Zach: "basically invisible/inert ... a dark
+## little ball", not a visible glowing dot even at low intensity) fading to a ghostly, slightly
+## desaturated spectral green once drain starts -- not a clean bright green, an eerie one.
+const ORB_REST_COLOR := Color(0.03, 0.03, 0.03)
+# Low red/blue relative to green, and a capped energy multiplier: bright emissive materials in this
+# engine tonemap toward white once pushed high enough that all channels saturate together, which
+# would erase the "ghostly green" read Zach's reference asked for -- keeping red/blue low means even
+# the brightest frame stays visibly green instead of clipping to white.
+const ORB_GLOW_COLOR := Color(0.12, 0.88, 0.34)
+const ORB_ENERGY_MIN := 0.0
+const ORB_ENERGY_MAX := 1.5
 
 var look_at := Vector3.ZERO
 var look_weight := 0.0
@@ -93,41 +100,44 @@ static func build(model: Node3D) -> bool:
 
 ## Build the throat orb: a real, separate MeshInstance3D (not baked into the skull/jaw geometry,
 ## not a texture trick) so it can be harvested as its own object later. Attached via a
-## BoneAttachment3D on `jaw`, tucked at the back of the mouth cavity near the throat.
+## BoneAttachment3D on `jaw`, tucked well back into the mouth cavity near the throat -- small and
+## recessed enough that the skull/jaw's own solid mesh occludes it from behind; it only reads
+## through the open mouth, facing whoever the dog is facing.
 func _build_orb(sk: Skeleton3D) -> void:
 	var attach := BoneAttachment3D.new()
 	attach.name = "OrbAttach"
 	attach.bone_name = "jaw"
 	sk.add_child(attach)
 	var mesh := SphereMesh.new()
-	mesh.radius = 0.032
-	mesh.height = 0.064
+	mesh.radius = 0.014
+	mesh.height = 0.028
 	mesh.radial_segments = 12
 	mesh.rings = 8
 	_orb_mat = StandardMaterial3D.new()
-	# A dim, muted surface colour at rest (still visible as a small lit shape) that the emission
-	# channel then overwhelms once `set_drain_glow` turns it up -- shaded (not unshaded), so the
-	# dim/off state actually reads dim under the scene's lights instead of always showing full
-	# albedo brightness regardless of glow level.
-	_orb_mat.albedo_color = ORB_EMISSION * 0.35
+	# Near-black and inert at rest; `set_drain_glow` fades both the surface colour and the emission
+	# up together, so dim-but-visible in between reads as a faint green ember, not a colour swap.
+	_orb_mat.albedo_color = ORB_REST_COLOR
 	_orb_mat.emission_enabled = true
-	_orb_mat.emission = ORB_EMISSION
+	_orb_mat.emission = ORB_GLOW_COLOR
 	_orb_mat.emission_energy_multiplier = ORB_ENERGY_MIN
 	mesh.material = _orb_mat
 	var mi := MeshInstance3D.new()
 	mi.name = "Orb"
 	mi.mesh = mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# Back of the jaw bone's local length, roughly where the throat sits once the mouth is open.
-	mi.position = Vector3(0, -0.01, -0.05)
+	# Recessed into the throat, behind the jaw hinge (negative along the bone's own length axis) and
+	# down into the mouth cavity -- deep enough that the skull mass blocks it from a rear view.
+	mi.position = Vector3(0, -0.015, -0.075)
 	attach.add_child(mi)
 
 
-## Set the throat orb's glow, 0 (dim/off, the default) to 1 (fully bright) -- driven by replicated
-## drain state from the brain-logic side. Purely visual; this poser does not decide when to drain.
+## Set the throat orb's glow, 0 (inert, near-black, the default) to 1 (fully lit, ghostly spectral
+## green) -- driven by replicated drain state from the brain-logic side. Purely visual; this poser
+## does not decide when to drain.
 func set_drain_glow(v: float) -> void:
 	_drain_glow = clampf(v, 0.0, 1.0)
 	if _orb_mat != null:
+		_orb_mat.albedo_color = ORB_REST_COLOR.lerp(ORB_GLOW_COLOR, _drain_glow)
 		_orb_mat.emission_energy_multiplier = lerpf(ORB_ENERGY_MIN, ORB_ENERGY_MAX, _drain_glow)
 
 
