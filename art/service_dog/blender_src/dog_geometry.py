@@ -276,6 +276,57 @@ def _socket_dip(i, theta, sock_ring, sigma=0.9, depth=0.42, side_center=1.05, br
 
 
 # ---------------------------------------------------------------------------
+# The coat's own half-width/half-height along the whole spine (RUMP through NECK1) -- exactly the
+# same control points and numbers `build_body`'s own spine loft uses below, so anything that
+# samples this (the vest, and the leg-junction blend) always agrees with the actual coat surface,
+# whether that point is near the hips or near the chest. (y, rx, rz), y increasing toward the head.
+_COAT_PROFILE = [
+    (RUMP.y, 0.100, 0.125),
+    (PELVIS.y, 0.092, 0.118),
+    (SPINE1.y, 0.062, 0.082),
+    (CHEST.y, 0.072, 0.145),
+    (NECK1.y, 0.050, 0.062),
+]
+
+
+def _coat_radius(y):
+    """Linear-interpolate the coat's own (rx, rz) at a given y from `_COAT_PROFILE`."""
+    pts = _COAT_PROFILE
+    if y <= pts[0][0]:
+        return pts[0][1], pts[0][2]
+    for i in range(len(pts) - 1):
+        y0, rx0, rz0 = pts[i]
+        y1, rx1, rz1 = pts[i + 1]
+        if y <= y1:
+            t = (y - y0) / (y1 - y0)
+            return rx0 + (rx1 - rx0) * t, rz0 + (rz1 - rz0) * t
+    return pts[-1][1], pts[-1][2]
+
+
+def _leg_junction(target, leg_r0, n_rings=4):
+    """The ONE shared shoulder/hip blend every leg is built from (front and hind alike -- see
+    Revision 4 in the README for why this replaced four separately-tuned one-off flares). Returns
+    (points, rx_list, rz_list) for `n_rings` rings that smoothly interpolate from sitting exactly
+    ON the torso's own surface (centred on the spine axis, radius = the coat's own `_coat_radius`
+    at that y -- so ring 0 is not a bigger/wider guess, it IS what the coat's surface already is
+    there, which is what makes it a blend and not another seam) to `target` (the leg's own root
+    landmark, e.g. SHOULDER or HIP) at `leg_r0` (the leg's own thickness there). Symmetric by
+    construction: everything here comes from `target`'s own (mirrored) coordinates and a radius
+    that does not depend on side at all, so a `.L`/`.R` pair built through this are exact mirror
+    images of each other with no separate tuning possible to drift apart."""
+    y = target.y
+    cx, cz = _coat_radius(y)
+    torso_centre = Vector((0.0, y, CHEST.z))
+    pts, rxs, rzs = [], [], []
+    for i in range(n_rings):
+        t = smooth01(i / (n_rings - 1))
+        pts.append(torso_centre.lerp(target, t))
+        rxs.append(cx + (leg_r0 - cx) * t)
+        rzs.append(cz + (leg_r0 - cz) * t)
+    return pts, rxs, rzs
+
+
+# ---------------------------------------------------------------------------
 def build_body(nseg=10, nseg_small=8):
     p = Part('Dog_Body', 'coat')
 
@@ -321,15 +372,20 @@ def build_body(nseg=10, nseg_small=8):
 
     # ---- legs: front L/R, hind L/R ----------------------------------------------------------
     def leg(side, sign, shoulder, elbow, wrist, paw, toe, upper_bone, lower_bone, pastern_bone, toe_bone,
-            r0=0.040, r1=0.026, r2=0.022, r3=0.020, r4=0.010, flare_rx=0.062, flare_rz=0.076):
-        # A flared root, not a bare cylinder butted against the coat: one extra ring pulled in
-        # toward the spine axis (so it sits inside the torso's own silhouette) at a radius wider
-        # than the leg itself, so the leg reads as growing out of a proper shoulder/hip join
-        # instead of a tube poking into or resting on top of the body.
-        root_flare = Vector((shoulder.x * 0.4, shoulder.y, shoulder.z))
-        pts_upper = [root_flare, shoulder, shoulder.lerp(elbow, 0.5), elbow]
-        p.add_tube(pts_upper, [flare_rx, r0, (r0 + r1) * 0.5, r1], [flare_rz, r0, (r0 + r1) * 0.5, r1], nseg_small,
-                   [{upper_bone: 1.0}, {upper_bone: 1.0}, {upper_bone: 1.0}, {upper_bone: 0.6, lower_bone: 0.4}],
+            r0=0.040, r1=0.026, r2=0.022, r3=0.020, r4=0.010):
+        # The root join: every leg (front or hind, left or right) is built through the one shared
+        # `_leg_junction` -- same method, same ring count, only the attachment point and the leg's
+        # own thickness differ -- so the four are consistent by construction instead of four
+        # separately hand-tuned flares (Revision 3's mistake). Ring 0 sits exactly on the torso's
+        # own surface (see `_leg_junction`'s docstring for why that is what actually removes the
+        # seam, rather than just being a wider ring next to a narrower one), and the join reaches
+        # `shoulder` at the leg's own radius, continuing straight into the upper-leg tube below.
+        junction_pts, junction_rx, junction_rz = _leg_junction(shoulder, r0)
+        pts_upper = junction_pts + [shoulder.lerp(elbow, 0.5), elbow]
+        rx_upper = junction_rx + [(r0 + r1) * 0.5, r1]
+        rz_upper = junction_rz + [(r0 + r1) * 0.5, r1]
+        w_upper = [{upper_bone: 1.0}] * len(junction_pts) + [{upper_bone: 1.0}, {upper_bone: 0.6, lower_bone: 0.4}]
+        p.add_tube(pts_upper, rx_upper, rz_upper, nseg_small, w_upper,
                    cap_start=True, cap_end=False, uv_v_range=(0.0, 0.3))
         pts_lower = [elbow, elbow.lerp(wrist, 0.5), wrist]
         p.add_tube(pts_lower, [r1, (r1 + r2) * 0.5, r2], [r1, (r1 + r2) * 0.5, r2], nseg_small,
@@ -348,10 +404,9 @@ def build_body(nseg=10, nseg_small=8):
     leg('R', -1.0, mirror(SHOULDER), mirror(ELBOW), mirror(WRIST), mirror(FPAW), mirror(FTOE),
         'upperarm.R', 'forearm.R', 'pastern.R', 'toe.R')
     leg('L', 1.0, HIP, KNEE, HOCK, HPAW, HTOE, 'thigh.L', 'shin.L', 'hock.L', 'htoe.L',
-        r0=0.046, r1=0.028, r2=0.022, r3=0.020, r4=0.010, flare_rx=0.068, flare_rz=0.082)
+        r0=0.046, r1=0.028, r2=0.022, r3=0.020, r4=0.010)
     leg('R', -1.0, mirror(HIP), mirror(KNEE), mirror(HOCK), mirror(HPAW), mirror(HTOE),
-        'thigh.R', 'shin.R', 'hock.R', 'htoe.R', r0=0.046, r1=0.028, r2=0.022, r3=0.020, r4=0.010,
-        flare_rx=0.068, flare_rz=0.082)
+        'thigh.R', 'shin.R', 'hock.R', 'htoe.R', r0=0.046, r1=0.028, r2=0.022, r3=0.020, r4=0.010)
 
     return p
 
@@ -363,29 +418,6 @@ VEST_BADGE_MAT = 5
 # The coat's own half-width/half-height along the torso (must match build_body's spine profile at
 # these same landmarks), so the vest can hug it: a snug wrap is this profile plus a small constant
 # margin, not an independently-sized shape. (y, rx, rz), y increasing toward the head.
-_COAT_PROFILE = [
-    (SPINE1.y, 0.062, 0.082),
-    (SPINE1.y * 0.35 + CHEST.y * 0.65, 0.068, 0.118),
-    (CHEST.y, 0.072, 0.145),
-    (CHEST.y * 0.55 + NECK1.y * 0.45, 0.061, 0.104),
-    (NECK1.y, 0.050, 0.062),
-]
-
-
-def _coat_radius(y):
-    """Linear-interpolate the coat's own (rx, rz) at a given y from `_COAT_PROFILE`."""
-    pts = _COAT_PROFILE
-    if y <= pts[0][0]:
-        return pts[0][1], pts[0][2]
-    for i in range(len(pts) - 1):
-        y0, rx0, rz0 = pts[i]
-        y1, rx1, rz1 = pts[i + 1]
-        if y <= y1:
-            t = (y - y0) / (y1 - y0)
-            return rx0 + (rx1 - rx0) * t, rz0 + (rz1 - rz0) * t
-    return pts[-1][1], pts[-1][2]
-
-
 def build_vest(nseg=16):
     """A real, clearly-readable service-dog vest that hugs the ribcage the way an actual
     harness-style service-dog vest does (Zach's reference photos: mesh/fabric conforming closely

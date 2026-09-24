@@ -1,7 +1,7 @@
 # The Service Dog: Blender sources
 
-**Built 2026-09-24, art side of the Service Dog feature; revised three times the same day after
-Zach's reviews (see "Revision 1", "Revision 2" and "Revision 3" below).** The model is
+**Built 2026-09-24, art side of the Service Dog feature; revised four times the same day after
+Zach's reviews (see "Revision 1" through "Revision 4" below).** The model is
 `assets/models/monsters/service_dog/service_dog.glb` (asset key `monster/service_dog`; skinned mesh,
 2 objects, 6 materials, 7 clips), registered in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is
 its `SkeletonModifier3D` (head-tracking, idle "wrongness"), following the Night Nurse / Hive
@@ -151,6 +151,37 @@ asked for four more:
    rest of the skull, so it inherits the same pale `Dog_Skull` material automatically -- no separate
    color call needed, it reads as one continuous pale head structure by construction. See
    `godot_shots/dog_head_closeup.png`.
+
+## Revision 4 (2026-09-24, leg junctions redone properly, not re-tuned)
+
+Zach looked at Revision 3's leg junctions again: still off, and inconsistent across the four legs
+(not the same construction front-to-back or left-to-right). Correctly diagnosed the cause --
+Revision 3's `root_flare` was one hand-picked point per leg, tuned by eye per call site (front legs
+got one `flare_rx`/`flare_rz`, hind legs another), so of course they didn't match: they were never
+built the same way. This revision replaces that with one real fix instead of another nudge:
+
+- **One shared routine, `_leg_junction(target, leg_r0)`, that every leg goes through** -- front and
+  hind, left and right, with no per-call tuning left at all. It returns a 4-ring blend from ring 0
+  (centred on the spine axis, at the coat's own `_coat_radius` for that ring's y -- not a guessed
+  "wider" radius, the actual coat surface radius there) to `target` (the leg's own root landmark) at
+  the leg's own thickness, eased with `smooth01`. Because ring 0 uses the coat's real radius at that
+  exact y instead of an independently chosen bigger number, the leg's surface and the torso's
+  surface actually coincide at the start of the blend -- which is what removes the seam, not just
+  widening the ring next to it. `_COAT_PROFILE` was extended back to `RUMP`/`PELVIS` (previously it
+  only covered `SPINE1`-`NECK1`) so this same profile now describes the whole torso, front or rear.
+- **Front vs. hind sizing falls out of the shared function automatically, not a hand-picked
+  parameter.** The hip region's `_coat_radius` is bigger than the chest's (matching `build_body`'s
+  own spine numbers there), so hind-leg junctions come out visibly broader than front-leg ones
+  without either being told to be a particular size -- exactly "same method, different attachment
+  point," which is what was asked for.
+- **Symmetry is now structural, not just a hope.** `_leg_junction` takes only `target` (already the
+  correctly mirrored landmark, e.g. `mirror(HIP)` for the right leg) and a radius that does not
+  depend on side at all -- there is no code path left where a `.L`/`.R` pair could be given different
+  numbers. Verified from both sides, not just the one every earlier screenshot happened to favour:
+  `godot_shots/dog_leg_junctions_left.png` / `_right.png` (full body) and
+  `dog_leg_junction_front_left/right.png`, `dog_leg_junction_hind_left/right.png` (one front and one
+  hind junction, close up, from each side) -- all four junctions read the same way, and the left and
+  right shots of the same junction match.
 
 ## Folder
 
@@ -307,11 +338,12 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
   (see `godot_shots/dog_standup_35.png` / `_65.png`) is still not graceful frame-by-frame, and
   `Run`'s stride reads as a dynamic lunge more than a controlled sprint. Both would benefit from
   another pass with fresh eyes before they ship as final.
-- **Legs now flare into a shoulder/hip join (Revision 3)** instead of the bare tube junction the
-  Seal's README calls out for its own flipper root -- an extra wide ring pulled toward the spine
-  axis at the top of each leg, rather than a true modelled socket. Reads much better than a plain
-  cylinder butted against the coat, but it is still a procedural approximation, not sculpted
-  anatomy, and up close (not at gameplay distance) it is a visible flare, not a seamless blend.
+- **Legs now blend into a shoulder/hip join through the shared `_leg_junction` (Revision 4)**
+  instead of the bare tube junction the Seal's README calls out for its own flipper root. Ring 0 of
+  the blend sits exactly on the coat's own surface radius, so there is no seam at gameplay distance
+  and the four junctions are provably built the same way. It is still a procedural approximation
+  (four rings interpolating position and radius), not sculpted anatomy or a true modelled socket --
+  up close, it is a smooth taper into the torso rather than an anatomically detailed shoulder.
 - **The vest is a snug wrap plus thin strap accents, not a cloth sim.** It now hugs the ribcage and
   follows the coat's own contour (Revision 2), which is the shape that matters, but the geometry
   itself is still simple lofts and thin raised boxes, not tailored/simulated cloth -- it won't fold
@@ -327,7 +359,7 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
 
 ## Stats
 
-- **Triangles:** `Dog_Body` 858 + `Dog_Vest` 380 = **1,238** for the whole model (no bake source, so
+- **Triangles:** `Dog_Body` 986 + `Dog_Vest` 380 = **1,366** for the whole model (no bake source, so
   no separate high-poly count).
 - **Materials:** 6 flat Principled BSDF (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`, `Dog_Vest_Worn`,
   `Dog_Vest_Cross`, `Dog_Vest_Badge`), no textures.

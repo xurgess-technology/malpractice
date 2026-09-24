@@ -186,10 +186,33 @@ func _run_shots() -> void:
 	_look_from(head_world2 + Vector3(0.32, -0.24, 0.05), head_world2 + Vector3(0.0, 0.10, 0.02))
 	await _shot("head_closeup")
 
-	# A clear full-body shot at idle, close enough to read all four leg-to-torso junctions at once.
+	# Full-body and close-up shots of the leg-to-torso junctions, from BOTH sides of the dog (Zach:
+	# the ".R" bones mirror rotation, but that says nothing about whether the mesh geometry itself
+	# is actually symmetric -- check both flanks, not just the one every other shot happens to
+	# favour). "Left"/"right" are read off the actual mirrored bones' world positions, not guessed
+	# world-space signs, so this is correct regardless of the asset's yaw/scale.
 	await _play_and_settle("Idle", 0.2)
-	_look_from(Vector3(1.35, 1.0, 1.75), Vector3(0, 0.9, 0.15))
-	await _shot("leg_junctions")
+	var chest_bi2: int = model.skeleton.find_bone("chest")
+	var chest_world2: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(chest_bi2).origin
+	var thigh_l: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(model.skeleton.find_bone("thigh.L")).origin
+	var thigh_r: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(model.skeleton.find_bone("thigh.R")).origin
+	var to_left: Vector3 = (thigh_l - chest_world2)
+	to_left.y = 0.0
+	to_left = to_left.normalized()
+	var to_right: Vector3 = -to_left
+	var up_a := Vector3(0, 0.55, 0.15)
+	for side_name in ["left", "right"]:
+		var side_dir: Vector3 = to_left if side_name == "left" else to_right
+		_look_from(chest_world2 + side_dir * 1.9 + up_a, chest_world2 + Vector3(0, -0.15, 0))
+		await _shot("leg_junctions_%s" % side_name)
+		var shoulder_bone := "upperarm.L" if side_name == "left" else "upperarm.R"
+		var shoulder_w: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(model.skeleton.find_bone(shoulder_bone)).origin
+		_look_from(shoulder_w + side_dir * 0.35 + Vector3(0, 0.05, 0.05), shoulder_w)
+		await _shot("leg_junction_front_%s" % side_name)
+		var thigh_bone := "thigh.L" if side_name == "left" else "thigh.R"
+		var thigh_w: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(model.skeleton.find_bone(thigh_bone)).origin
+		_look_from(thigh_w + side_dir * 0.35 + Vector3(0, 0.05, 0.05), thigh_w)
+		await _shot("leg_junction_hind_%s" % side_name)
 
 	print("[dog_lab] ------------------------------------------")
 	print("[dog_lab] result: ", "PASS" if ok else "FAIL")
