@@ -64,6 +64,11 @@ extends Node
 ##                    it makes while signed in reaches them too; it clicks MONSTERS and the host and
 ##                    client 2 follow, client 2 sees client 1's laser dot; client 1 walks away and
 ##                    everyone is signed out and back HOME
+##   service_dog      host + 1 client: the Service Dog carries a heart monitor up to client 1, sets it
+##                    down and growls; client 1 sees the carry, the clock (and its HUD), the growl and
+##                    the rear. Then CLIENT 1 picks the item up and throws it with a charge over the
+##                    wire: the host's dog stands down, fetches it and carries it again, and client 1
+##                    sees that too
 ##
 ## Shifts start the way the loop does (sweep 2): the host clocks in, skips the grace period,
 ## answers the phone, and the paramedics wheel the patient onto a table.
@@ -178,6 +183,7 @@ func _run() -> void:
 		"wall": await _sc_wall()   # terminal redesign, chunk 4
 		"rocket_boots": await _sc_rocket_boots()   # ROCKET BOOTS
 		"syringe_draw": await _sc_syringe_draw()   # SYRINGE DRAW: two handheld draws at once
+		"service_dog": await _sc_service_dog()   # SERVICE DOG: fetch over the wire
 		_: _end(false, "unknown scenario " + scenario)
 
 
@@ -1911,6 +1917,107 @@ func _sc_monsters():
 			return
 		_send("ng_seen", {})
 	await _finish_together("saw the Hives, one sedated (lying), hit, dragged by me and waking")
+
+
+## SERVICE DOG (scripts/monsters/service_dog_brain.gd): everything a client needs to see it, and a
+## client's own charged throw (drop_charge + drop_count, the real path) satisfying the host's dog.
+func _sc_service_dog():
+	const DogModes := preload("res://scripts/monsters/modes.gd")
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		game._clear_monsters()
+		await _wall_wait(0.5)
+		var c1 = game.players.get(_peer_of(1))
+		# A spot a few metres from client 1 with clear floor and a clear line to it.
+		var at := Vector3.INF
+		for r in [4.5, 3.5, 5.5]:
+			for i in 16:
+				var a := TAU * float(i) / 16.0
+				var c: Vector3 = game._floor_at(c1.global_position + Vector3(cos(a), 0.0, sin(a)) * r)
+				if absf(c.y - c1.global_position.y) > 0.3 or not game._point_is_clear(c + Vector3.UP * 0.3):
+					continue
+				var q := PhysicsRayQueryParameters3D.create(c + Vector3.UP * 0.8, c1.global_position + Vector3.UP * 0.8)
+				q.collision_mask = C.L_WORLD
+				if game.get_world_3d().direct_space_state.intersect_ray(q).is_empty():
+					at = c
+					break
+			if at != Vector3.INF:
+				break
+		if at == Vector3.INF:
+			return _end(false, "no clear spot near client 1 for the dog")
+		var dog: Node = game._add_monster("service_dog", at)
+		var to: Vector3 = c1.global_position - at
+		dog.rotation.y = atan2(-to.x, -to.z)
+		dog.brain.give({"kind": "heart_monitor", "count": 1, "v": 90})
+		# It picks client 1 (the host's own surgeon may be standing closer): the test chooses, not the cone.
+		dog.brain.target_id = int(c1.peer_id)
+		dog.brain.last_seen = c1.global_position
+		dog.brain._set_mode(DogModes.Mode.DOG_APPROACH)
+		_send("dog_start", {"id": dog.monster_id})
+		if not await _until(func(): return int(dog.mode) == DogModes.Mode.DOG_WARN, 40.0, "the dog to offer to client 1"):
+			return
+		_say("the dog put the heart monitor down for client 1 and is waiting (%.1f s)" % dog.dog_left)
+		if not await _until(func(): return _count_msgs("dog_saw_warn") > 0 or _count_msgs("fail") > 0, 30.0, "client 1 to see the offer"):
+			return
+		dog.brain.offer_left = 0.2
+		if not await _until(func(): return int(dog.mode) == DogModes.Mode.DOG_REAR, 5.0, "the dog to rear"):
+			return
+		if not await _until(func(): return _count_msgs("dog_saw_rear") > 0 or _count_msgs("fail") > 0, 30.0, "client 1 to see it rear"):
+			return
+		# Client 1 now throws the item from its own machine; nothing on this side touches it.
+		if not await _until(func(): return int(dog.mode) == DogModes.Mode.DOG_RETRIEVE or _count_msgs("fail") > 0, 60.0, "client 1's throw to stand the dog down"):
+			return
+		_say("client 1's charged throw stood the dog down")
+		if not await _until(func(): return String(dog.dog_carry) == "heart_monitor", 40.0, "the dog to fetch the heart monitor back"):
+			return
+		if not await _until(func(): return _count_msgs("dog_saw_fetch") > 0 or _count_msgs("fail") > 0, 30.0, "client 1 to see it fetched"):
+			return
+		await _finish_together("the dog offered to client 1, reared, and a throw from client 1's machine stood it down; it fetched the item")
+		return
+	if not await _wait_shift_as_client():
+		return
+	if not await _until(func(): return _count_msgs("dog_start") > 0, 90.0, "the dog test to start"):
+		return
+	var id := int(_msgs("dog_start")[0].data.id)
+	if not await _until(func(): return game.monsters.has(id) and String(game.monsters[id].kind) == "service_dog", 20.0, "the Service Dog on my machine"):
+		return
+	var d: Node = game.monsters[id]
+	var me := _me()
+	if not await _until(func(): return String(d.dog_carry) == "heart_monitor" and d._dog_held != null, 20.0, "the heart monitor in its mouth"):
+		return
+	if not await _until(func(): return int(d.mode) == DogModes.Mode.DOG_WARN and int(d.dog_target) == int(me.peer_id) and String(d.dog_carry) == "", 40.0, "it waiting for me, mouth empty"):
+		return
+	var left0 := float(d.dog_left)
+	await _wall_wait(1.0)
+	var hud = get_tree().get_first_node_in_group("hud")
+	var hud_ok: bool = hud != null and (hud.drawn as PackedStringArray).has("dog_fetch")
+	if float(d.dog_left) >= left0 or float(d.dog_left) <= 0.0 or int(d.dog_growls) < 1 or String(d.dog_offer_kind) != "heart_monitor" or not hud_ok:
+		return _end(false, "the offer on my machine: clock %.2f -> %.2f, growls %d, offer '%s', hud %s" % [left0, d.dog_left, d.dog_growls, d.dog_offer_kind, str(hud_ok)])
+	_say("the offer on my machine: clock %.1f s and running, %d growl(s), the HUD shows it" % [d.dog_left, d.dog_growls])
+	_send("dog_saw_warn", {})
+	if not await _until(func(): return int(d.mode) == DogModes.Mode.DOG_REAR and d.model.dog != null and float(d.model.dog.rear) > 0.9, 20.0, "it up on its hind legs on my machine"):
+		return
+	_send("dog_saw_rear", {})
+	# Pick the heart monitor up off the floor and throw it (a partial charge) -- the real client path.
+	var pick := func():
+		var it = game.world_items.get(_nearest_item("heart_monitor"))
+		if it != null:
+			_approach_item(it)
+	if not await _do_until(pick, func(): return me.holding("heart_monitor"), 40.0, "picking up the heart monitor"):
+		return
+	var sel := _slot_of("heart_monitor")
+	if sel >= 0:
+		me.selected = sel
+	await _wall_wait(0.3)
+	me.drop_charge = 0.5
+	me.drop_count += 1
+	if not await _until(func(): return int(d.mode) == DogModes.Mode.DOG_RETRIEVE or int(d.mode) == DogModes.Mode.WANDER, 20.0, "my throw to stand it down (on my machine)"):
+		return
+	if not await _until(func(): return String(d.dog_carry) == "heart_monitor" and d._dog_held != null and float(d.model.dog.rear) < 0.05, 40.0, "it back on all fours with the heart monitor"):
+		return
+	_send("dog_saw_fetch", {})
+	await _finish_together("saw the dog carry, offer, growl, count down and rear; my throw stood it down and it fetched")
 
 
 ## The flattest horizontal direction out of `m` with clear floor space behind it, so a knockback

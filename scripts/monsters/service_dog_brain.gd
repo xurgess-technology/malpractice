@@ -46,7 +46,9 @@ const SPEED_REAR := 3.1          ## on its hind legs; a surgeon walks 3.4, so ru
 const SPEED_BACKOFF := 1.6
 
 ## Where it stops to put the item down, metres from the surgeon (horizontal).
-const OFFER_DIST := 1.7
+## (From its middle: its head is over a metre ahead of that, so this leaves the item at your feet
+## and its face about an arm's length from yours.)
+const OFFER_DIST := 2.3
 ## The set-down: head lowers over OFFER_TIME, the item leaves its mouth at OFFER_DROP_AT.
 const OFFER_TIME := 1.3
 const OFFER_DROP_AT := 0.85
@@ -63,6 +65,8 @@ const REAR_RISE := 0.9
 ## Dropping back to all fours before it trots off to fetch.
 const REAR_DROP := 0.6
 const LUNGE_RANGE := 1.25
+## Reared, it stops walking at this range (metres from its middle) and swipes from there.
+const REAR_CLOSE := 1.0
 const HIT_REACH := 1.05
 const BACKOFF_TIME := 0.75
 ## After a fetch (or a give-up) it will not offer again for this long.
@@ -354,8 +358,13 @@ func _rear(delta: float) -> void:
 		m.step_toward(m.global_position + away, SPEED_BACKOFF, delta, false)
 		m.face_dir(-away, delta, 6.0)
 		return
-	m.nav_move(p.global_position, SPEED_REAR, delta)
 	var d := _flat(p.global_position)
+	if d > REAR_CLOSE:
+		m.nav_move(p.global_position, SPEED_REAR, delta)
+	else:
+		# Close enough to reach: it stands over you and swipes rather than walking into you.
+		m.stop()
+		m.face_dir(p.global_position - m.global_position, delta, 8.0)
 	if d <= LUNGE_RANGE and m.lunge_t <= 0.0:
 		m.lunge_t = 0.5
 	if d <= m.body_radius + C.PLAYER_RADIUS + HIT_REACH * 0.5 and m.calm <= 0.0:

@@ -297,9 +297,12 @@ func tick(delta: float) -> void:
 	# The neck: up and craning forward on all fours, straight up the spine's line when reared, down to
 	# the floor when it sets something down or picks it up.
 	var shake := sin(_t * 31.0) * 0.06 * growl
-	var neck_pitch := lerpf(0.0, -1.45, bow) - up * (REAR_TILT - 0.5) - 0.12 * growl
+	# Reared, the neck comes forward over the top of you rather than following the spine up.
+	var neck_pitch := lerpf(0.0, -1.45, bow) - up * (REAR_TILT + 0.35) - 0.12 * growl
 	_neck.rotation = Vector3(neck_pitch, clampf(look_yaw, -0.9, 0.9) * (1.0 - bow * 0.7), shake)
-	_skull.rotation.x = -neck_pitch * 0.55 - bow * 0.5 + up * 0.35 + 0.1 * growl
+	# The head's pitch in the world: level on all fours, nose down over you reared, to the floor bowed.
+	var head_world := -0.35 * up - 0.9 * bow + 0.08 * growl
+	_skull.rotation.x = head_world - (tilt + neck_pitch)
 	_skull.rotation.z = sin(_t * 0.7) * 0.05 * (1.0 - growl)   # a slow tilt, like it is trying to work you out
 	var jaw := 0.14 if carrying else 0.0
 	jaw = maxf(jaw, 0.38 * growl + sin(_t * 23.0) * 0.05 * growl)

@@ -558,6 +558,64 @@ distance** (nothing inside 6 m, full by 22 m) so it stays legible at the range i
 without swallowing the head up close. The database entry caps at tier 2 with no special case: tier
 3 is `harvested`, and there is nothing here to harvest.
 
+### The Service Dog (2026-09-24, branch `service-dog-brain`)
+
+`Monster.SERVICE_DOG` `"service_dog"`, a fifth kind in `Monster.KINDS`. It wants to play fetch and is
+not asking. Brain `scripts/monsters/service_dog_brain.gd` (host only), body
+`scripts/monsters/service_dog_rig.gd` (every machine).
+
+**The rule.** It carries a two-handed item (`Items.is_bulky`) in its mouth, or goes looking for a
+loose, settled one it may wander to (`monster_may_wander_to`). Carrying one, it notices a surgeon
+(a cone and a clear line, like the Hive), walks up (`DOG_APPROACH`, a walk), lowers its head and
+sets the item on the floor at their feet (`DOG_OFFER`), then stands and watches with a clock
+running (`DOG_WARN`, `FETCH_WINDOW` 12 s), growling once or twice. A **charged throw of that same
+item, by anybody** (charge past a tap: `game.drop_selected`'s charge > `THROW_MIN_CHARGE`; a tap
+reports charge 0 there already) satisfies it: `DOG_RETRIEVE`, it trots to wherever the item is,
+takes it back in its mouth and wanders, `CONTENT_TIME` before it will offer again. The clock running
+out puts it on its hind legs (`DOG_REAR`, `REAR_RISE` to get up) going for the surgeon it offered to,
+hitting and backing off and coming again, until **that surgeon is down or gone**, or **anybody**
+throws that item with a charge; either way it drops to all fours and retrieves. If the item leaves
+the world with nobody holding it (sold, freed) it stands down. Modes are the `DOG_*` tail of
+`Mode` (12..17, appended).
+
+**Identity is a tag, not a node.** Taking an item in its mouth removes the WorldItem like a pickup
+(`game.dog_take_item`) and setting it down spawns a new one (`game.dog_place_item`), so an offer is
+`brain.offer_tag` (`game.dog_new_tag`, never reused). The WorldItem carries it as `dog_tag` (host
+only, not replicated); `game.pickup_item` copies it into the hand slot as `"dg"`, and every way a
+stack leaves a hand (`drop_selected`, `_drop_hands`, `_drop_hands_in_place`, `storage_place`) copies
+it back out. `drop_selected` calls `game.dog_item_thrown(tag)` for a charged throw of a tagged
+stack. `game.dog_tagged_item(tag)` is the loose item, `game.dog_tag_exists(tag)` "anywhere at all".
+
+**Immune**, the Night Nurse's category: `can_be_hurt()` false (the saw is `"immune"`),
+`is_capturable` false (no needle, no table, no dissection, no pulse oximeter), and its brain's
+`shoved` / `stun` / `alert_to` do nothing, so it never enters the stun window, `can_sedate` is never
+true and no drag or jab prompt can be offered.
+
+**Roster**: none on shift 1, one from shift 2 (`Monster.dog_count`), outside `MAX_MONSTERS`,
+placed at a `monster_spawns` point like the Sonographer and the Nurse.
+
+**Replication** (only the dog's report carries these): `"ck"` -> `dog_carry` (the kind in its
+mouth, or ""), `"dt"` -> `dog_target` (peer id it is offering to or going for), `"ol"` ->
+`dog_left` (fetch clock, 0.25 s steps; a client counts down between snapshots), `"gr"` ->
+`dog_growls` (a counter: every machine plays each growl once; a machine that has seen no snapshot
+yet syncs without playing), `"ok"` -> `dog_offer_kind` (for the HUD). Rearing, head-down and the look
+are worked out on every machine from `md` / `mv` / `dt`.
+
+**The body** (`service_dog_rig.gd`) is a **placeholder**: primitives on a few pivots, tall and
+lanky (shoulders ~1.1 m, head ~1.5 m, ~2.4 m reared). `build(model)` prefers a GLB when
+`Assets.has("monster/service_dog")`; the Monster only sets `speed`, `moving`, `rear`, `head_down`,
+`growl`, `lunge`, `look_yaw`, `carrying` and calls `tick()`, and the carried item rides the `mouth`
+socket. For the GLB: clips `idle`, `walk`, `run`, `rear`, `attack` through `Assets.anim_name`, the
+mouth is a `Site_mouth` node or a BoneAttachment on bone `jaw`/`head`.
+
+**HUD**: `hud.gd _draw_dog_fetch` (drawn id `dog_fetch`): the clock and the item's name to the
+surgeon it chose, wherever they are, and to anyone within `DOG_HUD_RANGE` of it; while it is reared,
+a pulsing "throw it" line instead. **Doors**: it noses hinged doors open in any travelling mode.
+**Sounds**: `monsters_dog_growl`, `monsters_dog_snarl` (rearing, each swipe), `monsters_dog_step`
+(tools/gen_audio_monsters.mjs). **Tests**: `tools/dogtest.tscn` (headless, the whole loop four
+times), nettest `service_dog` (a client's throw over the wire), `tools/dogshot.tscn` (the smoke look,
+needs a renderer). **Review**: `--setup=service_dog`.
+
 ### Monsters, sweep 3 (monsters worker): the Hive, fighting and capturing
 
 Kinds: `Monster.HIVE` `"hive"`, `DISCHARGED`, `NIGHT_NURSE` (`Monster.KINDS`).
@@ -3057,4 +3115,4 @@ shift 2), nettest scenario `doors`, devtest door checks, `tools/perfprobe.tscn -
 (`{"seed": 4242, "stage": "_name"}`) and one static function that stages things with the helpers
 `place`, `clear_hands`, `give` (a stack, with extra stack keys like `bt`, `used`, `x`), `give_abilities`
 and `floor_item`. An unknown name is logged with the known ones and the menu opens as usual. Setups so
-far: `icons`, `items`, `graft`, `graft_back`, `trinkets`.
+far: `icons`, `items`, `graft`, `graft_back`, `trinkets`, `service_dog`.
