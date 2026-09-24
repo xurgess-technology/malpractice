@@ -283,6 +283,35 @@ func _run_shots() -> void:
 			await _shot("drop_down_%02d" % int(i * 100))
 	_check("DropDown plays", model.anim.has_animation("DropDown"))
 
+	# Revision 12: the brain-track integration test found the quadruped clips (Idle/Walk/Growl/
+	# PlaceItem) and the standing clips (RearUp/DrainIdle/UprightWalk) faced OPPOSITE directions in
+	# the rig -- confirmed by measuring bone positions, not a camera/rendering illusion. Fixed at the
+	# source in dog_rig.py (see its BIPED_SPINE1_PITCH etc. comment). Confirm it here with a direct
+	# side-by-side: the SAME camera offset, relative to each pose's own pelvis->head forward
+	# direction, applied to both Idle and DrainIdle -- if the fix holds, the dog faces the same way
+	# (screen-left or -right, whichever the layout puts it) in both.
+	var facing_pelvis_bi: int = model.skeleton.find_bone("pelvis")
+	var facing_head_bi: int = model.skeleton.find_bone("head")
+
+	await _play_and_settle("Idle", 0.2)
+	var idle_pelvis_w2: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(facing_pelvis_bi).origin
+	var idle_head_w2: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(facing_head_bi).origin
+	var idle_fwd: Vector3 = (idle_head_w2 - idle_pelvis_w2)
+	idle_fwd.y = 0.0
+	idle_fwd = idle_fwd.normalized()
+	var idle_side: Vector3 = idle_fwd.cross(Vector3.UP).normalized()
+	_look_from(idle_pelvis_w2 - idle_fwd * 2.0 + idle_side * 2.0 + Vector3(0, 1.4, 0), idle_pelvis_w2 + Vector3(0, 0.3, 0))
+	await _shot("facing_check_idle")
+
+	if model.anim.has_animation("DrainIdle"):
+		await _play_and_settle("DrainIdle", 0.0)
+		var drain_pelvis_w: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(facing_pelvis_bi).origin
+		# Deliberately reuse Idle's OWN fwd/side vectors (not recomputed from DrainIdle) and the same
+		# camera OFFSET from the pelvis, so this is a true apples-to-apples comparison: any visible
+		# difference in which way the dog faces is the rig, not a different camera each time.
+		_look_from(drain_pelvis_w - idle_fwd * 2.0 + idle_side * 2.0 + Vector3(0, 1.4, 0), drain_pelvis_w + Vector3(0, 0.3, 0))
+		await _shot("facing_check_drain_idle")
+
 	# Orb glow control: a real, small, near-black-at-rest mesh, fading to a ghostly green when
 	# set_drain_glow(1.0) is called, and (Zach) only meant to read from in front of the dog -- so
 	# shoot it from the front AND from directly behind, at rest and while lit, four shots total.
@@ -294,12 +323,21 @@ func _run_shots() -> void:
 		await _play_and_settle("DrainIdle", 0.0)
 		var head_bi4: int = model.skeleton.find_bone("head")
 		var head_world4: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(head_bi4).origin
-		# "Front"/"behind" the DOG, not the head bone's own (pitched-back-when-reared) axis --
-		# Assets.spawn() guarantees every monster's forward is -Z in its own root's basis
-		# (assets.gd's spawn() doc comment), so this is correct regardless of the current pose.
-		var fwd: Vector3 = -model.rig.global_transform.basis.z
+		# "Front"/"behind" the DOG: measured directly off the QUADRUPED pose's own pelvis->head
+		# direction (not assumed from Assets.spawn()'s documented -Z convention, and not the head
+		# bone's own pitched-back-when-reared axis) -- this is exactly the direction the brain-track
+		# bug report says is now consistent between the quadruped and standing clips, so measuring
+		# it once, on Idle, and reusing it here is the most direct way to get "front" right.
+		await _play_and_settle("Idle", 0.2)
+		var idle_pelvis_bi: int = model.skeleton.find_bone("pelvis")
+		var idle_head_bi: int = model.skeleton.find_bone("head")
+		var idle_pelvis_w: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(idle_pelvis_bi).origin
+		var idle_head_w: Vector3 = model.skeleton.global_transform * model.skeleton.get_bone_global_pose(idle_head_bi).origin
+		var fwd: Vector3 = idle_head_w - idle_pelvis_w
 		fwd.y = 0.0
 		fwd = fwd.normalized()
+		print("[dog_lab] measured quadruped forward (pelvis->head, flattened) = ", fwd)
+		await _play_and_settle("DrainIdle", 0.0)
 		var side: Vector3 = fwd.cross(Vector3.UP).normalized()
 		for glow_v in [0.0, 1.0]:
 			var tag := "off" if glow_v < 0.5 else "on"
@@ -317,6 +355,16 @@ func _run_shots() -> void:
 			_look_from(head_world4 - fwd * 2.2 + side * 0.4 + Vector3(0, 1.6 - head_world4.y, 0), head_world4)
 			await get_tree().process_frame
 			await _shot("orb_behind_far_%s" % tag)
+		poser.set_drain_glow(0.0)
+
+		# A wide, whole-body "player standing in front" shot at lit glow: eye height, several metres
+		# back, along the SAME measured forward direction as above -- so there is no ambiguity about
+		# which side is the front, and Zach can see the whole dog (not an isolated close crop) to
+		# confirm the orb reads correctly from where the target player would actually stand.
+		poser.set_drain_glow(1.0)
+		_look_from(head_world4 + fwd * 2.4 + side * 0.5 + Vector3(0, 1.6 - head_world4.y, 0), head_world4 + Vector3(0, -0.3, 0))
+		await get_tree().process_frame
+		await _shot("orb_front_wide")
 		poser.set_drain_glow(0.0)
 
 		# Revision 11: Zach flagged the orb as reading like it sat on the neck's exterior rather than

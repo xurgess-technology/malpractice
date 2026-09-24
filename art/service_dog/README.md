@@ -3,9 +3,10 @@
 **Built 2026-09-24, art side of the Service Dog feature; revised eight times the same day after
 Zach's reviews (see "Revision 1" through "Revision 8" below), then given a ninth pass the same day
 for a design change (see "Revision 9" below): the attack is now a dementor-style soul-drain, not a
-chase/bite; a tenth pass fixing three problems Zach found in that pass (see "Revision 10" below);
-and an eleventh pass fixing two more (see "Revision 11" below).** The model is
-`assets/models/monsters/service_dog/service_dog.glb` (asset key
+chase/bite; a tenth pass fixing three problems Zach found in that pass (see "Revision 10" below); an
+eleventh pass fixing two more (see "Revision 11" below); and a twelfth pass fixing the real bug
+underneath all of that, found by a real cross-branch integration test (see "Revision 12" below).**
+The model is `assets/models/monsters/service_dog/service_dog.glb` (asset key
 `monster/service_dog`; skinned mesh, 2 objects, 6 materials, 11 clips), registered in
 `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is its `SkeletonModifier3D` (head-tracking, idle
 "wrongness", continuous tail wag, the throat orb's glow hook), following the Night Nurse / Hive
@@ -435,6 +436,70 @@ Zach looked at Revision 10 again and flagged two more problems:
 Checked with the corrected `dog_rear_up_00/50/100.png` sequence (now a genuine forward lean, not a
 backbend, at the top of the rise) and the orb shots above, plus the standard `monster_lab.tscn`
 179-check regression (0 failed).
+
+## Revision 12 (2026-09-24, the real bug: the biped pose faced backward, not just leaned back)
+
+A real integration test from `service-dog-brain` (merging this model into their running code, not
+just eyeballing screenshots) found the actual bug Revisions 10-11 were dancing around: **the
+quadruped clips (Idle/Walk/Growl/PlaceItem) and the standing clips (RearUp/DrainIdle/UprightWalk)
+faced OPPOSITE directions in the exported rig.** No single `yaw` in `scripts/assets.gd` could make
+both correct. Confirmed by measuring bone positions directly (not a camera illusion): on all fours
+the `head` bone sits at +0.62 m (local); reared up, it sits at -0.60 m -- the opposite sign.
+Reproduced exactly by probing the built rig directly in Blender (see below).
+
+**Root cause**, found by actually computing what `biped_stand_pose()`/`biped_drain_pose()` do to
+bone POSITIONS, not just bone rotations (which is all Revisions 10-11 ever looked at): every pose
+delta here is a world-space rotation about a shared 'X' axis, and a bone's final POSITION is the sum,
+across the whole kinematic chain, of each ancestor segment's REST vector rotated by THAT segment's
+own cumulative angle. A segment whose cumulative angle overshoots past its own "straight up" angle
+contributes a NEGATIVE (backward) residual instead of a positive (forward) one. `neck2`'s rest vector
+in particular is unusually steep -- the quadruped idle neck already curves up sharply toward the head,
+so at rest it is already ~43 degrees off vertical -- and the old flat `-0.10` rad delta left its
+cumulative pitch at ~81 degrees, 38 degrees PAST that, which is what actually flipped the whole
+standing figure's measured forward direction. Revisions 10-11 only ever looked at the head bone's own
+final ORIENTATION (does it visually look like it's arcing back?), which is a real but DIFFERENT
+symptom of the same underlying pitch, and never caught the POSITION bug the brain track's integration
+test found, because a bone can still be oriented "facing forward" while its actual computed position
+sits behind where the quadruped pose's own convention says it should.
+
+**Fix**: `dog_rig.py`'s `BIPED_SPINE1_PITCH`/`BIPED_CHEST_PITCH_DELTA`/`BIPED_NECK1_PITCH`/
+`BIPED_NECK2_PITCH`/`BIPED_HEAD_PITCH` replace the old hand-tuned `spine1`/`chest`/`neck1`/`neck2`/
+`head` deltas in both `biped_stand_pose()` and `biped_drain_pose()` (now sharing one set, since the
+correct value is a property of each bone's own rest geometry, not a per-pose stylistic choice).
+Each is derived from that bone's own rest vector, landing its cumulative pitch close to its own
+"straight up" angle -- `BIPED_PELVIS_PITCH` (which the hind-leg and `GROUND_DROP` math both depend
+on) is untouched, so grounding is unaffected. This fixes the actual bug at the source (in Blender,
+not a runtime spin bolted onto specific clips in `dog_rig.gd`) and, as a side effect, also finishes
+what Revisions 10-11 were chasing by eye (no more visible backward arc). `biped_drain_pose()`'s own
+Revision 11 patch (separate, smaller `spine1`/`chest` additions) is gone -- superseded.
+
+Confirmed directly with a side-by-side: the SAME camera offset, relative to each pose's own measured
+pelvis->head forward direction, applied to both `Idle` and `DrainIdle` (`dog_facing_check_idle.png` /
+`dog_facing_check_drain_idle.png`) -- the dog faces the same way in both. `tools/dog_lab.gd`'s orb
+shots were re-verified too: the earlier "into the mouth" shot (`dog_orb_into_mouth.png`) had actually
+been aimed at the back of the skull/neck the whole time (this same bug fooled the camera script, not
+just the rig) -- it now genuinely shows the orb inside the open jaws, confirmed from a wide,
+whole-body "player standing in front" angle (`dog_orb_front_wide.png`) as well as the close crop.
+
+**Two smaller things** flagged by the same integration test:
+- `RearUp` (45 frames/1.5 s) and `DropDown` (24 frames/0.8 s) were roughly double the design brief's
+  ~0.7 s / ~0.4 s (the brain track was compensating with its own time-scaling). Shortened to 21 and 12
+  frames respectively (30 fps bake rate) to match the brief directly.
+- `dog_rig.gd`'s `ear_alert` code converted `look_at` from world space before using it, while the
+  class doc comment and `_look()` (the head-track code right above it) both treat `look_at` as
+  already skeleton space. Removed the stray `affine_inverse()` conversion so both code paths agree
+  with the documented contract, which is what the brain track is actually passing.
+
+Not changed (flagged as a design question, not a bug): the reared model's head sits at 1.83 m (mouth
+at 1.98 m), only slightly above the player's 1.70 m eye height, versus the brief's "taller than the
+player." Left for Zach's judgement when he sees it in a real review; the height comes from
+`BIPED_PELVIS_PITCH` and `GROUND_DROP`, both load-bearing for leg-grounding, so changing it is a
+bigger, separate task rather than a quick tweak.
+
+Validated with the full loop: rebuild, reimport, `tools/dog_lab.tscn` (structure check + `--shots`)
+and `tools/monster_lab.tscn`'s 179-check regression (0 failed) -- including `StandUp`/`Run`, which
+share the corrected `biped_stand_pose()` and were re-screenshotted to confirm they still read as
+upright and still have both hind paws grounded (the dedicated check in `dog_lab.gd` still passes).
 
 ## Folder
 

@@ -311,12 +311,47 @@ def bite_pose(f, n=24):
 # --------------------------------------------------------------------------- biped poses
 ## How much the pelvis pitches up in the biped pose (world-space 'X' rotation, see Poser.rot).
 BIPED_PELVIS_PITCH = 1.55
+
+## Revision 12: the spine1/chest/neck1/neck2/head deltas below are NOT hand-tuned by eye -- they are
+## derived from each bone's own REST vector (measured directly off the built rig), so that bone's
+## own CUMULATIVE world-space pitch (pelvis's + every ancestor's + its own delta) lands close to
+## that bone's own "vertical" angle: atan2(its rest vector's Y/forward extent, its Z/up extent).
+##
+## Why this matters, and what was wrong before (see the brain-track integration bug report,
+## service-dog-brain, and README "Revision 12"): every pose delta here is a WORLD-space rotation
+## about a shared global 'X' axis, and bone POSITION (not just a bone's own final orientation) is
+## the SUM, across the whole kinematic chain, of each ancestor segment's REST vector rotated by
+## THAT segment's own cumulative angle. A segment whose cumulative angle overshoots its own
+## "vertical" angle contributes a NEGATIVE (backward) residual instead of a positive (forward) one
+## -- and `neck2`'s rest vector in particular is unusually steep (already tilted ~43 degrees off
+## vertical even at rest, since the quadruped idle neck already curves sharply up toward the head),
+## so the old flat -0.10 rad delta left its cumulative angle at ~81 degrees -- 38 degrees PAST its
+## own ~43-degree "vertical" point -- which is what actually flipped the whole standing figure's
+## measured forward direction opposite to the quadruped clips' (confirmed directly: the brain track
+## measured the head bone at -0.60 m standing vs +0.62 m on all fours; probing the built rig here
+## reproduced those exact numbers). Retuning just the VISIBLE lean (Revisions 10-11, which only
+## looked at the head's own final orientation) never caught this, because it is a POSITION bug, not
+## an orientation-only one -- the head can still look "facing forward" in isolation while its actual
+## computed position sits behind where the quadruped pose's own forward convention says it should.
+##
+## Landing every segment's cumulative pitch near its own vertical angle also fixes the visible
+## lean Revisions 10/11 were chasing (a segment past-vertical reads as leaning back; one under is
+## leaning forward) as a side effect, so those revisions' separate neck-angle patches are gone --
+## this is the one, source-level fix for both problems.
+BIPED_SPINE1_PITCH = math.radians(83.9 - math.degrees(BIPED_PELVIS_PITCH))
+BIPED_CHEST_PITCH_DELTA = math.radians(83.4) - (BIPED_PELVIS_PITCH + BIPED_SPINE1_PITCH)
+BIPED_NECK1_PITCH = math.radians(79.7) - (BIPED_PELVIS_PITCH + BIPED_SPINE1_PITCH + BIPED_CHEST_PITCH_DELTA)
+BIPED_NECK2_PITCH = (math.radians(43.3) - (BIPED_PELVIS_PITCH + BIPED_SPINE1_PITCH + BIPED_CHEST_PITCH_DELTA
+                                            + BIPED_NECK1_PITCH))
+BIPED_HEAD_PITCH = (math.radians(79.9) - (BIPED_PELVIS_PITCH + BIPED_SPINE1_PITCH + BIPED_CHEST_PITCH_DELTA
+                                           + BIPED_NECK1_PITCH + BIPED_NECK2_PITCH))
+
 ## Cumulative world-space rotation carried down to 'chest' once pelvis + spine1 + chest all add
 ## their own deltas on top of each other (each bone's delta composes with its parents', since
 ## Poser.rot expresses every delta as a genuine world-space rotation about the same global axis --
 ## rotations about the same axis simply add). Front-leg angles below are chosen relative to this,
 ## not the pelvis pitch alone, since the arms hang off the chest, not the hips.
-BIPED_CHEST_PITCH = BIPED_PELVIS_PITCH + 0.14 + 0.10
+BIPED_CHEST_PITCH = BIPED_PELVIS_PITCH + BIPED_SPINE1_PITCH + BIPED_CHEST_PITCH_DELTA
 
 
 def biped_stand_pose():
@@ -334,11 +369,11 @@ def biped_stand_pose():
     own rest orientation once cancelled, so their deltas act like an ordinary standing bend."""
     p = {}
     add(p, 'pelvis', ('X', BIPED_PELVIS_PITCH))
-    add(p, 'spine1', ('X', 0.14))
-    add(p, 'chest', ('X', 0.10))
-    add(p, 'neck1', ('X', -0.15))
-    add(p, 'neck2', ('X', -0.10))
-    add(p, 'head', ('X', 0.10))
+    add(p, 'spine1', ('X', BIPED_SPINE1_PITCH))
+    add(p, 'chest', ('X', BIPED_CHEST_PITCH_DELTA))
+    add(p, 'neck1', ('X', BIPED_NECK1_PITCH))
+    add(p, 'neck2', ('X', BIPED_NECK2_PITCH))
+    add(p, 'head', ('X', BIPED_HEAD_PITCH))
     for side in ('L', 'R'):
         # Poser.rot mirrors 'X' (and 'Z') for every ".R" bone (matches this rig's other poses,
         # e.g. walk_pose's per-side sin phases already expect it) -- but here both legs are meant
@@ -405,39 +440,27 @@ def run_pose(f, n=30):
     return p
 
 
-## Revision 11: `biped_drain_pose`'s own, smaller spine1/chest additions (a body-forward lean, not
-## `biped_stand_pose`'s 0.14 / 0.10) -- see the pose's own docstring for why. Front-leg cancellation
-## below has to use THIS cumulative pitch, not the shared `BIPED_CHEST_PITCH` (which is derived from
-## `biped_stand_pose`'s own, larger, spine1/chest and would leave the arms hanging wrong once the
-## torso itself pitches less).
-DRAIN_SPINE1_PITCH = 0.06
-DRAIN_CHEST_PITCH = 0.05
-DRAIN_CHEST_TOTAL = BIPED_PELVIS_PITCH + DRAIN_SPINE1_PITCH + DRAIN_CHEST_PITCH
-
-
 def biped_drain_pose():
     """Soul-drain reared pose (Zach: the attack is now a dementor-style drain, not a chase/bite).
     Same weight-bearing hind-leg stance as `biped_stand_pose` (pelvis pitch, hind-leg bend and
-    `_pelvis_loc` grounding all unchanged, so `GROUND_DROP` still applies), but the jaw is held wide
-    open, the front legs hang loose at the sides instead of curling up tight against the chest, and
-    the torso leans slightly forward rather than standing bolt upright -- see below.
+    `_pelvis_loc` grounding all unchanged, so `GROUND_DROP` still applies) and the SAME
+    spine1/chest/neck1/neck2/head pitch as `biped_stand_pose` (see `BIPED_SPINE1_PITCH` etc.'s
+    comment -- those values are derived from each bone's own rest geometry, not hand-tuned per
+    pose, so both poses share them), but the jaw is held wide open and the front legs hang loose at
+    the sides instead of curling up tight against the chest.
 
-    Revision 10 matched `neck1`/`neck2`/`head` exactly to `biped_stand_pose`'s (-0.15 / -0.10 /
-    +0.10) to stop the head over-rotating into a backward arc; that fixed the worst of it but Zach
-    found the pose still leaned back, just less. Rather than push the neck cancellation even
-    further (fighting the torso's pitch with an ever-larger counter-rotation, which is what created
-    the original bug), this pose gives `spine1`/`chest` their OWN, smaller additions
-    (`DRAIN_SPINE1_PITCH`/`DRAIN_CHEST_PITCH`, 0.06/0.05 instead of `biped_stand_pose`'s 0.14/0.10)
-    on top of the same pelvis pitch -- a genuine forward lean of the upper body, not just a neck
-    trick -- so the same neck/head angles now land a few degrees past level (a slight, deliberate
-    forward lean) instead of needing to cancel as much pitch in the first place."""
+    (History: Revisions 10-11 gave this pose its own, different neck/spine tuning, chasing a visible
+    "backward arc" complaint by eye. That was the wrong axis to tune on -- see `BIPED_SPINE1_PITCH`'s
+    comment for the actual, source-level bug (a bone POSITION issue, not a visible-orientation one)
+    those revisions' patches never actually fixed. Revision 12 replaces all of that with the shared,
+    geometry-derived constants below.)"""
     p = {}
     add(p, 'pelvis', ('X', BIPED_PELVIS_PITCH))
-    add(p, 'spine1', ('X', DRAIN_SPINE1_PITCH))
-    add(p, 'chest', ('X', DRAIN_CHEST_PITCH))
-    add(p, 'neck1', ('X', -0.15))
-    add(p, 'neck2', ('X', -0.10))
-    add(p, 'head', ('X', 0.10))
+    add(p, 'spine1', ('X', BIPED_SPINE1_PITCH))
+    add(p, 'chest', ('X', BIPED_CHEST_PITCH_DELTA))
+    add(p, 'neck1', ('X', BIPED_NECK1_PITCH))
+    add(p, 'neck2', ('X', BIPED_NECK2_PITCH))
+    add(p, 'head', ('X', BIPED_HEAD_PITCH))
     add(p, 'jaw', ('X', -1.65))
     for side in ('L', 'R'):
         # Same mirror-cancelling convention as biped_stand_pose (see its comment): every 'X' value
@@ -447,9 +470,9 @@ def biped_drain_pose():
         add(p, 'shin.' + side, ('X', msign * 1.05))
         add(p, 'hock.' + side, ('X', msign * -0.35))
         add(p, 'htoe.' + side, ('X', msign * 0.15))
-        # Loose hang, not a tight curl: cancel THIS pose's own (smaller) chest pitch down to just
-        # past vertical, then only a slight, relaxed elbow/wrist bend -- limp, not tucked.
-        add(p, 'upperarm.' + side, ('X', msign * (-DRAIN_CHEST_TOTAL + 0.15)))
+        # Loose hang, not a tight curl: cancel the chest's cumulative pitch down to just past
+        # vertical, then only a slight, relaxed elbow/wrist bend -- limp, not tucked.
+        add(p, 'upperarm.' + side, ('X', msign * (-BIPED_CHEST_PITCH + 0.15)))
         add(p, 'forearm.' + side, ('X', msign * -0.35))
         add(p, 'pastern.' + side, ('X', msign * 0.15))
     add(p, 'tail1', ('X', -0.35))
@@ -458,18 +481,20 @@ def biped_drain_pose():
     return p
 
 
-def rear_up_pose(f, n=45):
+def rear_up_pose(f, n=21):
     """Quadruped -> biped_drain: a deliberate rise onto the hind legs, NOT a jump (Zach), jaws
     opening progressively as it rises since `stand_pose` has no jaw entry and `biped_drain_pose`'s
-    is wide open -- `lerp_pose` ramps that in step with everything else. ~0.75s at 60 fps."""
+    is wide open -- `lerp_pose` ramps that in step with everything else. ~0.7s at the rig's 30 fps
+    bake rate, matching the design brief (Revision 12: the first cut was 45 frames/1.5s -- twice the
+    brief's length, flagged by the brain-track integration test)."""
     t = G.smooth01(f / n)
     return lerp_pose(stand_pose(), biped_drain_pose(), t)
 
 
-def drop_down_pose(f, n=24):
+def drop_down_pose(f, n=12):
     """Biped_drain -> quadruped stand: the reverse of RearUp, jaws closing, but snappier -- an
     abrupt "back to being a normal dog" snap rather than a mirrored deliberate rise. ~0.4s at
-    60 fps (half of RearUp's duration)."""
+    30 fps (matching the design brief; Revision 12 -- see `rear_up_pose`)."""
     t = G.smooth01(f / n)
     return lerp_pose(biped_drain_pose(), stand_pose(), t)
 
@@ -537,9 +562,9 @@ def build_actions(arm):
     # Soul-drain sequence (Zach's design change: the attack is a dementor-style drain, not a
     # chase/bite -- Bite/Run above are kept, unused for this, so nothing else that still calls
     # them breaks). Naming contract shared with the brain-logic side on service-dog-brain.
-    act('RearUp', 45, rear_up_pose, cyclic=False)
+    act('RearUp', 21, rear_up_pose, cyclic=False)
     act('DrainIdle', 120, drain_idle_pose, cyclic=True)
     act('UprightWalk', 64, upright_walk_pose, cyclic=True)
-    act('DropDown', 24, drop_down_pose, cyclic=False)
+    act('DropDown', 12, drop_down_pose, cyclic=False)
     arm.animation_data.action = bpy.data.actions['Idle']
     return poser

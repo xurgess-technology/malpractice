@@ -222,7 +222,12 @@ func _process_modification_with_delta(delta: float) -> void:
 		if look_at != Vector3.ZERO:
 			var head_i := _bone(sk, "head")
 			if head_i >= 0:
-				var local_dir: Vector3 = sk.global_transform.affine_inverse() * look_at - sk.get_bone_global_pose(head_i).origin
+				# `look_at` is already skeleton space (see the class doc comment, and `_look`'s own
+				# usage above) -- no world<->skeleton conversion belongs here. A stray
+				# `affine_inverse()` transform here previously double-converted it (Revision 12,
+				# flagged by the brain-track integration test): it only matched `_look`'s own math
+				# by coincidence when the skeleton's own world transform was near-identity.
+				var local_dir: Vector3 = look_at - sk.get_bone_global_pose(head_i).origin
 				toward = clampf(local_dir.x, -1.0, 1.0)
 		_turn(sk, "ear.L", Vector3.RIGHT, -0.35 * ear_alert)
 		_turn(sk, "ear.R", Vector3.RIGHT, -0.35 * ear_alert)
