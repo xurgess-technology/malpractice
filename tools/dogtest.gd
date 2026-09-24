@@ -202,6 +202,25 @@ func _run() -> void:
 	var fx: Node = game.get_node_or_null("DogDrainFx")
 	await _seconds(1.0)
 	_check(fx != null and float(fx.amount) > 0.05, "your own screen and ears are going (drain fx %.2f)" % (fx.amount if fx != null else -1.0))
+	# Step back out of its reach: it follows upright, at a walk, not faster.
+	var away: Vector3 = me.global_position - dog.global_position
+	away.y = 0.0
+	away = away.normalized() if away.length() > 0.1 else Vector3.BACK
+	var back_to: Vector3 = game._floor_at(me.global_position + away * 1.6)
+	if game._point_is_clear(back_to + Vector3.UP * 0.5):
+		me.teleport(back_to)
+	var seen := {"walked": false, "top": 0.0}
+	await _until(func():
+		if bool(dog.moving):
+			seen.top = maxf(float(seen.top), float(dog.speed))
+			if not dog.model.dog.glb or String(dog.model.current()) == "upright_walk":
+				seen.walked = true
+		return false, 2.0)
+	var walked: bool = seen.walked
+	var spd: float = seen.top
+	_check(walked and int(dog.mode) == Modes.Mode.DOG_DRAIN and spd > 0.5 and spd <= C.WALK_SPEED + 0.05,
+		"you step back: it follows upright, at a walk (top %.2f m/s, %s)" % [spd, _body_state()])
+	await _until(func(): return not bool(dog.moving), 3.0)
 	# Standing, it is untouchable.
 	_upright_immunity()
 	# It takes a heart, and leaves your hands alone.
