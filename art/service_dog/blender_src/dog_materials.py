@@ -138,9 +138,11 @@ def _grimy_material(name, base_color, roughness, *, grime_color, blood_color=Non
     pos = b.position()
     _, _, z = b.sep(pos)
 
-    # Fur-clump micro-variation: a fine, high-frequency noise nudging brightness +-12%.
+    # Fur-clump micro-variation: a fine, high-frequency noise nudging brightness +-35% (Revision 14:
+    # +-12% turned out to be genuinely imperceptible once lit and shaded, not merely "subtle" --
+    # see README Revision 14).
     micro = b.noise(46.0, detail=2.0, roughness=0.55, w=grime_seed)
-    micro_mul = b.math('MULTIPLY', b.math('SUBTRACT', micro, 0.5), 0.24)
+    micro_mul = b.math('MULTIPLY', b.math('SUBTRACT', micro, 0.5), 0.70)
     micro_mul = b.math('ADD', micro_mul, 1.0)
 
     # Grime patches: coarse noise thresholded into blotches, biased toward low Z (legs/belly/hem)
@@ -149,12 +151,12 @@ def _grimy_material(name, base_color, roughness, *, grime_color, blood_color=Non
     if ground_bias:
         height_bias = b.math('SUBTRACT', 1.0, b.math('MULTIPLY', z, 0.55))
         grime_n = b.math('MULTIPLY', grime_n, b.math('ADD', 0.35, b.math('MULTIPLY', height_bias, 0.65)))
-    grime_mask, _ = b.ramp(grime_n, [(0.30, 0.0), (0.58, 1.0)])
+    grime_mask, _ = b.ramp(grime_n, [(0.28, 0.0), (0.52, 1.0)])
     # grime_mask is an RGB output (greyscale ramp); use its red channel as a 0..1 factor.
     grime_fac_sep = b.n('ShaderNodeSeparateColor')
     b.link(grime_mask, grime_fac_sep.inputs['Color'])
     grime_fac = grime_fac_sep.outputs['Red']
-    grime_fac = b.math('MULTIPLY', grime_fac, 0.85)  # never fully hides the base garment/coat colour
+    grime_fac = b.math('MULTIPLY', grime_fac, 1.0)  # Revision 14: was 0.85, capped too low to read
 
     grimed = b.mix_color(grime_fac, base_color, grime_color)
     dirtied = b.n('ShaderNodeMixRGB', blend_type='MULTIPLY')
@@ -187,9 +189,13 @@ def coat_material():
     # Near-black, slightly warm charcoal, with fur-clump noise, grime biased low on the legs/belly
     # (a real animal picks up dirt from the ground, not the shoulders) and a few dried-blood stains
     # (image ref tone: "wrong dog", not merely dirty) -- Revision 13.
+    # Revision 14: `grime_color` used to be DARKER than the near-black base -- on an already near-
+    # zero-luminance coat, "even darker" is invisible (this is what actually made Revision 13's
+    # grime read as nothing at all, not just subtle). Real dirt is dusty and LIGHTER/warmer than wet
+    # black fur, so the grime colour now reads as a visible warm-grey smudge, not more black-on-black.
     return _grimy_material('Dog_Coat', (0.028, 0.026, 0.030), 0.78,
-                            grime_color=(0.008, 0.007, 0.009), blood_color=(0.34, 0.028, 0.020),
-                            grime_seed=1.0, blood_seed=4.0, blood_amount=0.05)
+                            grime_color=(0.11, 0.09, 0.07), blood_color=(0.42, 0.03, 0.022),
+                            grime_seed=1.0, blood_seed=4.0, blood_amount=0.09)
 
 
 def skull_material():
@@ -198,8 +204,8 @@ def skull_material():
     # so this stays a SUBTLE smudge/stain rather than the coat's fuller grime treatment) plus one
     # dried-blood stain concentrated toward the jaw (low Z, the mouth's own end of the skull mesh).
     return _grimy_material('Dog_Skull', (0.72, 0.69, 0.63), 0.55,
-                            grime_color=(0.42, 0.40, 0.36), blood_color=(0.42, 0.05, 0.035),
-                            grime_seed=2.0, blood_seed=9.0, ground_bias=True, blood_amount=0.04)
+                            grime_color=(0.38, 0.36, 0.32), blood_color=(0.45, 0.05, 0.035),
+                            grime_seed=2.0, blood_seed=9.0, ground_bias=True, blood_amount=0.10)
 
 
 def vest_clean_material():
@@ -209,7 +215,7 @@ def vest_clean_material():
     # unmistakable" note -- this is the worn-in canvas texture on top of that, not a redesign.
     return _grimy_material('Dog_Vest_Clean', (0.62, 0.24, 0.05), 0.6,
                             grime_color=(0.18, 0.09, 0.03), blood_color=(0.38, 0.025, 0.020),
-                            grime_seed=3.0, blood_seed=13.0, blood_amount=0.08)
+                            grime_seed=3.0, blood_seed=13.0, blood_amount=0.12)
 
 
 def vest_worn_material():
@@ -220,7 +226,7 @@ def vest_worn_material():
     # stain mask already concentrates it where wear reads naturally).
     return _grimy_material('Dog_Vest_Worn', (0.28, 0.14, 0.08), 0.85,
                             grime_color=(0.09, 0.05, 0.03), blood_color=(0.30, 0.02, 0.015),
-                            grime_seed=5.0, blood_seed=17.0, blood_amount=0.07)
+                            grime_seed=5.0, blood_seed=17.0, blood_amount=0.10)
 
 
 def vest_cross_material():

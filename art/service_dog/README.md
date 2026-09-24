@@ -6,8 +6,10 @@ for a design change (see "Revision 9" below): the attack is now a dementor-style
 chase/bite; a tenth pass fixing three problems Zach found in that pass (see "Revision 10" below); an
 eleventh pass fixing two more (see "Revision 11" below); a twelfth pass fixing the real bug
 underneath all of that, found by a real cross-branch integration test (see "Revision 12" below);
-and a thirteenth, styling pass once Zach approved the base model (baked-texture grime/blood detail,
-a real two-layer crystal-ball orb -- see "Revision 13" below).**
+a thirteenth, styling pass once Zach approved the base model (baked-texture grime/blood detail,
+a real two-layer crystal-ball orb -- see "Revision 13" below); and a fourteenth pass fixing
+Revision 13's grime/blood texture, which turned out to be genuinely invisible on screen (see
+"Revision 14" below).**
 The model is `assets/models/monsters/service_dog/service_dog.glb` (asset key
 `monster/service_dog`; skinned mesh, 2 objects, 6 materials, 2 baked textures, 11 clips), registered
 in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is its `SkeletonModifier3D` (head-tracking,
@@ -555,6 +557,55 @@ and `tools/monster_lab.tscn`'s 179-check regression (0 failed). Screenshots: `do
 blood texture from several angles; `dog_orb_glow_off.png`/`_on.png`, `dog_orb_into_mouth.png` and
 `dog_orb_front_wide.png` for the new crystal-ball orb at rest and active, plus `dog_orb_behind_on.png`/
 `dog_orb_behind_far_on.png` re-confirming it still is not visible from behind at the bigger size.
+
+## Revision 14 (2026-09-24, Revision 13's grime/blood texture was genuinely invisible)
+
+Zach confirmed directly: Revision 13's grime/fur/blood texture read as completely absent in actual
+renders, the same category of bug as an earlier invisible-cross-patch problem (something technically
+built, not actually reaching the screen) -- not a "just re-tune the intensity" ask, a "find out why
+it is not rendering at all" one. Checked the whole pipeline end to end before touching any numbers:
+
+1. **The exported GLB's materials.** Dumped the `.glb`'s JSON directly: `Dog_Coat`/`Dog_Skull`/
+   `Dog_Vest_Clean` all have a real `baseColorTexture` (not just a flat `baseColorFactor`), pointing
+   at the correct `images[]` entries (`Dog_Body_Albedo` / `Dog_Vest_Albedo`). Correct.
+2. **The imported Godot material.** A headless probe script instantiating the actual game `.glb` and
+   reading each `MeshInstance3D`'s active `BaseMaterial3D` confirmed `albedo_texture` is set to the
+   right `CompressedTexture2D` (correct size, correct resource path) and `albedo_color` is pure white
+   (so it would not tint/hide the texture). Correct.
+3. **The UV mapping.** The same probe dumped each surface's actual `ARRAY_TEX_UV` range: a healthy
+   spread across ~0.01-0.99 on every textured surface, not degenerate or collapsed to a single point
+   (which would bake fine but sample as a single flat colour on the model, exactly the reported
+   symptom). Correct.
+4. **The texture files themselves, opened directly.** `Dog_Body_Albedo.png`/`Dog_Vest_Albedo.png`
+   DID show real per-island noise variation and a faint reddish tint under close inspection --
+   nothing was blank or corrupt.
+
+So every link in the pipeline Zach's checklist named was actually fine. The real root cause was
+narrower and easy to miss precisely because everything upstream looked correct: **the numbers
+Revision 13 landed on were themselves too small to survive being lit, shaded and re-encoded into a
+screenshot** -- not a pipeline bug, a contrast bug in the material graph itself:
+
+- The fur micro-noise varied brightness by only +-12%.
+- `Dog_Coat`'s grime colour (`(0.008, 0.007, 0.009)`) was DARKER than the coat's own near-black base
+  colour (`(0.028, 0.026, 0.030)`) -- on an already near-zero-luminance material, "even darker" has
+  nowhere to go and reads as nothing. Real dirt is dusty and lighter/warmer than wet black fur, not
+  blacker-than-black; the grime colour was tonally backwards for what it was supposed to depict.
+- The blood mask, after Revision 13's own "stop it covering half the model" fix, had been dialed
+  back to a coverage so small it amounted to a handful of near-invisible pixels once baked into a
+  1024x1024 atlas shared across ~40 UV islands.
+
+Fixed by actually confronting the contrast, not just nudging a knob: fur micro-noise to +-35%;
+`Dog_Coat`'s grime colour flipped to a genuinely lighter, warmer dust tone that contrasts against
+the near-black base instead of trying to out-black it; the grime factor's cap raised from 0.85 to
+1.0 (it was never allowed to fully show even where the mask said it should); and every material's
+`blood_amount` roughly doubled. Confirmed directly, not just by re-reading the flat texture atlas
+this time: `dog_idle.png` and `dog_vest_leg_clear_idle_left.png` show an unmistakable grey-brown
+grime pattern up the legs against the near-black torso, and `dog_leg_junction_hind_left.png` shows a
+clearly visible dark-red dried-blood stain at the shoulder, right where the front leg meets the
+vest strap -- a specific, pointable patch, not a texture-atlas crop.
+
+Validated with the same full loop: rebuild, reimport, `tools/dog_lab.tscn` (structure check +
+`--shots`), `tools/monster_lab.tscn`'s 179-check regression (0 failed).
 
 ## Folder
 
