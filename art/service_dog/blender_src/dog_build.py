@@ -2,9 +2,13 @@
 
     blender --background --factory-startup --python dog_build.py -- [--export]
 
-No bake pass (dog_materials.py is four flat Principled BSDF materials chosen per face, not a
-baked PBR atlas -- see README for why this is a smaller step than the seal/night_nurse pipeline
-they were templated from). Runs in well under a minute.
+Revision 13 (2026-09-24): a colour-only self-bake (Cycles DIFFUSE/COLOR pass, no separate high-poly
+source -- this mesh has none) of dog_materials.py's procedural grime/blood node graphs, through
+each part's own already-packed UV layer, into `Dog_Body_Albedo`/`Dog_Vest_Albedo` (art/service_dog/
+blender_src/textures/, git-ignored like the seal/night-nurse ones -- the game copy under
+assets/models/ is what ships). Smaller than the seal/night-nurse pipeline (no AO/normal bake, no
+separate high-poly sculpt) but the same underlying pattern: a real baked texture atlas, not flat
+per-face colour blocks. Runs in well under a minute.
 """
 import sys
 import os
@@ -67,6 +71,60 @@ def pack_uvs(obj):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
+def select_only(objs, active=None):
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = active or objs[0]
+
+
+def new_image(name, size):
+    img = bpy.data.images.new(name, size, size, alpha=False, float_buffer=False)
+    img.colorspace_settings.name = 'sRGB'
+    return img
+
+
+def bake_albedo(obj, mats, image, samples=8):
+    """Self-bake each of `mats`' procedural Base Color graph (dog_materials.py's grime/blood node
+    trees, or a flat colour for materials that skip them) into `image`, through `obj`'s own
+    (already-packed) UV layer -- the seal/night-nurse pattern (`*_build.py`'s `bake()`), just
+    without a separate high-poly source: there is nothing here to bake AO/normal detail from, so
+    this bakes colour only, self-to-self."""
+    # Deselect every node in EVERY material's tree first, not just `mats`': `use_clear=True` below
+    # clears whichever image is the "active" bake target it finds, and a stale active/selected node
+    # left over in a DIFFERENT material from a previous `bake_albedo()` call (e.g. the coat/skull
+    # bake's own target node, still marked active in its own material when the vest bake runs next)
+    # gets its image cleared too -- found by baking body then vest and watching the body image's
+    # own pixel data go to all-zero the moment the second (vest) bake ran, with no code touching it.
+    for anymat in bpy.data.materials:
+        if anymat.use_nodes:
+            for n in anymat.node_tree.nodes:
+                n.select = False
+    nodes = []
+    for m in mats:
+        nt = m.node_tree
+        node = nt.nodes.new('ShaderNodeTexImage')
+        node.image = image
+        node.select = True
+        nt.nodes.active = node
+        nodes.append(node)
+    scn = bpy.context.scene
+    scn.render.engine = 'CYCLES'
+    scn.cycles.device = 'CPU'
+    scn.cycles.samples = samples
+    select_only([obj], obj)
+    bpy.ops.object.bake(type='DIFFUSE', pass_filter={'COLOR'}, margin=8, use_clear=True, target='IMAGE_TEXTURES')
+    return nodes
+
+
+def wire_baked_albedo(mat, node):
+    """After baking, make the baked image the material's actual Base Color (replacing its
+    procedural grime/blood graph, which is only there to produce the bake) -- same "texture wins
+    once baked" pattern the seal/night-nurse materials use."""
+    bsdf = mat.node_tree.nodes.get('Principled BSDF')
+    mat.node_tree.links.new(node.outputs['Color'], bsdf.inputs['Base Color'])
+
+
 def main():
     reset()
     scn = bpy.context.scene
@@ -94,6 +152,23 @@ def main():
     vest_obj = part_object(vest, mats, vest_index)
     pack_uvs(body_obj)
     pack_uvs(vest_obj)
+
+    log('baking grime/blood texture (Revision 13)')
+    body_img = new_image('Dog_Body_Albedo', 1024)
+    vest_img = new_image('Dog_Vest_Albedo', 512)
+    body_nodes = bake_albedo(body_obj, mats[0:2], body_img)      # Coat, Skull
+    vest_nodes = bake_albedo(vest_obj, mats[2:4], vest_img)      # Vest_Clean, Vest_Worn
+    for m, n in zip(mats[0:2], body_nodes):
+        wire_baked_albedo(m, n)
+    for m, n in zip(mats[2:4], vest_nodes):
+        wire_baked_albedo(m, n)
+    tex_dir = os.path.join(HERE, 'textures')
+    os.makedirs(tex_dir, exist_ok=True)
+    for img in (body_img, vest_img):
+        img.filepath_raw = os.path.join(tex_dir, img.name + '.png')
+        img.file_format = 'PNG'
+        img.save()
+    bpy.ops.object.select_all(action='DESELECT')
 
     log('rig')
     arm = R.build_armature(joints)

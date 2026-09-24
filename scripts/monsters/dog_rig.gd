@@ -50,6 +50,11 @@ const ORB_REST_COLOR := Color(0.03, 0.03, 0.03)
 const ORB_GLOW_COLOR := Color(0.12, 0.88, 0.34)
 const ORB_ENERGY_MIN := 0.0
 const ORB_ENERGY_MAX := 1.5
+## Revision 13 (styling pass): the inner "wisp" core's own emission range -- dimmer than the outer
+## glass shell's at rest (so it does not leak light through a supposedly-inert crystal ball) but
+## brighter at full drain, since it is meant to read as the thing actually glowing INSIDE the glass.
+const ORB_CORE_ENERGY_MIN := 0.0
+const ORB_CORE_ENERGY_MAX := 3.2
 
 var look_at := Vector3.ZERO
 var look_weight := 0.0
@@ -59,6 +64,8 @@ var ear_alert := 0.0
 var _b := {}
 var _t := 0.0
 var _orb_mat: StandardMaterial3D
+var _orb_core_mat: StandardMaterial3D
+var _orb_core: Node3D
 var _drain_glow := 0.0
 
 
@@ -103,20 +110,41 @@ static func build(model: Node3D) -> bool:
 ## BoneAttachment3D on `jaw`, tucked well back into the mouth cavity near the throat -- small and
 ## recessed enough that the skull/jaw's own solid mesh occludes it from behind; it only reads
 ## through the open mouth, facing whoever the dog is facing.
+##
+## Revision 13 (styling pass, Zach: "bigger and more detailed -- like an actual crystal ball, not
+## just a plain colored sphere"): two nested spheres, not one -- an outer glass SHELL (glossy,
+## faintly refractive, a fresnel rim so it reads as a curved glass surface catching light, not a
+## flat-shaded dot) around an inner WISP core (a smaller, unshaded, emissive sphere with a swirling
+## noise pattern baked into its own emission texture, slowly rotated in `_process_modification_with_
+## delta` below) that reads as something glowing and moving INSIDE the glass. Still small/dark/
+## inert at rest and ghostly green and clearly visible from the front once active -- `set_drain_glow`
+## now drives both layers together.
 func _build_orb(sk: Skeleton3D) -> void:
 	var attach := BoneAttachment3D.new()
 	attach.name = "OrbAttach"
 	attach.bone_name = "jaw"
 	sk.add_child(attach)
+
+	# The outer glass shell: bigger than the old plain sphere, glossy (low roughness + a clearcoat
+	# pass) with a fresnel rim highlight and a little refraction, so its curved surface actually
+	# reads as glass rather than a matte ball.
 	var mesh := SphereMesh.new()
-	mesh.radius = 0.014
-	mesh.height = 0.028
-	mesh.radial_segments = 12
-	mesh.rings = 8
+	mesh.radius = 0.026
+	mesh.height = 0.052
+	mesh.radial_segments = 16
+	mesh.rings = 12
 	_orb_mat = StandardMaterial3D.new()
-	# Near-black and inert at rest; `set_drain_glow` fades both the surface colour and the emission
-	# up together, so dim-but-visible in between reads as a faint green ember, not a colour swap.
 	_orb_mat.albedo_color = ORB_REST_COLOR
+	_orb_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_orb_mat.roughness = 0.05
+	_orb_mat.clearcoat_enabled = true
+	_orb_mat.clearcoat = 1.0
+	_orb_mat.clearcoat_roughness = 0.03
+	_orb_mat.rim_enabled = true
+	_orb_mat.rim = 0.85
+	_orb_mat.rim_tint = 0.25
+	_orb_mat.refraction_enabled = true
+	_orb_mat.refraction_scale = 0.05
 	_orb_mat.emission_enabled = true
 	_orb_mat.emission = ORB_GLOW_COLOR
 	_orb_mat.emission_energy_multiplier = ORB_ENERGY_MIN
@@ -133,15 +161,61 @@ func _build_orb(sk: Skeleton3D) -> void:
 	mi.position = Vector3(0, -0.015, 0.10)
 	attach.add_child(mi)
 
+	# The inner wisp core: a smaller unshaded sphere with a swirl-like noise baked into its own
+	# emission texture (a real, if simple, stand-in for the "internal detail/refraction" look --
+	# StandardMaterial3D has no true volumetric refraction to swirl light through, so this fakes the
+	# read with a textured, slowly-rotated glow source sitting inside the glass shell instead).
+	var core_mesh := SphereMesh.new()
+	core_mesh.radius = 0.014
+	core_mesh.height = 0.028
+	core_mesh.radial_segments = 12
+	core_mesh.rings = 8
+	_orb_core_mat = StandardMaterial3D.new()
+	_orb_core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_orb_core_mat.albedo_color = Color(0, 0, 0)
+	_orb_core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_orb_core_mat.emission_enabled = true
+	_orb_core_mat.emission = ORB_GLOW_COLOR
+	_orb_core_mat.emission_energy_multiplier = ORB_CORE_ENERGY_MIN
+	var swirl := FastNoiseLite.new()
+	swirl.noise_type = FastNoiseLite.TYPE_CELLULAR
+	swirl.frequency = 0.045
+	swirl.cellular_return_type = FastNoiseLite.RETURN_CELL_VALUE
+	swirl.fractal_type = FastNoiseLite.FRACTAL_FBM
+	swirl.fractal_octaves = 3
+	var swirl_tex := NoiseTexture2D.new()
+	swirl_tex.width = 64
+	swirl_tex.height = 64
+	swirl_tex.seamless = true
+	swirl_tex.noise = swirl
+	# A steep gradient (dark gaps, bright veins), not the noise's own low-contrast mid-grey range,
+	# so the wisp reads as distinct swirling threads of light rather than an even glowing blob.
+	var swirl_ramp := Gradient.new()
+	swirl_ramp.colors = PackedColorArray([Color(0, 0, 0), Color(0.1, 0.1, 0.1), Color(1, 1, 1), Color(1, 1, 1)])
+	swirl_ramp.offsets = PackedFloat32Array([0.0, 0.55, 0.78, 1.0])
+	swirl_tex.color_ramp = swirl_ramp
+	_orb_core_mat.emission_texture = swirl_tex
+	core_mesh.material = _orb_core_mat
+	_orb_core = MeshInstance3D.new()
+	_orb_core.name = "OrbCore"
+	(_orb_core as MeshInstance3D).mesh = core_mesh
+	(_orb_core as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.add_child(_orb_core)
+
 
 ## Set the throat orb's glow, 0 (inert, near-black, the default) to 1 (fully lit, ghostly spectral
 ## green) -- driven by replicated drain state from the brain-logic side. Purely visual; this poser
-## does not decide when to drain.
+## does not decide when to drain. Drives both the outer glass shell and the inner wisp core.
 func set_drain_glow(v: float) -> void:
 	_drain_glow = clampf(v, 0.0, 1.0)
 	if _orb_mat != null:
 		_orb_mat.albedo_color = ORB_REST_COLOR.lerp(ORB_GLOW_COLOR, _drain_glow)
+		# Near-opaque, solid-looking glass at rest; noticeably more translucent once lit, so the
+		# inner core's own swirl actually reads through the shell instead of being hidden by it.
+		_orb_mat.albedo_color.a = lerpf(0.92, 0.42, _drain_glow)
 		_orb_mat.emission_energy_multiplier = lerpf(ORB_ENERGY_MIN, ORB_ENERGY_MAX, _drain_glow)
+	if _orb_core_mat != null:
+		_orb_core_mat.emission_energy_multiplier = lerpf(ORB_CORE_ENERGY_MIN, ORB_CORE_ENERGY_MAX, _drain_glow)
 
 
 func _bone(sk: Skeleton3D, n: String) -> int:
@@ -213,6 +287,10 @@ func _process_modification_with_delta(delta: float) -> void:
 	if sk == null:
 		return
 	_wag(sk)
+	if _orb_core != null:
+		# A slow, lazy tumble for the wisp inside the glass -- reads as something alive moving
+		# inside the crystal ball rather than a static texture painted on a sphere.
+		_orb_core.rotation = Vector3(_t * 0.35, _t * 0.55, _t * 0.2)
 	if look_weight <= 0.0 and twitch <= 0.0 and ear_alert <= 0.0:
 		return
 	if look_weight > 0.0 and look_at != Vector3.ZERO:

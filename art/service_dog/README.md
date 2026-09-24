@@ -4,12 +4,14 @@
 Zach's reviews (see "Revision 1" through "Revision 8" below), then given a ninth pass the same day
 for a design change (see "Revision 9" below): the attack is now a dementor-style soul-drain, not a
 chase/bite; a tenth pass fixing three problems Zach found in that pass (see "Revision 10" below); an
-eleventh pass fixing two more (see "Revision 11" below); and a twelfth pass fixing the real bug
-underneath all of that, found by a real cross-branch integration test (see "Revision 12" below).**
+eleventh pass fixing two more (see "Revision 11" below); a twelfth pass fixing the real bug
+underneath all of that, found by a real cross-branch integration test (see "Revision 12" below);
+and a thirteenth, styling pass once Zach approved the base model (baked-texture grime/blood detail,
+a real two-layer crystal-ball orb -- see "Revision 13" below).**
 The model is `assets/models/monsters/service_dog/service_dog.glb` (asset key
-`monster/service_dog`; skinned mesh, 2 objects, 6 materials, 11 clips), registered in
-`scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is its `SkeletonModifier3D` (head-tracking, idle
-"wrongness", continuous tail wag, the throat orb's glow hook), following the Night Nurse / Hive
+`monster/service_dog`; skinned mesh, 2 objects, 6 materials, 2 baked textures, 11 clips), registered
+in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is its `SkeletonModifier3D` (head-tracking,
+idle "wrongness", continuous tail wag, the throat orb's glow hook), following the Night Nurse / Hive
 convention (`scripts/monsters/night_nurse_rig.gd`, `hive_rig.gd`). `tools/dog_lab.gd` /
 `tools/dog_lab.tscn` is its smoke-test viewer (see "Validate" below). This folder has a `.gdignore`,
 so Godot never imports it.
@@ -501,6 +503,59 @@ and `tools/monster_lab.tscn`'s 179-check regression (0 failed) -- including `Sta
 share the corrected `biped_stand_pose()` and were re-screenshotted to confirm they still read as
 upright and still have both hind paws grounded (the dedicated check in `dog_lab.gd` still passes).
 
+## Revision 13 (2026-09-24, styling pass: surface detail, and a real crystal-ball orb)
+
+Zach approved the base model/rig/animations after Revision 12 -- this pass is styling/detail only,
+not another correctness fix.
+
+1. **Grime, fur variation and blood on the coat and vest.** `dog_materials.py`'s `Dog_Coat`,
+   `Dog_Skull`, `Dog_Vest_Clean` and `Dog_Vest_Worn` (the two small icon patches, `Dog_Vest_Cross`/
+   `Dog_Vest_Badge`, stay flat/clean -- Zach has twice asked for the cross specifically to read
+   unambiguously, not weathered) each build a small procedural Cycles node graph -- fine fur-clump
+   micro-noise, blotchy grime concentrated low on the legs/belly/hem (a real animal picks up dirt
+   from the ground, not the shoulders), and a scatter of dried-blood stains -- and `dog_build.py`
+   self-bakes each one (a Cycles `DIFFUSE`/`COLOR`-pass bake, no separate high-poly source since this
+   mesh has none) through each part's own already-packed UV layer into `Dog_Body_Albedo` (1024,
+   covering Coat + Skull) and `Dog_Vest_Albedo` (512, covering Vest_Clean + Vest_Worn) -- the same
+   "real baked texture atlas" pattern art/seal/ and art/night_nurse/ use, just without their AO/normal
+   bake (no high-poly sculpt to bake those from). Textures live in `blender_src/textures/` (committed,
+   like the seal's) and the game copy under `assets/models/monsters/service_dog/textures/`.
+   - **Bug found and fixed while wiring this up:** baking `Dog_Body_Albedo` then `Dog_Vest_Albedo`
+     right after it silently zeroed the FIRST image back to solid black. Root cause: Blender's bake
+     operator, with `use_clear=True`, clears whichever image is the "active" bake target it finds --
+     and a stale active/selected node left over in the FIRST bake's own materials (never explicitly
+     deselected before starting the second) still counted, even though those materials were not used
+     by the second bake's object at all. Fixed by deselecting every node in every material in the
+     whole file before each bake, not just the ones about to be baked.
+   - Getting the blood stains to a "reads well, not overwhelming" AMOUNT took a few passes: a
+     colour-ramp threshold on a single noise turned out to be extremely sensitive (swinging from
+     "invisible" to "half the model soaked in red" over a few percent of threshold), because the
+     underlying noise's actual value distribution was not what a naive 0..1 assumption expects.
+     Replaced with a noise raised to a high power (`POWER`, exponent 9) before scaling: this makes
+     only the noise's own highest peaks survive, which is far less sensitive to the exact multiplier
+     and also gives the surviving spots a soft, organic falloff (a soaked-in stain edge, not a
+     painted one) for free.
+2. **The throat orb is now a real two-layer crystal ball, not a plain sphere** (Zach: "bigger and
+   more detailed -- like an actual crystal ball"). `dog_rig.gd`'s `_build_orb()` builds two nested
+   meshes on the same `OrbAttach`: an OUTER glass shell (bigger than before -- 0.026 m radius, up
+   from 0.014 -- glossy via a clearcoat pass, a fresnel rim highlight, and `refraction_enabled` for a
+   little glass-like distortion) around an INNER wisp core (a smaller, unshaded, emissive sphere
+   whose `emission_texture` is a `NoiseTexture2D` cellular-noise swirl run through a steep colour
+   ramp, so it reads as distinct bright threads rather than an even glow, slowly rotated in
+   `_process_modification_with_delta` for a lazy tumbling-wisp read). `set_drain_glow` now drives
+   both layers together: the outer shell's own colour/emission (dark, near-opaque glass at rest;
+   ghostly green, more translucent once lit, so the inner wisp's glow can actually show through) and
+   the inner core's emission energy (dim at rest, brighter at full drain). Still respects every
+   existing rule: small/dark/inert at rest, ghostly green and clearly visible from the front once
+   active, not visible from directly behind (re-confirmed -- see below).
+
+Validated with the full loop: rebuild, reimport, `tools/dog_lab.tscn` (structure check + `--shots`)
+and `tools/monster_lab.tscn`'s 179-check regression (0 failed). Screenshots: `dog_idle.png`,
+`dog_vest_closeup.png`, `dog_walk_midstride.png` and the leg-clearance set for the new grime/fur/
+blood texture from several angles; `dog_orb_glow_off.png`/`_on.png`, `dog_orb_into_mouth.png` and
+`dog_orb_front_wide.png` for the new crystal-ball orb at rest and active, plus `dog_orb_behind_on.png`/
+`dog_orb_behind_far_on.png` re-confirming it still is not visible from behind at the bigger size.
+
 ## Folder
 
 | Path | What |
@@ -547,19 +602,21 @@ pipeline does not bake, so it has nothing to tune there (see "Known problems").
 - **No separate eyes.** The sockets are geometry only — sunken, and left the same dark coat colour
   as the rest of the head map (no globe, no glint). This is the strongest and most deliberate tonal
   call in the whole model; see "Open design calls" below, it is the one most worth Zach's eyes.
-- **Materials — a smaller step than the Seal/Night Nurse pipeline.** Those bake a procedural Cycles
-  material to a PBR texture atlas (albedo/roughness/normal/AO) from a high-poly source. This model
-  skips that: `dog_materials.py` is six flat Principled BSDF materials (`Dog_Coat` dark charcoal,
-  `Dog_Skull` pale bone, `Dog_Vest_Clean` a saturated safety-vest orange, `Dog_Vest_Worn`,
-  `Dog_Vest_Cross`, `Dog_Vest_Badge`), and `dog_geometry.py` computes a per-vertex `head` mask (from
-  the same bone-weight blend used for skinning: near 1 on the skull and jaw, 0 everywhere else) and a
-  `stain` mask on the vest (low on the girth, along the back panel's rear edge, plus a deterministic
-  sine-based pseudo-noise — no RNG). `dog_build.py` picks each face's material by averaging its
-  vertices' mask value, so the pale skull, dark body and clean/worn vest patches are real per-face
-  material choices with no bake step and no UV-packing risk. The vest's two icon patches
+- **Materials — a smaller step than the Seal/Night Nurse pipeline, but the same bake-to-texture
+  pattern since Revision 13.** Those bake a procedural Cycles material to a full PBR texture atlas
+  (albedo/roughness/normal/AO) from a separate high-poly source. This model still skips the
+  high-poly source (there isn't one) and the roughness/normal/AO maps, but `dog_materials.py`'s six
+  Principled BSDF materials (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`, `Dog_Vest_Worn`,
+  `Dog_Vest_Cross`, `Dog_Vest_Badge`) are no longer flat colour blocks: `dog_geometry.py` computes a
+  per-vertex `head` mask (from the same bone-weight blend used for skinning: near 1 on the skull and
+  jaw, 0 everywhere else) and a `stain` mask on the vest (low on the girth, along the back panel's
+  rear edge, plus a deterministic sine-based pseudo-noise — no RNG); `dog_build.py` picks each face's
+  material by averaging its vertices' mask value, so the pale skull, dark body and clean/worn vest
+  patches are real per-face material choices with no UV-packing risk. The vest's two icon patches
   (`Part.add_patch`, small raised boxes) instead force their material directly, bypassing the mask
-  average entirely (`Part.face_mat`). The trade: no fur variation, no normal-mapped detail, no AO.
-  Flagged as a place to invest more if the flat look reads too clean in the finished lighting.
+  average entirely (`Part.face_mat`) and stay flat/clean (see "Revision 13" below for why). The four
+  big-area materials now carry a real baked texture (fur-clump micro-noise, grime, dried-blood
+  stains) instead of a flat colour — see "Revision 13".
 - **Rig — the first quadruped skeleton in the project.** 29 deform bones: `pelvis` -> `spine1` ->
   `chest` -> `neck1` -> `neck2` -> `head` -> `jaw`; `tail1..4`; `ear.L`/`ear.R`; and per side
   `upperarm`/`forearm`/`pastern`/`toe` (front) and `thigh`/`shin`/`hock`/`htoe` (hind). Bone naming
@@ -654,9 +711,12 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
 
 **Technical simplifications, not tonal calls:**
 
-- **No baked texture pipeline.** Flat per-face materials only (see "Materials" above) — no fur
-  variation, no normal map, no AO. The seal/night-nurse bake pipeline (`seal_materials.py` +
-  `seal_build.py`'s bake step) would be the template to fork if this needs more surface detail later.
+- **Bake pipeline is colour-only (Revision 13).** A self-bake of `dog_materials.py`'s procedural
+  grime/blood/fur node graphs to `Dog_Body_Albedo`/`Dog_Vest_Albedo` (see "Revision 13" below) —
+  still no roughness/normal/AO maps, and no separate high-poly source to bake them from even if
+  added. The seal/night-nurse bake pipeline (`seal_materials.py` + `seal_build.py`'s bake step,
+  which DOES have a high-poly source) would be the template to fork if this needs that level of
+  surface detail later.
 - **StandUp and Run are a working pass, not a polished one.** This is a genuinely novel animation
   problem for the project (nothing else here blends a quadruped and a biped skeleton). Revision 2
   fixed the actual ground contact (both hind paws measured within 1 cm of the ground and of each
@@ -695,9 +755,12 @@ The `--shots` run has no display in this container, so it renders through Xvfb +
 
 - **Triangles:** `Dog_Body` 986 + `Dog_Vest` 344 = **1,330** for the whole model (no bake source, so
   no separate high-poly count).
-- **Materials:** 6 flat Principled BSDF (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`, `Dog_Vest_Worn`,
-  `Dog_Vest_Cross`, `Dog_Vest_Badge`), no textures.
+- **Materials:** 6 Principled BSDF (`Dog_Coat`, `Dog_Skull`, `Dog_Vest_Clean`, `Dog_Vest_Worn`,
+  `Dog_Vest_Cross`, `Dog_Vest_Badge`); the first four carry a baked grime/blood/fur texture as of
+  Revision 13 (`Dog_Body_Albedo` 1024x1024, `Dog_Vest_Albedo` 512x512), the icon-patch two stay flat.
 - **Bones:** 29 deform + `root`. **Clips:** Idle, Walk, PlaceItem, Growl, StandUp, Run, Bite,
   RearUp, DrainIdle, UprightWalk, DropDown (11 total).
-- **Throat orb (Revision 9):** a Godot-side `SphereMesh` (`Orb`, on `BoneAttachment3D` "OrbAttach"
-  under `jaw`), not part of the Blender build's own triangle/material counts above.
+- **Throat orb (Revision 9, restyled Revision 13):** Godot-side, on `BoneAttachment3D` "OrbAttach"
+  under `jaw`, not part of the Blender build's own triangle/material counts above -- a two-layer
+  crystal ball, an outer glass-shell `SphereMesh` (`Orb`) around a smaller unshaded, emissive inner
+  wisp `SphereMesh` (`OrbCore`) with a swirl `NoiseTexture2D`.
