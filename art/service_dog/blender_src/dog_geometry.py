@@ -255,13 +255,18 @@ class Part:
             for k in ATTRS:
                 self.attr[k].append(0.0)
 
-    def add_flat_poly(self, center, right, up, points2d, thickness, weight, mat_index):
+    def add_flat_poly(self, center, right, up, points2d, cap_faces, thickness, weight, mat_index):
         """A thin, arbitrary-outline decal (Revision 6's cross patch is a single "+" outline
         through this, replacing two crossed rectangular `add_patch` boxes -- their overlap left a
-        visible dark seam where the two separate surfaces intersected, which read as an odd carved
-        shape rather than one flush painted mark). `points2d` is the outline, counter-clockwise as
-        seen from the outward normal (`right.cross(up)`), in `right`/`up` units from `center`;
-        `thickness` should be small enough to read as paint, not an applique."""
+        visible dark seam where the two separate surfaces intersected). `points2d` is the outline,
+        counter-clockwise as seen from the outward normal (`right.cross(up)`), in `right`/`up`
+        units from `center`. `cap_faces` is an explicit decomposition of that outline into convex
+        polygons (each a tuple of indices into `points2d`, wound counter-clockwise the same way) --
+        Revision 8: a plus/cross outline is CONCAVE, and the previous version's cap triangulated it
+        with a naive fan from point 0, which is only valid for convex polygons; on a concave one it
+        produces triangles that fold back over each other, reading as spikes poking out of the
+        surface and dark self-intersecting gaps in the middle of the shape. `thickness` should be
+        small enough to read as paint, not an applique."""
         right = right.normalized()
         up = up.normalized()
         normal = right.cross(up).normalized()
@@ -271,9 +276,9 @@ class Part:
         top = [c + normal * thickness for c in bottom]
         self.v += bottom + top
         faces = []
-        for i in range(1, n - 1):
-            faces.append((base + n, base + n + i, base + n + i + 1))       # top cap, outward
-            faces.append((base, base + i + 1, base + i))                    # bottom cap, inward
+        for face in cap_faces:
+            faces.append(tuple(base + n + i for i in face))              # top cap, outward
+            faces.append(tuple(base + i for i in reversed(face)))        # bottom cap, inward
         for i in range(n):
             j = (i + 1) % n
             faces.append((base + i, base + j, base + n + j, base + n + i))  # side wall
@@ -526,7 +531,10 @@ def build_vest(nseg=16):
     top_cx, top_cz = _coat_radius(top_y)
     mid_y = _y(0.78)
     mid_cx, mid_cz = _coat_radius(mid_y)
-    strap_top = Vector((0.0, top_y, CHEST.z + top_cz + MARGIN))
+    # The top end is pulled INSIDE the vest body's own radius (not proud of it like the rest of the
+    # strap) so its capped tip is buried in the body's solid volume instead of poking out past the
+    # surface as a free-floating spike (Revision 8: exactly what Zach flagged near the vest's front).
+    strap_top = Vector((0.0, top_y, CHEST.z + top_cz * 0.72))
     strap_mid = Vector((0.0, mid_y, CHEST.z + mid_cz * 0.35))
     strap_bot = Vector((0.0, gy, CHEST.z - (gcz + MARGIN + 0.004)))
     for side in ('L', 'R'):
@@ -562,7 +570,11 @@ def build_vest(nseg=16):
     # two crossed boxes (their overlap left a visible seam -- see `add_flat_poly`'s docstring).
     plus = [(big, w), (w, w), (w, big), (-w, big), (-w, w), (-big, w),
             (-big, -w), (-w, -w), (-w, -big), (w, -big), (w, -w), (big, -w)]
-    p.add_flat_poly(cross_center, cross_right, cross_up, plus, DECAL, {'chest': 1.0}, VEST_CROSS_MAT)
+    # A plus is concave, so its cap can't be one fan from a single point (Revision 8) -- it splits
+    # cleanly into 5 quads instead: the centre square (indices 1, 4, 7, 10 -- already the plus's
+    # four inner corners) plus one rectangle per arm, each wound the same way as `plus` above.
+    plus_caps = [(1, 4, 7, 10), (0, 1, 10, 11), (2, 3, 4, 1), (4, 5, 6, 7), (7, 8, 9, 10)]
+    p.add_flat_poly(cross_center, cross_right, cross_up, plus, plus_caps, DECAL, {'chest': 1.0}, VEST_CROSS_MAT)
     badge_y = _y(0.20)
     bcx, bcz = _coat_radius(badge_y)
     badge_normal = Vector((0.75, 0.0, 0.66)).normalized()   # forward-and-out, the vest's side face

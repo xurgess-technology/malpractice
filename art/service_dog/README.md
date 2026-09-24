@@ -1,7 +1,7 @@
 # The Service Dog: Blender sources
 
-**Built 2026-09-24, art side of the Service Dog feature; revised seven times the same day after
-Zach's reviews (see "Revision 1" through "Revision 7" below).** The model is
+**Built 2026-09-24, art side of the Service Dog feature; revised eight times the same day after
+Zach's reviews (see "Revision 1" through "Revision 8" below).** The model is
 `assets/models/monsters/service_dog/service_dog.glb` (asset key `monster/service_dog`; skinned mesh,
 2 objects, 6 materials, 7 clips), registered in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is
 its `SkeletonModifier3D` (head-tracking, idle "wrongness"), following the Night Nurse / Hive
@@ -267,6 +267,36 @@ the vest side-on, level with the chest bone, while the cross sits on TOP of the 
 chest bone's height plus the vest's own local radius -- out of frame regardless of how visible the
 decal itself was. Retargeted at that actual position. See the new
 `godot_shots/dog_vest_cross_patch.png`: the cross is unambiguous.
+
+## Revision 8 (2026-09-24, the cross was self-intersecting, and a strap end poked out as a spike)
+
+Zach looked at Revision 7's own screenshot again and flagged two more geometry problems in it,
+both real, both found this time by actually reading `add_flat_poly`'s implementation rather than
+just tuning numbers:
+
+1. **The cross was clipping/self-intersecting, not clean paint.** The real bug was in
+   `Part.add_flat_poly` itself, present since Revision 6: its cap triangulated the outline with a
+   fan from point 0 (`for i in range(1, n - 1): faces.append((base+n, base+n+i, base+n+i+1))`),
+   which is only a valid triangulation for a CONVEX polygon. A "+" outline is concave (it has
+   reflex corners where the arms meet the centre square), so the fan produced triangles that fold
+   back across the shape instead of tiling it -- reading as a dark self-intersecting gap right
+   through the middle of the cross, which is exactly what Zach saw as "clipping into the vest."
+   Fixed by giving `add_flat_poly` an explicit `cap_faces` parameter: a caller-supplied
+   decomposition into convex pieces, wound the same way as the outline. A plus splits cleanly into
+   5 quads -- the centre square (using the outline's own 4 inner-corner indices, no new vertices
+   needed) plus one rectangle per arm -- so `build_vest` now passes that decomposition instead of
+   leaving the cap logic to guess at a fan. No more coincident/folded triangles, so no more seam.
+2. **A small spike near the vest's front-top was the chest strap's own end cap.** `strap_top` (the
+   chest strap's upper end, `add_tube`'s default `cap_start=True`) sat proud of the vest body's
+   surface by `top_cz + MARGIN` with nothing else covering it, so its pointed tube-end cap read as a
+   stray spike sticking out of nothing rather than a strap disappearing into the vest it's meant to
+   be stitched to. Pulled `strap_top` in to `top_cz * 0.72` -- inside the vest body's own local
+   radius, not proud of it -- so that end (and its cap) sits buried in the body's solid volume,
+   invisible, the way the girth strap's own ends already were.
+
+Checked against the exact screenshot Zach flagged (`godot_shots/dog_vest_cross_patch.png`, same
+angle) plus a fresh look at `dog_vest_closeup.png` and the standard idle/walk/standup, both-sides
+leg-clearance set, since any vest-geometry change earns that check again.
 
 ## Folder
 
