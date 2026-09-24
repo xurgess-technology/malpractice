@@ -1,0 +1,380 @@
+"""Armature, weights and hand-authored procedural animation for the Service Dog: the first
+from-scratch quadruped rig in this project (art/night_nurse/blender_src/nn_rig.py is the sibling
+convention for a monster with a locomotion rig; art/seal/blender_src/seal_rig.py is the sibling
+convention for authoring a non-human skeleton, but the seal never walks).
+
+Bone naming follows the human/night-nurse convention (dotted `.L`/`.R` suffixes) so
+`scripts/monsters/dog_rig.gd` and any tooling that already knows that convention keeps working.
+"""
+import math
+import bpy
+from mathutils import Vector, Matrix
+import dog_geometry as G
+
+# (name, head, tail, parent)
+SPINE = [
+    ('pelvis', tuple(G.RUMP), tuple(G.PELVIS), 'root'),
+    ('spine1', tuple(G.PELVIS), tuple(G.SPINE1), 'pelvis'),
+    ('chest', tuple(G.SPINE1), tuple(G.CHEST), 'spine1'),
+    ('neck1', tuple(G.CHEST), tuple(G.NECK1), 'chest'),
+    ('neck2', tuple(G.NECK1), tuple(G.NECK2), 'neck1'),
+    ('head', tuple(G.NECK2), tuple(G.HEAD_TIP), 'neck2'),
+    ('jaw', (G.HEAD.x, G.HEAD.y - 0.028, G.HEAD.z), tuple(G.JAW_TIP), 'head'),
+]
+
+TAIL = [
+    ('tail1', tuple(G.TAIL[0]), tuple(G.TAIL[1]), 'pelvis'),
+    ('tail2', tuple(G.TAIL[1]), tuple(G.TAIL[2]), 'tail1'),
+    ('tail3', tuple(G.TAIL[2]), tuple(G.TAIL[3]), 'tail2'),
+    ('tail4', tuple(G.TAIL[3]), tuple(G.TAIL[4]), 'tail3'),
+]
+
+EARS = [
+    ('ear.L', tuple(G.EAR_BASE), tuple(G.EAR_TIP), 'head'),
+]
+
+
+def leg_bones_front(side, shoulder, elbow, wrist, paw, toe):
+    return [
+        ('upperarm.' + side, tuple(shoulder), tuple(elbow), 'chest'),
+        ('forearm.' + side, tuple(elbow), tuple(wrist), 'upperarm.' + side),
+        ('pastern.' + side, tuple(wrist), tuple(paw), 'forearm.' + side),
+        ('toe.' + side, tuple(paw), tuple(toe), 'pastern.' + side),
+    ]
+
+
+def leg_bones_hind(side, hip, knee, hock, paw, toe):
+    return [
+        ('thigh.' + side, tuple(hip), tuple(knee), 'pelvis'),
+        ('shin.' + side, tuple(knee), tuple(hock), 'thigh.' + side),
+        ('hock.' + side, tuple(hock), tuple(paw), 'shin.' + side),
+        ('htoe.' + side, tuple(paw), tuple(toe), 'hock.' + side),
+    ]
+
+
+def all_defs():
+    defs = list(SPINE) + list(TAIL) + list(EARS)
+    defs.append(('ear.R', tuple(G.mirror(G.EAR_BASE)), tuple(G.mirror(G.EAR_TIP)), 'head'))
+    defs += leg_bones_front('L', G.SHOULDER, G.ELBOW, G.WRIST, G.FPAW, G.FTOE)
+    defs += leg_bones_front('R', G.mirror(G.SHOULDER), G.mirror(G.ELBOW), G.mirror(G.WRIST), G.mirror(G.FPAW), G.mirror(G.FTOE))
+    defs += leg_bones_hind('L', G.HIP, G.KNEE, G.HOCK, G.HPAW, G.HTOE)
+    defs += leg_bones_hind('R', G.mirror(G.HIP), G.mirror(G.KNEE), G.mirror(G.HOCK), G.mirror(G.HPAW), G.mirror(G.HTOE))
+    return defs
+
+
+def build_armature(_joints=None):
+    arm_data = bpy.data.armatures.new('Dog_Rig')
+    arm = bpy.data.objects.new('ServiceDog_Rig', arm_data)
+    bpy.context.scene.collection.objects.link(arm)
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='EDIT')
+    eb = arm_data.edit_bones
+    root = eb.new('root')
+    root.head, root.tail = (0, 0, 0), (0, 0.15, 0)
+    root.use_deform = False
+    defs = all_defs()
+    for name, h, t, parent in defs:
+        b = eb.new(name)
+        b.head, b.tail = Vector(h), Vector(t)
+    for name, h, t, parent in defs:
+        b = eb[name]
+        b.parent = eb[parent]
+        b.use_connect = (Vector(h) - eb[parent].tail).length < 1e-4
+        # Blender is Z-up here (see dog_geometry.py): a bone is "vertical" when its length is
+        # mostly a change in Z (the legs), "horizontal" when it is mostly a change in Y (the spine).
+        vertical = abs(Vector(t).z - Vector(h).z) > 0.5 * (Vector(t) - Vector(h)).length
+        b.align_roll(Vector((0, -1, 0)) if vertical else Vector((0, 0, 1)))
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return arm
+
+
+def assign_weights(obj, part):
+    """Direct analytic weights from dog_geometry.Part.w -- no bone heat, so the sockets and paws
+    stay exactly on the bones they were authored against in every pose. Reuses the (empty) vertex
+    groups `skin`'s ARMATURE_NAME parenting already created one per deform bone: creating new ones
+    of the same name here would silently rename them to "name.001" and leave the Armature modifier
+    reading the original, empty group -- every deform bone would then move with no vertex following it."""
+    groups = {}
+    for i, wd in enumerate(part.w):
+        for bone, weight in wd.items():
+            if weight <= 1e-4:
+                continue
+            if bone not in groups:
+                groups[bone] = obj.vertex_groups.get(bone) or obj.vertex_groups.new(name=bone)
+            groups[bone].add([i], weight, 'REPLACE')
+
+
+def skin(obj, arm):
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    arm.select_set(True)
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.parent_set(type='ARMATURE_NAME')
+    mod = obj.modifiers.get('Armature')
+    if mod is None:
+        mod = obj.modifiers.new('Armature', 'ARMATURE')
+    mod.object = arm
+
+
+# ------------------------------------------------------------------ posing (see nn_rig.py Poser)
+class Poser:
+    def __init__(self, arm):
+        self.arm = arm
+        self.rest = {b.name: b.matrix_local.to_3x3() for b in arm.data.bones}
+
+    def rot(self, name, rots):
+        R = Matrix.Identity(3)
+        right = name.endswith('.R')
+        for ax, ang in rots:
+            if right and ax in ('X', 'Z'):
+                ang = -ang
+            R = Matrix.Rotation(ang, 3, ax) @ R
+        M = self.rest[name]
+        return (M.inverted() @ R @ M).to_quaternion()
+
+    def apply(self, pose, frame=None):
+        pbs = self.arm.pose.bones
+        for pb in pbs:
+            pb.rotation_mode = 'QUATERNION'
+            pb.rotation_quaternion = self.rot(pb.name, pose.get(pb.name, []))
+            if frame is not None:
+                pb.keyframe_insert('rotation_quaternion', frame=frame)
+        loc = pose.get('_pelvis_loc', Vector())
+        M = self.rest['pelvis']
+        pbs['pelvis'].location = M.inverted() @ Vector(loc)
+        if frame is not None:
+            pbs['pelvis'].keyframe_insert('location', frame=frame)
+
+
+def add(pose, bone, *rots):
+    pose.setdefault(bone, []).extend(rots)
+
+
+def lerp_pose(a, b, t):
+    """Blend two pose dicts (lists of (axis, angle) per bone) linearly by angle; used only for the
+    stand-up transition, where every source pose shares the same bones and axis order."""
+    out = {}
+    keys = set(a) | set(b)
+    for k in keys:
+        if k == '_pelvis_loc':
+            va = a.get(k, Vector())
+            vb = b.get(k, Vector())
+            out[k] = va.lerp(vb, t)
+            continue
+        ra = a.get(k, [])
+        rb = b.get(k, [])
+        n = max(len(ra), len(rb))
+        merged = []
+        for i in range(n):
+            ax = ra[i][0] if i < len(ra) else rb[i][0]
+            va = ra[i][1] if i < len(ra) else 0.0
+            vb = rb[i][1] if i < len(rb) else 0.0
+            merged.append((ax, va + (vb - va) * t))
+        out[k] = merged
+    return out
+
+
+# --------------------------------------------------------------------------- rest / quadruped poses
+def stand_pose():
+    """Alert quadruped stance: legs planted, spine level, head up. This is also frame 0 of every
+    quadruped clip and the reference the walk cycle oscillates around."""
+    p = {}
+    add(p, 'neck1', ('X', -0.05))
+    add(p, 'neck2', ('X', -0.20))
+    add(p, 'head', ('X', 0.05))
+    return p
+
+
+def idle_pose(f, n=150):
+    """Held stillness, then a slow, too-deliberate head tilt -- longer than a real dog would ever
+    hold a look (image ref 1: 'looming', unnervingly patient)."""
+    t = f / n
+    p = stand_pose()
+    hold = 0.55
+    if t < hold:
+        tilt = 0.0
+    else:
+        tilt = math.sin((t - hold) / (1.0 - hold) * math.pi)
+    add(p, 'neck2', ('Z', 0.10 * tilt))
+    add(p, 'head', ('Z', 0.22 * tilt), ('X', 0.05 * tilt))
+    add(p, 'ear.L', ('X', -0.08 * tilt))
+    add(p, 'ear.R', ('X', 0.05 * tilt))
+    # An almost-imperceptible sway, like weight shifting on locked legs -- not a breath.
+    sway = math.sin(t * G.TAU) * 0.008
+    add(p, 'spine1', ('Z', sway))
+    add(p, 'chest', ('Z', -sway * 0.6))
+    p['_pelvis_loc'] = Vector((0, sway * 0.01, 0))
+    return p
+
+
+def walk_pose(f, n=48):
+    """A quadruped walk cycle: diagonal-ish sighthound gait (front/hind roughly opposite phase),
+    long low strides on the exaggerated legs."""
+    ph = f / n * G.TAU
+    p = stand_pose()
+    add(p, 'spine1', ('X', 0.03 * math.sin(ph * 2)))
+    add(p, 'chest', ('X', -0.02 * math.sin(ph * 2)))
+    bob = -0.02 * (1.0 - math.cos(ph * 2))
+    p['_pelvis_loc'] = Vector((0, bob, 0))
+    front = [('L', 0.0), ('R', math.pi)]
+    hind = [('L', math.pi * 0.5), ('R', math.pi * 1.5)]
+    for side, offset in front:
+        s = math.sin(ph + offset)
+        swing = max(0.0, s)
+        stance = max(0.0, -s)
+        add(p, 'upperarm.' + side, ('X', 0.55 * s))
+        add(p, 'forearm.' + side, ('X', -0.35 - 0.55 * swing))
+        add(p, 'pastern.' + side, ('X', 0.15 + 0.35 * swing))
+        add(p, 'toe.' + side, ('X', -0.25 * swing))
+    for side, offset in hind:
+        s = math.sin(ph + offset)
+        swing = max(0.0, s)
+        add(p, 'thigh.' + side, ('X', 0.5 * s))
+        add(p, 'shin.' + side, ('X', -0.30 - 0.6 * swing))
+        add(p, 'hock.' + side, ('X', 0.30 + 0.45 * swing))
+        add(p, 'htoe.' + side, ('X', -0.20 * swing))
+    add(p, 'tail1', ('X', 0.05 * math.sin(ph)), ('Z', 0.10 * math.sin(ph * 2)))
+    add(p, 'tail2', ('Z', 0.10 * math.sin(ph * 2 + 0.4)))
+    add(p, 'tail3', ('Z', 0.10 * math.sin(ph * 2 + 0.8)))
+    add(p, 'head', ('Z', 0.03 * math.sin(ph)))
+    return p
+
+
+def place_pose(f, n=60):
+    """Head lowers, mouth opens, something is set down at the ground (a quadruped clip; not
+    cyclic). Peaks a little past halfway and holds briefly before rising back."""
+    t = f / n
+    lower = G.smooth01(t / 0.55) if t < 0.55 else 1.0 - G.smooth01((t - 0.75) / 0.25)
+    lower = max(0.0, min(1.0, lower))
+    p = stand_pose()
+    add(p, 'neck1', ('X', 0.55 * lower))
+    add(p, 'neck2', ('X', 0.75 * lower))
+    add(p, 'head', ('X', 0.35 * lower))
+    add(p, 'jaw', ('X', -0.55 * lower))
+    add(p, 'thigh.L', ('X', 0.06 * lower))
+    add(p, 'thigh.R', ('X', 0.06 * lower))
+    p['_pelvis_loc'] = Vector((0, -0.02 * lower, 0))
+    return p
+
+
+def growl_pose(f, n=24):
+    """Short, subtle: ears pin, lip curls (jaw parts a little, head lowers a hair), a low
+    almost-inaudible-looking tremor. Triggerable on demand, does not need to be long."""
+    t = f / n
+    k = math.sin(t * math.pi)
+    p = stand_pose()
+    add(p, 'neck1', ('X', 0.12 * k))
+    add(p, 'neck2', ('X', 0.10 * k))
+    add(p, 'head', ('X', -0.05 * k))
+    add(p, 'jaw', ('X', -0.18 * k))
+    add(p, 'ear.L', ('X', -0.30 * k), ('Z', -0.10 * k))
+    add(p, 'ear.R', ('X', 0.20 * k), ('Z', 0.10 * k))
+    tremor = math.sin(t * G.TAU * 6) * 0.01 * k
+    add(p, 'chest', ('X', tremor))
+    return p
+
+
+def bite_pose(f, n=18):
+    """A fast lunging bite: head snaps forward and down, jaw slams shut, weight drives through
+    the front legs. Not cyclic."""
+    t = f / n
+    strike = G.smooth01(t / 0.35) if t < 0.35 else max(0.0, 1.0 - G.smooth01((t - 0.35) / 0.25))
+    settle = G.smooth01((t - 0.55) / 0.45) if t > 0.55 else 0.0
+    p = stand_pose()
+    add(p, 'neck1', ('X', 0.35 * strike + 0.05 * settle))
+    add(p, 'neck2', ('X', 0.55 * strike))
+    add(p, 'head', ('X', 0.25 * strike))
+    jaw_open = max(0.0, strike - settle)
+    add(p, 'jaw', ('X', -0.9 * jaw_open + 0.1 * settle))
+    add(p, 'upperarm.L', ('X', 0.25 * strike))
+    add(p, 'upperarm.R', ('X', 0.25 * strike))
+    p['_pelvis_loc'] = Vector((0, -0.01 * strike, 0.05 * strike))
+    return p
+
+
+# --------------------------------------------------------------------------- biped poses
+def biped_stand_pose():
+    """Reared onto the hind legs: hips pitched up under the spine, the hind legs straight and
+    under the body for support, the front legs folded up against the chest, the tail out for
+    balance. The end pose of StandUp and the rest pose of Run."""
+    p = {}
+    add(p, 'pelvis', ('X', 1.55))
+    add(p, 'spine1', ('X', 0.10))
+    add(p, 'chest', ('X', 0.08))
+    add(p, 'neck1', ('X', -0.15))
+    add(p, 'neck2', ('X', -0.10))
+    add(p, 'head', ('X', 0.10))
+    for side in ('L', 'R'):
+        add(p, 'thigh.' + side, ('X', 1.50))
+        add(p, 'shin.' + side, ('X', -0.10))
+        add(p, 'hock.' + side, ('X', 0.35))
+        add(p, 'htoe.' + side, ('X', -0.10))
+        # Front legs fold up against the chest like a begging dog -- the strangest single pose
+        # in the set; flagged in the README as the part most worth a second pass.
+        add(p, 'upperarm.' + side, ('X', 1.65), ('Z', 0.15 if side == 'L' else -0.15))
+        add(p, 'forearm.' + side, ('X', -2.15))
+        add(p, 'pastern.' + side, ('X', 0.55))
+    add(p, 'tail1', ('X', -0.35))
+    add(p, 'tail2', ('X', -0.25))
+    p['_pelvis_loc'] = Vector((0, 0.30, -0.08))
+    return p
+
+
+def standup_pose(f, n=50):
+    """The stand-up transition: quadruped -> biped. A first pass at a novel problem for this
+    project (nothing else here blends quadruped and biped poses) -- see README 'Known problems'."""
+    t = G.smooth01(f / n)
+    return lerp_pose(stand_pose(), biped_stand_pose(), t)
+
+
+def run_pose(f, n=30):
+    """Biped chase run, once reared up: big alternating strides, arms (the folded front legs)
+    pumping a little, torso pitched forward."""
+    ph = f / n * G.TAU
+    base = biped_stand_pose()
+    p = {k: list(v) for k, v in base.items() if k != '_pelvis_loc'}
+    add(p, 'pelvis', ('X', -1.40))
+    add(p, 'spine1', ('X', 0.28))
+    add(p, 'chest', ('X', 0.10))
+    add(p, 'neck1', ('X', -0.30))
+    add(p, 'head', ('X', 0.10))
+    bob = abs(math.sin(ph)) * 0.05
+    p['_pelvis_loc'] = base['_pelvis_loc'] + Vector((0, bob - 0.03, 0))
+    for side, off in (('L', 0.0), ('R', math.pi)):
+        s = math.sin(ph + off)
+        add(p, 'thigh.' + side, ('X', 1.10 + 0.75 * s))
+        add(p, 'shin.' + side, ('X', -0.20 - 0.9 * max(0.0, -s)))
+        add(p, 'hock.' + side, ('X', 0.20 + 0.5 * max(0.0, s)))
+        add(p, 'upperarm.' + side, ('X', 1.55 - 0.35 * s))
+        add(p, 'forearm.' + side, ('X', -2.0 + 0.25 * s))
+    add(p, 'tail1', ('X', -0.30), ('Z', 0.15 * math.sin(ph)))
+    return p
+
+
+def build_actions(arm):
+    poser = Poser(arm)
+
+    def act(name, n, fn, cyclic=True):
+        a = bpy.data.actions.new(name)
+        a.use_fake_user = True
+        arm.animation_data_create()
+        arm.animation_data.action = a
+        for f in range(n + 1 if cyclic else n):
+            poser.apply(fn(f), frame=f)
+        try:
+            a.frame_range = (0, n)
+            a.use_frame_range = True
+            a.use_cyclic = cyclic
+        except Exception:
+            pass
+        return a
+
+    act('Idle', 150, idle_pose, cyclic=True)
+    act('Walk', 48, walk_pose, cyclic=True)
+    act('PlaceItem', 60, place_pose, cyclic=False)
+    act('Growl', 24, growl_pose, cyclic=False)
+    act('StandUp', 50, standup_pose, cyclic=False)
+    act('Run', 30, run_pose, cyclic=True)
+    act('Bite', 18, bite_pose, cyclic=False)
+    arm.animation_data.action = bpy.data.actions['Idle']
+    return poser

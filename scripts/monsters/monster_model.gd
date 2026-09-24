@@ -12,6 +12,7 @@ const NurseRig := preload("res://scripts/monsters/night_nurse_rig.gd")
 const HiveRig := preload("res://scripts/monsters/hive_rig.gd")
 const SonoRig := preload("res://scripts/monsters/sonographer_rig.gd")
 const OnlookerRig := preload("res://scripts/monsters/onlooker_rig.gd")
+const DogRig := preload("res://scripts/monsters/dog_rig.gd")
 
 const RIG_KEY := "patient/human"
 const LOOPING := ["idle", "walk", "sprint"]
@@ -29,6 +30,8 @@ var hive = null
 ## The Sonographer's model: its pose modifier and its look interface (sonographer_rig.gd), null for
 ## every other look. It is `shaper` too.
 var sono = null
+## The Service Dog's model: its pose modifier (dog_rig.gd), null for every other look.
+var dog = null
 ## Movable ears: [{node: Node3D pivot on the head, side: +1 left / -1 right, rest: outward radians}]
 var ears: Array = []
 var _ear_listen := 0.0
@@ -50,6 +53,14 @@ func setup(monster_kind: String) -> void:
 		play("idle")
 		return
 	if kind == "sonographer" and SonoRig.build(self):
+		play("idle")
+		return
+	# ART: the Service Dog's own Blender model and quadruped rig (art/service_dog/, dog_rig.gd).
+	# service-dog-brain builds the brain/state-machine side on its own branch against whatever
+	# placeholder body it needs meanwhile; this case only takes over once both land and the real
+	# GLB (monster/service_dog) exists, exactly like the Nurse/Hive/Sonographer cases above.
+	if kind == "service_dog" and DogRig.build(self):
+		dog = skeleton.get_node("DogPoser")
 		play("idle")
 		return
 	# POCKETS 2 phase 6: primitives, no skeleton and no clip, so no play() either -- it never takes
@@ -185,6 +196,8 @@ func eye_offset() -> Vector3:
 		return hive.eye_offset
 	if sono != null:
 		return sono.eye_offset
+	if dog != null:
+		return Vector3(0.0, 0.0, 0.16)   # the head bone sits between the sockets; +Z is its snout
 	return Vector3(0.0, 0.13, 0.1)
 
 
@@ -226,6 +239,8 @@ func _anim_key() -> String:
 		return HiveRig.KEY
 	if sono != null:
 		return SonoRig.KEY
+	if dog != null:
+		return DogRig.KEY
 	return RIG_KEY
 
 
