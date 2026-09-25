@@ -9,9 +9,10 @@ underneath all of that, found by a real cross-branch integration test (see "Revi
 a thirteenth, styling pass once Zach approved the base model (baked-texture grime/blood detail,
 a real two-layer crystal-ball orb -- see "Revision 13" below); a fourteenth pass fixing
 Revision 13's grime/blood texture, which turned out to be genuinely invisible on screen (see
-"Revision 14" below); and a fifteenth pass pushing the blood coverage much further, per Zach's
+"Revision 14" below); a fifteenth pass pushing the blood coverage much further, per Zach's
 direct ask for the dog to read as genuinely covered, not lightly stained (see "Revision 15"
-below).**
+below); and a sixteenth pass pulling that back to discrete splatters once Revision 15 turned out
+to be "WAYYYYY too much" (see "Revision 16" below).**
 The model is `assets/models/monsters/service_dog/service_dog.glb` (asset key
 `monster/service_dog`; skinned mesh, 2 objects, 6 materials, 2 baked textures, 11 clips), registered
 in `scripts/assets.gd`. `scripts/monsters/dog_rig.gd` is its `SkeletonModifier3D` (head-tracking,
@@ -635,6 +636,40 @@ Confirmed on a fresh render, not the texture atlas: `dog_idle.png` and `dog_vest
 heavily bloodied at a glance -- the coat, legs and vest are all a deep, saturated red-brown, not a
 subtle tint -- and `dog_head_closeup.png` shows the skull/snout carrying the same coverage as the
 body (previously pure white with nothing on it).
+
+Validated with the same full loop: rebuild, reimport, `tools/dog_lab.tscn` (structure check +
+`--shots`), `tools/monster_lab.tscn`'s 179-check regression (0 failed).
+
+## Revision 16 (2026-09-25, Revision 15 overshot: splatters, not a full-body soak)
+
+Zach on Revision 15: "WAYYYYY too much." He wants distinct blood splatters/drips with clearly clean
+coat/vest/skull visible everywhere else, not full coverage -- and specifically asked for this to come
+from making the mask itself sharper/more discrete, not just multiplying the same wash down by a
+uniform factor (which would just be a fainter version of the same problem).
+
+- Added a `blood_power` knob to `_grimy_material` (the exponent the blood noise is raised to before
+  masking): Revision 15 had dropped it to 1.7 for maximum coverage; Revision 16 raises it back up to
+  4.0, so the clean-to-bloody transition is sharp and only the noise's own high spots read as blood
+  at all, instead of most of its range doing so.
+- Added a `blood_scale` override per material (the coat/vest's own default lowered to 1.3, well below
+  Revision 14/15's 2.2): a lower frequency makes each surviving mark a recognisable splatter-sized
+  blob instead of an even, fine speckle.
+- `blood_amount` cut to well under half of Revision 15's levels across `Dog_Coat` (0.55 -> 0.45),
+  `Dog_Vest_Clean` (1.1 -> 0.65) and `Dog_Vest_Worn` (1.0 -> 0.6).
+- **The skull needed the opposite adjustment on `blood_amount` despite the same sharper `blood_power`**
+  -- turning the mask more discrete (a good thing for the coat/vest) made the skull's already-touchy
+  small-area problem (see Revision 14/15) worse, not better: at the coat/vest-appropriate amount, the
+  sharpened mask cleared threshold NOWHERE on the skull's small footprint, reading as plain white
+  again. Fixed empirically by pushing `blood_amount` up to 1.6 (well above the coat/vest's ~0.5-0.65)
+  while keeping `blood_scale` at a separate, higher 4.5 (down a little from Revision 15's 7.0, for a
+  slightly bigger/more recognisable mark, but still well above the coat/vest's 1.3 so the skull's own
+  small area still has room to vary instead of landing in one uniform noise cell).
+
+Confirmed on a fresh render, not the texture atlas: `dog_head_closeup.png` shows a single, clearly
+bounded dark-red streak along the jaw with the rest of the snout and skull tip still pale and clean;
+`dog_leg_junction_hind_left.png` shows a distinct red splatter at the shoulder/vest seam with clean
+coat visible on both sides of it; `dog_idle.png` and `dog_vest_closeup.png` show the dog mostly its
+normal coat/vest colour at a glance, with a few clearly readable blood marks, not an even tint.
 
 Validated with the same full loop: rebuild, reimport, `tools/dog_lab.tscn` (structure check +
 `--shots`), `tools/monster_lab.tscn`'s 179-check regression (0 failed).
