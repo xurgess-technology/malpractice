@@ -138,6 +138,11 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	var fp_torch: Node3D = preload("res://scripts/hands/fp_arms.gd").make_torch()
 	shelf.add_child(fp_torch)
 	fp_torch.position = Vector3(x + 0.4, 0.3, 0.3)
+	# FLASHLIGHT POSE: the torch a teammate's body holds, lit (its lens, flare and shaft shaders).
+	var tp_torch = preload("res://scripts/hands/body_torch.gd").new()
+	shelf.add_child(tp_torch)
+	tp_torch.position = Vector3(x + 0.6, 0.3, 0.3)
+	tp_torch.set_state(1, false)
 	_inert(shelf)
 	_report(progress, "hands")
 	# Draw this first part for a few frames. At launch these are the printout's still "connecting"

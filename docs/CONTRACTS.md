@@ -2330,6 +2330,22 @@ p.carry_cam.front_view()                     # swung round facing the player: no
   A new rig is an entry in `RigMap.RIGS`. A body without a matching rig (the capsule placeholder, a
   dev dummy) keeps `HeldThirdPerson` at `BodyHands.FIXED_ATTACH`. The local player's body only
   animates while the carry camera shows it. The jab shows a syringe in the hand (both views).
+- **The torch in the body's hand (2026-09-24, FLASHLIGHT POSE)**: every rigged body holds a torch
+  (`body_hands.torch`, `scripts/hands/body_torch.gd`: fp_arms' torch model at 1.5x, its lens, a
+  billboard flare brightest when it points at you, and a faint additive shaft 2.4 m long). It is in
+  the LEFT hand (the right holds the selected stack and throws, jabs and saws), the right while the
+  left arm wraps a carried body. `Player.torch_state()` is 0 off, 1 lit, 2 the scanner (from
+  `flashlight_on` and `scan_holding`, both already replicated: nothing new on the wire). Lit or
+  scanning, the arm rises over the hold pose to point along the look (`BodyHands.torch_aim(pitch,
+  side)`, pitch clamped to +-1.1 rad) and the torch turns from the forearm to the exact look direction,
+  so the beam lies on the crosshair's line; off, it hangs along the forearm. Lens: dark / warm / the
+  scanner's blue. Hidden (light back at the head) while downed, prone, diving, carried, on a table,
+  stunned or in the Nurse's grab. **Everyone else's copy of a player** moves that player's
+  `SpotLight3D` onto the lens every skeleton update (`_lights_follow_head`), and hides it while they
+  scan (the laser in `scan_fx.gd` already starts at `p.flashlight`, so it now leaves the torch). **Your
+  own** light never moves: first person and the shoulder cameras keep it at the head; your own body's
+  torch (mirror, shoulder camera) shows no shaft, so there is only ever one beam. Gameplay
+  (`lights_point`, the Lurker, the Nurse) still reads the head. Review: `--setup=flashlight_pair`.
 - **The human rig (2026-09-14, HUMAN HOOK)**: `RigMap.HUMAN` (picked first by `detect()`) is the Blender
   surgeon: `generic: true`, `bones` torso `chest`, arms `upperarm.*`, plus `fore` (forearms), `hand_bone`
   (`hand.*`, where `HandR`/`HandL` and the grip sockets go, palm 0.055 m along the bone) and

@@ -316,7 +316,7 @@ func _boot_setup_join(port: int) -> void:
 	# Let the host finish staging (it places its own player last thing) before we copy where it stands.
 	for i in 90:
 		await get_tree().process_frame
-	ReviewSetups.place_beside(game, host_player)
+	await ReviewSetups.place_joiner(ReviewSetups.requested(), game, host_player)
 	# Proof, in the log, that this is the host's world and not a lookalike of it: the host's player
 	# is a node here at the spot the host's own log says the setup put it, and the case the host
 	# staged is on this machine's table too. Two windows that look right but are in separate worlds

@@ -125,6 +125,12 @@ const SETUPS := {
 	# at your feet. The vats have always been ordinary bulky items; their bench's collider used to
 	# bury them, so E never saw them at all.
 	"vats": {"seed": 4242, "stage": "_vats"},
+	# FLASHLIGHT POSE (2026-09-24): a teammate holding their torch, the beam coming out of it. With
+	# `-Count 2` the onlooker window stands in front of the host, facing it, its own torch off; the host
+	# runs a demo loop (lit and sweeping, then the blue scanner, then off) until anyone touches the
+	# host window. Solo, you watch Dr. Botsworth do the same loop. `--shots` (onlooker) saves a run of
+	# screenshots to tools/flashlight_shots/.
+	"flashlight_pair": {"seed": 4242, "stage": "_flashlight_pair", "join": "_flashlight_pair_join"},
 }
 
 
@@ -244,6 +250,16 @@ static func place_beside(game: Game, other) -> void:
 	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
 	var pos: Vector3 = other.global_position + right * 1.1 - forward * 0.6
 	place(game, pos, other.global_position + forward * 2.5 + Vector3.UP * 1.2)
+
+
+## A joining co-op review window finds its spot: the setup's own `join` function if it has one
+## (called with the host's player), else beside the host (place_beside).
+static func place_joiner(setup: String, game: Game, host_player) -> void:
+	var f := String((SETUPS.get(setup, {}) as Dictionary).get("join", ""))
+	if f != "":
+		await Callable(ReviewSetups, f).call(game, host_player)
+	else:
+		place_beside(game, host_player)
 
 
 ## The horizontal direction (of the four axes) from `from` with the most room, so a spot beside a wall
@@ -1379,3 +1395,177 @@ static func _bleed(game: Game) -> void:
 			break
 	place(game, spot, look)
 	print("[review] bleed: standing at %v, %.1f m from it" % [spot, spot.distance_to(at)])
+
+
+# ---------------------------------------------------------------------------
+# FLASHLIGHT POSE (2026-09-24)
+
+## How far in front of the host the onlooker stands, and how far off to one side: about 50 degrees
+## off the host's line, so the raised arm reads side on and the sweeping beam swings past you.
+const TORCH_WATCH_AHEAD := 2.4
+const TORCH_WATCH_SIDE := 2.6
+
+
+## Somewhere with room ahead: the host faces down it. Solo, you take the onlooker's spot and Dr.
+## Botsworth the host's. Either way Dr. Botsworth stands a step to the host's left running the demo, so
+## there is always a teammate's torch to look at; the host runs it too until its window is touched.
+static func _flashlight_pair(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("god", {"on": true})
+	game.dev.request("monsters_off", {"on": true})
+	game._clear_monsters()
+	await tree.physics_frame
+	var base: Vector3 = game._floor_at(game.clock_pos())
+	var out := open_direction(game, base + Vector3.UP * 1.2, 8.0)
+	var side := out.cross(Vector3.UP).normalized()   # the host's right
+	var coop := role() == "host"
+	var host_at: Vector3 = base
+	var bot_at: Vector3 = game._floor_at(base - side * 1.4 + out * 0.3)
+	clear_hands(game)
+	var bid: int = game.dev.spawn_bot("bot", p, "Dr. Botsworth", bot_at)
+	for i in 4:
+		await tree.physics_frame
+	var bot = game.players.get(bid)
+	if bot != null and is_instance_valid(bot):
+		game.dev.brains.erase(bid)   # no orders, no wandering: it stands and holds its torch
+		bot.teleport(bot_at)
+		# A saw in the right hand, so the torch in the left is seen beside something held.
+		bot.take_into("bone_saw", 1, 0)
+	var yaw := atan2(-out.x, -out.z)
+	if coop:
+		place(game, host_at, host_at + out * 4.0 + Vector3.UP * 1.5)
+	else:
+		# Solo: you are the onlooker, in front of Dr. Botsworth, looking back at him.
+		var watch: Vector3 = game._floor_at(bot_at + out * TORCH_WATCH_AHEAD + side * TORCH_WATCH_SIDE)
+		place(game, watch, bot_at + Vector3.UP * 1.25)
+		p.set_flashlight(false)
+	var demo := TorchDemo.new()
+	demo.name = "ReviewTorchDemo"
+	demo.host = p if coop else null
+	demo.bot = bot
+	demo.yaw = yaw
+	game.add_child(demo)
+	if coop and OS.get_cmdline_user_args().has("--shots"):
+		_torch_host_shots(game)
+	game.say("Your teammate holds a torch now: the beam comes out of it. Lit, blue while scanning (R), dark when off (F).", 10.0)
+	print("[review] flashlight_pair: host at %v facing %v, Dr. Botsworth (%d) at %v, %s" % [
+			host_at, out, bid, bot_at, "co-op" if coop else "solo"])
+
+
+## Smoke look, the host's own view: 15 shots in its saved camera mode, then 15 in the other (first
+## person against the shoulder camera), and the saved mode put back. Your own torch must still light
+## your own view, and your own body's torch must not throw a second beam.
+static func _torch_host_shots(game: Game) -> void:
+	var tree := game.get_tree()
+	var dir := ProjectSettings.globalize_path("res://tools/flashlight_shots")
+	DirAccess.make_dir_recursive_absolute(dir)
+	var saved := String(Settings.get_value("camera"))
+	for i in 30:
+		if i == 15:
+			Settings.set_value("camera", "first_person" if saved != "first_person" else "shoulder")
+		await tree.create_timer(1.0).timeout
+		game.get_viewport().get_texture().get_image().save_png("%s/host_%02d.png" % [dir, i])
+	Settings.set_value("camera", saved)
+	print("[review] host shots done, camera back to %s" % saved)
+
+
+## The onlooker: in front of the host and a little to one side, facing it, with its own torch off so
+## what lights the host up is the host's own beam.
+static func _flashlight_pair_join(game: Game, host_player) -> void:
+	var tree := game.get_tree()
+	var me = game.local_player()
+	# The host's own placement lands a moment after the shift starts here: read where it faces after.
+	await tree.create_timer(2.5).timeout
+	var yaw: float = host_player.rotation.y
+	var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
+	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+	var hp: Vector3 = host_player.global_position
+	var chest := hp + Vector3.UP * 1.25
+	# The first spot, most side-on first, that is floor where it was asked for and sees the host.
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	var at: Vector3 = game._floor_at(hp + forward * 3.6 + right * 1.1)
+	for o in [Vector2(TORCH_WATCH_AHEAD, TORCH_WATCH_SIDE), Vector2(TORCH_WATCH_AHEAD, -TORCH_WATCH_SIDE),
+			Vector2(3.0, 1.7), Vector2(3.0, -1.7), Vector2(3.6, 1.1), Vector2(3.6, -1.1), Vector2(3.0, 0.6)]:
+		var want: Vector3 = hp + forward * o.x + right * o.y
+		var got: Vector3 = game._floor_at(want)
+		if absf(got.y - hp.y) > 0.3:
+			continue   # on top of something, or no floor there
+		# Both ways, so a spot inside a wall (where a ray starting in it sees nothing) is not taken.
+		var eye: Vector3 = got + Vector3.UP * 1.6
+		var q := PhysicsRayQueryParameters3D.create(eye, chest)
+		q.collision_mask = C.L_WORLD
+		var back := PhysicsRayQueryParameters3D.create(chest, eye)
+		back.collision_mask = C.L_WORLD
+		if space.intersect_ray(q).is_empty() and space.intersect_ray(back).is_empty():
+			at = got
+			break
+	place(game, at, chest)
+	me.set_flashlight(false)
+	if not OS.get_cmdline_user_args().has("--shots"):
+		return
+	# Smoke look: a screenshot a second through two whole demo loops, from this (the other player's) camera.
+	var dir := ProjectSettings.globalize_path("res://tools/flashlight_shots")
+	DirAccess.make_dir_recursive_absolute(dir)
+	for i in 30:
+		await tree.create_timer(1.0).timeout
+		var img := game.get_viewport().get_texture().get_image()
+		var path := "%s/pair_%02d.png" % [dir, i]
+		img.save_png(path)
+		var fl = host_player.flashlight
+		print("[review] shot %s: host torch state %d, its light %s at %v (head %v)" % [path.get_file(),
+				int(host_player.torch_state()), "on" if fl.visible else "off", fl.global_position, host_player.head.global_position])
+
+
+## The demo loop (host side): held still, lit and straight ahead for HOLD s (so the onlooker can read
+## which way the host faces), then round and round: lit and sweeping the beam about, the scanner, off.
+## Drives Dr. Botsworth always, and the host's own player until anything is pressed in the host window.
+class TorchDemo extends Node:
+	const HOLD := 8.0
+	const LIT := 6.0
+	const SCAN := 3.0
+	const OFF := 2.5
+	var host = null
+	var bot = null
+	var yaw := 0.0
+	var t := 0.0
+
+	func _process(delta: float) -> void:
+		t += delta
+		var run := maxf(0.0, t - HOLD)
+		var phase := fmod(run, LIT + SCAN + OFF)
+		var state := 1
+		if run > 0.0 and phase >= LIT:
+			state = 2 if phase < LIT + SCAN else 0
+		var dyaw := sin(run * 0.8) * 0.5
+		var pitch := sin(run * 0.55) * 0.35
+		if host != null and is_instance_valid(host):
+			host._yaw = yaw + dyaw
+			host._pitch = pitch
+			if host.flashlight_on != (state != 0):
+				host.set_flashlight(state != 0)
+			if state == 2 and not Input.is_action_pressed("scan"):
+				Input.action_press("scan")
+			elif state != 2 and Input.is_action_pressed("scan"):
+				Input.action_release("scan")
+		if bot != null and is_instance_valid(bot):
+			bot.bot_yaw = yaw - dyaw
+			bot.bot_pitch = -pitch
+			if bot.flashlight_on != (state != 0):
+				bot.set_flashlight(state != 0)
+			bot.bot_scan = state == 2
+
+	func _input(e: InputEvent) -> void:
+		if host == null:
+			return
+		if (e is InputEventKey or e is InputEventMouseButton) and e.is_pressed():
+			if Input.is_action_pressed("scan"):
+				Input.action_release("scan")
+			host = null   # someone is at the host window: it is theirs now
+			print("[review] flashlight_pair: the host window was touched; the demo stops driving it")
+

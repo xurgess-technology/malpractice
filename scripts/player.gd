@@ -2002,6 +2002,12 @@ func _process(_delta: float) -> void:
 		hands.update(_delta)
 	if body_hands != null:
 		body_hands.update(_delta)
+	# FLASHLIGHT POSE: a teammate's torch goes out while it is the scanner's laser, as your own does
+	# (scan_fx.gd dims yours); the laser itself comes out of their torch's lens.
+	if not view_local() and flashlight != null:
+		var lit := torch_state() == 1
+		if flashlight.visible != lit:
+			flashlight.visible = lit
 
 
 ## GRAFT HOOK (dev free camera, driving Dr. Botsworth): your own body is shown out in the world, on
@@ -2140,6 +2146,17 @@ static func _tp_scale(kind: String) -> float:
 func set_flashlight(on: bool) -> void:
 	flashlight_on = on
 	refresh_own_lights()
+
+
+## FLASHLIGHT POSE: what this surgeon's torch is doing, from state every machine already has
+## (flashlight_on and scan_holding are both replicated): off, lit, or the scanner's blue laser. The body
+## holds and aims it (scripts/hands/body_hands.gd, body_torch.gd).
+func torch_state() -> int:
+	if not alive or on_table:
+		return 0
+	if scan_holding:
+		return 2
+	return 1 if flashlight_on else 0
 
 
 ## GRAFT HOOK: every light this surgeon carries -- the torch, and the soft bubble in the head that
