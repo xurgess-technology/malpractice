@@ -34,6 +34,10 @@ const DRAG_HOLD := 1.0
 const DRAG_SPEED_K := 0.55
 ## Metres from the dragger's feet back to the middle of the dragged body.
 const DRAG_BEHIND := 1.15
+## OR GURNEY: a monster lying on the OR gurney has this `dragged_by`. Far below any peer id (dev
+## bots count down from -1). Pinned by monster_pin to the gurney, it thinks no more than a dragged
+## one does, and every machine knows it from the replicated `db`.
+const GURNEY_DRAGGER := -900000
 ## A teammate jabbed with anesthetic is out for this long.
 const JAB_KNOCKOUT := 8.0
 ## Half-angles of the hit cones around the aim.
@@ -577,6 +581,8 @@ func dragger_of(m: Node) -> Node:
 ## pin's -Z points at the dragger: the body lies along Z with its feet toward -Z (held by the ankles)
 ## and its head toward +Z. Not dragged: the monster's own transform.
 func monster_pin(m: Node) -> Transform3D:
+	if m != null and is_instance_valid(m) and int(m.get("dragged_by")) == GURNEY_DRAGGER and game.gurney != null:
+		return game.gurney.monster_pose()   # OR GURNEY: riding the gurney
 	var q := dragger_of(m)
 	if q == null:
 		return m.global_transform if m != null and is_instance_valid(m) and m.is_inside_tree() else Transform3D.IDENTITY
@@ -590,6 +596,8 @@ func can_drag(q: Node, m: Node, check_hands := true) -> bool:
 		return false
 	if not q.alive or q.downed or q.stun > 0.0 or q.carrying != 0 or q.carried_by != 0 or dragging(q) >= 0 or q.operating:
 		return false
+	if q.pushing_gurney() or int(m.get("dragged_by")) == GURNEY_DRAGGER:
+		return false   # OR GURNEY: hands on the handle, or it is lying on the gurney
 	if not is_sedated(m) or dragger_of(m) != null:
 		return false
 	return not check_hands or q.hands_empty()
@@ -614,6 +622,9 @@ func drag_aim(p: Node, node: Node) -> Array:
 	var id := ""
 	if node != null and node.has_meta("interact_id"):
 		id = String(node.get_meta("interact_id"))
+	# OR GURNEY: onto the parked, empty gurney.
+	if id == "gurney" and game.gurney != null and game.gurney.pusher == 0 and not game.gurney.has_rider():
+		return [id, "Put the %s on the gurney" % mname]
 	var ti := table_index_for(id)
 	if ti >= 0 and m != null and is_instance_valid(m) and Procedures.is_monster(String(m.kind)):
 		var why := strap_problem(ti)
@@ -661,6 +672,11 @@ func start_drag(q: Node, m: Node) -> void:
 func dragger_pressed_interact(q: Node, aim: String) -> void:
 	if not game.is_host() or dragging(q) < 0:
 		return
+	if aim == "gurney" and game.gurney != null:
+		var gn: Node = game.find_interactable(aim)
+		if gn != null and game._within_reach(q, gn) and game.gurney.pusher == 0 and not game.gurney.has_rider():
+			game.gurney.take_from_dragger(q)   # OR GURNEY
+			return
 	var ti := table_index_for(aim)
 	var m: Node = game.monsters.get(dragging(q))
 	if ti >= 0 and strap_problem(ti) == "" and m != null and is_instance_valid(m) and Procedures.is_monster(String(m.kind)):
@@ -680,6 +696,17 @@ func strap(q: Node, ti: int) -> int:
 	if m == null or not is_instance_valid(m) or not Procedures.is_monster(String(m.kind)):
 		q.dragging_monster = -1
 		return -1
+	var id := strap_monster(m, ti, q)
+	if id >= 0:
+		q.dragging_monster = -1
+	return id
+
+
+## Host: monster m goes onto patient table ti as its monster case (a drag or the OR gurney ends
+## here), strapped by q. -1 when the table would not take it.
+func strap_monster(m: Node, ti: int, q: Node) -> int:
+	if not game.is_host() or m == null or not is_instance_valid(m) or not Procedures.is_monster(String(m.kind)):
+		return -1
 	var s := lerpf(STRAP_SEDATION_MIN, 1.0, clampf(sedation_left(m) / SEDATE_SECONDS, 0.0, 1.0))
 	var kind := String(m.kind)
 	var id: int = game.add_case({"table": ti, "patient_id": kind, "ailment_id": "eye_extraction", "monster": true,
@@ -687,7 +714,6 @@ func strap(q: Node, ti: int) -> int:
 	if id < 0:
 		game.tell(q, "The table is taken.", 2.0)
 		return -1
-	q.dragging_monster = -1
 	if "dragged_by" in m:
 		m.dragged_by = 0
 	_remove_monster_quietly(m)
@@ -784,7 +810,7 @@ func _host_tick(delta: float) -> void:
 			_wake_drop(q, m)
 	# Monsters still marked as dragged by someone who let go or left.
 	for m in game.monsters.values():
-		if is_instance_valid(m) and "dragged_by" in m and int(m.dragged_by) != 0:
+		if is_instance_valid(m) and "dragged_by" in m and int(m.dragged_by) != 0 and int(m.dragged_by) != GURNEY_DRAGGER:
 			var q = game.players.get(int(m.dragged_by))
 			if q == null or not is_instance_valid(q) or dragging(q) != int(m.monster_id):
 				m.dragged_by = 0
@@ -837,7 +863,7 @@ func _tick_aims() -> void:
 			box.add_child(cs)
 			m.add_child(box)
 			_aims[id] = box
-		var on := is_sedated(m) and dragger_of(m) == null
+		var on := is_sedated(m) and dragger_of(m) == null and int(m.get("dragged_by")) != GURNEY_DRAGGER
 		box.collision_layer = C.L_INTERACT if on else 0
 
 

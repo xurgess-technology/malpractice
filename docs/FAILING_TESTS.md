@@ -329,7 +329,7 @@ The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\
 - **Run headless tests one at a time per checkout.** Parallel runs in the same directory segfault.
 - Test scenes, each prints `result=PASS` or `FAIL` at the end: `tools/*test.tscn` (carrycamtest,
   combattest, controlstest, databasetest, devtest, doortest,
-  downedtest, fogtest, handstest, inventorytest, looptest, orscreentest, pockettest, settingstest,
+  downedtest, fogtest, gurneytest, handstest, inventorytest, looptest, orscreentest, pockettest, settingstest,
   straptest) and
   `tools/monster_lab.tscn`
 - A bot plays a whole shift: `tools/playtest.tscn -- --god --seed=N`

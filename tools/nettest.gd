@@ -31,6 +31,10 @@ extends Node
 ##                    on different tables at the same time and each watches the other
 ##   downed           client 1 goes down and crawls; client 2 carries them to the player table and
 ##                    stitches them up; the host and both clients see each stage
+##   gurney           (OR GURNEY) client 2 goes down in the OR; client 1 takes the gurney's handle,
+##                    pushes it to them, loads them, turns it and puts them on a free table; the host
+##                    sees the pusher, the rider riding along and the stitches case; client 2 rides it
+##                    on its own machine, pinned to the gurney as it moves, and lands on the table
 ##   combat           sweep 3: client 1 kills a monster with the bone saw, shoves and jabs another,
 ##                    drags it and straps it to a free patient table; the host checks the case and
 ##                    client 2 watches the swings, the drag and the strapped case
@@ -170,6 +174,7 @@ func _run() -> void:
 		"economy": await _sc_economy()
 		"two_patients": await _sc_two_patients()
 		"downed": await _sc_downed()
+		"gurney": await _sc_gurney()   # OR GURNEY
 		"combat": await _sc_combat()
 		"monsters": await _sc_monsters()   # SWEEP 3 HOOK (monsters)
 		"onlooker": await _sc_onlooker()   # POCKETS 2 phase 6: a hop must JUMP on a client
@@ -1482,6 +1487,123 @@ func _sc_downed():
 	if not await _until(func(): return not target.downed and target.alive, 90.0, "the stitches to finish"):
 		return
 	await _finish_together("carried a downed teammate to the table and stitched them up")
+
+
+## OR GURNEY: client 2 goes down in the OR ahead of the parked gurney; client 1 takes the handle,
+## pushes it alongside them, loads them, turns it and puts them on a free table. The host and client
+## 2 each check what they saw: the pusher, the rider pinned to the moving gurney, the table.
+func _sc_gurney():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		game._clear_monsters()
+		var g = game.gurney
+		var b := Basis(Vector3.UP, float(g.park_yaw))
+		var c1: int = _peer_of(1)
+		var c2: int = _peer_of(2)
+		var p2 = game.players[c2]
+		# Ahead of the parked gurney's front end and a step to its side: it has to be brought there.
+		var lie_at: Vector3 = (g.park_pos as Vector3) + b * Vector3(1.0, 0.0, -3.3)
+		_send("stand", {"peer": c2, "pos": lie_at})
+		if not await _until(func(): return _count_msgs("standing") > 0, 30.0, "client 2 in place"):
+			return
+		await _wall_wait(0.5)
+		game.knock_down_player(p2, "test")
+		_send("gurney_go", {"pusher": c1, "rider": c2})
+		var seen := {"push": false, "ride": false, "follow": false, "moved": false, "from": Vector3.INF}
+		var watch := func():
+			if int(g.pusher) == c1:
+				seen.push = true
+			if p2.on_gurney and g.rides("player", c2):
+				seen.ride = true
+				if p2.global_position.distance_to(g.rider_player_pose().origin) < 0.3:
+					seen.follow = true
+				if seen.from == Vector3.INF:
+					seen.from = p2.global_position
+				elif p2.global_position.distance_to(seen.from) > 0.8:
+					seen.moved = true
+		if not await _do_until(watch, func(): return p2.on_table, 150.0, "client 1 to wheel client 2 onto a table"):
+			return
+		if not (seen.push and seen.ride and seen.follow and seen.moved):
+			return _end(false, "host saw push=%s ride=%s follow=%s moved=%s" % [str(seen.push), str(seen.ride), str(seen.follow), str(seen.moved)])
+		if game.player_surgery.patient() != p2 or p2.on_gurney or g.has_rider():
+			return _end(false, "after the table: patient %s, on_gurney %s, gurney rider %s" % [str(game.player_surgery.patient()), str(p2.on_gurney), g.rider_kind])
+		_say("client 1 pushed the gurney to client 2, loaded them and put them on table %d" % int(game.player_table.get("index", -1)))
+		await _finish_together("a downed client wheeled to the table on the gurney, seen by the host")
+		return
+	if not await _wait_shift_as_client():
+		return
+	var me := _me()
+	var g = game.gurney
+	if index == 2:
+		# The rider: down on my own machine, then on the gurney, pinned to it as it moves, then the table.
+		if not await _until(func(): return _count_msgs("stand") > 0, 60.0, "stand order"):
+			return
+		me.teleport(game._floor_at(_msgs("stand")[0].data.pos))
+		await _wall_wait(1.0)
+		_send("standing", {})
+		if not await _until(func(): return me.downed, 30.0, "going down"):
+			return
+		var seen := {"pusher": false, "ride": false, "pinned": true, "moved": false, "from": Vector3.INF, "view": false, "frames": 0}
+		var watch := func():
+			if int(g.pusher) != 0:
+				seen.pusher = true
+			if me.on_gurney:
+				seen.ride = true
+				seen.frames = int(seen.frames) + 1
+				var off: float = me.global_position.distance_to(g.rider_player_pose().origin)
+				if int(seen.frames) > 3 and off > 0.3:   # the first frames are the snapshot landing
+					seen.pinned = false
+					_say("off the gurney by %.2f m on riding frame %d" % [off, int(seen.frames)])
+				if absf(me.head.position.y - 0.28) < 0.05:
+					seen.view = true
+				if seen.from == Vector3.INF:
+					seen.from = me.global_position
+				elif me.global_position.distance_to(seen.from) > 0.8:
+					seen.moved = true
+		if not await _do_until(watch, func(): return me.on_table, 150.0, "riding the gurney to a table"):
+			return
+		if not (seen.pusher and seen.ride and seen.pinned and seen.moved and seen.view):
+			return _end(false, "the rider saw pusher=%s ride=%s pinned=%s moved=%s lying view=%s" % [str(seen.pusher), str(seen.ride), str(seen.pinned), str(seen.moved), str(seen.view)])
+		await _finish_together("rode the gurney on my own machine, pinned to it, onto the table")
+		return
+	# Client 1: the pusher.
+	if not await _until(func(): return _count_msgs("gurney_go") > 0, 60.0, "the go"):
+		return
+	var rider_id: int = _msgs("gurney_go")[0].data.rider
+	if not await _until(func(): return game.players.has(rider_id) and game.players[rider_id].downed, 20.0, "the teammate to be down"):
+		return
+	var rider = game.players[rider_id]
+	var grab := func(): _press_at(g.pose().origin + Vector3.UP * 0.6, "gurney")
+	if not await _do_until(grab, func(): return int(g.pusher) == me.peer_id, 40.0, "taking the gurney's handle"):
+		return
+	me.bot_aim_id = ""
+	await _wall_wait(0.3)
+	var push := func(): me.bot_move = Vector2(0, -1)
+	if not await _do_until(push, func(): return me.aim_prompt.begins_with("Load"), 30.0, "bringing the gurney alongside"):
+		return
+	me.bot_move = Vector2.ZERO
+	var press := func():
+		if me.aim_prompt.begins_with("Load") and Time.get_ticks_msec() >= _press_at_ms:
+			me.bot_press += 1
+			_press_at_ms = Time.get_ticks_msec() + 1000
+	if not await _do_until(press, func(): return rider.on_gurney, 30.0, "loading them"):
+		return
+	# Round toward the tables (north, -Z) and in to one.
+	me.bot_yaw = 0.0
+	await _wall_wait(1.5)
+	var in_to := func():
+		me.bot_move = Vector2(0, -1) if not me.aim_prompt.begins_with("Put") else Vector2.ZERO
+	if not await _do_until(in_to, func(): return me.aim_prompt.begins_with("Put"), 30.0, "reaching a free table"):
+		return
+	me.bot_move = Vector2.ZERO
+	var put := func():
+		if me.aim_prompt.begins_with("Put") and Time.get_ticks_msec() >= _press_at_ms:
+			me.bot_press += 1
+			_press_at_ms = Time.get_ticks_msec() + 1000
+	if not await _do_until(put, func(): return rider.on_table, 30.0, "putting them on the table"):
+		return
+	await _finish_together("pushed the gurney to a downed teammate and wheeled them onto a table")
 
 
 ## Combat (sweep 3): client 1 saws monster A to death, shoves and jabs monster B, drags B and straps
