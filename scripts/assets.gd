@@ -171,6 +171,24 @@ const MODELS := {
 		},
 		"note": "The Sonographer, made for Malpractice with Blender scripts (art/stylized). No third-party licence.",
 	},
+	# The Service Dog (2026-09-24): built in-house from Python in Blender (art/service_dog/), the
+	# first quadruped in the project. A borzoi pushed taller and gaunter, wearing a service-dog
+	# vest, feet at y = 0, facing +Z like every monster here. Flat materials (no baked texture
+	# atlas -- see art/service_dog/README.md). scripts/monsters/dog_rig.gd.
+	"monster/service_dog": {
+		"path": "res://assets/models/monsters/service_dog/service_dog.glb",
+		"scale": 1.0, "yaw": 180,
+		"anims": {
+			"idle": "Idle", "walk": "Walk", "run": "Run", "attack": "Bite",
+			"place": "PlaceItem", "growl": "Growl", "standup": "StandUp",
+			# Soul-drain sequence (2026-09-24 design change: the attack is now a dementor-style
+			# drain, not a chase/bite -- naming contract shared with service-dog-brain). Bite/Run
+			# above are kept for compatibility but no longer used for the attack.
+			"rear_up": "RearUp", "drain_idle": "DrainIdle",
+			"upright_walk": "UprightWalk", "drop_down": "DropDown",
+		},
+		"note": "Service Dog, made for Malpractice with Blender scripts (art/service_dog/blender_src). No third-party licence.",
+	},
 	# ---- patients ---------------------------------------------------------
 	# The seal patient (2026-09-14): built in-house from Python in Blender (art/seal/), authored in the
 	# PatientBody frame (nose -X, belly on y 0, its left +Z), so no fix-ups. 16k triangles, 20 bones,
