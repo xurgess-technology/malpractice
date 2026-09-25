@@ -206,6 +206,8 @@ func link_block(p, boot_grace := 0.0) -> String:
 		return "Not right now."
 	if p.carrying != 0 or p.dragging_monster >= 0:
 		return "Put them down first."
+	if p.has_method("pushing_gurney") and p.pushing_gurney():
+		return "Let go of the gurney first."
 	if p.operating:
 		return "Step back from the operation first."
 	return ""
@@ -384,7 +386,8 @@ func _host_tick() -> void:
 		look = REST_LOOK
 		return
 	if not powered or not p.alive or p.downed or p.carried_by != 0 or int(p.held_by) >= 0 or p.puppeting \
-			or p.carrying != 0 or p.dragging_monster >= 0:
+			or p.carrying != 0 or p.dragging_monster >= 0 \
+			or (p.has_method("pushing_gurney") and p.pushing_gurney()):
 		drop(p)
 
 

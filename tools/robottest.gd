@@ -9,7 +9,10 @@ extends Node
 ## out, E from the robot's camera starting Eyeball Extraction on a strapped Hive while the body stands
 ## across the OR (no walk-away), and then the point of it: strapped to the robot's table yourself,
 ## remoted in, grafting your own Hive eye, all four steps, with E never getting you up. Then a hit
-## throws you out, and a game over switches the robot off.
+## throws you out, and a game over switches the robot off. The OR gurney parks clear of the robot and
+## rolls right past it; P is refused while pushing it.
+
+const GurneyScript := preload("res://scripts/gurney/gurney.gd")
 
 var main: Node3D
 var game: Game
@@ -214,6 +217,9 @@ func _run() -> void:
 	game.get_up_from_table(me)
 	await _frames(3)
 
+	# ---- the OR gurney shares the room: parked clear of the robot, pushed right past it
+	await _gurney_checks(fx, tp)
+
 	# ---- a hit throws you out; a game over switches it off
 	robot.local_toggle()
 	await _frames(3)
@@ -225,6 +231,69 @@ func _run() -> void:
 	await _frames(2)
 	_check(not robot.powered, "a game over switches the robot off")
 	_check(alone.begins_with("Hold E") or alone == "" or alone.begins_with("!"), "(the table on its own offered '%s')" % alone)
+
+
+## OR GURNEY (scripts/gurney/gurney.gd) and the robot, both in the OR: the gurney's parking spot is
+## well clear of the robot's column, a pusher can roll the gurney along the aisle in front of the
+## tables right past the robot's head-end spot and back without sticking, the robot does not budge,
+## and P is refused while pushing (the body would freeze with the gurney on it).
+func _gurney_checks(fx: Node3D, tp: Vector3) -> void:
+	var g: Node = game.gurney
+	_check(g != null and g.node != null and is_instance_valid(g.node), "the OR has its gurney too")
+	if g == null or g.node == null:
+		return
+	var parked: Vector3 = g.pose().origin
+	var gap := Vector2(parked.x - fx.global_position.x, parked.z - fx.global_position.z).length()
+	# Half the gurney's length plus half the robot's footprint diagonal, and then some.
+	_check(gap > GurneyScript.BOX_SIZE.z * 0.5 + 0.6 + 1.0, "the gurney parks clear of the robot (%.1f m apart)" % gap)
+	var fx_at: Transform3D = fx.global_transform
+	_clear_hands()
+	var gp: Transform3D = g.pose()
+	me.teleport(game._floor_at(gp.origin + gp.basis * Vector3(0.9, 0, 2.2)))
+	me.bot_move = Vector2.ZERO
+	me.bot_aim_id = "gurney"
+	await _frames(3)
+	me.bot_press += 1
+	await _frames(3)
+	me.bot_aim_id = ""
+	_check(me.pushing_gurney(), "took the gurney's handle")
+	if not me.pushing_gurney():
+		return
+	_check(robot.link_block(me).contains("gurney"), "P is refused while pushing ('%s')" % robot.link_block(me))
+	robot.local_toggle()
+	await _frames(3)
+	_check(not robot.local_linked(), "and P does not remote in")
+	# The aisle in front of the tables, heading west (-X) toward the robot's corner: the gurney's
+	# middle starts past table 0's foot, 1.65 m out from the tables' centre line.
+	var lane_z: float = tp.z + 1.65
+	var yaw := PI / 2.0
+	var start := Vector3(tp.x + 2.5 + GurneyScript.HANDLE_BACK, 0.0, lane_z)
+	me.teleport(game._floor_at(start))
+	me._yaw = yaw
+	me.rotation.y = yaw
+	me.bot_yaw = yaw
+	me.bot_pitch = 0.0
+	await _frames(3)
+	var from_x: float = g.pose().origin.x
+	me.bot_move = Vector2(0, -1)
+	var past := await _until(func(): return (g.nose() as Vector3).x < fx.global_position.x - 0.2, 10.0)
+	me.bot_move = Vector2.ZERO
+	await _frames(2)
+	_check(past, "pushed the gurney along the tables and past the robot (nose x %.2f, robot x %.2f, rolled %.1f m)"
+		% [(g.nose() as Vector3).x, fx.global_position.x, from_x - g.pose().origin.x])
+	_check(me.pushing_gurney(), "still on the handle (nothing snagged it off)")
+	var back_from: float = g.pose().origin.x
+	me.bot_move = Vector2(0, 1)
+	await _seconds(1.5)
+	me.bot_move = Vector2.ZERO
+	await _frames(2)
+	_check(g.pose().origin.x - back_from > 1.0, "and backed it out again (%.2f m)" % (g.pose().origin.x - back_from))
+	_check(fx.global_transform.is_equal_approx(fx_at), "the robot did not move")
+	g.release_if_pusher(me)
+	await _frames(3)
+	_check(not me.pushing_gurney() and robot.link_block(me) == "", "let go, P is allowed again ('%s')" % robot.link_block(me))
+	g.park()
+	await _frames(3)
 
 
 func _core_items() -> Array:

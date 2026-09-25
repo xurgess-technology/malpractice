@@ -1794,6 +1794,7 @@ game.furnace_can_sell(kind) -> bool  # loot and placebo_pills; nothing else
 game.furnace_value(kind, slot) -> int  # eyes: spoiled value; placebo_pills: 0; else slot.v
 game.PILL_PRICE / game.PILL_COUNT    # $15, 10 pills a bottle
 game.ROCKET_BOOTS_PRICE              # $100 a pair (catalog line "rocket_boots", count 1)
+game.ROBOT_CORE_PRICE                # $500 a core (catalog line "robot_core", count 1; see "The surgical robot")
 game.player_faceplanted(p)           # host; a rocket dive hit a wall head on: damage_player(p, 1, "faceplant")
 ```
 
@@ -3090,6 +3091,11 @@ game.ROBOT_CORE_PRICE (500)           # PHARMACY_CATALOG line "robot_core", coun
   `OFFSET` (-1.85 m along the table's long axis, the head end) from `game.patient_tables[0]`,
   facing along +X over the table. It is an interactable itself (interact_id `"robot"`, group
   `interactable`, a `C.L_WORLD` collider on its base and column; the boom and arms are overhead).
+  **The OR gurney** (`scripts/gurney/gurney.gd`, parked at `entrance.gd`'s `spots["gurney"]`, tile
+  (9.5, 10.5) down the middle of the room) is about 6.8 m from it: the robot's footprint stays inside
+  the tables' own row (its south face is level with the table's side), so the aisle in front of the
+  tables is clear and a pushed gurney rolls past the robot's corner and back; being `C.L_WORLD`, the
+  robot's base stops a gurney shoved straight at it like any wall (`gurney._box_hits`).
 - **Plugging in.** Aimed at with a `robot_core` anywhere in your hands: "Plug in the robot core";
   E consumes one (`consume_hand`), sets `powered` and `boot_t`, plays `robot_plug`, and says so.
   Otherwise the prompt says it is dead and what it needs, that it is in use, or that P remotes in.
@@ -3102,11 +3108,13 @@ game.ROBOT_CORE_PRICE (500)           # PHARMACY_CATALOG line "robot_core", coun
   (and Esc, when not mid-step) to `local_toggle()`, which checks `link_block` locally (a hint and
   `robot_denied` if not) and asks the host (`_rpc_link`). Refused when: no robot, no power, still
   booting, **in use by someone else ("Robot in use (X)")**, you are down, carried, held,
-  puppeting a Hive (`puppeting`), carrying or dragging, or operating at a table in person. Allowed strapped to a table --
-  that is the point. The host throws the operator out (`drop`) on anything that takes them out of
-  play (`_host_tick`: gone, dead, downed, carried, held, puppeting; and every hurt, through
-  `game._end_operations`, so a hit, a knock-down or death unlinks you). Leaving ends whatever they
-  were doing through it (`end_operations`), as walking away from a table does.
+  puppeting a Hive (`puppeting`), carrying or dragging, pushing the OR gurney ("Let go of the
+  gurney first."), or operating at a table in person. Allowed strapped to a table -- that is the
+  point. The host throws the operator out (`drop`) on anything that takes them out of play
+  (`_host_tick`: gone, dead, downed, carried, held, puppeting, carrying, dragging or pushing the
+  gurney; and every hurt, through `game._end_operations`, so a hit, a knock-down or death unlinks
+  you). Leaving ends whatever they were doing through it (`end_operations`), as walking away from a
+  table does.
 - **While in.** `Player.robot_linked()`. The body stays where it is and takes no movement
   (`_local_step`: `can_move` false); strapped, `_pinned_step` hands over to the link and E is no
   longer the get-up hold. The mouse turns the robot's eye (`local_look_input`, within `LOOK_YAW` /
@@ -3136,9 +3144,12 @@ game.ROBOT_CORE_PRICE (500)           # PHARMACY_CATALOG line "robot_core", coun
   servo whirrs now and then. The core shows in its socket once plugged in.
 - Sounds `robot_plug`, `robot_boot`, `robot_link`, `robot_unlink`, `robot_denied`, `robot_servo`
   (`tools/gen_audio_robot.mjs`). Warmup: `robot.gd` `warm()` builds a working fixture.
+- Known limits: it serves only the first patient table (`patient_tables[0]`), and the dev panel has
+  no button for it (review setups `robot`, `robot_graft` and `robot_buy` stand in).
 - Tests: `tools/robottest.tscn` (headless: buying, plugging in, P in and out, operating on a Hive from
-  across the OR, grafting yourself alone with E never getting you up, a hit throwing you out, a game
-  over switching it off), nettest scenario `robot`, `tools/robotshot.tscn` (the smoke look,
+  across the OR, grafting yourself alone with E never getting you up, the gurney parked clear of it
+  and pushed past it and back with P refused on the handle, a hit throwing you out, a game over
+  switching it off), nettest scenario `robot`, `tools/robotshot.tscn` (the smoke look,
   `tools\robotshot.ps1`, shots into `tools/robot_shots/`). Review setups `robot`, `robot_graft`,
   `robot_buy`.
 
