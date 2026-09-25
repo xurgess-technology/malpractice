@@ -29,7 +29,7 @@ const SECTIONS := [
 ]
 
 ## Which ability path a monster's ability grows on, and its name.
-const ABILITY := {"hive": "Hive Eyes", "sonographer": "Echo"}
+const ABILITY := {"hive": "Puppet", "sonographer": "Echo"}
 
 const MONSTER_TEXT := {
 	"hive": ["Wanders the wings until it hears something. It can't see: running, dropping things and shoving give you away.", "About 2 doses of anesthetic put it under."],
@@ -206,7 +206,7 @@ static func _monster(kind: String, view: Dictionary) -> Dictionary:
 			var ab = view.get("abilities")
 			if lvl >= n and ab != null:
 				if kind == "hive":
-					levels[n - 1] = "Reach %.0f m, watch for %.1f s" % [ab.hive_range(n), ab.hive_seconds(n)]
+					levels[n - 1] = "Reach %.0f m, drive it for %.1f s" % [ab.puppet_range(n), ab.puppet_seconds(n)]
 				else:
 					levels[n - 1] = "Radius %.0f m, lasts %.1f s" % [ab.echo_radius(n), ab.echo_seconds(n)]
 	p["ability"] = {"name": name, "levels": levels}

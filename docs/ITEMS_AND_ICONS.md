@@ -92,7 +92,7 @@ pulse oximeter loot. Remove them from `scripts/economy/loot_table.gd`, their mod
   which draws its own slot, border, selection and live count.
 - `art/icons/items/categories.json`: each kind's name, category and glow, plus the border
   colours.
-- `art/icons/hive_eyes.svg`, `art/icons/echolocation.svg`: the ability icons (round, framed).
+- `art/icons/puppet.svg` (was `hive_eyes.svg`), `art/icons/echolocation.svg`: the ability icons (round, framed).
 - File names are the item kinds. Import the SVGs big enough for their largest use (the database
   card) with mipmaps, so they stay crisp at 40 px. Register them in `scripts/warmup.gd`.
 
@@ -123,7 +123,7 @@ Replaces the text boxes in `scripts/hud.gd` `_draw_hands`.
 
 ## Icons everywhere else
 
-- **The ability bar:** the Hive Eyes and Echolocation icons replace the drawn glyphs in the round
+- **The ability bar:** the Puppet (then Hive Eyes) and Echolocation icons replace the drawn glyphs in the round
   slots. The HUD adds a glow in the ability's colour: steady when ready, stronger while in use,
   dim on cooldown (the radial cooldown sweep stays). Any ability without an icon keeps its glyph.
 - **The database** (the break-room screen): item and procedure pages show the framed icon beside

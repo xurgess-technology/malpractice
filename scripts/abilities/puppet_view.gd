@@ -1,17 +1,18 @@
 extends Node
-## Hive Eyes, on the watching player's machine only (sweep 3; the fly-through is sweep 4a
-## chunk 4): a camera riding in a Hive's eyes and a grainy, sickly, night-sight screen over it.
-## main.gd renders through `camera` while `active` (game.abilities.camera()). Hives see in the
-## dark, so the screen lifts the shadows a lot; everything is a washed-out yellow-green with
-## grain, scan lines and a slow wobble.
+## Puppet, on the puppeteer's machine only: a camera riding in a Hive's head, with free mouse look,
+## and the grainy, sickly, night-sight screen over it that Hive Eyes had. main.gd renders through
+## `camera` while `active` (game.abilities.camera()). Hives see in the dark, so the screen lifts the
+## shadows a lot; everything is a washed-out yellow-green with grain, scan lines and a slow wobble.
 ##
-## The ability system (host) says which monster and until when; everything about the flight -- the
-## camera leaving the player's own head, gliding along the navmesh to the Hive (or a straight
-## line when there is no path) and settling into its eyes over FLIGHT_IN seconds, then a quick
-## FLIGHT_OUT glide back on a normal end -- is local and purely cosmetic (docs/SWEEP4A.md "Hive
-## Eyes"). A hit, the Hive dying or going under snap back instantly instead (no fly-back):
-## this file decides that itself, by comparing the local player's hp/state to what it was when
-## the flight started, since only the local machine can react to its own hit instantly.
+## The ability system (host) says which monster and until when, and walks the Hive about from what
+## the player sends it (Player.puppet_move / puppet_yaw -> Monster._puppet_step). Everything about
+## the view is local: the camera leaves the player's own head and glides along the navmesh to the
+## Hive (or a straight line when there is no path) over FLIGHT_IN seconds, rides the Hive's head
+## looking wherever the mouse points (`look_yaw` / `look_pitch`, which the Player hands the host as
+## puppet_yaw so the body turns to follow), then a quick FLIGHT_OUT glide back on a quiet end. A hit,
+## the Hive dying or going under snap back instantly instead (no fly-back): this file decides that
+## itself, by comparing the local player's hp/state to what it was when the flight started, since
+## only the local machine can react to its own hit instantly.
 
 const OVERLAY_SHADER := """
 shader_type canvas_item;
@@ -42,15 +43,22 @@ void fragment() {
 
 static var _shader: Shader = null
 
-## SWEEP 4A HOOK (Hive Eyes fly-through, chunk 4): local, cosmetic, both ends of the flight.
-const FLIGHT_IN := 1.2
+## Local, cosmetic, both ends of the flight. The host adds FLIGHT_IN to the end time and holds the
+## Hive still until it has passed, so the seconds you drive it are all seconds you can see.
+const FLIGHT_IN := 1.0
 const FLIGHT_OUT := 0.3
+## How far up and down you can look inside it.
+const PITCH_LIMIT := 1.2
 
 var game: Node = null
 var active := false
 var monster_id := -1
 var until := 0.0
 var camera: Camera3D
+## The mouse look inside the Hive (world yaw, -Z forward; pitch up positive). The Player sends
+## look_yaw to the host as puppet_yaw; the pitch stays on this machine.
+var look_yaw := 0.0
+var look_pitch := -0.1
 var _layer: CanvasLayer
 var _rect: ColorRect
 var _mat: ShaderMaterial
@@ -58,7 +66,7 @@ var _label: Label
 var _t := 0.0
 var _fade := 0.0
 
-## "in" (flying to the Hive), "settled" (riding its eyes) or "out" (flying back to the body).
+## "in" (flying to the Hive), "settled" (driving it) or "out" (flying back to the body).
 var _phase := "in"
 var _phase_t := 0.0
 var _path: PackedVector3Array = PackedVector3Array()
@@ -78,14 +86,14 @@ static func overlay_material() -> ShaderMaterial:
 func setup(g: Node) -> void:
 	game = g
 	camera = Camera3D.new()
-	camera.name = "HiveEyesCamera"
+	camera.name = "PuppetCamera"
 	camera.fov = 88.0
 	camera.near = 0.05
 	camera.far = 70.0
 	camera.current = false
 	add_child(camera)
 	_layer = CanvasLayer.new()
-	_layer.name = "HiveEyesOverlay"
+	_layer.name = "PuppetOverlay"
 	_layer.layer = 1   # over the world, under the HUD (2)
 	add_child(_layer)
 	_rect = ColorRect.new()
@@ -108,9 +116,9 @@ func setup(g: Node) -> void:
 	_layer.visible = false
 
 
-## Look through monster `id` until world_time `end_at` (or stop with id -1). Called every frame
-## from abilities.gd's physics_tick with the current authoritative state, on every machine; only
-## transitions (inactive -> active, ending, or the target id changing) do anything.
+## Drive monster `id` until world_time `end_at` (or stop with id -1). Called every frame from
+## abilities.gd's physics_tick with the current authoritative state, on every machine; only
+## transitions (inactive -> active, ending) do anything.
 func set_target(id: int, end_at: float) -> void:
 	if id < 0:
 		if active and not _pending_end:
@@ -120,11 +128,21 @@ func set_target(id: int, end_at: float) -> void:
 	_pending_end = false
 	if not active:
 		_begin_start(id)
-	elif id != monster_id and _phase == "settled":
-		_begin_cycle(id)
 	monster_id = id
 	until = end_at
 	active = true
+
+
+## Free look inside the Hive once you are in it. The Player's own _input ignores the mouse while
+## puppeting, so this is the only thing turning it.
+func _input(event: InputEvent) -> void:
+	if not active or _phase != "settled" or not (event is InputEventMouseMotion):
+		return
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		return
+	var sens: float = Player.MOUSE_SENS * float(Settings.get_value("sensitivity"))
+	look_yaw = wrapf(look_yaw - event.relative.x * sens, -PI, PI)
+	look_pitch = clampf(look_pitch - event.relative.y * sens, -PITCH_LIMIT, PITCH_LIMIT)
 
 
 func _local_me() -> Node:
@@ -148,24 +166,16 @@ func _begin_start(id: int) -> void:
 	var m = game.monsters.get(id)
 	var from_xf := _local_eye()
 	var to_pos: Vector3 = (m as Node3D).global_position if m != null else from_xf.origin
+	look_yaw = (m as Node3D).global_rotation.y if m != null else 0.0
+	look_pitch = -0.1
 	_path = _path_from(from_xf.origin, to_pos)
 	camera.global_transform = from_xf
 	Audio.play("ability_hive_in", null, -3.0)
 
 
-func _begin_cycle(id: int) -> void:
-	_phase = "in"
-	_phase_t = 0.0
-	var m = game.monsters.get(id)
-	var to_pos: Vector3 = (m as Node3D).global_position if m != null else camera.global_position
-	_path = _path_from(camera.global_position, to_pos)
-	Audio.play("ability_hive_in", null, -3.0, 0.1)
-
-
 func _begin_end() -> void:
 	# A hit, the Hive dying/going under, or the player going down/being carried snap back
-	# instantly (docs/SWEEP4A.md "Hive Eyes"); a quiet end (the slot again, or time running out)
-	# gets the quick fly-back.
+	# instantly; a quiet end (the slot again, or time running out) gets the quick fly-back.
 	var me := _local_me()
 	var m = game.monsters.get(monster_id)
 	var instant: bool = m == null or not is_instance_valid(m) \
@@ -216,9 +226,8 @@ func _path_from(from: Vector3, to: Vector3) -> PackedVector3Array:
 func _process(delta: float) -> void:
 	if not active or game == null:
 		return
-	# The Hive gone mid fly-back (a new run clears the monsters the same frame game over ends the
-	# view): snap back, as when it dies while you look through it, instead of gliding across the
-	# new hospital.
+	# The Hive gone mid fly-back (a new run clears the monsters the same frame game over ends it):
+	# snap back, as when it dies while you drive it, instead of gliding across the new hospital.
 	if _phase == "out" and not game.monsters.has(monster_id):
 		_deactivate()
 		return
@@ -247,14 +256,18 @@ func _fly(delta: float) -> void:
 		var start: Vector3 = _path[0] if _path.size() > 0 else camera.global_position
 		pos = start.lerp(dest_xf.origin, e)
 	pos.y += sin(e * PI) * 0.3   # a little lift mid-flight, purely cosmetic
-	var look_at: Vector3 = dest_xf.origin
-	var look_dir := (look_at - pos)
+	var look_dir := dest_xf.origin - pos
 	var yaw := atan2(-look_dir.x, -look_dir.z) if look_dir.length() > 0.01 else 0.0
 	var pitch := clampf(asin(clampf(look_dir.normalized().y, -1.0, 1.0)), -1.2, 1.2) if look_dir.length() > 0.01 else 0.0
+	if _phase == "in" and e > 0.75:
+		# The last stretch turns to the way the Hive is looking, so landing is not a snap.
+		var u := (e - 0.75) / 0.25
+		yaw = lerp_angle(yaw, look_yaw, u)
+		pitch = lerpf(pitch, look_pitch, u)
 	camera.global_transform = Transform3D(Basis.from_euler(Vector3(pitch, yaw, 0.0)), pos)
 	_layer.visible = _phase == "in"
 	_mat.set_shader_parameter("amount", 0.0 if _phase == "out" else e)
-	_label.text = "HIVE EYES   arriving..." if _phase == "in" else ""
+	_label.text = "PUPPET   reaching in..." if _phase == "in" else ""
 	if _phase_t >= total:
 		if _phase == "in":
 			_phase = "settled"
@@ -281,7 +294,7 @@ func _along_path(path: PackedVector3Array, e: float) -> Vector3:
 	return path[path.size() - 1]
 
 
-## Ride the Hive's eyes once the flight has landed (unchanged from sweep 3's version).
+## Inside the Hive: the camera rides its head and looks where the mouse says.
 func _settled(delta: float) -> void:
 	var m = game.monsters.get(monster_id)
 	if m == null or not is_instance_valid(m):
@@ -294,28 +307,23 @@ func _settled(delta: float) -> void:
 	_mat.set_shader_parameter("amount", _fade)
 	_mat.set_shader_parameter("time_s", _t)
 	var left := maxf(0.0, until - float(game.world_time))
-	_label.text = "HIVE EYES   %.1f s        R / E / Esc: back to your body" % left
+	_label.text = "PUPPET   %.1f s        move keys: walk it        E / Esc: back to your body" % left
 
 
-## The settled eye transform for monster `m`, including its lumbering sway and head bob.
+## Where the camera sits in monster `m` and which way it looks: at its animated head, a little out
+## from the middle of it along the look (so its own head never fills the view, whichever way you
+## turn), with a slight sway of its own. The look itself is `look_yaw` / `look_pitch`.
 func _eye_transform(m: Node) -> Transform3D:
-	var eye_h: float = float(m.get("height")) * 0.93 if m.get("height") != null else 1.7
-	var yaw: float = (m as Node3D).global_rotation.y
-	var fwd := Vector3(-sin(yaw), 0.0, -cos(yaw))
-	var sway := sin(_t * 2.3) * 0.02
-	var bob := sin(_t * 4.6) * 0.012
-	var eye: Vector3 = (m as Node3D).global_position + Vector3.UP * (eye_h + bob) + fwd * 0.34
-	var pitch := -0.1 + bob
+	var eye: Vector3
 	if m.has_method("eye_transform"):
-		# Integration: ride the Hive's animated head (Monster.eye_transform, -Z forward), a little in
-		# front of the face so its own head never fills the view; keep the horizon level.
-		var ex: Transform3D = m.eye_transform()
-		var look := -ex.basis.z
-		if Vector2(look.x, look.z).length() > 0.05:
-			yaw = atan2(-look.x, -look.z)
-			pitch = clampf(asin(clampf(look.y, -1.0, 1.0)), -0.5, 0.3) + bob
-		eye = ex.origin + Vector3(-sin(yaw), 0.0, -cos(yaw)) * 0.12
-	return Transform3D(Basis.from_euler(Vector3(pitch, yaw, sway)), eye)
+		eye = (m.eye_transform() as Transform3D).origin
+	else:
+		var eye_h: float = float(m.get("height")) * 0.93 if m.get("height") != null else 1.7
+		eye = (m as Node3D).global_position + Vector3.UP * eye_h
+	var fwd := Vector3(-sin(look_yaw), 0.0, -cos(look_yaw))
+	eye += fwd * 0.14
+	var sway := sin(_t * 2.3) * 0.02
+	return Transform3D(Basis.from_euler(Vector3(look_pitch, look_yaw, sway)), eye)
 
 
 ## Warmup hook: compile the overlay's canvas shader once (a tiny rect, freed shortly after).

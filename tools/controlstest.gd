@@ -447,7 +447,7 @@ func _shoulder_camera() -> void:
 		main._unhandled_input(ev)
 		order.append(String(Settings.get_value("camera")))
 	_check(order == ["shoulder", "front", "first_person"], "F5 cycles shoulder -> front -> first person (%s)" % str(order))
-	# Hive Eyes, surgery and the rest keep the head: going down drops back to first person.
+	# Puppet, surgery and the rest keep the head: going down drops back to first person.
 	Settings.set_value("camera", "first_person")
 	var off := await _until(func(): return not cc.active, 1.5)
 	_check(off and not me._carry_body and not cc.hides_hands(), "back to first person: the rig lets go")
@@ -488,29 +488,90 @@ func _ability_slots() -> void:
 	me.revive_full()
 	me.bot_move = Vector2.ZERO
 	me.bot_crouch = false
-	b.set_level(me.peer_id, "hive_in", 1)   # -> slot 0
+	b.set_level(me.peer_id, "puppet", 1)   # -> slot 0
 	b.set_level(me.peer_id, "echo", 1)      # -> slot 1
-	_check(b.slot_of(me.peer_id, "hive_in") == 0 and b.slot_of(me.peer_id, "echo") == 1, "hive_in in slot 1, echo in slot 2")
-	# Fire slot 2 (Echo). Slot 1 (Hive Eyes) must still be off cooldown.
+	_check(b.slot_of(me.peer_id, "puppet") == 0 and b.slot_of(me.peer_id, "echo") == 1, "puppet in slot 1, echo in slot 2")
+	# Fire slot 2 (Echo). Slot 1 (Puppet) must still be off cooldown.
 	me.bot_ability_slot = 1
 	me.bot_ability += 1
 	await _frames(3)
 	_check(b.last_result == "echo", "Alt+2 fires Echo (%s)" % b.last_result)
 	_check(b.cooldown_left(me.peer_id, "sonographer") > 0.0, "Echo's own cooldown is running")
-	_check(b.cooldown_left(me.peer_id, "hive") <= 0.0, "Hive Eyes' cooldown is untouched: each slot cools down on its own")
-	# Now fire slot 1 (Hive Eyes): a Hive to borrow.
+	_check(b.cooldown_left(me.peer_id, "hive") <= 0.0, "Puppet's cooldown is untouched: each slot cools down on its own")
+	# Now fire slot 1 (Puppet): a Hive to climb into.
 	var wi: Node = game.spawn_hive(game._floor_at(me.global_position + Vector3(0, 0, 10)))
 	await _frames(2)
 	me.bot_ability_slot = 0
 	me.bot_ability += 1
 	await _frames(3)
-	_check(b.last_result == "hive" and me.hive_view, "Alt+1 fires Hive Eyes (%s)" % b.last_result)
+	_check(b.last_result == "puppet" and me.puppeting, "Alt+1 fires Puppet (%s)" % b.last_result)
+	_check(int(wi.puppet_by) == me.peer_id, "the Hive knows who is driving it")
 	# Pressing the same slot again ends it, like R used to.
 	me.bot_ability += 1
 	await _frames(3)
-	_check(not me.hive_view, "pressing slot 1 again ends the active ability")
+	_check(not me.puppeting, "pressing slot 1 again ends the active ability")
+	_check(int(wi.puppet_by) == 0, "and the Hive has its own head back")
+	await _puppet_walk(b, wi)
 	game.kill_monster(wi)
 	b.on_reset()
+
+
+## PUPPET: inside the Hive the move keys walk it (relative to where you look in it), its own AI is
+## off, your body stands still; time running out, a hit on you and the Hive going under all bring you
+## back, and it thinks for itself again afterwards.
+func _puppet_walk(b: Node, wi: Node) -> void:
+	_say("---- Puppet: walk the Hive, then come back")
+	b._cd.clear()
+	b._press_grace.clear()
+	me.bot_move = Vector2.ZERO
+	var body_at: Vector3 = me.global_position
+	var yaw := 0.7
+	me.bot_yaw = yaw
+	me.bot_ability_slot = 0
+	me.bot_ability += 1
+	await _frames(3)
+	_check(me.puppeting, "in again (%s)" % b.last_result)
+	var start: Vector3 = wi.global_position
+	me.bot_move = Vector2(0, -1)   # forward
+	await _frames(int(float(b.PuppetViewScript.FLIGHT_IN) * 60.0) - 10)
+	_check(wi.global_position.distance_to(start) < 0.2, "the Hive stands still while the camera flies in (%.2f m)" % wi.global_position.distance_to(start))
+	await _frames(70)
+	var moved: Vector3 = wi.global_position - start
+	moved.y = 0.0
+	var want := Vector3(-sin(yaw), 0.0, -cos(yaw))
+	_check(moved.length() > 1.0 and moved.normalized().dot(want) > 0.8,
+		"forward walks it along the look (%.2f m, dot %.2f)" % [moved.length(), moved.normalized().dot(want) if moved.length() > 0.01 else 0.0])
+	_check(absf(angle_difference(wi.rotation.y, yaw)) < 0.2, "and it faces where you look (%.2f vs %.2f)" % [wi.rotation.y, yaw])
+	_check(me.global_position.distance_to(body_at) < 0.05, "your own body stays where you left it")
+	_check(me.global_position.distance_to(wi.global_position) < 20.0 and wi.mode != Monster.Mode.RUSH, "its own brain is off: no rushing the body standing right there")
+	# Time runs out: 4 s at level 1, after the flight.
+	me.bot_move = Vector2.ZERO
+	var left: float = float(b._puppet.get(me.peer_id, [0, 0.0])[1]) - float(game.world_time)
+	await _frames(int(left * 60.0) + 10)
+	_check(not me.puppeting and int(wi.puppet_by) == 0, "the time runs out and you are back (%.1f s left when it started)" % left)
+	_check(b.cooldown_left(me.peer_id, "hive") > 10.0, "Puppet cools down from when you come back")
+	_check(me.global_position.distance_to(body_at) < 0.05, "still where you left it")
+	# A hit on your body brings you straight back.
+	b._cd.clear()
+	b._press_grace.clear()
+	me.bot_ability += 1
+	await _frames(3)
+	_check(me.puppeting, "in once more")
+	me.hp -= 1
+	await _frames(3)
+	_check(not me.puppeting, "a hit on your body snaps you back")
+	me.revive_full()
+	# The Hive going under does too.
+	b._cd.clear()
+	b._press_grace.clear()
+	me.bot_ability += 1
+	await _frames(3)
+	_check(me.puppeting, "and in again")
+	wi.sedate(5.0)
+	await _frames(3)
+	_check(not me.puppeting and int(wi.puppet_by) == 0, "the Hive going under snaps you back")
+	wi.wake()
+	await _frames(3)
 
 
 func _scanner() -> void:

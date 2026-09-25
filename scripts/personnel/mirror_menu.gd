@@ -14,7 +14,7 @@ extends CanvasLayer
 ## anywhere but dead centre skewed the off-axis frustum rather than turning your head.
 ## Fix: `_cam` below is a real `Camera3D`, planted where the glass is and handed to
 ## `game.mirror_camera()` -> main.gd's per-frame camera arbitration (the same chain
-## `surgery_camera()`/Hive Eyes already use, main.gd ~line 711) via `camera.current`-style
+## `surgery_camera()`/Puppet already use, main.gd ~line 711) via `camera.current`-style
 ## takeover, `Camera3D.make_current()`. A real camera on the ordinary viewport always matches
 ## the screen's actual aspect ratio and FOV, so there is nothing left to stretch or letterbox.
 ## `Player.set_mirror_self` (already built for the old glass reflection) puts the local body on
@@ -313,7 +313,7 @@ func _do_open(p: Node) -> void:
 	# third-person shot of yourself.
 	_cam.cull_mask = (p.camera.cull_mask & ~((1 << 18) | (1 << 17))) | LightRooms.SELF
 	# `current` is not set here: main.gd's per-frame camera arbitration (~line 711, reading
-	# game.mirror_camera()) is what calls `make_current()`, the same as surgery_camera()/Hive Eyes
+	# game.mirror_camera()) is what calls `make_current()`, the same as surgery_camera()/Puppet
 	# -- it's the one place that knows how to hand the viewport's current camera back afterwards.
 	# Hand mirrors.gd's own walk-by loop the wheel (see the file header for why) and show the local
 	# body to this camera, the same flag mirrors.gd's own reflection cameras use (and the same idea
@@ -355,7 +355,7 @@ func _cycle(key: String, by: int) -> void:
 
 
 ## The camera main.gd's per-frame camera arbitration should be showing right now (game.gd's
-## mirror_camera(), read by main.gd exactly like surgery_camera()/Hive Eyes).
+## mirror_camera(), read by main.gd exactly like surgery_camera()/Puppet).
 func active_camera() -> Camera3D:
 	return _cam if _open else null
 

@@ -128,7 +128,7 @@ func _pose_scan_nurse() -> void:
 
 
 ## Chunk 2: stand square to the screen with the projector on and open `to` (a scanned Hive with
-## Hive Eyes at level 1, an X-ray film picked up).
+## Puppet at level 1, an X-ray film picked up).
 func _pose_wall2(to: Dictionary, quirk := "") -> void:
 	var wt: Node3D = _level_wall_terminal()
 	if wt == null:
@@ -143,7 +143,7 @@ func _pose_wall2(to: Dictionary, quirk := "") -> void:
 	game.mark_db("hive", "sighted")
 	game.mark_db("hive", "scanned")
 	game.mark_db("xray_film", "sighted")
-	game.abilities.set_level(bot.peer_id, "hive_in", 1)
+	game.abilities.set_level(bot.peer_id, "puppet", 1)
 	bot.set_flashlight(false)
 	var glass: Node3D = wt.glass
 	var n: Vector3 = glass.global_basis.z.normalized()
@@ -337,7 +337,7 @@ func _pose_hive_flight() -> void:
 	bot.bot_scan = false
 	var b: Node = game.abilities
 	b.on_reset()
-	b.set_level(bot.peer_id, "hive_in", 1)
+	b.set_level(bot.peer_id, "puppet", 1)
 	var here: Vector3 = bot.global_position
 	var wi: Node3D = game.spawn_hive(game._floor_at(here + Vector3(0, 0, 8))) as Node3D
 	await get_tree().process_frame

@@ -535,7 +535,7 @@ func _panel_extras() -> void:
 		_check(or_rect.grow(0.5).has_point(Vector2(me.global_position.x, me.global_position.z)), "Go takes you to the OR")
 	_press_panel("All abilities")
 	await _frames(2)
-	_check(game.abilities.slot_of(me.peer_id, "echo") >= 0 and game.abilities.slot_of(me.peer_id, "hive_in") >= 0, "the panel's All abilities grants Echo and Hive Eyes")
+	_check(game.abilities.slot_of(me.peer_id, "echo") >= 0 and game.abilities.slot_of(me.peer_id, "puppet") >= 0, "the panel's All abilities grants Echo and Puppet")
 	_press_panel("Unlock every entry")
 	_check(game.db_record("hive").harvested and game.db_record("night_nurse").scanned, "Unlock every entry fills this machine's database")
 	_press_panel("Reset database")

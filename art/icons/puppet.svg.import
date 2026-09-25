@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cmy7nawd5o7y2"
-path="res://.godot/imported/hive_eyes.svg-570e5763afa1dcfb7874e46a68ef2a3c.ctex"
+uid="uid://cglcbr5r24nlh"
+path="res://.godot/imported/puppet.svg-547dac50148d21a02f906f7b5f9146a1.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/icons/hive_eyes.svg"
-dest_files=["res://.godot/imported/hive_eyes.svg-570e5763afa1dcfb7874e46a68ef2a3c.ctex"]
+source_file="res://art/icons/puppet.svg"
+dest_files=["res://.godot/imported/puppet.svg-547dac50148d21a02f906f7b5f9146a1.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

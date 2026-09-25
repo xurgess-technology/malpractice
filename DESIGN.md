@@ -165,9 +165,9 @@ The core choice in every fight: **kill it to be safe, or catch it to get paid.**
 - **On the table:** only a Hive can be strapped down (see Grafting: it is the only monster a surgeon operates on). Sedation wears off, faster with noise. Low sedation makes it stir (the operator's hand shakes); lower still it is awake and thrashing, which botches the work and damages the eye being taken. Anyone can re-dose it with anesthetic from their hands (E at the table), but every dose works for less time than the last.
 - **Harvested parts spoil.** A part loses value quickly out in the open: keep it in a specimen vat (see Grafting) or run it to the crematorium, where throwing it into the furnace is the only way to sell anything now.
 - **Abilities come from grafts.** A grafted monster part is what teaches a surgeon an ability; it lands in the next empty slot of your 4-slot ability bar, and swapping the part back out takes it away again. There are two:
-  - **Hive Eyes** (from a grafted Hive eyeball): fire from its slot to see through a nearby Hive's eyes for a few seconds. Your camera flies there along the navmesh first (about 1-1.5s), then settles into its eyes; your own body stands with glazed eyes teammates can see. A hit snaps you back instantly instead of flying back. Higher levels: longer range and time, and at level 2+ you can cycle between Hives in range instead of only the nearest. (Later: Puppet, steering it.)
+  - **Puppet** (from a grafted Hive eyeball): fire from its slot to climb into the nearest Hive for a couple of seconds (4 s, 5 at level 2, 6 at level 3). Your camera flies there along the navmesh first (about a second), then you are in its head: look around freely with the mouse and walk it about with the move keys, through its sickly night-sight eyes. The Hive's own mind is switched off while you drive it, and teammates see it walk where you steer it. Your own body stands where you left it, slumped with glazed eyes, and anything can walk up to it. A hit on your body, the Hive dying or the Hive going under snaps you back instantly; the slot again, E or Esc brings you back on purpose. Hitting or shoving the Hive knocks it about with you still in it. When you let go it comes to where you left it, with no memory of the walk. Higher levels: longer range and longer inside.
   - **Echo**: fire from its slot for a loud shriek, visibly coming from you (a pulse ring, a body lean) on every machine; for a few seconds everything nearby shows as outlines through walls. It is loud enough to bring every Sonographer in the wing. Higher levels: bigger radius and longer. **No graft grants Echo yet** -- the trachea graft that would (docs/GRAFTING_TRACHEA.md) is not built, so today only the dev panel can hand it out.
-- Later sweeps: Puppet, Rise (get back up as a shambler when downed), visible side effects (pale skin, groans, bigger ears, loud noises hurt), rare strap breaks.
+- Later sweeps: Rise (get back up as a shambler when downed), visible side effects (pale skin, groans, bigger ears, loud noises hurt), rare strap breaks.
 
 Shift 1 has Hives and one Sonographer; the Night Nurse joins from shift 2; more of each on later shifts and with more players.
 
@@ -190,7 +190,7 @@ of: **Hive's eyeball**, **Zach's eyeball**.
   that you are committed.
 - **What you get.** One normal eye and one orange Hive eye, stitched in and visible to everyone --
   in the mirror, over your shoulder, on other players' screens. It glows low all the time and lights
-  right up while you are using **Hive Eyes 1**, which the graft gives you in your next free ability
+  right up while you are using **Puppet 1**, which the graft gives you in your next free ability
   slot. Your own view carries a faint orange tint down its left edge, stronger while the ability is
   running. Swap your own eye back in and the ability goes with it.
 - A graft lasts the whole run, through death, and is lost on a game over, like the ability it gave

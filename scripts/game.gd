@@ -230,7 +230,7 @@ var dissection: Node = null   # monster cases on the patient tables: sedation an
 var _step_operator := 0     # host: who finished the step that is finishing the case (only inside surgery_step_done)
 var vats: Node = null         # GRAFTING part one: specimen vats, eye spoilage (scripts/grafting/vats.gd)
 var grafts: Node = null       # GRAFTING chunk C: Eyeball Grafting on a strapped surgeon (scripts/grafting/grafts.gd)
-var abilities: Node = null    # Echo and Hive Eyes, their levels and slots (scripts/abilities/)
+var abilities: Node = null    # Echo and Puppet, their levels and slots (scripts/abilities/)
 var trinkets: Node = null     # TRINKETS chunk B: what the six trinkets do (scripts/trinkets/trinkets.gd)
 # POCKETS HOOK: pocket spaces (the Factory, the Restaurant), their seams and crossings.
 const PocketSpacesScript := preload("res://scripts/level/pockets/pocket_spaces.gd")
@@ -3523,7 +3523,7 @@ func player_table_prompt(q: Node) -> String:
 func strap_in_prompt(q: Node) -> String:
 	if q == null or not q.alive or q.downed or q.on_table or q.carried_by != 0 or int(q.held_by) >= 0:
 		return ""
-	if q.dragging_monster >= 0 or q.carrying != 0 or q.hive_view:
+	if q.dragging_monster >= 0 or q.carrying != 0 or q.puppeting:
 		return ""
 	if phase != Phase.SHIFT:
 		return ""
