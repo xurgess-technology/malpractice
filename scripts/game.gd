@@ -577,6 +577,12 @@ func _set_phase(p: int) -> void:
 		if me != null and (not me.alive or me.downed or waiting_peers.has(me.peer_id)):
 			_respawn_at_start(me)
 		loop.reset()
+	# SKILL TREE: clocking out of a shift earns this machine's player a skill point (every machine
+	# for its own player; a late joiner still waiting to spawn was not on the shift).
+	if p == Phase.WON and phase == Phase.SHIFT:
+		var me := local_player()
+		if me != null and not waiting_peers.has(me.peer_id):
+			Skills.award_shift()
 	phase = p
 	phase_changed.emit(p)
 
@@ -3908,6 +3914,32 @@ func mirror_camera() -> Camera3D:
 func mirror_menu_open() -> bool:
 	var mm := _mirror_menu()
 	return mm != null and bool(mm.get("_open"))
+
+
+## SKILL TREE: the level's vein machine in Personnel (scripts/personnel/vein_machine.gd), found
+## rather than owned like the mirror menu above. Its camera and mouse are decided in main.gd.
+var _vein_node_cache: Node = null
+
+func _vein_machine() -> Node:
+	if _vein_node_cache == null or not is_instance_valid(_vein_node_cache):
+		_vein_node_cache = level.find_child("VeinMachine", true, false) if level != null and is_instance_valid(level) else null
+	return _vein_node_cache
+
+
+func vein_camera() -> Camera3D:
+	var vm := _vein_machine()
+	return vm.active_camera() as Camera3D if vm != null else null
+
+
+func vein_open() -> bool:
+	var vm := _vein_machine()
+	return vm != null and bool(vm.is_open())
+
+
+func vein_local_exit() -> void:
+	var vm := _vein_machine()
+	if vm != null:
+		vm.close()
 
 
 func surgery_local_exit() -> void:

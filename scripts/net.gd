@@ -44,6 +44,17 @@ var looks: Dictionary = {}
 ## one surgeon can ever be at it.
 var mirror_user: int = 0
 signal mirror_user_changed
+## SKILL TREE: who is using which shared station (scripts/personnel/vein_machine.gd, "veins"):
+## station id -> peer id, a free station is simply missing. Host-authoritative and replicated the
+## same way as the mirror lock above (which predates it and still has its own flag).
+var station_users: Dictionary = {}
+signal station_users_changed
+## SKILL TREE: peer id -> {u: unlocked skill ids, p: unspent points, f: the node picked on the vein
+## machine's screen}. Replicated like `looks`: a client tells the host, the host tells everyone the
+## whole table. This machine's own entry is `local_skills` (scripts/skills/skills.gd publishes it).
+var skills: Dictionary = {}
+var local_skills: Dictionary = {"u": [], "p": 0, "f": ""}
+signal skills_changed
 ## The name this machine introduces itself with. Survives reset(); set it before join().
 var local_name: String = "Surgeon"
 ## The look this machine introduces itself with. Survives reset(); set it before join().
@@ -96,6 +107,8 @@ func _ready() -> void:
 	# CUSTOMIZATION: the look this machine last picked at a mirror, so it is already ours before we
 	# introduce ourselves to anybody (Settings is the autoload above this one).
 	local_look = int(Settings.get_value("look"))
+	# SKILL TREE: this machine's own skills, from disk (scripts/skills/skills.gd).
+	Skills.ensure_loaded()
 	var no_steam := DisplayServer.get_name() == "headless"
 	for a in OS.get_cmdline_user_args():
 		var kv := a.trim_prefix("--").split("=", true, 1)
@@ -269,8 +282,10 @@ func start_solo(player_name: String) -> void:
 	backend = "solo"
 	names = {HOST_ID: player_name}
 	looks = {HOST_ID: local_look}
+	skills = {HOST_ID: local_skills}
 	roster_changed.emit()
 	looks_changed.emit()
+	skills_changed.emit()
 
 
 func host(player_name: String, port: int = C.DEFAULT_PORT) -> String:
@@ -285,8 +300,10 @@ func host(player_name: String, port: int = C.DEFAULT_PORT) -> String:
 	backend = "enet"
 	names = {HOST_ID: player_name}
 	looks = {HOST_ID: local_look}
+	skills = {HOST_ID: local_skills}
 	roster_changed.emit()
 	looks_changed.emit()
+	skills_changed.emit()
 	return ""
 
 
@@ -342,6 +359,11 @@ func reset() -> void:
 	if mirror_user != 0:
 		mirror_user = 0
 		mirror_user_changed.emit()
+	skills.clear()
+	skills_changed.emit()
+	if not station_users.is_empty():
+		station_users.clear()
+		station_users_changed.emit()
 	active = false
 	solo = false
 	backend = "solo"
@@ -463,6 +485,7 @@ func _on_lobby_created(result: int, new_lobby_id: int) -> void:
 	solo = false
 	backend = "steam"
 	names = {HOST_ID: local_name}
+	skills = {HOST_ID: local_skills}   # SKILL TREE
 	_steam.setRichPresence("connect", "+connect_lobby %d" % lobby_id)
 	_steam.setRichPresence("status", "Hosting a shift")
 	print("[net] Steam lobby %d created" % lobby_id)
@@ -571,11 +594,19 @@ func _on_peer_disconnected(id: int) -> void:
 		# CUSTOMIZATION: alt-F4 out of the mirror menu must not leave it locked forever.
 		if mirror_user == id:
 			_release_mirror_host(id)
+		# SKILL TREE: nor out of the vein machine.
+		for st in station_users.keys():
+			if int(station_users[st]) == id:
+				_release_station_host(String(st), id)
+		if skills.erase(id):
+			skills_changed.emit()
+			_send_skills.rpc(skills)
 
 
 func _on_connected() -> void:
 	_set_timeouts(HOST_ID)
 	_introduce.rpc_id(HOST_ID, local_name, local_look)
+	_tell_skills.rpc_id(HOST_ID, local_skills)   # SKILL TREE
 	joined_ok.emit()
 
 
@@ -623,6 +654,10 @@ func _introduce(player_name: String, look: int = -1) -> void:
 	looks_changed.emit()
 	_send_roster.rpc(names)
 	_send_looks.rpc(looks)
+	# SKILL TREE: a late joiner learns who is at which station and everyone's skills.
+	skills[HOST_ID] = local_skills
+	_send_skills.rpc_id(id, skills)
+	_send_stations.rpc_id(id, station_users)
 
 
 @rpc("authority", "reliable", "call_remote")
@@ -645,6 +680,115 @@ func _tell_look(packed: int) -> void:
 func _send_looks(table: Dictionary) -> void:
 	looks = table.duplicate()
 	looks_changed.emit()
+
+
+# =========================================================================
+# SKILL TREE: skills and shared stations
+# =========================================================================
+
+func skills_for(id: int) -> Dictionary:
+	if id == my_id():
+		return local_skills
+	return skills.get(id, {})
+
+
+## This machine's skills changed (scripts/skills/skills.gd). The host owns the table; a client asks.
+func set_my_skills(entry: Dictionary) -> void:
+	local_skills = entry.duplicate(true)
+	if solo or not active:
+		skills[my_id()] = local_skills
+		skills_changed.emit()
+		return
+	if multiplayer.is_server():
+		skills[HOST_ID] = local_skills
+		skills_changed.emit()
+		_send_skills.rpc(skills)
+	else:
+		_tell_skills.rpc_id(HOST_ID, local_skills)
+
+
+@rpc("any_peer", "reliable")
+func _tell_skills(entry: Dictionary) -> void:
+	if not multiplayer.is_server():
+		return
+	skills[multiplayer.get_remote_sender_id()] = entry
+	skills_changed.emit()
+	_send_skills.rpc(skills)
+
+
+@rpc("authority", "reliable", "call_remote")
+func _send_skills(table: Dictionary) -> void:
+	skills = table.duplicate(true)
+	skills_changed.emit()
+
+
+## Who is at `station` (0: nobody).
+func station_user(station: String) -> int:
+	return int(station_users.get(station, 0))
+
+
+## Ask to use a shared station. Like claim_mirror: the host resolves at once, a client waits for
+## station_users_changed to name it.
+func claim_station(station: String) -> void:
+	if solo or not active:
+		if station_user(station) == 0:
+			station_users[station] = my_id()
+		station_users_changed.emit()
+		return
+	if multiplayer.is_server():
+		_claim_station_host(station, HOST_ID)
+	else:
+		_request_station.rpc_id(HOST_ID, station)
+
+
+## Give a station up. A no-op unless this machine holds it.
+func release_station(station: String) -> void:
+	if station_user(station) != my_id():
+		return
+	if solo or not active:
+		station_users.erase(station)
+		station_users_changed.emit()
+		return
+	if multiplayer.is_server():
+		_release_station_host(station, HOST_ID)
+	else:
+		_tell_station_released.rpc_id(HOST_ID, station)
+
+
+func _claim_station_host(station: String, id: int) -> void:
+	var holder := station_user(station)
+	if holder != 0 and holder != id:
+		return   # taken: the asker just never hears its own name
+	if holder != id:
+		station_users[station] = id
+		_send_stations.rpc(station_users)
+	station_users_changed.emit()
+
+
+func _release_station_host(station: String, id: int) -> void:
+	if station_user(station) != id:
+		return
+	station_users.erase(station)
+	station_users_changed.emit()
+	_send_stations.rpc(station_users)
+
+
+@rpc("any_peer", "reliable")
+func _request_station(station: String) -> void:
+	if multiplayer.is_server():
+		_claim_station_host(station, multiplayer.get_remote_sender_id())
+
+
+@rpc("any_peer", "reliable")
+func _tell_station_released(station: String) -> void:
+	if multiplayer.is_server():
+		_release_station_host(station, multiplayer.get_remote_sender_id())
+
+
+@rpc("authority", "reliable", "call_remote")
+func _send_stations(table: Dictionary) -> void:
+	station_users = table.duplicate()
+	station_users_changed.emit()
 
 
 # =========================================================================

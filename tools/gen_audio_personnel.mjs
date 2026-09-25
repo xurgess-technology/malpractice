@@ -9,6 +9,11 @@
 //
 //   personnel_shower_water   sample-exact loop of falling water (looped by scripts/personnel/
 //                            showers.gd, the same way containers_fridge_hum loops in med_fridge.gd)
+//   personnel_vein_scan      the vein machine reading a palm: a contact click, then a rising
+//                            shimmering sweep with a mains hum under it (scripts/personnel/vein_machine.gd)
+//   personnel_vein_grow      the veins creeping across its screen: a wet, crackling rustle that
+//                            swells and ends on two soft heartbeats
+//   personnel_vein_unlock    blood let into a skill: a heartbeat thump and a liquid rush
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -112,9 +117,90 @@ function showerWater() {
   return out;
 }
 
+// The vein machine. One-shots, so these get a fade at each end (see ONE_SHOTS below).
+function env(t, a, d, total) {
+  return Math.min(1, t / a) * Math.min(1, Math.max(0, (total - t) / d));
+}
+
+function veinScan() {
+  const rnd = rngFor('vein_scan');
+  const secs = 1.45;
+  const out = new Buf(secs);
+  const hp = biquad('highpass', 900, 0.7);
+  let ph = 0, ph2 = 0;
+  for (let i = 0; i < out.d.length; i++) {
+    const t = i / SR;
+    // The palm going down on the glass: a short damped knock.
+    const knock = Math.exp(-t * 60) * Math.sin(TAU * 180 * t) * 0.9 + hp(rnd() * 2 - 1) * Math.exp(-t * 200) * 0.5;
+    // The read: a sweep from 320 Hz to 980 Hz, shimmering, fading in after the knock.
+    const k = Math.min(1, Math.max(0, (t - 0.12) / 1.15));
+    const f = 320 + 660 * k * k;
+    ph += TAU * f / SR;
+    ph2 += TAU * f * 2.01 / SR;
+    const shimmer = 0.75 + 0.25 * Math.sin(TAU * 17 * t);
+    const sweep = (Math.sin(ph) * 0.5 + Math.sin(ph2) * 0.18) * shimmer * env(t - 0.12, 0.15, 0.25, secs - 0.12) * (t > 0.12 ? 1 : 0);
+    const hum = (Math.sin(TAU * 60 * t) * 0.5 + Math.sin(TAU * 120 * t) * 0.25) * 0.22 * env(t, 0.1, 0.3, secs);
+    out.d[i] = knock + sweep * 0.55 + hum;
+  }
+  return out;
+}
+
+function veinGrow() {
+  const rnd = rngFor('vein_grow');
+  const secs = 2.3;
+  const out = new Buf(secs);
+  const bp = biquad('bandpass', 300, 1.2);
+  const lp = biquad('lowpass', 2400, 0.7);
+  let crack = 0;
+  for (let i = 0; i < out.d.length; i++) {
+    const t = i / SR;
+    const k = t / secs;
+    // A creeping rustle: noise through a band that climbs as the veins spread.
+    const rustle = bp(rnd() * 2 - 1, 220 + 520 * k) * 1.6 * env(t, 0.35, 0.5, secs) * (0.6 + 0.4 * Math.sin(TAU * 3.3 * t) ** 2);
+    // Wet crackles, thicker in the middle.
+    if (rnd() < 0.0009 * (0.4 + Math.sin(Math.PI * k))) crack = rnd.range(0.4, 1);
+    crack *= 0.985;
+    const wet = lp((rnd() * 2 - 1) * crack) * 0.8;
+    // Two soft heartbeats as it finishes.
+    let beat = 0;
+    for (const bt of [1.7, 1.95]) {
+      const u = t - bt;
+      if (u > 0) beat += Math.sin(TAU * (58 - 20 * u) * u) * Math.exp(-u * 16) * 0.9;
+    }
+    out.d[i] = rustle * 0.6 + wet + beat;
+  }
+  return out;
+}
+
+function veinUnlock() {
+  const rnd = rngFor('vein_unlock');
+  const secs = 0.95;
+  const out = new Buf(secs);
+  const bp = biquad('bandpass', 1200, 2.0);
+  for (let i = 0; i < out.d.length; i++) {
+    const t = i / SR;
+    // Lub-dub.
+    let beat = 0;
+    for (const [bt, amp] of [[0.0, 1.0], [0.2, 0.7]]) {
+      const u = t - bt;
+      if (u > 0) beat += Math.sin(TAU * (62 - 25 * u) * u) * Math.exp(-u * 14) * amp;
+    }
+    // The rush of blood into the vein: a band of noise falling in pitch.
+    const f = 1300 * Math.exp(-t * 2.6) + 180;
+    const rush = bp(rnd() * 2 - 1, f) * 2.2 * env(t - 0.05, 0.08, 0.4, secs - 0.05) * (t > 0.05 ? 1 : 0);
+    out.d[i] = beat + rush * 0.5;
+  }
+  return out;
+}
+
 const FILES = {
   'personnel_shower_water.wav': () => showerWater(),
+  'personnel_vein_scan.wav': () => veinScan(),
+  'personnel_vein_grow.wav': () => veinGrow(),
+  'personnel_vein_unlock.wav': () => veinUnlock(),
 };
+// Everything but the loop gets a few milliseconds of fade at each end.
+const ONE_SHOTS = new Set(['personnel_vein_scan.wav', 'personnel_vein_grow.wav', 'personnel_vein_unlock.wav']);
 
 function writeWav(file, buf, targetDb) {
   const p = buf.peak();
@@ -127,8 +213,10 @@ function writeWav(file, buf, targetDb) {
   out.write('data', 36); out.writeUInt32LE(bytes, 40);
   // No fade at the ends: this is a loop (loop_mode is set at load time by showers.gd), and a fade
   // here would put an audible dip at the seam every time round.
+  const fade = ONE_SHOTS.has(path.basename(file)) ? Math.round(0.006 * SR) : 0;
   for (let i = 0; i < n; i++) {
-    const v = Math.max(-1, Math.min(1, buf.d[i] * k));
+    const edge = fade > 0 ? Math.min(1, i / fade, (n - 1 - i) / fade) : 1;
+    const v = Math.max(-1, Math.min(1, buf.d[i] * k * edge));
     out.writeInt16LE(Math.round(v * 32767), 44 + i * 2);
   }
   if (!DRY) fs.writeFileSync(file, out);
