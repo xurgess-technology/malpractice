@@ -143,6 +143,12 @@ const SETUPS := {
 	# host window. Solo, you watch Dr. Botsworth do the same loop. `--shots` (onlooker) saves a run of
 	# screenshots to tools/flashlight_shots/.
 	"flashlight_pair": {"seed": 4242, "stage": "_flashlight_pair", "join": "_flashlight_pair_join"},
+	# TUMBLE TUNING (2026-09-24): a stack of throwables in hand on open floor, some stairs and a
+	# wall close by. Throw one at a shallow angle, a steep one and straight down, and time how long
+	# each takes to stand up into its hover.
+	"tumble": {"seed": 4242, "stage": "_tumble"},
+	# SHOWERS (2026-09-24): standing beside a personnel shower with an empty hand. Press E.
+	"showers": {"seed": 4242, "stage": "_showers"},
 }
 
 
@@ -1724,3 +1730,42 @@ static func _zfight_stage(game: Game, spot: Callable) -> void:
 	p.flashlight_on = true
 	p.refresh_own_lights()
 	await game.get_tree().physics_frame
+
+
+## SHOWERS (2026-09-24, Zach: "make the showers able to be turned on and off with E"): standing a
+## step back from the first personnel shower, facing it, hands empty. Press E: a stream falls off
+## the head, a low mist where it hits the floor, and the water loop starts. E again turns it off.
+static func _showers(game: Game) -> void:
+	var pr: Dictionary = game.level_info.get("personnel", {})
+	var list: Array = pr.get("showers", [])
+	if list.is_empty():
+		print("[review] showers: this level has no personnel showers")
+		return
+	var s: Dictionary = list[0]
+	var sp: Vector3 = s.position
+	var out := (Basis(Vector3.UP, float(s.get("yaw", 0.0))) * Vector3(0, 0, -1)).normalized()
+	place(game, game._floor_at(sp + out * 1.3), sp + Vector3(0.0, 1.4, 0.0))
+	clear_hands(game)
+	game.local_player().selected = 0
+	game.say("Aim at the shower head and press E: water on, water off. It should sound and look the same on a teammate's screen.", 9.0)
+	print("[review] showers: %d showers on this level, standing in front of the first at %s" % [list.size(), str(sp.snappedf(0.1))])
+
+
+## TUMBLE TUNING (2026-09-24): open floor with a wall close on one side, four throwables in hand
+## (light, heavy, bulky, a stack). Right-click and hold to charge a throw, at a few angles: a flat
+## toss along the floor, a lobbed arc, one straight down and one at the wall. Each should land,
+## settle within about a second of coming to rest and ease up into its hover -- no sitting there
+## tumbling, no jitter, nothing buried in the floor or the wall.
+static func _tumble(game: Game) -> void:
+	var t: Vector3 = game.table_pos()
+	var base: Vector3 = game._floor_at(t + Vector3(0.0, 0.0, 4.2))
+	var out := open_direction(game, base + Vector3.UP * 1.2, 4.0)
+	place(game, base, base + out * 3.0 + Vector3(0.0, 0.5, 0.0))
+	clear_hands(game)
+	give(game, "gauze", 2)          # light
+	give(game, "bone_saw", 1)       # heavy, bulky
+	give(game, "gold_watch", 1, 80) # loot, small
+	give(game, "placebo_pills", 6)  # a stack
+	game.local_player().selected = 0
+	game.say("Hold right-click to charge a throw. Try a flat toss, a high arc, straight down and one at the wall behind you.", 10.0)
+

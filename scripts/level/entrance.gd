@@ -276,9 +276,10 @@ static func build(st: S, ox: int, oy: int) -> void:
 	# wall with the four staff lockers among them, sinks with mirrors down the right (south) wall and
 	# then the big full-length mirror, benches between. Past them the back half is white tile: three
 	# showers on each side wall, a drain under each, and across the whole back wall the palm vein
-	# machine and its big screen. Only the set dressing so far: nothing works yet, but the stations'
-	# spots are recorded (spots.personnel -> level_info.personnel) for when they do. The mirrors do
-	# reflect (scripts/personnel/mirrors.gd, built from the same spots).
+	# machine and its big screen. Set dressing only for the lockers and the vein machine so far, but
+	# the stations' spots are recorded (spots.personnel -> level_info.personnel) for when they work.
+	# The mirrors do reflect (scripts/personnel/mirrors.gd) and the showers do run (scripts/personnel/
+	# showers.gd), both built from these same spots.
 	var place := func(kind: String, x: float, y: float, face: Vector2) -> void:
 		if not put.call(kind, x, y, face, personnel):
 			push_error("entrance: personnel %s at (%.2f, %.2f) did not fit" % [kind, x, y])
@@ -302,11 +303,17 @@ static func build(st: S, ox: int, oy: int) -> void:
 	place.call("tile_wall_end", 32.0, 16.5, WEST)
 	place.call("tile_wall", 29.0, 14.0, SOUTH)
 	place.call("tile_wall", 29.0, 19.0, N)
+	# SHOWERS (2026-09-24): the set dressing above is decorative geometry only; the working part
+	# (scripts/personnel/showers.gd) is built from these spots, one per shower, in the same order
+	# the row is placed in.
+	var showers: Array = []
 	for x in [26.9, 28.2, 29.5]:
 		place.call("shower", x, 14.0, SOUTH)
 		place.call("shower", x, 19.0, N)
 		place.call("floor_drain", x, 14.45, SOUTH)
 		place.call("floor_drain", x, 18.55, N)
+		showers.append({"pos": Vector2(ox + x, oy + 14.0), "yaw": Defs.yaw_facing(SOUTH)})
+		showers.append({"pos": Vector2(ox + x, oy + 19.0), "yaw": Defs.yaw_facing(N)})
 	var machine_x: float = 32.0 - depth.call("vein_machine")
 	place.call("vein_machine", machine_x, 16.5, WEST)
 	var lockers: Array = []
@@ -315,6 +322,7 @@ static func build(st: S, ox: int, oy: int) -> void:
 	st.spots["personnel"] = {
 		"lockers": lockers,
 		"sinks": sinks,
+		"showers": showers,
 		"mirror": {"pos": Vector2(ox + mirror_x, oy + 19.0), "yaw": Defs.yaw_facing(N)},
 		# The hand plate on the machine's console, and the middle of its screen's glass.
 		"scanner": {"pos": Vector2(ox + machine_x - VEIN_PLATE_Z / Defs.TILE, oy + 16.5), "yaw": Defs.yaw_facing(WEST)},
