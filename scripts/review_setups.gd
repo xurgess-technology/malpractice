@@ -50,6 +50,13 @@ const SETUPS := {
 	# things to stand behind.
 	"onlooker": {"seed": 4242, "pocket": "natatorium", "stage": "_onlooker"},
 	"onlooker_chapel": {"seed": 4242, "pocket": "chapel", "stage": "_onlooker"},
+	# 2026-09-24: the Onlooker's shadow and its poof. It is already standing eleven metres in front of
+	# you, wreathed in its smoke, waiting: run at it and it poofs. It comes back far off (a few
+	# seconds rather than the real 75), so you can go at it again as often as you like.
+	# `onlooker_rush_chapel` / `_factory` are the same thing in other light and other fog.
+	"onlooker_rush": {"seed": 4242, "pocket": "natatorium", "stage": "_onlooker_rush"},
+	"onlooker_rush_chapel": {"seed": 4242, "pocket": "chapel", "stage": "_onlooker_rush"},
+	"onlooker_rush_factory": {"seed": 4242, "pocket": "factory", "stage": "_onlooker_rush"},
 	"items": {"seed": 1, "stage": "_items"},
 	# GRAFTING chunk C (docs/GRAFTING.md): strapped to a table with a loaded vat on its stand, as
 	# Dr. Botsworth, ready to operate. `graft_back` is the same with the graft already done.
@@ -1294,6 +1301,106 @@ static func _onlooker(game: Game) -> void:
 	if game.onlooker_watch != null:
 		game.onlooker_watch.rearm()
 	await game.get_tree().physics_frame
+
+
+## 2026-09-24: the Onlooker's shadow and its poof. It is standing `RUSH_AT` metres in front of you,
+## in the pocket's own light and air, facing you -- look at it: the edge that will not resolve, the
+## smoke coming off it. Then run at it: inside six metres it poofs, a burst of dark smoke and a cloud
+## that hangs where it stood and thins out over a few seconds. With `-Count 2` the joiner, beside
+## you, should see the same poof from where they stand.
+##
+## It holds still for the first look (no hop until you have been at it once). After a banish it
+## comes back in RUSH_BACK seconds instead of the real 75, placed by its own brain (far off, in your
+## view, the way it really arrives), so it can be rushed again and again.
+const RUSH_AT := 11.0
+const RUSH_BACK := 4.0
+
+static func _onlooker_rush(game: Game) -> void:
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	var pk = game.pockets
+	if pk == null or not pk.active():
+		print("[review] onlooker_rush: no pocket was built")
+		return
+	game._clear_monsters()
+	game.dev.request("monsters_off", {"on": true})
+	preload("res://scripts/monsters/onlooker_watch.gd").force = "off"
+	var centre: Vector3 = pk.pocket.spawn
+	var dir := open_heading(game, centre + Vector3.UP * 1.5, 40.0)
+	place(game, centre, centre + dir * 30.0 + Vector3.UP * 1.6)
+	await game.get_tree().physics_frame
+	var o = onlooker_ahead(game, RUSH_AT)
+	if o == null:
+		print("[review] onlooker_rush: could not add an Onlooker")
+		return
+	# A small keeper: after each banish, bring it back in RUSH_BACK seconds instead of 75.
+	var keeper := Node.new()
+	keeper.name = "OnlookerRushKeeper"
+	game.add_child(keeper)
+	var tick := func() -> void:
+		if not is_instance_valid(o) or o.brain == null:
+			return
+		if not bool(o.present) and float(o.brain.away_left) > RUSH_BACK:
+			o.brain.away_left = RUSH_BACK
+	game.get_tree().physics_frame.connect(tick)
+	keeper.tree_exiting.connect(func(): game.get_tree().physics_frame.disconnect(tick))
+	print("[review] onlooker_rush: standing %.1f m off" % o.global_position.distance_to(p.global_position))
+
+
+## Of 16 headings out of `from`, the one with the longest clear run (capped at `reach`).
+static func open_heading(game: Game, from: Vector3, reach: float) -> Vector3:
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	var best := Vector3.FORWARD
+	var best_d := -1.0
+	for i in 16:
+		var a := TAU * float(i) / 16.0
+		var d := Vector3(sin(a), 0.0, cos(a))
+		var q := PhysicsRayQueryParameters3D.create(from, from + d * reach)
+		q.collision_mask = C.L_WORLD
+		var hit := space.intersect_ray(q)
+		var dist: float = reach if hit.is_empty() else from.distance_to(hit.position)
+		if dist > best_d + 0.01:
+			best_d = dist
+			best = d
+	return best
+
+
+## Host: an Onlooker standing `dist` metres straight ahead of the local player, facing them, already
+## there, marking them and holding still (no hop until it has been sent away once). For the review
+## setup above and tools/gameshot_pockets.gd's onlooker shots. Null if it could not be added.
+static func onlooker_ahead(game: Game, dist: float, fade_in := true) -> Node:
+	var p = game.local_player()
+	var fwd: Vector3 = -p.global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
+	var at: Vector3 = game._floor_at(p.global_position + fwd * dist)
+	var o = game.onlooker_watch.current() if game.onlooker_watch != null else null
+	if o == null:
+		for m in game.monsters.values():
+			if is_instance_valid(m) and String(m.kind) == "onlooker":
+				o = m
+	if o == null:
+		o = game.spawn_pocket_monster("onlooker", at)
+	if o == null:
+		return null
+	var br = o.brain
+	o.global_position = at
+	o.velocity = Vector3.ZERO
+	o.face_dir(p.global_position - at, 1.0, 1.0)
+	br.space = String(game.pockets.pocket.get("kind", ""))
+	br.started = true
+	br.mark_peer = int(p.peer_id)
+	br.placements += 1   # a client snaps to it rather than sliding in
+	br.hop_left = 1.0e9   # it waits for you; the first banish puts it back on its real clock
+	br.stare = 0.0
+	br.ticks = 0
+	o.present = true
+	o.presence = 0.0 if fade_in else 1.0
+	return o
 
 
 ## POCKETS 2 phase 4 (docs/POCKET_SPACES_2.md): the Laundromat. You start well inside the room with

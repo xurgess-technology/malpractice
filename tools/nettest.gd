@@ -44,6 +44,9 @@ extends Node
 ##                    its own HOP_INTERVAL clock, cadence sped up only through its already-
 ##                    overridable per-instance timers) lands right on the client, and only the
 ##                    marked player loses a heart when a real stare runs out
+##   onlooker_poof    host + 1 client: the host runs at a real, brain-placed Onlooker and banishes it;
+##                    the poof (a burst and a cloud of smoke where it stood) appears on the client's
+##                    machine too, in the right place, and clears itself away
 ##   trinkets         (chunk B) client 1 shocks a downed client 2 awake with a defibrillator over the
 ##                    wire; client 2 comes up where it lay on its own machine, and the paddles are
 ##                    spent on both
@@ -169,6 +172,7 @@ func _run() -> void:
 		"monsters": await _sc_monsters()   # SWEEP 3 HOOK (monsters)
 		"onlooker": await _sc_onlooker()   # POCKETS 2 phase 6: a hop must JUMP on a client
 		"onlooker_live": await _sc_onlooker_live()   # POCKETS 2 phase 6 gap: the brain's OWN real hop, cross-machine
+		"onlooker_poof": await _sc_onlooker_poof()   # 2026-09-24: run at it and it poofs, on every machine
 		"hit_feedback": await _sc_hit_feedback()   # HIT FEEDBACK: the red flash and the push
 		"sono": await _sc_sono()   # docs/SONOGRAPHER.md chunk B: the Sonographer's echo over the wire
 		"graft": await _sc_graft()   # GRAFTING chunk C
@@ -2204,6 +2208,132 @@ func _sc_onlooker_live():
 		% [jumps, worst, worst_err, str(wd.get("mark_hp0")), str(wd.get("mark_hp1")), int(_me().hp)])
 	_send("client_verdict", {"hops": jumps, "run": worst, "err": worst_err})
 	await _finish_together("saw the brain's own hop land as a jump, in the right place, and only the mark lose a heart")
+
+
+# =========================================================================
+# 2026-09-24: the Onlooker poofs away when you run at it, on every machine
+# =========================================================================
+## The poof (scripts/monsters/onlooker_smoke.gd) is spawned by monster.gd on the frame `present`
+## drops, and `present` is the replicated `pr`: so a client makes its own from the same event, and
+## nothing new was added to the wire. This proves that claim end to end. The host stands in the
+## pocket, the brain places the Onlooker for real, and then the host's player is put inside
+## BANISH_RANGE -- the brain's own banish does the rest. The client (never in the pocket) must see
+## its copy poof exactly once, with the poof standing where the host's monster stood, and the poof
+## must clear itself away afterwards rather than piling up.
+func _sc_onlooker_poof():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		var me := _me()
+		me.bot_active = true
+		me.bot_invulnerable = true
+		game._clear_monsters()
+		if not game.pockets.active():
+			return _end(false, "no pocket on the host")
+		var pk := game.pockets
+		OnlookerWatch.force = "off"
+		me.teleport(_nav_point(pk.pocket.spawn))
+		me.bot_move = Vector2.ZERO
+		var o: Node = game.spawn_pocket_monster("onlooker", pk.pocket.spawn)
+		if o == null:
+			return _end(false, "the host could not add an Onlooker")
+		var br = o.brain
+		br.away_left = 0.0
+		var t0 := _wall()
+		while not bool(o.present) or float(o.presence) < 0.99:
+			if _done:
+				return
+			if _wall() - t0 > 45.0:
+				return _end(false, "the Onlooker never found anywhere to stand in 45 s")
+			if not bool(o.present):
+				me.bot_yaw = wrapf(me.bot_yaw + 0.05, -PI, PI)
+				br.away_left = minf(br.away_left, OL_FAST_AWAY)
+			br.hop_left = maxf(br.hop_left, 30.0)   # hold still: this is about the poof, not the hop
+			await get_tree().physics_frame
+		_send("ol_there", {"id": o.monster_id})
+		if not await _until(func(): return _count_msgs("ol_seen_there") > 0 or _count_msgs("fail") > 0, 30.0, "the client to see it standing"):
+			return
+		if _count_msgs("fail") > 0:
+			return
+		var where: Vector3 = o.global_position
+		var poofs0 := int(o.poofs)
+		# Run at it: put the host inside the banish range, facing it.
+		var to_me: Vector3 = me.global_position - where
+		to_me.y = 0.0
+		me.teleport(_nav_point(where + to_me.normalized() * (OnlookerBrain.BANISH_RANGE - 2.0)))
+		_look_at_point(me, where + Vector3.UP * 1.6)
+		if not await _until(func(): return not bool(o.present), 10.0, "the banish"):
+			return
+		if int(br.banished) != 1:
+			return _end(false, "it went, but not by a banish (banished=%d)" % int(br.banished))
+		await _frames(2)
+		if int(o.poofs) != poofs0 + 1:
+			return _end(false, "the host left %d poofs for one banish" % (int(o.poofs) - poofs0))
+		var mine := _poof_nodes(o)
+		if mine.size() != 1:
+			return _end(false, "the host has %d poof nodes after one banish" % mine.size())
+		_say("banished from %.1f m; the host left one poof at %s" % [me.global_position.distance_to(where), str(where)])
+		_send("ol_banished", {"pos": where})
+		if not await _until(func(): return _count_msgs("ol_poof_verdict") > 0 or _count_msgs("fail") > 0, 60.0, "the client's verdict"):
+			return
+		if _count_msgs("fail") > 0:
+			return
+		if not await _until(func(): return _poof_nodes(o).is_empty(), 20.0, "the host's poof to clear itself away"):
+			return
+		await _finish_together("run at the Onlooker and it poofs on every machine, where it stood, and the cloud clears")
+		return
+
+	if not await _wait_shift_as_client():
+		return
+	if not await _until(func(): return _count_msgs("ol_there") > 0, 60.0, "the host to place the Onlooker"):
+		return
+	var oid: int = int(_msgs("ol_there")[0].data.id)
+	if not await _until(func(): return game.monsters.has(oid) and is_instance_valid(game.monsters[oid]) and bool(game.monsters[oid].present), 20.0, "the Onlooker standing on my machine"):
+		return
+	var o: Node = game.monsters[oid]
+	if not await _until(func(): return float(o.presence) > 0.9, 10.0, "it to fade in on my machine"):
+		return
+	var poofs0 := int(o.poofs)
+	_send("ol_seen_there", {})
+	if not await _until(func(): return _count_msgs("ol_banished") > 0, 30.0, "the host to run at it"):
+		return
+	if not await _until(func(): return int(o.poofs) > poofs0, 5.0, "the poof on my machine"):
+		_send("fail", {})
+		return
+	await _frames(2)
+	var host_pos: Vector3 = _msgs("ol_banished")[0].data.pos
+	var nodes := _poof_nodes(o)
+	if nodes.size() != 1 or int(o.poofs) != poofs0 + 1:
+		_send("fail", {})
+		return _end(false, "one banish left %d poofs (%d nodes) on the client" % [int(o.poofs) - poofs0, nodes.size()])
+	var err: float = (nodes[0] as Node3D).global_position.distance_to(host_pos)
+	if err > 0.3:
+		_send("fail", {})
+		return _end(false, "the client's poof is %.2f m from where the host's Onlooker stood" % err)
+	if bool(o.present):
+		_send("fail", {})
+		return _end(false, "it poofed but is still standing there on the client")
+	_say("poofed on my machine too, %.3f m from where the host had it" % err)
+	var t0 := _wall()
+	while not _poof_nodes(o).is_empty():
+		if _wall() - t0 > 20.0:
+			_send("fail", {})
+			return _end(false, "the client's poof never cleared itself away")
+		await _frames(5)
+	_send("ol_poof_verdict", {"err": err})
+	await _finish_together("saw the Onlooker poof where it stood, and the cloud clear")
+
+
+## The poofs this Onlooker has left lying about (onlooker_smoke.gd adds them beside it).
+func _poof_nodes(o: Node) -> Array:
+	var out: Array = []
+	var parent: Node = o.get_parent() if is_instance_valid(o) else null
+	if parent == null:
+		return out
+	for c in parent.get_children():
+		if String(c.name).begins_with("OnlookerPoof") and not c.is_queued_for_deletion():
+			out.append(c)
+	return out
 
 
 ## Aim `p`'s bot camera straight at `target`, no movement -- the same shape as _face_at, minus the

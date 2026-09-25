@@ -313,7 +313,8 @@ a table, so there is no clip for a rig to play. Searched the vetted CC0 sources 
 shadow figure" / "faceless standing figure" and found only fully modelled monsters or low-poly
 humans, neither of which is a silhouette — and a silhouette is the whole brief, since the thing has
 to read as the same hole in the world at forty metres under the Chapel's candles and in the
-Factory's fog. No sound file either: it is silent on purpose (docs/CONTRACTS.md, "The Onlooker").
+Factory's fog. No sound file either: it is silent on purpose (docs/CONTRACTS.md, "The Onlooker"). Its smoke (2026-09-24) is no asset either: the torn edge and the puffs are procedural noise
+in two shaders (`shaders/onlooker_body.gdshader`, `shaders/onlooker_smoke.gdshader`), no textures.
 
 Kinds with no CC0 model, still primitives: `pulse_oximeter`, `epipen`, `reflex_hammer`, and
 (POCKETS 2 phase 4) `quarter_bucket`, `warm_scrubs`, `fabric_softener` — searched the same vetted

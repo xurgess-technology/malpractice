@@ -56,6 +56,8 @@ const SCENARIOS := [
 	# placement, its own HOP_INTERVAL clock) land right on a second machine, cadence sped up only
 	# through the brain's already-overridable per-instance timers, never the shipped constants.
 	{"name": "onlooker_live", "scenario": "onlooker_live", "clients": 1, "timeout": 240, "extra": ["--pocket=natatorium"]},
+	# 2026-09-24: run at it and it poofs -- a burst and a lingering cloud -- on every machine.
+	{"name": "onlooker_poof", "scenario": "onlooker_poof", "clients": 1, "timeout": 240, "extra": ["--pocket=natatorium"]},
 	# docs/SONOGRAPHER.md chunk B: a client sees the neck, the charge, the fan and the deafen, and is
 	# imaged and hunted correctly.
 	{"name": "sono", "scenario": "sono", "clients": 1, "timeout": 300},
