@@ -3,6 +3,13 @@
 Everything that changes in **Malpractice**, newest first. One minor version per day of work, one
 patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog).
 
+**2026-09-25 (0.11.x)**
+
+- **0.11.1**: THE SERVICE DOG 🐕
+    - Added: A new monster, the Service Dog -- a tall, gaunt, bloodied borzoi in a service vest. It wanders with a two-handed item in its mouth, brings it to you and sets it down like it wants to play fetch, then growls a warning. Throw the item back (any charge past a tap) and it fetches happily and wanders off; ignore the warning and it rears onto its hind legs, opens its jaws on a glowing throat orb, and drains your hearts with a spectral thread until someone throws the item -- teammates can save you. It's vulnerable to a shove, the needle, dragging and the saw like a Hive, but only while it's on all fours; standing and draining, nothing touches it, and killing it on the ground pays nothing.
+- **0.11.0**: Throws go the distance
+    - Changed: A fully charged throw is much faster and travels much further -- you can actually chuck something down a hallway now. Takes a little longer to wind up to full charge too.
+
 **2026-09-22 (0.10.x)**
 
 - **0.10.55**: The pool has a real bottom now 🏊
