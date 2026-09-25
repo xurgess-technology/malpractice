@@ -12,6 +12,7 @@ const Grips := preload("res://scripts/hands/grips.gd")
 const WindupScript := preload("res://scripts/combat/windup.gd")
 const HumanModel := preload("res://scripts/human/human_model.gd")   # HUMAN HOOK
 const ThrowPoseScript := preload("res://scripts/hands/throw_pose.gd")   # THROW HOOK
+const TorchScript := preload("res://scripts/hands/body_torch.gd")   # FLASHLIGHT POSE
 
 ## The fallback attach point on a body without a rig (body space).
 const FIXED_ATTACH := Vector3(-0.25, 1.05, -0.35)
@@ -42,6 +43,14 @@ var _syringe: Node3D = null
 # HUMAN HOOK: one-shot clips (Interact / PickUp) and the last interact seen.
 var _oneshot_t := 0.0
 var _interact_seen := -1
+# FLASHLIGHT POSE: the torch in the body's hand (scripts/hands/body_torch.gd), which arm holds it, how
+# far that arm is raised to aim it (0 hanging at the side .. 1 pointed where the player looks), and
+# whether it is shown at all (not while lying, crawling, carried, strapped down or hanging).
+var torch: TorchScript = null
+var torch_side := "arm_l"
+var torch_w := 0.0
+var _aim_w := 0.0          # how far the torch itself has turned from the forearm to the look
+var _torch_shown := false
 
 static var _libs := {}
 
@@ -77,6 +86,9 @@ func _init(p: Node, body_visual: Node3D) -> void:
 		else:
 			hand_l = ba
 	skeleton.skeleton_updated.connect(_after_skeleton)
+	torch = TorchScript.new()   # FLASHLIGHT POSE
+	torch.visible = false
+	body.add_child(torch)
 
 
 func has_rig() -> bool:
@@ -132,6 +144,19 @@ func update(delta: float) -> void:
 	var kind := String(player.selected_stack().kind)
 	var grip := Grips.grip(kind) if kind != "" else {}
 	_two = kind != "" and int(grip.hands) >= 2
+
+	# FLASHLIGHT POSE: the torch hand. The left, since the right holds the selected stack (and does the
+	# throwing, jabbing and sawing); the right while the left arm is wrapped round a carried body. Raised
+	# to aim while the torch is lit or is the scanner's laser, hanging at the side when it is off.
+	var tstate: int = player.torch_state()
+	_torch_shown = _torch_can_show()
+	torch_side = "arm_r" if player.carrying != 0 else "arm_l"
+	var torch_up := _torch_shown and tstate != TorchScript.OFF and not _two
+	torch_w = move_toward(torch_w, 1.0 if torch_up else 0.0, delta * POSE_RATE)
+	_aim_w = move_toward(_aim_w, 1.0 if tstate != TorchScript.OFF else 0.0, delta * POSE_RATE)
+	if torch != null:
+		torch.visible = _torch_shown
+		torch.set_state(tstate, player.view_local())
 
 	# ---- the clip underneath
 	if anim != null and rig.get("generic", false):
@@ -209,6 +234,14 @@ func update(delta: float) -> void:
 		if pose.has("torso"):
 			tor += Vector2(pose.torso[0], pose.torso[1]) * w
 			torw = maxf(torw, w * float(pose.torso[2]))
+	if torch_w > 0.001:   # FLASHLIGHT POSE: the torch arm points where the player looks, over the hold
+		var aim := [torch_aim(float(player.head.rotation.x), torch_side), 1.0]
+		if torch_side == "arm_l":
+			al = _toward(al, alw, aim, torch_w)
+			alw = maxf(alw, torch_w)
+		else:
+			ar = _toward(ar, arw, aim, torch_w)
+			arw = maxf(arw, torch_w)
 	if action_pose != "" and action_w > 0.0:
 		var ap: Dictionary = RigMap.pose_of(rig, action_pose)
 		if from_pose != "":
@@ -316,6 +349,7 @@ func _after_skeleton() -> void:
 	var to_body := body.global_transform.affine_inverse() * skeleton.global_transform
 	_socket_r = _socket(to_body, "arm_r")
 	_socket_l = _socket(to_body, "arm_l")
+	_place_torch()
 	_lights_follow_head()
 
 
@@ -328,14 +362,12 @@ var _light_home := {}   # light -> its local position on its parent
 
 
 func _lights_follow_head() -> void:
-	if player.is_local or not is_instance_valid(skeleton):
+	if player.view_local() or not is_instance_valid(skeleton):
 		return
 	if _head_bone == -2:
 		_head_bone = skeleton.find_bone(String(rig.bones.get("head", "")))
 	if _head_bone < 0:
 		return
-	var sx := skeleton.global_transform
-	var moved: Vector3 = sx * skeleton.get_bone_global_pose(_head_bone).origin - sx * skeleton.get_bone_global_rest(_head_bone).origin
 	if _light_home.is_empty():
 		var lights: Array = [player.flashlight] if player.flashlight != null else []
 		for l in player.head.get_children():
@@ -343,10 +375,67 @@ func _lights_follow_head() -> void:
 				lights.append(l)
 		for l in lights:
 			_light_home[l] = (l as Node3D).position
+	# FLASHLIGHT POSE: the beam comes out of the torch in the hand (body_torch.gd), not out of the head.
+	var flash = player.flashlight
+	var on_lens: bool = is_instance_valid(flash) and torch != null and _torch_shown and torch.is_inside_tree()
+	if on_lens:
+		var tx: Transform3D = torch.global_transform
+		flash.global_transform = Transform3D(tx.basis.orthonormalized(), tx * TorchScript.lens_offset())
+	var sx := skeleton.global_transform
+	var moved: Vector3 = sx * skeleton.get_bone_global_pose(_head_bone).origin - sx * skeleton.get_bone_global_rest(_head_bone).origin
 	for l in _light_home:
 		var n := l as Node3D
-		if is_instance_valid(n):
-			n.global_position = n.get_parent().global_transform * (_light_home[l] as Vector3) + moved
+		if not is_instance_valid(n) or (on_lens and n == flash):
+			continue
+		if n == flash:
+			n.basis = Basis()   # back from the hand: along the head's look again
+		n.global_position = n.get_parent().global_transform * (_light_home[l] as Vector3) + moved
+
+
+# -- FLASHLIGHT POSE ------------------------------------------------------------------------------------
+
+## The torch arm's pose: the forearm along the look (pitch clamped so it never folds over the head or
+## into the chest), a touch low so the hand sits under the eye line, and a touch in toward the middle.
+## Skeleton space, as the pose table: +Z forward, +Y up, the body's right -X.
+static func torch_aim(pitch: float, side: String) -> Vector3:
+	var p := clampf(pitch, -1.1, 1.1)
+	var inward := -0.12 if side == "arm_l" else 0.12
+	return Vector3(inward, sin(p) - 0.12, cos(p)).normalized()
+
+
+## Shown in a hand only while the body is up and about: a body lying on a table, crawling, carried,
+## face down in a dive or dangling from the Night Nurse keeps its light at the head, as before.
+func _torch_can_show() -> bool:
+	return player.alive and not player.downed and player.carried_by == 0 and not player.on_table and int(player.held_by) < 0 and not player.prone and not player.dive_in_air() and player.stun <= 0.0
+
+
+## The torch in the hand: its handle in the fist, pointing along the forearm while it hangs, turning to
+## point exactly where the player looks as the arm comes up (so the beam lands on the crosshair's line).
+func _place_torch() -> void:
+	if torch == null or not _torch_shown:
+		return
+	var sock: Transform3D = _socket_l if torch_side == "arm_l" else _socket_r
+	var bx: Transform3D = body.global_transform
+	var inv := bx.basis.inverse()
+	# Hanging: -Z down the forearm (wrist to palm), the back of the torch toward the body's front.
+	var along: Vector3 = -sock.basis.z
+	var hang := _along(along, Vector3(0.0, 0.0, -1.0))
+	# Aimed: the head's look, in body space.
+	var look: Basis = (inv * player.head.global_transform.basis).orthonormalized()
+	var k := _aim_w * _aim_w * (3.0 - 2.0 * _aim_w)
+	var b := Basis(hang.get_rotation_quaternion().slerp(look.get_rotation_quaternion(), k))
+	# The handle sits across the curled fingers, a little out of the palm.
+	torch.transform = Transform3D(b, sock.origin + sock.basis.y * 0.025)
+
+
+## A basis whose -Z runs along `dir`, +Y as near `up_hint` as it can be.
+static func _along(dir: Vector3, up_hint: Vector3) -> Basis:
+	var z := -dir.normalized()
+	var up := up_hint - z * up_hint.dot(z)
+	if up.length() < 0.01:
+		up = Vector3.UP - z * z.y
+	up = up.normalized()
+	return Basis(up.cross(z), up, z)
 
 
 func _socket(to_body: Transform3D, side: String) -> Transform3D:
