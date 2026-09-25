@@ -3,6 +3,12 @@
 Everything that changes in **Malpractice**, newest first. One minor version per day of work, one
 patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog).
 
+**2026-09-24 (0.11.x)**
+
+- **0.11.0**: Your teammates actually hold their flashlights now 🔦
+    - Changed: Other players hold a real flashlight -- arm up, pointed where they're looking -- and the beam comes out of the lens instead of out of nowhere. Off, it hangs at their side.
+    - Changed: You can see a teammate's flashlight turn on, off and blue to scan from your own screen, lens glow and all.
+
 **2026-09-22 (0.10.x)**
 
 - **0.10.55**: The pool has a real bottom now 🏊
