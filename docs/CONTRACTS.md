@@ -558,6 +558,107 @@ distance** (nothing inside 6 m, full by 22 m) so it stays legible at the range i
 without swallowing the head up close. The database entry caps at tier 2 with no special case: tier
 3 is `harvested`, and there is nothing here to harvest.
 
+### The Service Dog (2026-09-24, branch `service-dog-brain`)
+
+`Monster.SERVICE_DOG` `"service_dog"`, a fifth kind in `Monster.KINDS`. It wants to play fetch and is
+not asking. Brain `scripts/monsters/service_dog_brain.gd` (host only), body
+`scripts/monsters/service_dog_rig.gd` (every machine), the drained surgeon's own effects
+`scripts/monsters/dog_drain_fx.gd` (local only).
+
+**The offer.** It carries a two-handed item (`Items.is_bulky`) in its mouth, or goes looking for a
+loose, settled one it may wander to (`monster_may_wander_to`). Carrying one, it notices a surgeon
+(a cone and a clear line, like the Hive), walks up (`DOG_APPROACH`, a walk), lowers its head and
+sets the item on the floor at their feet (`DOG_OFFER`), then stands and watches with a clock
+running (`DOG_WARN`, `FETCH_WINDOW` 12 s), growling once or twice. A **real throw of that same
+item, by anybody** satisfies it: `charge` as `game.drop_selected(p, charge)` gets it (0..1) above
+`THROW_MIN_CHARGE` 0.1. A tap reaches `drop_selected` as charge 0; `Player.DROP_TAP_MAX` is seconds of
+hold and is never compared with a charge. Satisfied: `DOG_RETRIEVE`, it trots to wherever the item
+is, takes it back in its mouth and wanders, `CONTENT_TIME` before it will offer again.
+
+**The drain** (`DOG_DRAIN`, replaced the old rear-and-attack; `DOG_REAR_RETIRED` keeps its number).
+When the clock runs out -- not before -- it rises onto its hind legs over `REAR_RISE` (about 2.4 m
+to the head), jaws wide, and the orb at the back of its throat lights. While its **original target
+only** is within `DRAIN_RANGE` (4 m, flat) with a clear line from its throat to their face, hearts go
+on the Onlooker's pacing: a meter that fills in range and bleeds down out of it (`DRAIN_DECAY`), the
+first heart at `DRAIN_GRACE`, then gaps of `DRAIN_TICK_FIRST` x `DRAIN_TICK_RAMP`^n floored at
+`DRAIN_TICK_MIN` (three hearts in about 11 s). Hearts go through `game.dog_drain_heart`, **not**
+`damage_player`: no knockback, nothing dropped from the hands, no wind-up cancelled, because it does
+not hold them and the counter (pick it up, throw it) has to stay open; at 0 they go down as usual.
+It follows upright and silently at `SPEED_DRAIN` (a little under a surgeon's walk), standing
+`DRAIN_STAND` off; the following is its own function (`_drain_follow`) so a glide can replace it.
+It ends when **anybody** makes a real throw of that item (it drops over `REAR_DROP`, jaws shut, orb
+dims, `DOG_RETRIEVE`), or when its target is down, dead or gone (the same, as if nothing happened).
+If the item leaves the world with nobody holding it (sold, freed) it stands down.
+
+**Vulnerable on all fours, untouchable standing.** `is_capturable("service_dog")` is true;
+`Monster.capturable_now()` and `can_be_hurt()` are false in `DOG_DRAIN`. On all fours it is a Hive:
+a shove stuns it (`STUNNED`, `SHOVE_STUN`; the fetch clock does not run while it is down, and it
+goes back to what it was doing), the needle puts it under (it drops what it carries, and its offer
+is released: `game.dog_release_tag`), a sedated dog can be dragged, and the saw kills it in 2 hits
+(`max_hp_for`), dropping what it carried. No monster pays a bounty, so a kill pays nothing (the
+test asserts it). Standing, the brain's `shoved` / `stun` ignore it, the saw returns `"immune"`, and
+combat's `_capturable` (now asking `capturable_now()` first) refuses the needle.
+**Not strappable yet:** strapping needs a `Procedures` monster patient and a table body, which is
+the surgery flow (the Sonographer is in the same place); `drag_aim` offers "Put the Service Dog
+down" at a table.
+
+**Identity is a tag, not a node.** Taking an item in its mouth removes the WorldItem like a pickup
+(`game.dog_take_item`) and setting it down spawns a new one (`game.dog_place_item`), so an offer is
+`brain.offer_tag` (`game.dog_new_tag`, never reused). The WorldItem carries it as `dog_tag` (host
+only, not replicated); `game.pickup_item` copies it into the hand slot as `"dg"`, and every way a
+stack leaves a hand (`drop_selected`, `_drop_hands`, `_drop_hands_in_place`, `storage_place`) copies
+it back out. `drop_selected` calls `game.dog_item_thrown(tag)` for a real throw of a tagged stack.
+`game.dog_tagged_item(tag)` is the loose item, `game.dog_tag_exists(tag)` "anywhere at all".
+
+**Roster**: none on shift 1, one from shift 2 (`Monster.dog_count`), outside `MAX_MONSTERS`,
+placed at a `monster_spawns` point like the Sonographer and the Nurse.
+
+**Replication** (only the dog's report carries these): `"ck"` -> `dog_carry`, `"dt"` ->
+`dog_target` (peer id it is offering to or draining), `"ol"` -> `dog_left` (fetch clock, 0.25 s
+steps; a client counts down between snapshots), `"gr"` -> `dog_growls` (a counter: each growl
+plays once everywhere), `"ok"` -> `dog_offer_kind`, `"og"` -> `dog_glow` (the orb, 0..1, 1/32 steps).
+The mode is `md`. The host only turns the orb full while its target is in range with a clear line,
+so `Monster.dog_draining()` (DOG_DRAIN, fully upright, `og` > 0.7) is "draining this second" on
+every machine without a field of its own. From it every machine draws **the thread** (a thin
+orb-coloured line from the target's mouth to the orb, `DrainThread`, seen by everyone), and
+`dog_drain_fx.gd` asks "is a dog draining ME?" from `dt` on its own machine: the screen
+desaturates (the Look environment's `adjustment_saturation`), the audio goes distant
+(`Audio.set_drain_muffle`, the fog's low-pass) and the torch dims (**on trial**, `FLASH_DIM`), all
+ramping in over `RAMP_SECONDS` and clearing over `CLEAR_SECONDS`. No field exists for the local
+effects.
+
+**The body** (`service_dog_rig.gd`) is a **placeholder**: primitives on a few pivots, tall and
+lanky (shoulders ~1.1 m, head ~1.5 m, ~2.4 m standing). `build(model)` prefers a GLB when
+`Assets.has("monster/service_dog")`. Inputs: `speed`, `moving`, `rear`, `head_down`, `growl`,
+`look_yaw`, `carrying`, `lying`, the stun window's `daze` / `rise` / `stagger`, and
+`set_drain_glow(v)`; then `tick()`. Sockets: `mouth` (the carried item), `orb` -- a node named
+**`Orb`**, its own mesh and material (never baked into the head), so a later task can take it out
+(`orb_world()`) -- and `Head`. For the GLB: clips `idle`, `walk`, `rear_up`, `drain_idle`,
+`upright_walk`, `drop_down` through `Assets.anim_name` (missing ones fall back to idle/walk); the orb
+is a node named `Orb` (or `Site_orb` / a `throat` bone as its socket, where ours goes); the mouth is
+`Site_mouth` or a BoneAttachment on bone `jaw`/`head`.
+
+**With the art track's model** (`service-dog-art`: `dog_rig.gd`'s `DogPoser`, checked against
+its Revision 11): when `res://scripts/monsters/dog_rig.gd` exists, `service_dog_rig.gd` builds the
+GLB through that script's `build(model)`, reparents the GLB under itself (so the lying roll applies),
+takes the poser's `OrbAttach/Orb` and `Head` as its sockets (`set_drain_glow` forwards to the
+poser's orb material), feeds the poser `look_at` (skeleton space) / `look_weight` / `ear_alert` /
+`twitch`, and plays the art's `place` / `growl` clips where they fit. One-shot clips (`rear_up`,
+`drop_down`, `place`) are time-scaled to the brain's `REAR_RISE` / `REAR_DROP` / `OFFER_TIME`
+whatever length they were authored at. Offer and pick-up distances come from the body's measured
+mouth reach (`reach()`, `Monster.dog_reach()`), not the placeholder's neck. `model.dog` is always
+this wrapper, never the poser: merging `service-dog-art` means taking this branch's side of
+`monster_model.gd` and dropping the art's own `DogRig.build` case in `setup()` (keep its
+`eye_offset` line).
+
+**No HUD, on purpose** (Zach, 2026-09-24): no prompt text and no countdown on screen. The tells are
+the dog's: the item set at your feet, the growl, its stare, standing up, the orb and the thread.
+**Doors**: it noses hinged doors open in any travelling mode. **Sounds**: `monsters_dog_growl`,
+`monsters_dog_snarl` (shoved down), `monsters_dog_step` (on all fours); standing and draining it is
+silent (tools/gen_audio_monsters.mjs). **Tests**: `tools/dogtest.tscn` (headless: the whole loop,
+the drain, the vulnerability), nettest `service_dog` (a client drained, and its own throw ending
+it), `tools/dogshot.tscn` (the smoke look, needs a renderer). **Review**: `--setup=service_dog`.
+
 ### Monsters, sweep 3 (monsters worker): the Hive, fighting and capturing
 
 Kinds: `Monster.HIVE` `"hive"`, `DISCHARGED`, `NIGHT_NURSE` (`Monster.KINDS`).
@@ -3057,4 +3158,4 @@ shift 2), nettest scenario `doors`, devtest door checks, `tools/perfprobe.tscn -
 (`{"seed": 4242, "stage": "_name"}`) and one static function that stages things with the helpers
 `place`, `clear_hands`, `give` (a stack, with extra stack keys like `bt`, `used`, `x`), `give_abilities`
 and `floor_item`. An unknown name is logged with the known ones and the menu opens as usual. Setups so
-far: `icons`, `items`, `graft`, `graft_back`, `trinkets`.
+far: `icons`, `items`, `graft`, `graft_back`, `trinkets`, `service_dog`.

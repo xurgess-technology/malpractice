@@ -12,7 +12,7 @@ const NurseRig := preload("res://scripts/monsters/night_nurse_rig.gd")
 const HiveRig := preload("res://scripts/monsters/hive_rig.gd")
 const SonoRig := preload("res://scripts/monsters/sonographer_rig.gd")
 const OnlookerRig := preload("res://scripts/monsters/onlooker_rig.gd")
-const DogRig := preload("res://scripts/monsters/dog_rig.gd")
+const DogRig := preload("res://scripts/monsters/service_dog_rig.gd")
 
 const RIG_KEY := "patient/human"
 const LOOPING := ["idle", "walk", "sprint"]
@@ -30,7 +30,8 @@ var hive = null
 ## The Sonographer's model: its pose modifier and its look interface (sonographer_rig.gd), null for
 ## every other look. It is `shaper` too.
 var sono = null
-## The Service Dog's model: its pose modifier (dog_rig.gd), null for every other look.
+## The Service Dog's body and its inputs (service_dog_rig.gd: the GLB when there is one, else the
+## placeholder primitives), null for every other look. monster.gd routes the dog past the shaper.
 var dog = null
 ## Movable ears: [{node: Node3D pivot on the head, side: +1 left / -1 right, rest: outward radians}]
 var ears: Array = []
@@ -55,18 +56,15 @@ func setup(monster_kind: String) -> void:
 	if kind == "sonographer" and SonoRig.build(self):
 		play("idle")
 		return
-	# ART: the Service Dog's own Blender model and quadruped rig (art/service_dog/, dog_rig.gd).
-	# service-dog-brain builds the brain/state-machine side on its own branch against whatever
-	# placeholder body it needs meanwhile; this case only takes over once both land and the real
-	# GLB (monster/service_dog) exists, exactly like the Nurse/Hive/Sonographer cases above.
-	if kind == "service_dog" and DogRig.build(self):
-		dog = skeleton.get_node("DogPoser")
-		play("idle")
-		return
 	# POCKETS 2 phase 6: primitives, no skeleton and no clip, so no play() either -- it never takes
 	# a step, so there is nothing to animate. monster.gd routes this kind past the shaper entirely.
 	if kind == "onlooker":
 		OnlookerRig.build(self)
+		return
+	# The Service Dog: its own body either way (a GLB `monster/service_dog` once the art lands, the
+	# placeholder primitives until then), driven by monster.gd's _dog_visual, never by the shaper.
+	if kind == "service_dog":
+		dog = DogRig.build(self)
 		return
 	rig = Assets.spawn(RIG_KEY) if Assets.has(RIG_KEY) else null
 	if rig != null:
