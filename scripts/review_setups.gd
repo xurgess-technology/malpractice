@@ -149,6 +149,17 @@ const SETUPS := {
 	"tumble": {"seed": 4242, "stage": "_tumble"},
 	# SHOWERS (2026-09-24): standing beside a personnel shower with an empty hand. Press E.
 	"showers": {"seed": 4242, "stage": "_showers"},
+	# THE SURGICAL ROBOT (2026-09-24): in the OR in front of the dead robot with a robot core and a
+	# scalpel in hand, and a sedated Hive strapped to the robot's table. E plugs it in; then P from
+	# anywhere and E from its camera cuts round the Hive's eye. `-Count 2`: the other window watches
+	# the robot come to life and its arms go to work.
+	"robot": {"seed": 4242, "stage": "_robot"},
+	# The point of it: the robot already on, a Hive's eyeball in the vat on its table, the four graft
+	# tools in hand, standing at that table. Hold E to strap in, press P, and graft your own eye.
+	"robot_graft": {"seed": 4242, "stage": "_robot_graft"},
+	# Buying it: $500 and the lobby's pharmacy fax in front of you. Order a robot core, take it from
+	# the drawer, carry it to the OR.
+	"robot_buy": {"seed": 4242, "stage": "_robot_buy"},
 }
 
 
@@ -1184,6 +1195,92 @@ static func _minimap(game: Game) -> void:
 	game.say("Walk out into a wing. The hub is already on the map; the wards fill in as you go into them.", 10.0)
 	print("[review] minimap: %d rooms, %d lit at the start" % [
 			int(game.minimap.room_count), int(game.minimap.seen_rooms.count(0xFF))])
+
+
+## THE SURGICAL ROBOT: nothing else going on -- no phone, no patient wheeled in, no monsters, no
+## game over -- and the robot's table and fixture, or nulls without them.
+static func _robot_quiet(game: Game) -> Dictionary:
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game.dev.request("monsters_off", {"on": true})
+	game.dev.request("god", {"on": true})
+	var r = game.robot
+	if r == null or r.fixture == null or int(r.table_index) < 0:
+		push_warning("[review] robot setup: no robot in this level")
+		return {}
+	return {"robot": r, "ti": int(r.table_index), "fixture": r.fixture}
+
+
+## THE SURGICAL ROBOT: the dead robot in front of you, a core and a scalpel in hand, a sedated Hive
+## strapped to its table.
+static func _robot(game: Game) -> void:
+	var tree := game.get_tree()
+	var q := _robot_quiet(game)
+	if q.is_empty():
+		return
+	var ti: int = q.ti
+	var fx: Node3D = q.fixture
+	game.dissection.dev_strap("hive", 1.0, ti)
+	for i in 4:
+		await tree.physics_frame
+	clear_hands(game)
+	give(game, "robot_core", 1)
+	give(game, "scalpel", 1)
+	game.local_player().selected = 0
+	# Beside the robot on the room side, looking at its socket and past it at the table.
+	var b := fx.global_transform.basis
+	place(game, game._floor_at(fx.global_position + b * Vector3(0.35, 0.0, 1.35)), fx.global_position + b * Vector3(0.1, 1.0, 0.0))
+	game.say("E on the robot plugs the core in. Then P, anywhere, to remote in.", 8.0)
+
+
+## THE SURGICAL ROBOT: the solo graft. Robot on, Hive eye in the vat on its table, the four tools.
+static func _robot_graft(game: Game) -> void:
+	var tree := game.get_tree()
+	var q := _robot_quiet(game)
+	if q.is_empty():
+		return
+	var r = q.robot
+	var ti: int = q.ti
+	r.powered = true
+	r.boot_t = float(game.world_time) - 10.0
+	var si: int = game.vats.place_of_table(ti)
+	if si >= 0:
+		var yaw: float = game.table_yaw_of(ti)
+		var vat = game._spawn_item("specimen_vat", 1, Transform3D(Basis(Vector3.UP, yaw), game.vats.places[si].position as Vector3), WorldItem.State.LOOSE)
+		vat.x = Eyes.pack("eye_hive", "", 0.0, 120)
+	var hud = tree.get_first_node_in_group("hud")
+	if hud != null:
+		hud._card_seen["hive_in"] = true
+	clear_hands(game)
+	for k in ["scalpel", "eye_spoon", "forceps", "suture_kit"]:
+		give(game, k, 1)
+	game.local_player().selected = 0
+	var tb := Basis(Vector3.UP, game.table_yaw_of(ti))
+	var table: Vector3 = game.table_position(ti)
+	place(game, game._floor_at(table + tb * Vector3(-0.2, 0.0, 1.3)), table + Vector3.UP * 0.9)
+	await tree.physics_frame
+	game.say("Hold E on the table to strap in. P to remote into the robot. 1-4 picks the tool, E does the step.", 10.0)
+
+
+## THE SURGICAL ROBOT: buying the core. $500, standing at the lobby's pharmacy fax.
+static func _robot_buy(game: Game) -> void:
+	var tree := game.get_tree()
+	_robot_quiet(game)
+	game.reset_money()
+	game.add_money(500, "review")
+	clear_hands(game)
+	for i in 30:
+		await tree.physics_frame
+	var fax: Node = game.find_interactable("pharmacy_fax")
+	if fax is Node3D:
+		var at: Vector3 = (fax as Node3D).global_position
+		var out: Vector3 = open_direction(game, at + Vector3.UP * 1.0, 3.0)
+		place(game, game._floor_at(at + out * 1.1), at + Vector3.UP * 0.9)
+	game.say("E on the fax, tick Robot core, send. Take it from the drawer and carry it to the OR.", 9.0)
 
 
 ## GRAFTING (2026-09-22): the lab wall's vat bench, standing where you would stand to take one.

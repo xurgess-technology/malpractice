@@ -75,7 +75,7 @@ static func glow_key(kind: String) -> String:
 	if ItemsDB.is_loot(kind):
 		return "gold"
 	var d := ItemsDB.def(kind)
-	if d.get("wear", false) or d.get("consumable", false):
+	if d.get("wear", false) or d.get("consumable", false) or d.get("shop", false):
 		return "pharma"
 	if d.get("bulky", false):
 		return "vessel"
@@ -105,6 +105,7 @@ static func make(kind: String, count: int = 1) -> Node3D:
 		"suture_kit": _suture_kits(root, clampi(count, 1, 4))
 		"placebo_pills": _placebo_bottle(root)   # SWEEP 4A HOOK (pharmacy, chunk 3)
 		"rocket_boots": _rocket_boots(root)   # ROCKET BOOTS
+		"robot_core": robot_core(root)   # THE SURGICAL ROBOT
 		"scalpel": _scalpel(root)   # GRAFTING part one
 		"eye_spoon": _eye_spoon(root)
 		"specimen_vat": Vats.build_model(root)
@@ -192,6 +193,7 @@ static func footprint(kind: String) -> Vector3:
 		"suture_kit": return Vector3(0.16, 0.05, 0.11)
 		"placebo_pills": return Vector3(0.045, 0.07, 0.045)
 		"rocket_boots": return Vector3(0.22, 0.1, 0.4)
+		"robot_core": return Vector3(0.1, 0.22, 0.1)
 		"scalpel": return Vector3(0.17, 0.02, 0.03)
 		"eye_spoon": return Vector3(0.2, 0.02, 0.04)
 		"specimen_vat": return Vector3(0.16, 0.26, 0.16)
@@ -787,6 +789,36 @@ static func _placebo_bottle(root: Node3D) -> void:
 	_add(root, _cyl(0.017, 0.04, pills), Vector3(0, 0.022, 0))
 	_add(root, _cyl(0.0215, 0.03, label), Vector3(0, 0.036, 0))
 	_add(root, _cyl(0.023, 0.014, cap), Vector3(0, 0.077, 0))
+
+
+## THE SURGICAL ROBOT: the robot core. A glass cell standing upright between two steel caps, a teal
+## coil glowing inside it, contact pins on the bottom cap and a carry ring on the top. About 22 cm
+## tall. The robot's socket shows the same model once it is plugged in (robot_fixture.gd).
+static func robot_core(root: Node3D) -> void:
+	var steel := _mat(Color(0.5, 0.53, 0.55), 0.35, 0.8)
+	var dark := _mat(Color(0.07, 0.08, 0.09), 0.6)
+	var glow := StandardMaterial3D.new()
+	glow.albedo_color = Color(0.2, 0.9, 0.8)
+	glow.emission_enabled = true
+	glow.emission = Color(0.25, 0.95, 0.85)
+	glow.emission_energy_multiplier = 2.2
+	_add(root, _cyl(0.046, 0.035, steel, 16), Vector3(0, 0.0175, 0))
+	_add(root, _cyl(0.04, 0.012, dark, 16), Vector3(0, 0.041, 0))
+	_add(root, _cyl(0.038, 0.12, _glass(Color(0.55, 0.9, 0.95)), 16), Vector3(0, 0.107, 0))
+	_add(root, _cyl(0.012, 0.11, glow, 8), Vector3(0, 0.107, 0))
+	for i in 5:
+		_add(root, _cyl(0.024, 0.006, glow, 12), Vector3(0, 0.063 + i * 0.022, 0))
+	_add(root, _cyl(0.04, 0.012, dark, 16), Vector3(0, 0.173, 0))
+	_add(root, _cyl(0.046, 0.03, steel, 16), Vector3(0, 0.194, 0))
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.016
+	tm.outer_radius = 0.024
+	ring.mesh = tm
+	ring.material_override = steel
+	_add(root, ring, Vector3(0, 0.222, 0), Vector3(90, 0, 0))
+	for x in [-0.018, 0.018]:
+		_add(root, _cyl(0.005, 0.012, steel, 6), Vector3(x, -0.004, 0))
 
 
 ## ROCKET BOOTS: a pair of white clogs, each with a steel thruster can bolted to the heel (an orange

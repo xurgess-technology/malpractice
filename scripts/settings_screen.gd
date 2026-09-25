@@ -365,6 +365,7 @@ func _build() -> void:
 	right.add_child(_rebind_row("key_jump", "Jump"))
 	right.add_child(_rebind_row("key_ability_alt", "Ability"))
 	right.add_child(_rebind_row("key_scan", "Scan"))
+	right.add_child(_rebind_row("key_robot", "Robot"))   # THE SURGICAL ROBOT: remote in
 
 	_sheet.add_child(_rule())
 	_sheet.add_child(_ink("Changes apply right away.  F2 cycles graphics, F5 the camera, F11 fullscreen.", 14, Fax.INK_FAINT))

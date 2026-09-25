@@ -207,6 +207,23 @@ const ITEMS := {
 		"where": "Only sold at the pharmacy window.",
 		"handling": "Worn, not carried: taking a pair puts them on. Hold crouch through a sprint-dive to burn fuel and fly straight ahead. Walls hurt.",
 	},
+	# THE SURGICAL ROBOT (scripts/robot/robot.gd): what brings the OR's robot to life. Only ever
+	# bought, like the boots; carried in one hand to the robot and plugged in with E, which uses it up
+	# and powers the robot for the rest of the run. `shop` puts it in the pharmacy's colour.
+	"robot_core": {
+		"name": "Robot core",
+		"short": "Robot cores",
+		"surgical": false,
+		"consumable": false,
+		"shop": true,
+		"batch": [1, 1],
+		"fragile": false,
+		"found": {},
+		"loose_surfaces": [],
+		"real_use": "A glass power cell with something humming in it. The surgical robot beside the OR table has an empty socket exactly this shape.",
+		"where": "Only sold at the pharmacy window.",
+		"handling": "Carry it to the surgical robot in the OR and press E to plug it in. The robot stays on for the rest of the run.",
+	},
 	# GRAFTING part one (docs/GRAFTING.md): the two eye tools, and the specimen vat. `found` is empty:
 	# game.gd stocks the scalpel and the eye spoon on the OR's storage shelves at the start of a run,
 	# and the vats stand on the lab wall (scripts/grafting/vats.gd).

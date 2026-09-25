@@ -392,7 +392,9 @@ func _host_tick(delta: float) -> void:
 	var p = game.players.get(operator_id)
 	var table := _table_pos()
 	var gone: bool = p == null or not is_instance_valid(p) or not bool(p.get("alive"))
-	if not gone:
+	# THE SURGICAL ROBOT: an operator remoted into the robot at this table is at the table, wherever
+	# their body is. Leaving the robot ends the operation from robot.gd, the way walking off does.
+	if not gone and not _robot_operates(p, table):
 		var flat: Vector3 = p.global_position - table
 		flat.y = 0.0
 		gone = flat.length() > WALK_AWAY_M
@@ -667,8 +669,7 @@ func _start_local_operating() -> void:
 	_op_time = 0.0
 	_report_accum = 0.0
 	mg.ctx["operator"] = true
-	var p = _my_player()
-	var head_cam: Camera3D = p.camera if p != null and "camera" in p and p.camera != null else null
+	var head_cam: Camera3D = _head_camera()   # THE SURGICAL ROBOT: the robot's eye, when remoted in
 	if head_cam != null:
 		_head_fov = head_cam.fov
 		if _cam_dir == 0 and _cam_blend <= 0.0:
@@ -729,6 +730,34 @@ func _my_op_id() -> int:
 	if game != null and game.has_method("driving_id"):
 		return int(game.driving_id())
 	return Net.my_id()
+
+
+## THE SURGICAL ROBOT: the real Game behind this system (a stand-in game, like the player table's,
+## keeps it in `game`), for its robot.
+func _robot():
+	var g = game
+	if g != null and g.get("robot") == null and g.get("game") != null:
+		g = g.game
+	var r = g.get("robot") if g != null else null
+	return r if r != null and is_instance_valid(r) else null
+
+
+## THE SURGICAL ROBOT: `p` is operating here through the robot (linked, and this is its table).
+func _robot_operates(p, table: Vector3) -> bool:
+	var r = _robot()
+	return r != null and bool(r.linked(p)) and bool(r.covers(table))
+
+
+## The camera the surgery view blends out of and back into on this machine: the robot's eye while
+## this machine's player is remoted into it, else the driving player's head.
+func _head_camera() -> Camera3D:
+	var r = _robot()
+	if r != null:
+		var rc = r.local_camera()
+		if rc != null:
+			return rc
+	var p = _my_player()
+	return p.camera if p != null and "camera" in p and p.camera != null else null
 
 
 ## The player this machine looks out of: whose head the surgery camera blends out of and back into.
@@ -950,9 +979,10 @@ func _update_camera(delta: float) -> void:
 	var target := _pose()
 	var p = _my_player()
 	var head: Transform3D = target
-	if p != null and "camera" in p and p.camera != null:
-		head = p.camera.global_transform
-		_head_fov = p.camera.fov
+	var hc := _head_camera()   # THE SURGICAL ROBOT: the robot's eye, when remoted in
+	if hc != null:
+		head = hc.global_transform
+		_head_fov = hc.fov
 	var e := smoothstep(0.0, 1.0, _cam_blend)
 	_cam.global_transform = head.interpolate_with(target, e)
 	_cam.fov = lerpf(_head_fov, _last_pose_fov, e)
@@ -964,8 +994,8 @@ func _update_camera(delta: float) -> void:
 		_cam_dir = 0
 		_cam.current = false
 		_lamp.visible = false
-		if p != null and "camera" in p and p.camera != null and p.alive:
-			p.camera.current = true
+		if hc != null and (p == null or p.alive):
+			hc.current = true
 
 
 func camera() -> Camera3D:

@@ -62,6 +62,7 @@ const DEFAULTS := {
 	"key_jump": KEY_SPACE,
 	"key_ability_alt": KEY_ALT,
 	"key_scan": KEY_R,
+	"key_robot": KEY_P,   # THE SURGICAL ROBOT: remote in and out
 	# CUSTOMIZATION (scripts/personnel/customization.gd): what your surgeon looks like, packed into
 	# one int, chosen at the big mirror in Personnel. Per machine, so it follows you into any shift.
 	# -1 means nobody has been to the mirror yet: the surgeon wears the default for their peer id.
@@ -78,6 +79,7 @@ const REBIND_ACTIONS := {
 	"key_jump": "jump",
 	"key_ability_alt": "ability_alt",
 	"key_scan": "scan",
+	"key_robot": "robot_remote",   # THE SURGICAL ROBOT
 }
 
 ## Numeric keys: [min, max]. Values are clamped into these on set and on load.
@@ -93,6 +95,7 @@ const RANGES := {
 	"key_jump": [0, 4194500],
 	"key_ability_alt": [0, 4194500],
 	"key_scan": [0, 4194500],
+	"key_robot": [0, 4194500],   # THE SURGICAL ROBOT
 	"look": [-1, 1073741823],
 	"patterns_unlocked": [0, 1073741823],
 }

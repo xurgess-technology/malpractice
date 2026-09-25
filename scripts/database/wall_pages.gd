@@ -264,6 +264,15 @@ static func _other(kind: String) -> Dictionary:
 				"Anything solid, head on, costs you a heart.", "Order them on the lobby fax."],
 			"models": [{"item": kind, "count": 1}],
 		}
+	if kind == "robot_core":   # THE SURGICAL ROBOT
+		return {
+			"title": "ROBOT CORE",
+			"subtitle": "PHARMACY",
+			"paragraphs": ["A glass power cell with something humming in it. The surgical robot at the head of the first OR table has an empty socket this shape.",
+				"Carry it to the robot and press E to plug it in. The robot stays on for the rest of the run.",
+				"Then press P anywhere to remote into it and operate on whoever is on its table. Even you.", "Order it on the lobby fax."],
+			"models": [{"item": kind, "count": 1}],
+		}
 	if kind == "specimen_vat":
 		return {
 			"title": "SPECIMEN VAT",
