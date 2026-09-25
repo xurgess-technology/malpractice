@@ -138,6 +138,10 @@ const SETUPS := {
 	# host window. Solo, you watch Dr. Botsworth do the same loop. `--shots` (onlooker) saves a run of
 	# screenshots to tools/flashlight_shots/.
 	"flashlight_pair": {"seed": 4242, "stage": "_flashlight_pair", "join": "_flashlight_pair_join"},
+	# TUMBLE TUNING (2026-09-24): a stack of throwables in hand on open floor, some stairs and a
+	# wall close by. Throw one at a shallow angle, a steep one and straight down, and time how long
+	# each takes to stand up into its hover.
+	"tumble": {"seed": 4242, "stage": "_tumble"},
 }
 
 
@@ -1675,4 +1679,23 @@ class TorchDemo extends Node:
 				Input.action_release("scan")
 			host = null   # someone is at the host window: it is theirs now
 			print("[review] flashlight_pair: the host window was touched; the demo stops driving it")
+
+
+## TUMBLE TUNING (2026-09-24): open floor with a wall close on one side, four throwables in hand
+## (light, heavy, bulky, a stack). Right-click and hold to charge a throw, at a few angles: a flat
+## toss along the floor, a lobbed arc, one straight down and one at the wall. Each should land,
+## settle within about a second of coming to rest and ease up into its hover -- no sitting there
+## tumbling, no jitter, nothing buried in the floor or the wall.
+static func _tumble(game: Game) -> void:
+	var t: Vector3 = game.table_pos()
+	var base: Vector3 = game._floor_at(t + Vector3(0.0, 0.0, 4.2))
+	var out := open_direction(game, base + Vector3.UP * 1.2, 4.0)
+	place(game, base, base + out * 3.0 + Vector3(0.0, 0.5, 0.0))
+	clear_hands(game)
+	give(game, "gauze", 2)          # light
+	give(game, "bone_saw", 1)       # heavy, bulky
+	give(game, "gold_watch", 1, 80) # loot, small
+	give(game, "placebo_pills", 6)  # a stack
+	game.local_player().selected = 0
+	game.say("Hold right-click to charge a throw. Try a flat toss, a high arc, straight down and one at the wall behind you.", 10.0)
 

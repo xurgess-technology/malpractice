@@ -23,7 +23,24 @@ const FogRingScript := preload("res://scripts/level/fog_ring.gd")   # SWEEP 4A H
 
 enum State { IN_CONTAINER, LOOSE }
 
-const SETTLE_MAX := 3.0
+## TUMBLE TUNING (2026-09-24): a thrown item used to be allowed a full 3 s of physics before it
+## stood up into its hover, and a slope, a stair lip or a wall could keep its velocity flickering
+## above the old "settled" threshold for all of it -- so a normal underhand toss across a room
+## routinely sat there tumbling for a couple of seconds after it had visibly stopped. Two changes:
+## the hard cap is a fifth of that (SETTLE_MAX), and "settled" is now "been slow, continuously,
+## for STILL_TIME" (_still_t below) rather than "elapsed time since the throw minus a fixed slop" --
+## so a stack that comes to rest quickly stands up quickly, one that skitters down a stairwell keeps
+## tumbling until it actually stops (or the hard cap catches it), and a jitter of a frame or two above
+## the threshold (a slope, a lip, a wall) does not restart a long wait, only the short one.
+const SETTLE_MAX := 1.0
+## Both linear and angular speed have to be under this for the still-timer to run at all, so a stack
+## that is still visibly spinning (caught against a wall, rocking on an edge) never reads as settled
+## just because its centre stopped moving.
+const STILL_LINEAR := 0.05
+const STILL_ANGULAR := 0.5
+## How long it has to stay that slow, in a row, before it counts as settled. Short on purpose: this
+## is the "well under a second" the tumble should feel like once it has actually stopped.
+const STILL_TIME := 0.12
 
 ## HOVER DROP: floor to the bottom of a hovering stack.
 const HOVER_HEIGHT := 0.32
@@ -96,6 +113,10 @@ var x: String = ""
 var _visual: Node3D
 var _shape: CollisionShape3D
 var _settle: float = 0.0
+## TUMBLE TUNING: seconds it has been continuously slow (both linear and angular under the STILL_
+## thresholds); reset to 0 the instant either one spikes back up, so a bounce off a wall or a step
+## down a stair restarts only this short timer, not the whole flight.
+var _still_t: float = 0.0
 var _target: Transform3D
 var _has_target := false
 
@@ -222,10 +243,13 @@ func begin_hover() -> void:
 func _step_hop(delta: float) -> void:
 	_hop_t += delta
 	var k := clampf(_hop_t / _hop_len, 0.0, 1.0)
-	var p := _hop_from.lerp(_hop_to, k)
+	# Ease in and out rather than at a constant rate, so standing up into the hover reads as a
+	# settle rather than a snap: slow to leave the landed pose, slow again into the hover.
+	var e := smoothstep(0.0, 1.0, k)
+	var p := _hop_from.lerp(_hop_to, e)
 	p.y += sin(k * PI) * _hop_arc
 	global_position = p
-	global_basis = _hop_basis_from.slerp(_hop_basis_to, k)
+	global_basis = _hop_basis_from.slerp(_hop_basis_to, e)
 	if k >= 1.0:
 		_hop_t = -1.0
 
@@ -361,6 +385,7 @@ func toss(from: Transform3D, velocity: Vector3) -> void:
 	linear_velocity = velocity
 	angular_velocity = Vector3(randf_range(-6, 6), randf_range(-6, 6), randf_range(-6, 6))
 	_settle = SETTLE_MAX
+	_still_t = 0.0
 
 
 var _container_node: Node = null
@@ -395,7 +420,11 @@ func _physics_process(delta: float) -> void:
 				queue_free()
 				return
 			_settle -= delta
-			if sleeping or _settle <= 0.0 or (linear_velocity.length() < 0.03 and _settle < SETTLE_MAX - 0.4):
+			if linear_velocity.length() < STILL_LINEAR and angular_velocity.length() < STILL_ANGULAR:
+				_still_t += delta
+			else:
+				_still_t = 0.0
+			if sleeping or _settle <= 0.0 or _still_t >= STILL_TIME:
 				# POCKETS 2 phase 4: a scattered handful of quarters never settles as a pickup. It
 				# bursts where it lands, which is the whole point of throwing it: the noise happens
 				# over there and not where you are standing.
