@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-24 (0.11.x)**
 
+- **0.11.3**: Thrown things settle, and the showers run 🚿
+    - Changed: A thrown item stops tumbling as soon as it actually stops moving and eases up into its hover, instead of rolling around for up to three seconds first. It never takes more than a second.
+    - Added: The personnel room showers turn on and off with E. They don't do anything. They're just showers.
 - **0.11.2**: The pocket spaces stop flickering 🧺
     - Fixed: Every prop in every pocket space was being drawn inside out -- you were seeing the insides of washers, starting blocks and pews, and their bottoms fought the floor for every pixel. That was the flicker at the feet of the laundry machines and the blocks at the far end of the pool. Props look properly solid now, so expect everything back there to be shaded a little differently.
     - Fixed: A handful of surfaces that sat exactly on top of each other (chapel roofs and pillars, the factory office roof and conveyor, restaurant booths, the pool's edge) no longer shimmer.
