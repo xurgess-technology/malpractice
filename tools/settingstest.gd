@@ -115,6 +115,7 @@ func _run() -> void:
 	Settings.set_value("key_robot", KEY_O)   # THE SURGICAL ROBOT
 	Settings.set_value("soft_squeal", true)   # the Sonographer's quieter deafen squeal
 	Settings.set_value("look", 12345)   # CUSTOMIZATION: the packed surgeon look
+	Settings.set_value("patterns_unlocked", 5)   # POCKETS 2 phase 4: scrub pattern unlock mask
 	await _frames(3)
 	for key in Settings.DEFAULTS.keys():
 		_check(seen.has(key), "changed emitted for %s" % key)

@@ -333,9 +333,9 @@ the baked models (only the baked GLBs are kept).
 
 ## Abilities (sweep 3)
 
-Nothing downloaded. The Echo and Hive Eyes screens are built from code
-(`scripts/abilities/echo_view.gd`, `hive_view.gd`), and the two ability icons are hand-drawn
-vectors (`art/icons/hive_eyes.svg`, `art/icons/echolocation.svg`). The sounds
+Nothing downloaded. The Echo and Puppet screens are built from code
+(`scripts/abilities/echo_view.gd`, `puppet_view.gd`), and the two ability icons are hand-drawn
+vectors (`art/icons/puppet.svg`, `art/icons/echolocation.svg`). The sounds
 `audio/sfx/ability_*.wav` are synthesized by `tools/gen_audio_abilities.mjs` (deterministic, no
 samples).
 

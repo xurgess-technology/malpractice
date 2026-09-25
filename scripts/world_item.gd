@@ -109,6 +109,10 @@ var bt: float = -1000000.0   # "no spoil clock" (a real one can be negative earl
 ## GRAFTING part one: a small string that travels with the stack (into a hand slot as "x" and back):
 ## an eye's owner ("Zach"), or what a specimen vat holds (Eyes.pack). "" for everything else.
 var x: String = ""
+## SERVICE DOG (host only, never replicated): the offer tag of the dog that set this stack down, 0
+## for everything else. Rides into a hand slot as "dg" and back out on every drop, so a throw of the
+## same item is recognised whoever throws it (game.gd "SERVICE DOG").
+var dog_tag: int = 0
 
 var _visual: Node3D
 var _shape: CollisionShape3D

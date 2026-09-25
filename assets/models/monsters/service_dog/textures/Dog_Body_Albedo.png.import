@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cmy7nawd5o7y2"
-path="res://.godot/imported/hive_eyes.svg-570e5763afa1dcfb7874e46a68ef2a3c.ctex"
+uid="uid://c7uh8lw8vdt4e"
+path="res://.godot/imported/Dog_Body_Albedo.png-e24e9dfd2add1515318b4f8a9e7043c1.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/icons/hive_eyes.svg"
-dest_files=["res://.godot/imported/hive_eyes.svg-570e5763afa1dcfb7874e46a68ef2a3c.ctex"]
+source_file="res://assets/models/monsters/service_dog/textures/Dog_Body_Albedo.png"
+dest_files=["res://.godot/imported/Dog_Body_Albedo.png-e24e9dfd2add1515318b4f8a9e7043c1.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
@@ -38,6 +38,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false

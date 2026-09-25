@@ -99,7 +99,7 @@ func _run() -> void:
 			if p.a > 0.5 and (absf(p.r - p.g) > 0.02 or absf(p.g - p.b) > 0.02):
 				grey_ok = false
 		_check(grey_ok, "the greyscale icon has no colour left")
-	_check(ItemIcons.ability("hive_in") != null and ItemIcons.ability("echo") != null and ItemIcons.ability("zzz") == null, "ability icons, and none for an unknown one")
+	_check(ItemIcons.ability("puppet") != null and ItemIcons.ability("echo") != null and ItemIcons.ability("zzz") == null, "ability icons, and none for an unknown one")
 	_check(ItemIcons.kind_named("Forceps") == "forceps", "a step's item name finds its kind")
 	print("[hud] result=%s checks=%d fails=%d" % ["PASS" if fails == 0 else "FAIL", checks, fails])
 	get_tree().quit(1 if fails > 0 else 0)

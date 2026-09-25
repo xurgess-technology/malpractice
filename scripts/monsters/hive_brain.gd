@@ -287,6 +287,19 @@ func sedated() -> void:
 	home = m.global_position
 
 
+## PUPPET: a surgeon was driving this body and just let go. It comes to where it was left with no
+## memory of the walk: nobody targeted, home is here now, and it stands a moment before wandering.
+func puppet_released() -> void:
+	target_id = 0
+	seeing = false
+	wander_goal = null
+	_after_stun = null
+	home = m.global_position
+	if m.mode != M.Mode.STUNNED and m.mode != M.Mode.RETREAT and m.mode != M.Mode.SEDATED:
+		_start_idle()
+		timer = rng.randf_range(0.8, 2.0)
+
+
 func woke(hunt_pos) -> void:
 	stun(Vector3.ZERO, 1.2, 0.0, hunt_pos)
 

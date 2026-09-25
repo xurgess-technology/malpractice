@@ -202,7 +202,7 @@ func link_block(p, boot_grace := 0.0) -> String:
 		return "Robot in use (%s)." % (who.player_name if who != null else "someone")
 	if not p.alive or p.downed:
 		return "Not while you are down."
-	if p.carried_by != 0 or int(p.held_by) >= 0 or p.hive_view:
+	if p.carried_by != 0 or int(p.held_by) >= 0 or p.puppeting:
 		return "Not right now."
 	if p.carrying != 0 or p.dragging_monster >= 0:
 		return "Put them down first."
@@ -383,7 +383,7 @@ func _host_tick() -> void:
 		remote_peer = 0
 		look = REST_LOOK
 		return
-	if not powered or not p.alive or p.downed or p.carried_by != 0 or int(p.held_by) >= 0 or p.hive_view \
+	if not powered or not p.alive or p.downed or p.carried_by != 0 or int(p.held_by) >= 0 or p.puppeting \
 			or p.carrying != 0 or p.dragging_monster >= 0:
 		drop(p)
 

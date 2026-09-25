@@ -34,7 +34,7 @@ const GUN_FP_POS := Vector3(0.24, -0.23, -0.46)
 ## scripts/personnel/mirrors.gd, which keeps the gun's own first-person model out of the mirrors.
 const GUN_FP_LAYER := 1 << 17
 const ORDERS := ["follow", "stay", "carry", "operate"]
-const MONSTER_KINDS := ["hive", "sonographer", "night_nurse"]  # SWEEP 3 HOOK (monsters): the Hive
+const MONSTER_KINDS := ["hive", "sonographer", "night_nurse", "service_dog"]  # SWEEP 3 HOOK (monsters): the Hive
 ## NURSE HOOK: the panel's pace choices for the Night Nurse, m/s (her hunting speed first).
 const NURSE_PACES := [3.4, 1.6, 0.8]
 const NURSE_PACE_NAMES := ["Hunt (3.4 m/s)", "Stalk (1.6 m/s)", "Creep (0.8 m/s)"]

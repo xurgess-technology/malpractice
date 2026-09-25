@@ -16,7 +16,7 @@ const ENTRIES := {
 		"threat": "Low alone. Dangerous in groups or once it has found you and closed the distance.",
 		"doses": "About 2 doses of anesthetic to bring it under and keep it there for a full harvest.",
 		"brain_site": "Skull, centre, just above eye level.",
-		"ability": "Hive Eyes",
+		"ability": "Puppet",
 		"growth_site": "",
 	},
 	"sonographer": {

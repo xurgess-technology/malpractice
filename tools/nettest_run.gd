@@ -41,6 +41,8 @@ const SCENARIOS := [
 	# Seed 4247 is the seal with an amputation: four steps, the longest case.
 	{"name": "economy", "scenario": "economy", "clients": 3, "timeout": 300, "start_after": {3: "[marker] economy_bought"}},
 	{"name": "downed", "scenario": "downed", "clients": 2, "timeout": 300},
+	# OR GURNEY: a client pushes the gurney to a downed client and wheels them onto a table.
+	{"name": "gurney", "scenario": "gurney", "clients": 2, "timeout": 300},
 	{"name": "full_shift_lag", "scenario": "full_shift", "clients": 2, "timeout": 900, "lag": true, "extra": ["--seed=4247"]},
 	# loop (sweep 2): two patients on two tables, two clients operating at once.
 	{"name": "two_patients", "scenario": "two_patients", "clients": 2, "timeout": 300},
@@ -63,6 +65,8 @@ const SCENARIOS := [
 	{"name": "sono", "scenario": "sono", "clients": 1, "timeout": 300},
 	# GRAFTING chunk C: the host grafts a Hive eyeball into a client; the other client sees the eye.
 	{"name": "graft", "scenario": "graft", "clients": 2, "timeout": 400},
+	# PUPPET: client 1 climbs into a Hive and walks it; the host moves it, client 2 sees it go.
+	{"name": "puppet", "scenario": "puppet", "clients": 2, "timeout": 300},
 	# TRINKETS chunk B: a client's defibrillator revives another client where they lie.
 	{"name": "trinkets", "scenario": "trinkets", "clients": 2, "timeout": 400},
 	# POCKETS: a client, a carried client and an item through a seam into the Factory.
@@ -80,6 +84,8 @@ const SCENARIOS := [
 	{"name": "robot", "scenario": "robot", "clients": 2, "timeout": 400},
 	# HIT FEEDBACK: the red flash on a hit monster and on a hit player reaches a client's machine.
 	{"name": "hit_feedback", "scenario": "hit_feedback", "clients": 1, "timeout": 240},
+	# SERVICE DOG: the offer, clock, growl and rear reach a client, and a client's throw satisfies it.
+	{"name": "service_dog", "scenario": "service_dog", "clients": 1, "timeout": 300},
 ]
 ## Not part of the default run: bandwidth measurements (4 players, no lag, --stats). `bandwidth`
 ## is Bob's gunshot (seed 4242, the case the pre-delta numbers were taken on); `bandwidth_amp`

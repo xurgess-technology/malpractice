@@ -1,7 +1,7 @@
 extends CanvasLayer
 ## GRAFTING chunk C (docs/GRAFTING.md): the first-person tell. A grafted surgeon sees a faint orange
 ## wash down the LEFT edge of their view -- the side the Hive eyeball is on -- and it comes up while
-## Hive Eyes is running.
+## Puppet is running (the surgeon is inside a Hive).
 ##
 ## It sits ABOVE the look pass's grain, vignette and teal grade (scripts/look.gd, canvas layer 50),
 ## which the HUD deliberately sits under: graded, a faint orange on a teal picture disappears
@@ -18,9 +18,9 @@ var wash: Control = null
 class Wash extends Control:
 	const TINT := Color(1.0, 0.33, 0.05)
 	const BANDS := 8
-	## How far across the screen it reaches, at rest and while Hive Eyes runs.
+	## How far across the screen it reaches, at rest and while Puppet runs.
 	const WIDTH := Vector2(0.20, 0.30)
-	## Total alpha at the very edge, at rest and while Hive Eyes runs.
+	## Total alpha at the very edge, at rest and while Puppet runs.
 	const ALPHA := Vector2(0.22, 0.6)
 
 	var game: Node = null

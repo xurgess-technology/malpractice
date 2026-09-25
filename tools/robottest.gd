@@ -207,7 +207,7 @@ func _run() -> void:
 		me.bot_interact = false
 		await _seconds(0.4)
 	_check(game.grafts.graft_of(me.peer_id) == "eye_hive", "you grafted your own Hive eye, alone")
-	_check(game.abilities.slot_of(me.peer_id, "hive_in") >= 0, "and got Hive Eyes")
+	_check(game.abilities.slot_of(me.peer_id, "puppet") >= 0, "and got Puppet")
 	robot.local_toggle()
 	await _frames(3)
 	_check(not robot.local_linked(), "out of the robot")

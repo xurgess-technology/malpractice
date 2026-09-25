@@ -4,7 +4,13 @@ extends Node3D
 ## bulky loot takes both hands and the torch tucks under the right arm. Every frame it
 ## poses both hands (rest pose for what is held, the wind-up / strike / recover of combat.action_of,
 ## walk bob, sway lagging the mouse, lower-and-raise on a new stack, lowered while sprinting, pulled
-## in near walls) and puts HeldFirstPerson on the palm with the kind's grip (grips.gd).
+## in near walls) and puts HeldFirstPerson on the palm with the kind's grip.
+##
+## BETTER HANDS (2026-09-24): what the hand holds and how its fingers close round it come from the
+## baked first-person grips (scripts/hands/grips.gd fp_held(), solved by tools/gripbake.gd): a fist
+## round a saw's handle, a pinch on a clipboard's edge, fingers cupped round a bottle on the palm.
+## The torch and the jab's syringe are held the same way. A kind with no bake falls back to the old
+## grips.gd placement and a plain curl.
 ##
 ## Hands and held stacks render on HANDS_LAYER, which the flashlight does not light (it sits a hand's
 ## width away and would bleach them), and cast no shadows.
@@ -25,6 +31,12 @@ const RAISE_TIME := 0.38
 ## How far in front of the camera the wall check reaches, and how far the hands pull back.
 const WALL_REACH := 0.62
 const WALL_PULL := 0.17
+## Where each forearm runs to, camera space (the elbows, below and just behind the eye): the wrists
+## bend toward them, so a hand can turn a handle anywhere and its sleeve still comes from the corner.
+const ELBOW_L := Vector3(-0.3, -0.62, 0.08)
+const ELBOW_R := Vector3(0.3, -0.62, 0.08)
+## How fast the fingers move to a new shape (per second, exponential).
+const SHAPE_RATE := 16.0
 
 var player: Node = null
 var arm_r: Node3D
@@ -36,6 +48,11 @@ var fov_k := 1.0
 ## The pose each hand ended on last frame (tests and the gameshot read these).
 var pose_r: Dictionary = {}
 var pose_l: Dictionary = {}
+## The finger shapes each hand ended on last frame (fp_arms shapes).
+var shape_l: Dictionary = Arms.shape_from_curl(0.4)
+var shape_r: Dictionary = Arms.shape_from_curl(1.0)
+## The baked hold of the selected stack (grips.gd fp_held), {} when empty or not baked.
+var held: Dictionary = {}
 
 var _kind := ""
 var _count := 0
@@ -50,6 +67,9 @@ var _stow := 0.0   ## 0..1: hands dropped out of view while the laptop map is up
 var _wall_t := 0.0
 var _shake_t := 0.0
 var _throw = ThrowPoseScript.new()   # THROW HOOK
+var _torch_hold: Dictionary = {}
+var _jab_hold: Dictionary = {}
+var _lens_lit := -1
 
 
 func setup(p: Node) -> void:
@@ -62,12 +82,14 @@ func setup(p: Node) -> void:
 	add_child(arm_l)
 	torch = Arms.make_torch()
 	arm_r.add_child(torch)
-	torch.position = Vector3(0.0, 0.022, -0.01)
+	_torch_hold = Grips.fp_held("__torch", 1)
+	torch.transform = _torch_hold.xf if not _torch_hold.is_empty() else Transform3D(Basis(), Vector3(0.0, 0.022, -0.01))
 	syringe = preload("res://scripts/combat/combat.gd").make_syringe()
 	syringe.name = "HandsSyringe"
 	syringe.visible = false
 	arm_l.add_child(syringe)
-	syringe.position = Vector3(0.0, 0.024, 0.0)
+	_jab_hold = Grips.fp_held("__jab", 1)
+	syringe.transform = _jab_hold.xf if not _jab_hold.is_empty() else Transform3D(Basis(), Vector3(0.0, 0.024, 0.0))
 	dress(self)
 
 
@@ -98,6 +120,7 @@ func held_changed(kind: String, count: int) -> void:
 		_raise = 1.0
 	_kind = kind
 	_count = count
+	held = Grips.fp_held(kind, Grips.fp_shown_count(kind, count)) if kind != "" else {}
 
 
 ## How big a stack of `kind` is drawn in first person.
@@ -105,13 +128,30 @@ static func fp_scale(kind: String) -> float:
 	var fp := ItemModels.footprint(kind)
 	var biggest := maxf(fp.x, maxf(fp.y, fp.z))
 	var g := Grips.grip(kind)
+	var spec: Dictionary = Grips.FP.get(kind, {})
 	if int(g.hands) >= 2:
 		return minf(1.0, FP_BOTH_SIZE / maxf(0.01, biggest))
-	if String(g.style) == "fist":
+	if spec.has("size"):
+		return minf(1.0, float(spec.size) / maxf(0.01, biggest))
+	if String(spec.get("grip", "palm")) in ["power", "hook"] or String(g.style) == "fist":
 		return minf(1.0, FP_FIST_SIZE / maxf(0.01, biggest))   # a handle stays long enough to see past the fist
 	if Items.is_loot(kind) and biggest > FP_LOOT_SIZE:
 		return FP_LOOT_SIZE / biggest
 	return 1.0
+
+
+## Where the two hands and the thing between them sit at rest (no bob, sway or FOV): {xl, xr (the
+## palm sockets), held (the HeldFirstPerson node), pivot (the Held pivot under it, scale k)}.
+## update() uses the same numbers; tools/gripbake.gd solves the fingers against it.
+static func two_hand_layout(kind: String, k: float, spread: float) -> Dictionary:
+	var centre := Poses.BOTH_CENTRE
+	var half := ItemModels.footprint(kind).x * k * 0.5 + spread
+	var xl := Poses.xform(_offset(Poses.BOTH_LEFT, centre + Vector3(-half, 0.0, 0.0)))
+	var xr := Poses.xform(_offset(Poses.mirror(Poses.BOTH_LEFT), centre + Vector3(half, 0.0, 0.0)))
+	var g := Grips.grip(kind).duplicate()
+	g.pos = (g.pos as Vector3) * k
+	return {"xl": xl, "xr": xr, "held": Transform3D(Basis(), (xl.origin + xr.origin) * 0.5 + Vector3(0.0, 0.03, 0.0)),
+		"pivot": Grips.transform_of(g), "half": half}
 
 
 func update(delta: float) -> void:
@@ -121,32 +161,42 @@ func update(delta: float) -> void:
 	var act: Dictionary = g.combat.action_of(player) if g != null and g.combat != null else {}
 	var grip := Grips.grip(_kind) if _kind != "" else {}
 	var two := _kind != "" and int(grip.get("hands", 1)) >= 2
-	var fist := _kind != "" and String(grip.get("style", "palm")) == "fist"
+	var style := String(held.get("grip", "")) if not held.is_empty() else ("fist" if String(grip.get("style", "palm")) == "fist" else "palm")
+	var fist := _kind != "" and style in ["power", "hook", "fist"]
 
 	# ---- rest poses for what is held
 	var rest_l: Dictionary = Poses.LEFT_EMPTY
-	var rest_r: Dictionary = Poses.TORCH
+	var rest_r: Dictionary = Poses.TORCH_GRIP if not _torch_hold.is_empty() else Poses.TORCH
 	var centre := Poses.BOTH_CENTRE
 	var half := 0.0
 	if two:
-		var fp := ItemModels.footprint(_kind) * fp_scale(_kind)
-		half = fp.x * 0.5
+		half = ItemModels.footprint(_kind).x * fp_scale(_kind) * 0.5 + float(held.get("spread", 0.0))
 		rest_l = _offset(Poses.BOTH_LEFT, centre + Vector3(-half, 0.0, 0.0))
-		rest_r = Poses.TORCH_TUCKED
+		rest_r = Poses.TORCH_TUCKED_GRIP if not _torch_hold.is_empty() else Poses.TORCH_TUCKED
 	elif _kind != "":
-		rest_l = Poses.LEFT_FIST if fist else Poses.LEFT_PALM
+		match style:
+			"power", "fist":
+				rest_l = Poses.LEFT_POWER if not held.is_empty() else Poses.LEFT_FIST
+			"hook":
+				rest_l = Poses.LEFT_HOOK
+			"pinch":
+				rest_l = Poses.LEFT_PINCH
+			_:
+				rest_l = Poses.LEFT_PALM
 	var right_both := _offset(Poses.mirror(Poses.BOTH_LEFT), centre + Vector3(half, 0.0, 0.0))
 
 	# ---- actions
 	var pl: Dictionary = rest_l
 	var pr: Dictionary = right_both if two else rest_r
 	var jab := false
+	var shove := false
 	if not act.is_empty():
 		match String(act.k):
 			"jab":
-				pl = Poses.action_pose(rest_l, Poses.JAB, act)
+				pl = Poses.action_pose(rest_l, Poses.JAB_GRIP if not _jab_hold.is_empty() else Poses.JAB, act)
 				jab = true
 			"shove":
+				shove = true
 				pl = Poses.action_pose(rest_l, Poses.SHOVE_LEFT, act)
 				var keys_r := [Poses.mirror(Poses.SHOVE_LEFT[0]), Poses.mirror(Poses.SHOVE_LEFT[1])]
 				pr = Poses.action_pose(pr, keys_r, act)
@@ -181,7 +231,9 @@ func update(delta: float) -> void:
 				# The last of it just left the hands: the left hand still follows through.
 				pl = Poses.blend(pl, _offset(lw, c), maxf(ww, sw))
 		else:
-			pl = Poses.blend(Poses.blend(pl, Poses.THROW_LEFT[0], ww), Poses.THROW_LEFT[1], sw)
+			# A fist swings its handle over the shoulder and down; an open hand throws from the palm.
+			var keys: Array = Poses.THROW_FIST if fist and not held.is_empty() else Poses.THROW_LEFT
+			pl = Poses.blend(Poses.blend(pl, keys[0], ww), keys[1], sw)
 
 	# ---- life: bob, sway, raise, sprint, walls
 	var speed01 := 0.0
@@ -207,7 +259,7 @@ func update(delta: float) -> void:
 
 	var bob := Vector3(sin(_bob) * 0.009, -absf(cos(_bob)) * 0.011, 0.0) * _speed
 	var raise_e := Poses.smooth(_raise)
-	var map_up: bool = g != null and g.trinkets != null and _kind == "laptop" and g.trinkets.map_left(player) > 0.0
+	var map_up: bool = g != null and g.get("trinkets") != null and _kind == "laptop" and g.trinkets.map_left(player) > 0.0
 	_stow = move_toward(_stow, 1.0 if map_up else 0.0, delta * 5.0)
 	var extra := bob + Vector3(_sway.x, -_sway.y, 0.0) + Vector3(0.0, -0.3 * raise_e, 0.05 * raise_e) \
 		+ Vector3(0.02, -0.13, 0.07) * _sprint + Vector3(0.0, -0.05, WALL_PULL) * _pull \
@@ -219,27 +271,73 @@ func update(delta: float) -> void:
 	var xr := _placed(pr, extra, tilt)
 	arm_l.transform = xl
 	arm_r.transform = xr
-	Arms.set_curl(arm_l, float(pl.c), -1.0)
-	Arms.set_curl(arm_r, float(pr.c), 1.0)
+	_aim_forearm(arm_l, xl, ELBOW_L)
+	_aim_forearm(arm_r, xr, ELBOW_R)
+
+	# ---- fingers: closed round what each hand holds (the bake), else the pose's plain curl
+	var want_l: Dictionary
+	if jab and not _jab_hold.is_empty():
+		want_l = _jab_hold.shape
+	elif _kind != "" and not held.is_empty():
+		want_l = held.shape
+	else:
+		want_l = Arms.shape_from_curl(float(pl.c))
+	var want_r: Dictionary
+	if two and not held.is_empty() and not (held.get("shape_r", {}) as Dictionary).is_empty() and not shove:
+		want_r = held.shape_r
+	elif not two and not _torch_hold.is_empty():
+		# The torch never leaves the fist, shove or not.
+		want_r = _torch_hold.shape
+	else:
+		want_r = Arms.shape_from_curl(float(pr.c))
+	var su := 1.0 - exp(-SHAPE_RATE * delta)
+	shape_l = Arms.blend_shapes(shape_l, want_l, su)
+	shape_r = Arms.blend_shapes(shape_r, want_r, su)
+	Arms.apply(arm_l, shape_l, -1.0)
+	Arms.apply(arm_r, shape_r, 1.0)
+
+	# ---- the torch: in the right hand unless both hands carry something (then along the forearm);
+	# its lens only glows while the light is on (the scanner tints it blue itself, scan_fx.gd).
 	torch.visible = true
+	if not _torch_hold.is_empty():
+		torch.transform = _torch_hold.xf if not two else Transform3D(Basis(Vector3.RIGHT, -0.2), Vector3(0.0, -0.035, 0.07))
+	_update_lens()
 	syringe.visible = jab and int(act.ph) != WindupScript.RECOVER or (jab and float(act.u) < 0.5)
 
 	# ---- the held stack
-	var held: Node3D = player._held_fp
-	if held != null:
+	var held_node: Node3D = player._held_fp
+	if held_node != null:
 		if two:
 			# The midpoint of the two palms, facing forward, palm-up frame.
 			var mid := (xl.origin + xr.origin) * 0.5 + Vector3(0.0, 0.03, 0.0)
-			held.transform = Transform3D(tilt, mid)
+			held_node.transform = Transform3D(tilt, mid)
 		else:
-			held.transform = xl
-		for c in held.get_children():
+			held_node.transform = xl
+		for c in held_node.get_children():
 			for part in c.get_children():
 				if part is Node3D and part != syringe:
 					(part as Node3D).visible = not syringe.visible
 
 
+## FLASHLIGHT POSE follow-up: the first-person lens is dark while the light is off.
+func _update_lens() -> void:
+	var lens := torch.get_node_or_null("Lens") as MeshInstance3D
+	if lens == null or bool(player.get("scan_holding")):
+		_lens_lit = -1   # scan_fx owns the lens while scanning; take it back afterwards
+		return
+	var lit := 1 if player.torch_state() == 1 else 0
+	if lit != _lens_lit:
+		_lens_lit = lit
+		lens.material_override = Arms.lens_material(lit == 1)
+
+
 var _wall_target := 0.0
+
+
+func _aim_forearm(arm: Node3D, x: Transform3D, elbow: Vector3) -> void:
+	var wrist := x * (Arms.WRIST * Arms.HAND_SCALE)
+	var e := Vector3(elbow.x * fov_k, elbow.y * fov_k, elbow.z)
+	Arms.aim_forearm(arm, x.basis.inverse() * (e - wrist))
 
 
 ## 0..1: how much a wall in front of the camera pushes the hands back.

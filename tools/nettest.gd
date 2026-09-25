@@ -31,6 +31,10 @@ extends Node
 ##                    on different tables at the same time and each watches the other
 ##   downed           client 1 goes down and crawls; client 2 carries them to the player table and
 ##                    stitches them up; the host and both clients see each stage
+##   gurney           (OR GURNEY) client 2 goes down in the OR; client 1 takes the gurney's handle,
+##                    pushes it to them, loads them, turns it and puts them on a free table; the host
+##                    sees the pusher, the rider riding along and the stitches case; client 2 rides it
+##                    on its own machine, pinned to the gurney as it moves, and lands on the table
 ##   combat           sweep 3: client 1 kills a monster with the bone saw, shoves and jabs another,
 ##                    drags it and straps it to a free patient table; the host checks the case and
 ##                    client 2 watches the swings, the drag and the strapped case
@@ -47,6 +51,8 @@ extends Node
 ##   onlooker_poof    host + 1 client: the host runs at a real, brain-placed Onlooker and banishes it;
 ##                    the poof (a burst and a cloud of smoke where it stood) appears on the client's
 ##                    machine too, in the right place, and clears itself away
+##   puppet           client 1 climbs into a Hive and walks it about; the host walks it on client 1's
+##                    input, client 1's camera rides it and its body stays put, client 2 sees it walk
 ##   trinkets         (chunk B) client 1 shocks a downed client 2 awake with a defibrillator over the
 ##                    wire; client 2 comes up where it lay on its own machine, and the paddles are
 ##                    spent on both
@@ -70,6 +76,12 @@ extends Node
 ##                    it makes while signed in reaches them too; it clicks MONSTERS and the host and
 ##                    client 2 follow, client 2 sees client 1's laser dot; client 1 walks away and
 ##                    everyone is signed out and back HOME
+##   service_dog      host + 1 client: the Service Dog carries a heart monitor up to client 1, sets it
+##                    down and growls; client 1 sees the carry, the clock (never drawn) and the growl.
+##                    The clock runs out and it DRAINS client 1: client 1 sees it standing, the orb
+##                    lit and the thread, feels its own screen go (local only) and loses a heart. Then
+##                    CLIENT 1 picks the item up and throws it with a charge over the wire: the host's
+##                    dog drops, fetches it and carries it again; client 1's effects clear
 ##
 ## Shifts start the way the loop does (sweep 2): the host clocks in, skips the grace period,
 ## answers the phone, and the paramedics wheel the patient onto a table.
@@ -171,6 +183,7 @@ func _run() -> void:
 		"economy": await _sc_economy()
 		"two_patients": await _sc_two_patients()
 		"downed": await _sc_downed()
+		"gurney": await _sc_gurney()   # OR GURNEY
 		"combat": await _sc_combat()
 		"monsters": await _sc_monsters()   # SWEEP 3 HOOK (monsters)
 		"onlooker": await _sc_onlooker()   # POCKETS 2 phase 6: a hop must JUMP on a client
@@ -179,6 +192,7 @@ func _run() -> void:
 		"hit_feedback": await _sc_hit_feedback()   # HIT FEEDBACK: the red flash and the push
 		"sono": await _sc_sono()   # docs/SONOGRAPHER.md chunk B: the Sonographer's echo over the wire
 		"graft": await _sc_graft()   # GRAFTING chunk C
+		"puppet": await _sc_puppet()   # PUPPET: a client drives a Hive
 		"trinkets": await _sc_trinkets()   # TRINKETS chunk B
 		"pockets": await _sc_pockets()   # POCKETS
 		"doors": await _sc_doors()   # DOORS HOOK
@@ -186,6 +200,7 @@ func _run() -> void:
 		"rocket_boots": await _sc_rocket_boots()   # ROCKET BOOTS
 		"robot": await _sc_robot()   # THE SURGICAL ROBOT
 		"syringe_draw": await _sc_syringe_draw()   # SYRINGE DRAW: two handheld draws at once
+		"service_dog": await _sc_service_dog()   # SERVICE DOG: fetch over the wire
 		_: _end(false, "unknown scenario " + scenario)
 
 
@@ -1165,7 +1180,7 @@ func _sc_two_patients():
 
 ## GRAFTING chunk C (docs/GRAFTING.md): the host grafts a Hive eyeball into a client's surgeon on an
 ## OR table, with the vat on that table's stand. The other client watches: the graft, the swapped eye
-## on the patient's body and its glow while Hive Eyes runs all have to reach it.
+## on the patient's body and its glow while Puppet runs all have to reach it.
 func _sc_graft():
 	if role == "host":
 		if not await _start_shift_when_full():
@@ -1209,14 +1224,14 @@ func _sc_graft():
 				return
 		if not await _until(func(): return game.grafts.graft_of(patient.peer_id) == "eye_hive", 30.0, "the graft to take"):
 			return
-		if game.abilities.slot_of(patient.peer_id, "hive_in") < 0:
-			return _end(false, "the graft gave no Hive Eyes slot")
+		if game.abilities.slot_of(patient.peer_id, "puppet") < 0:
+			return _end(false, "the graft gave no Puppet slot")
 		_say("grafted: %s, vat now %s" % [game.grafts.graft_of(patient.peer_id), String(vat.x)])
-		# The glow: hive_view is replicated, so the other machine must light the eye up too.
-		patient.hive_view = true
+		# The glow: puppeting is replicated, so the other machine must light the eye up too.
+		patient.puppeting = true
 		_send("glow", {"on": true})
 		await _wall_wait(2.0)
-		patient.hive_view = false
+		patient.puppeting = false
 		if not await _until(func(): return _count_msgs("ok") >= 2 or _count_msgs("fail") > 0, 90.0, "both clients' reports"):
 			return
 		await _finish_together("the host grafted a Hive eyeball into a client, and the other machine saw the eye and its glow")
@@ -1241,11 +1256,115 @@ func _sc_graft():
 		return _end(false, "the patient's own left eye is still showing over the graft")
 	if not await _until(func(): return _count_msgs("glow") > 0, 120.0, "the glow order"):
 		return
-	if not await _until(func(): return float(game.grafts._lock.get(pid, 0.0)) > 0.6, 20.0, "the eye to light up while Hive Eyes runs"):
+	if not await _until(func(): return float(game.grafts._lock.get(pid, 0.0)) > 0.6, 20.0, "the eye to light up while Puppet runs"):
 		return
 	_say("saw the graft, the swapped eye and its glow (lock %.2f)" % float(game.grafts._lock.get(pid, 0.0)))
 	_send("ok", {})
 	await _finish_together("the graft, the eye on the body and its glow all reached this machine")
+
+
+## PUPPET: client 1 climbs into a Hive and walks it. Its input crosses to the host (report_state
+## [20]/[21]), the host walks the Hive, and the walk reaches every machine: client 1's own camera
+## rides it, client 2 sees it go. Client 1's own body stays put, and the Hive has its head back after.
+func _sc_puppet():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		game._clear_monsters()
+		await _frames(2)
+		var c1: int = _peer_of(1)
+		var p1 = game.players[c1]
+		var body_at: Vector3 = p1.global_position
+		var fwd: Vector3 = -p1.global_transform.basis.z
+		fwd.y = 0.0
+		fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
+		var h: Node = game._add_monster("hive", _nav_point(p1.global_position + fwd * 7.0))
+		await _frames(3)
+		h.mode = MonsterScript.Mode.IDLE
+		h.brain.timer = 999.0
+		h.calm = 999.0
+		# Walk it back toward the client's body: the corridor between them is known to be open.
+		var to: Vector3 = p1.global_position - h.global_position
+		var yaw := atan2(-to.x, -to.z)
+		game.abilities.set_level(c1, "puppet", 1)
+		_send("pp_go", {"id": h.monster_id, "yaw": yaw, "slot": game.abilities.slot_of(c1, "puppet")})
+		var seen := {"on": false, "moved": 0.0, "from": Vector3.ZERO, "body": 0.0}
+		var watch := func():
+			if not game.monsters.has(h.monster_id):
+				return
+			if int(h.puppet_by) == c1:
+				if not seen.on:
+					seen.on = true
+					seen.from = h.global_position
+				seen.moved = maxf(float(seen.moved), (h.global_position - (seen.from as Vector3)).length())
+				seen.body = maxf(float(seen.body), p1.global_position.distance_to(body_at))
+		if not await _do_until(watch, func(): return bool(seen.on), 60.0, "client 1 to climb into the Hive"):
+			return
+		if not await _do_until(watch, func(): return not p1.puppeting, 30.0, "client 1's puppeting to end"):
+			return
+		if float(seen.moved) < 1.5:
+			return _end(false, "the host only walked the Hive %.2f m on client 1's input" % float(seen.moved))
+		if float(seen.body) > 0.3:
+			return _end(false, "client 1's own body moved %.2f m while it was away" % float(seen.body))
+		if int(h.puppet_by) != 0:
+			return _end(false, "the Hive is still puppeted by %d after it ended" % int(h.puppet_by))
+		_say("client 1 walked the Hive %.2f m; its body moved %.2f m; the Hive has its head back" % [float(seen.moved), float(seen.body)])
+		await _finish_together("client 1 puppeted a Hive, the host walked it, and it let go")
+		return
+	if not await _wait_shift_as_client():
+		return
+	if not await _until(func(): return _count_msgs("pp_go") > 0, 90.0, "the puppet order"):
+		return
+	var go: Dictionary = _msgs("pp_go")[0].data
+	var hid := int(go.id)
+	var c1: int = _peer_of(1)
+	if not await _until(func(): return game.monsters.has(hid), 30.0, "the Hive on this machine"):
+		return
+	var h: Node = game.monsters[hid]
+	if index == 1:
+		var me := _me()
+		var body_at: Vector3 = me.global_position
+		if not await _until(func(): return game.abilities.slot_of(me.peer_id, "puppet") >= 0, 30.0, "Puppet in a slot"):
+			return
+		me.bot_move = Vector2.ZERO
+		me.bot_yaw = float(go.yaw)
+		me.bot_ability_slot = game.abilities.slot_of(me.peer_id, "puppet")
+		me.bot_ability += 1
+		if not await _until(func(): return me.puppeting and game.abilities.camera() != null, 30.0, "to be inside the Hive with its camera"):
+			return
+		me.bot_move = Vector2(0, -1)
+		var from: Vector3 = h.global_position
+		var st := {"most": 0.0, "cam": true}
+		var track := func():
+			st.most = maxf(float(st.most), h.global_position.distance_to(from))
+			if me.puppeting and game.abilities.camera() == null:
+				st.cam = false
+		if not await _do_until(track, func(): return not me.puppeting, 30.0, "the puppeting to end"):
+			return
+		me.bot_move = Vector2.ZERO
+		var most := float(st.most)
+		var cam_ok := bool(st.cam)
+		if most < 1.5:
+			return _end(false, "the Hive only moved %.2f m on the puppeteer's own screen" % most)
+		if not cam_ok:
+			return _end(false, "the Puppet camera dropped out while still puppeting")
+		if me.global_position.distance_to(body_at) > 0.3:
+			return _end(false, "my own body walked off (%.2f m) while I was in the Hive" % me.global_position.distance_to(body_at))
+		_say("drove the Hive %.2f m, watched through its camera the whole time" % most)
+		await _finish_together("client 1 walked a Hive from inside it")
+		return
+	# Client 2 watches.
+	if not await _until(func(): return game.players.has(c1) and bool(game.players[c1].puppeting), 60.0, "client 1 to be puppeting (report key pp)"):
+		return
+	var from2: Vector3 = h.global_position
+	var st2 := {"most": 0.0}
+	var track2 := func(): st2.most = maxf(float(st2.most), h.global_position.distance_to(from2))
+	if not await _do_until(track2, func(): return not bool(game.players[c1].puppeting), 30.0, "client 1 to come back"):
+		return
+	if float(st2.most) < 1.5:
+		return _end(false, "the puppeted Hive only moved %.2f m on client 2's screen" % float(st2.most))
+	_say("saw client 1 slump and the Hive walk %.2f m" % float(st2.most))
+	await _finish_together("client 2 saw the puppeted Hive walk")
 
 
 ## TRINKETS chunk B: a trinket used on a teammate has to work on the other machine. The host knocks
@@ -1484,6 +1603,123 @@ func _sc_downed():
 	if not await _until(func(): return not target.downed and target.alive, 90.0, "the stitches to finish"):
 		return
 	await _finish_together("carried a downed teammate to the table and stitched them up")
+
+
+## OR GURNEY: client 2 goes down in the OR ahead of the parked gurney; client 1 takes the handle,
+## pushes it alongside them, loads them, turns it and puts them on a free table. The host and client
+## 2 each check what they saw: the pusher, the rider pinned to the moving gurney, the table.
+func _sc_gurney():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		game._clear_monsters()
+		var g = game.gurney
+		var b := Basis(Vector3.UP, float(g.park_yaw))
+		var c1: int = _peer_of(1)
+		var c2: int = _peer_of(2)
+		var p2 = game.players[c2]
+		# Ahead of the parked gurney's front end and a step to its side: it has to be brought there.
+		var lie_at: Vector3 = (g.park_pos as Vector3) + b * Vector3(1.0, 0.0, -3.3)
+		_send("stand", {"peer": c2, "pos": lie_at})
+		if not await _until(func(): return _count_msgs("standing") > 0, 30.0, "client 2 in place"):
+			return
+		await _wall_wait(0.5)
+		game.knock_down_player(p2, "test")
+		_send("gurney_go", {"pusher": c1, "rider": c2})
+		var seen := {"push": false, "ride": false, "follow": false, "moved": false, "from": Vector3.INF}
+		var watch := func():
+			if int(g.pusher) == c1:
+				seen.push = true
+			if p2.on_gurney and g.rides("player", c2):
+				seen.ride = true
+				if p2.global_position.distance_to(g.rider_player_pose().origin) < 0.3:
+					seen.follow = true
+				if seen.from == Vector3.INF:
+					seen.from = p2.global_position
+				elif p2.global_position.distance_to(seen.from) > 0.8:
+					seen.moved = true
+		if not await _do_until(watch, func(): return p2.on_table, 150.0, "client 1 to wheel client 2 onto a table"):
+			return
+		if not (seen.push and seen.ride and seen.follow and seen.moved):
+			return _end(false, "host saw push=%s ride=%s follow=%s moved=%s" % [str(seen.push), str(seen.ride), str(seen.follow), str(seen.moved)])
+		if game.player_surgery.patient() != p2 or p2.on_gurney or g.has_rider():
+			return _end(false, "after the table: patient %s, on_gurney %s, gurney rider %s" % [str(game.player_surgery.patient()), str(p2.on_gurney), g.rider_kind])
+		_say("client 1 pushed the gurney to client 2, loaded them and put them on table %d" % int(game.player_table.get("index", -1)))
+		await _finish_together("a downed client wheeled to the table on the gurney, seen by the host")
+		return
+	if not await _wait_shift_as_client():
+		return
+	var me := _me()
+	var g = game.gurney
+	if index == 2:
+		# The rider: down on my own machine, then on the gurney, pinned to it as it moves, then the table.
+		if not await _until(func(): return _count_msgs("stand") > 0, 60.0, "stand order"):
+			return
+		me.teleport(game._floor_at(_msgs("stand")[0].data.pos))
+		await _wall_wait(1.0)
+		_send("standing", {})
+		if not await _until(func(): return me.downed, 30.0, "going down"):
+			return
+		var seen := {"pusher": false, "ride": false, "pinned": true, "moved": false, "from": Vector3.INF, "view": false, "frames": 0}
+		var watch := func():
+			if int(g.pusher) != 0:
+				seen.pusher = true
+			if me.on_gurney:
+				seen.ride = true
+				seen.frames = int(seen.frames) + 1
+				var off: float = me.global_position.distance_to(g.rider_player_pose().origin)
+				if int(seen.frames) > 3 and off > 0.3:   # the first frames are the snapshot landing
+					seen.pinned = false
+					_say("off the gurney by %.2f m on riding frame %d" % [off, int(seen.frames)])
+				if absf(me.head.position.y - 0.28) < 0.05:
+					seen.view = true
+				if seen.from == Vector3.INF:
+					seen.from = me.global_position
+				elif me.global_position.distance_to(seen.from) > 0.8:
+					seen.moved = true
+		if not await _do_until(watch, func(): return me.on_table, 150.0, "riding the gurney to a table"):
+			return
+		if not (seen.pusher and seen.ride and seen.pinned and seen.moved and seen.view):
+			return _end(false, "the rider saw pusher=%s ride=%s pinned=%s moved=%s lying view=%s" % [str(seen.pusher), str(seen.ride), str(seen.pinned), str(seen.moved), str(seen.view)])
+		await _finish_together("rode the gurney on my own machine, pinned to it, onto the table")
+		return
+	# Client 1: the pusher.
+	if not await _until(func(): return _count_msgs("gurney_go") > 0, 60.0, "the go"):
+		return
+	var rider_id: int = _msgs("gurney_go")[0].data.rider
+	if not await _until(func(): return game.players.has(rider_id) and game.players[rider_id].downed, 20.0, "the teammate to be down"):
+		return
+	var rider = game.players[rider_id]
+	var grab := func(): _press_at(g.pose().origin + Vector3.UP * 0.6, "gurney")
+	if not await _do_until(grab, func(): return int(g.pusher) == me.peer_id, 40.0, "taking the gurney's handle"):
+		return
+	me.bot_aim_id = ""
+	await _wall_wait(0.3)
+	var push := func(): me.bot_move = Vector2(0, -1)
+	if not await _do_until(push, func(): return me.aim_prompt.begins_with("Load"), 30.0, "bringing the gurney alongside"):
+		return
+	me.bot_move = Vector2.ZERO
+	var press := func():
+		if me.aim_prompt.begins_with("Load") and Time.get_ticks_msec() >= _press_at_ms:
+			me.bot_press += 1
+			_press_at_ms = Time.get_ticks_msec() + 1000
+	if not await _do_until(press, func(): return rider.on_gurney, 30.0, "loading them"):
+		return
+	# Round toward the tables (north, -Z) and in to one.
+	me.bot_yaw = 0.0
+	await _wall_wait(1.5)
+	var in_to := func():
+		me.bot_move = Vector2(0, -1) if not me.aim_prompt.begins_with("Put") else Vector2.ZERO
+	if not await _do_until(in_to, func(): return me.aim_prompt.begins_with("Put"), 30.0, "reaching a free table"):
+		return
+	me.bot_move = Vector2.ZERO
+	var put := func():
+		if me.aim_prompt.begins_with("Put") and Time.get_ticks_msec() >= _press_at_ms:
+			me.bot_press += 1
+			_press_at_ms = Time.get_ticks_msec() + 1000
+	if not await _do_until(put, func(): return rider.on_table, 30.0, "putting them on the table"):
+		return
+	await _finish_together("pushed the gurney to a downed teammate and wheeled them onto a table")
 
 
 ## Combat (sweep 3): client 1 saws monster A to death, shoves and jabs monster B, drags B and straps
@@ -2024,6 +2260,123 @@ func _sc_monsters():
 			return
 		_send("ng_seen", {})
 	await _finish_together("saw the Hives, one sedated (lying), hit, dragged by me and waking")
+
+
+## SERVICE DOG (scripts/monsters/service_dog_brain.gd): everything a client needs to see it, and a
+## client's own charged throw (drop_charge + drop_count, the real path) satisfying the host's dog.
+func _sc_service_dog():
+	const DogModes := preload("res://scripts/monsters/modes.gd")
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		game._clear_monsters()
+		await _wall_wait(0.5)
+		var c1 = game.players.get(_peer_of(1))
+		# A spot a few metres from client 1 with clear floor and a clear line to it.
+		var at := Vector3.INF
+		for r in [4.5, 3.5, 5.5]:
+			for i in 16:
+				var a := TAU * float(i) / 16.0
+				var c: Vector3 = game._floor_at(c1.global_position + Vector3(cos(a), 0.0, sin(a)) * r)
+				if absf(c.y - c1.global_position.y) > 0.3 or not game._point_is_clear(c + Vector3.UP * 0.3):
+					continue
+				var q := PhysicsRayQueryParameters3D.create(c + Vector3.UP * 0.8, c1.global_position + Vector3.UP * 0.8)
+				q.collision_mask = C.L_WORLD
+				if game.get_world_3d().direct_space_state.intersect_ray(q).is_empty():
+					at = c
+					break
+			if at != Vector3.INF:
+				break
+		if at == Vector3.INF:
+			return _end(false, "no clear spot near client 1 for the dog")
+		var dog: Node = game._add_monster("service_dog", at)
+		var to: Vector3 = c1.global_position - at
+		dog.rotation.y = atan2(-to.x, -to.z)
+		dog.brain.give({"kind": "heart_monitor", "count": 1, "v": 90})
+		# It picks client 1 (the host's own surgeon may be standing closer): the test chooses, not the cone.
+		dog.brain.target_id = int(c1.peer_id)
+		dog.brain.last_seen = c1.global_position
+		dog.brain._set_mode(DogModes.Mode.DOG_APPROACH)
+		_send("dog_start", {"id": dog.monster_id})
+		if not await _until(func(): return int(dog.mode) == DogModes.Mode.DOG_WARN, 40.0, "the dog to offer to client 1"):
+			return
+		_say("the dog put the heart monitor down for client 1 and is waiting (%.1f s)" % dog.dog_left)
+		if not await _until(func(): return _count_msgs("dog_saw_warn") > 0 or _count_msgs("fail") > 0, 30.0, "client 1 to see the offer"):
+			return
+		dog.brain.offer_left = 0.2
+		if not await _until(func(): return int(dog.mode) == DogModes.Mode.DOG_DRAIN, 5.0, "the dog to start draining"):
+			return
+		# Client 1 is hurtable while it drains (the host keeps everyone else invulnerable).
+		_hurtable = c1.peer_id
+		c1.invuln = 0.0
+		if not await _until(func(): return _count_msgs("dog_saw_drain") > 0 or _count_msgs("fail") > 0, 30.0, "client 1 to see the drain"):
+			return
+		# Client 1 now throws the item from its own machine; nothing on this side touches it.
+		if not await _until(func(): return int(dog.mode) == DogModes.Mode.DOG_RETRIEVE or _count_msgs("fail") > 0, 60.0, "client 1's throw to end the drain"):
+			return
+		_hurtable = -1
+		_say("client 1's charged throw ended the drain (%d heart(s) taken)" % int(dog.brain.hearts))
+		if not await _until(func(): return String(dog.dog_carry) == "heart_monitor", 40.0, "the dog to fetch the heart monitor back"):
+			return
+		if not await _until(func(): return _count_msgs("dog_saw_fetch") > 0 or _count_msgs("fail") > 0, 30.0, "client 1 to see it fetched"):
+			return
+		await _finish_together("the dog offered to client 1, drained it, and a throw from client 1's machine ended it; it fetched the item")
+		return
+	if not await _wait_shift_as_client():
+		return
+	if not await _until(func(): return _count_msgs("dog_start") > 0, 90.0, "the dog test to start"):
+		return
+	var id := int(_msgs("dog_start")[0].data.id)
+	if not await _until(func(): return game.monsters.has(id) and String(game.monsters[id].kind) == "service_dog", 20.0, "the Service Dog on my machine"):
+		return
+	var d: Node = game.monsters[id]
+	var me := _me()
+	if not await _until(func(): return String(d.dog_carry) == "heart_monitor" and d._dog_held != null, 20.0, "the heart monitor in its mouth"):
+		return
+	if not await _until(func(): return int(d.mode) == DogModes.Mode.DOG_WARN and int(d.dog_target) == int(me.peer_id) and String(d.dog_carry) == "", 40.0, "it waiting for me, mouth empty"):
+		return
+	var left0 := float(d.dog_left)
+	await _wall_wait(1.0)
+	var hud = get_tree().get_first_node_in_group("hud")
+	var hud_ok: bool = hud != null and not (hud.drawn as PackedStringArray).has("dog_fetch")   # no on-screen clock, by design
+	if float(d.dog_left) >= left0 or float(d.dog_left) <= 0.0 or int(d.dog_growls) < 1 or String(d.dog_offer_kind) != "heart_monitor" or not hud_ok:
+		return _end(false, "the offer on my machine: clock %.2f -> %.2f, growls %d, offer '%s', hud %s" % [left0, d.dog_left, d.dog_growls, d.dog_offer_kind, str(hud_ok)])
+	_say("the offer on my machine: clock %.1f s and running, %d growl(s), nothing on the HUD" % [d.dog_left, d.dog_growls])
+	_send("dog_saw_warn", {})
+	var hp0: int = me.hp
+	var fx_seen := {"amount": 0.0}
+	var watch := func():
+		var fx = game.get_node_or_null("DogDrainFx")
+		if fx != null:
+			fx_seen.amount = maxf(float(fx_seen.amount), float(fx.amount))
+	if not await _do_until(watch, func(): return d.dog_draining() and d._dog_thread != null and d._dog_thread.visible \
+			and float(d.model.dog.rear) > 0.95 and float(d.dog_glow) > 0.9 and int(d.dog_target) == int(me.peer_id) \
+			and me.hp < hp0 and float(fx_seen.amount) > 0.05, 25.0, "it draining me on my machine (standing, orb lit, thread, a heart gone, my screen going)"):
+		return
+	_say("drained on my machine: glow %.2f, thread up, hp %d -> %d, my fx %.2f" % [d.dog_glow, hp0, me.hp, fx_seen.amount])
+	_send("dog_saw_drain", {})
+	# Pick the heart monitor up off the floor and throw it (a partial charge) -- the real client path.
+	var pick := func():
+		var it = game.world_items.get(_nearest_item("heart_monitor"))
+		if it != null:
+			_approach_item(it)
+	if not await _do_until(pick, func(): return me.holding("heart_monitor"), 40.0, "picking up the heart monitor"):
+		return
+	var sel := _slot_of("heart_monitor")
+	if sel >= 0:
+		me.selected = sel
+	await _wall_wait(0.3)
+	me.drop_charge = 0.5
+	me.drop_count += 1
+	if not await _until(func(): return int(d.mode) == DogModes.Mode.DOG_RETRIEVE or int(d.mode) == DogModes.Mode.WANDER, 20.0, "my throw to stand it down (on my machine)"):
+		return
+	if not await _until(func(): return not d.dog_draining() and (d._dog_thread == null or not d._dog_thread.visible) \
+			and float(game.get_node("DogDrainFx").amount) == 0.0, 5.0, "the thread gone and my effects cleared"):
+		return
+	if not await _until(func(): return String(d.dog_carry) == "heart_monitor" and d._dog_held != null and float(d.model.dog.rear) < 0.05, 40.0, "it back on all fours with the heart monitor"):
+		return
+	_send("dog_saw_fetch", {})
+	await _finish_together("saw the dog carry, offer, growl, count down and drain me; my throw ended it, my effects cleared and it fetched")
 
 
 ## The flattest horizontal direction out of `m` with clear floor space behind it, so a knockback

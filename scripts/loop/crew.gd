@@ -133,6 +133,12 @@ static var _gurney_mesh: ArrayMesh = null
 
 
 func _make_gurney() -> Node3D:
+	return make_gurney_model()
+
+
+## The gurney on its own (origin on the floor under its middle, long along Z, push handle at +Z,
+## IV pole at the -Z head end): the paramedics' and the OR's player-pushed one (scripts/gurney/gurney.gd).
+static func make_gurney_model() -> Node3D:
 	var g := Node3D.new()
 	g.name = "Gurney"
 	if _gurney_mesh == null:

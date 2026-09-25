@@ -4,6 +4,7 @@ extends RefCounted
 ## n: out-of-the-palm direction, c: finger curl 0..1}. scripts/hands/fp_hands.gd blends them.
 
 const WindupScript := preload("res://scripts/combat/windup.gd")
+const GripsScript := preload("res://scripts/hands/grips.gd")
 
 ## Right hand, the torch in a fist, thumb up, pointing where you look.
 const TORCH := {"p": Vector3(0.25, -0.255, -0.42), "f": Vector3(-0.1, 0.1, -1.0), "n": Vector3(-1.0, 0.1, -0.12), "c": 1.0}
@@ -51,6 +52,46 @@ const THROW_BOTH_LEFT := [
 	{"p": Vector3(-0.012, -0.03, 0.03), "f": Vector3(0.1, 0.45, 0.9), "n": Vector3(1.0, 0.2, 0.0), "c": 0.7},
 	{"p": Vector3(-0.012, -0.03, 0.03), "f": Vector3(0.12, -0.2, -1.0), "n": Vector3(1.0, 0.35, 0.0), "c": 0.35},
 ]
+
+
+# ---- BETTER HANDS: poses for the grips (scripts/hands/grips.gd FP). A fist is easier to aim by the
+# handle it holds than by the fingers: grip_pose(p, h, n, side) is the hand whose handle axis (the
+# way the thumb end of what it holds points) lies along camera direction h, palm facing n.
+
+## Right hand, the torch in a fist, its lens forward out of the thumb side.
+static var TORCH_GRIP := grip_pose(Vector3(0.235, -0.25, -0.43), Vector3(-0.06, 0.07, -1.0), Vector3(-1.0, -0.15, 0.0), 1.0)
+## Right hand while both hands carry something: low and to the side, the torch along the forearm.
+static var TORCH_TUCKED_GRIP := grip_pose(Vector3(0.3, -0.42, -0.26), Vector3(-0.2, 0.25, -1.0), Vector3(-1.0, 0.1, 0.0), 1.0)
+## Left hand: a handle in a fist, the working end up and forward (saws, scalpels, bottles).
+static var LEFT_POWER := grip_pose(Vector3(-0.2, -0.235, -0.44), Vector3(0.2, 0.75, -0.62), Vector3(1.0, 0.05, 0.2), -1.0)
+## Left hand: a bail in the fingers, the thing hanging below.
+const LEFT_HOOK := {"p": Vector3(-0.19, -0.2, -0.46), "f": Vector3(0.3, 0.1, -1.0), "n": Vector3(0.25, 1.0, 0.1), "c": 1.0}
+## Left hand: thumb and first fingers on something small or flat, held up to look at.
+const LEFT_PINCH := {"p": Vector3(-0.2, -0.235, -0.44), "f": Vector3(0.45, 0.35, -1.0), "n": Vector3(0.45, 0.85, 0.35), "c": 0.5}
+## The jab with the fist grip: the syringe's needle out of the thumb side, pulled back, then driven.
+static var JAB_GRIP := [
+	grip_pose(Vector3(-0.15, -0.2, -0.28), Vector3(0.3, 0.3, -1.0), Vector3(1.0, 0.1, 0.25), -1.0),
+	grip_pose(Vector3(-0.05, -0.13, -0.58), Vector3(0.1, 0.05, -1.0), Vector3(1.0, 0.15, 0.0), -1.0),
+]
+## A handle thrown or swung (the saw's chop, the hammer's bonk, throwing a fist-held thing): cocked
+## up and back past the shoulder, working end behind, then brought down and through in front.
+static var THROW_FIST := [
+	grip_pose(Vector3(-0.36, -0.02, -0.33), Vector3(0.2, 0.6, 0.75), Vector3(1.0, 0.1, 0.1), -1.0),
+	grip_pose(Vector3(-0.07, -0.2, -0.62), Vector3(0.35, -0.5, -0.8), Vector3(0.9, 0.35, -0.1), -1.0),
+]
+
+
+## A fist pose from where its handle points (see above). The handle runs across the palm from the
+## little-finger heel to the index knuckle (grips.gd fp_frame), so the fingers come out of that.
+static func grip_pose(p: Vector3, h: Vector3, n: Vector3, side: float, c := 1.0) -> Dictionary:
+	var hs := Vector3(side, 0.0, -GripsScript.GRIP_DIAG).normalized()
+	var ys := Vector3.UP
+	var hc := h.normalized()
+	var nc := (n - hc * n.dot(hc)).normalized()
+	var sock := Basis(hs, ys, hs.cross(ys))
+	var cam := Basis(hc, nc, hc.cross(nc))
+	var rot := cam * sock.transposed()
+	return {"p": p, "f": rot * Vector3(0, 0, -1), "n": nc, "c": c}
 
 
 ## Mirror a left-hand pose to the right hand.

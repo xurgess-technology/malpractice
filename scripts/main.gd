@@ -627,7 +627,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	# Esc while looking through a Hive's eyes comes back instead of pausing.
-	if event.is_action_pressed("pause") and not game.paused and game.abilities != null and game.abilities.local_hive_active():
+	if event.is_action_pressed("pause") and not game.paused and game.abilities != null and game.abilities.local_puppet_active():
 		game.abilities.local_exit()
 		get_viewport().set_input_as_handled()
 		return
@@ -728,10 +728,10 @@ func _process(_delta: float) -> void:
 	var mirror_cam: Camera3D = game.mirror_camera() if game.phase != Game.Phase.MENU else null
 	if mirror_cam != null:
 		surgery_cam = mirror_cam
-	# Hive Eyes renders through the Hive's eyes.
-	var hive_cam: Camera3D = game.abilities.camera() if game.phase != Game.Phase.MENU and game.abilities != null else null
-	if hive_cam != null:
-		surgery_cam = hive_cam
+	# Puppet renders through the Hive it is driving.
+	var puppet_cam: Camera3D = game.abilities.camera() if game.phase != Game.Phase.MENU and game.abilities != null else null
+	if puppet_cam != null:
+		surgery_cam = puppet_cam
 	# THE SURGICAL ROBOT: remoted in, you look out of the robot's eye (not a "surgery camera": the
 	# HUD keeps the prompt and the item bar, which is how you pick the robot's next tool).
 	var robot_cam: Camera3D = game.robot.local_camera() if game.phase != Game.Phase.MENU and game.robot != null else null

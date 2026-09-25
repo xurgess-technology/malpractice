@@ -1,30 +1,34 @@
 extends Node
 ## The two surgeon abilities and the four slots they sit in: Echo (a shriek that outlines everything
-## nearby through walls) and Hive Eyes (see through a nearby Hive for a few seconds). A child
-## "Abilities" of Game on every machine.
+## nearby through walls) and Puppet (climb into a nearby Hive for a few seconds: see through it,
+## look around in it and walk it about while your own body stands there). A child "Abilities" of
+## Game on every machine.
 ##
-## Where levels come from: **grafting**. An eye_hive graft grants Hive Eyes at level 1 and takes it
+## Where levels come from: **grafting**. An eye_hive graft grants Puppet at level 1 and takes it
 ## away when the part comes out (scripts/grafting/grafts.gd PART_ABILITY). Brains and the break-room
 ## blender used to be the other source and are gone (docs/backlog/ABILITIES_REMOVED.md), which is
 ## why a level is now simply SET rather than accumulated: there are no fractional points any more,
 ## `set_level()` is the whole earning path, and Echo has no source in the game yet.
 ##
-## Authority: the host decides everything (levels, slots, cooldowns, who is looking through which
-## Hive). Clients get it through `net_state()` (global snapshot field `ab`), the Player field
-## `hive_view` (report key `hv`) and the reliable events `ab_echo` and `ab_hive`. The visuals (the
-## Echo view, the Hive Eyes camera) run on every machine from that state.
+## Authority: the host decides everything (levels, slots, cooldowns, who is driving which Hive, and
+## where that Hive walks). Clients get it through `net_state()` (global snapshot field `ab`), the
+## Player field `puppeting` (report key `pp`), the Hive's own Monster report, and the reliable events
+## `ab_echo` and `ab_puppet`. A client puppeting sends what it wants the Hive to do in its own
+## report_state (Player.puppet_move / puppet_yaw). The visuals (the Echo view, the Puppet camera) run
+## on every machine from that state.
 
 const EchoViewScript := preload("res://scripts/abilities/echo_view.gd")
-const HiveViewScript := preload("res://scripts/abilities/hive_view.gd")
+const PuppetViewScript := preload("res://scripts/abilities/puppet_view.gd")
 
-## The ability paths. The ORDER MATTERS: it indexes the per-player level array.
+## The ability paths. The ORDER MATTERS: it indexes the per-player level array. Puppet grows on the
+## "hive" path (it is the Hive's ability, whatever it is called).
 const PATHS := ["hive", "sonographer"]
-const ABILITY_NAME := {"hive": "Hive Eyes", "sonographer": "Echo"}
+const ABILITY_NAME := {"hive": "Puppet", "sonographer": "Echo"}
 ## SWEEP 4A HOOK (controls): ability ids, and the ability-slot cap. add_ability()/set_level()/
 ## slot_of() are independent of how a level is earned, so slot code never reads levels directly
 ## except through level().
-const ABILITY_ID := {"sonographer": "echo", "hive": "hive_in"}
-const ABILITY_ID_TO_PATH := {"echo": "sonographer", "hive_in": "hive"}
+const ABILITY_ID := {"sonographer": "echo", "hive": "puppet"}
+const ABILITY_ID_TO_PATH := {"echo": "sonographer", "puppet": "hive"}
 const MAX_SLOTS := 4
 const HIVE := "hive"   # Monster.HIVE (monsters worker); the string, so this runs without it
 
@@ -37,21 +41,22 @@ const ECHO_RADIUS_PER_LEVEL := 6.0
 const ECHO_SECONDS := 2.5
 const ECHO_SECONDS_PER_LEVEL := 0.75
 
-const HIVE_COOLDOWN := 12.0   # counted from when the view ends
-const HIVE_RANGE := 20.0
-const HIVE_RANGE_PER_LEVEL := 10.0
-const HIVE_SECONDS := 5.0
-const HIVE_SECONDS_PER_LEVEL := 2.0
-## After a Hive Eyes view ends, R presses from that player are ignored this long (the press that
+const PUPPET_COOLDOWN := 12.0   # counted from when you come back
+const PUPPET_RANGE := 20.0
+const PUPPET_RANGE_PER_LEVEL := 10.0
+## A couple of seconds in the Hive, counted from when you arrive in it: 4 / 5 / 6 s.
+const PUPPET_SECONDS := 3.0
+const PUPPET_SECONDS_PER_LEVEL := 1.0
+## After a puppeting ends, slot presses from that player are ignored this long (the press that
 ## ended it on the client may arrive after the host already ended it).
-const HIVE_PRESS_GRACE := 0.5
+const PUPPET_PRESS_GRACE := 0.5
 
 var game: Node = null
 
 ## Replicated. peer id -> [hive level, sonographer level] (ints, 0..MAX_LEVEL).
 var _levels: Dictionary = {}
 ## Replicated. peer id -> [monster id, world_time it ends].
-var _hive: Dictionary = {}
+var _puppet: Dictionary = {}
 ## Replicated. peer id -> Array[MAX_SLOTS] of ability id ("" empty). Host authoritative; a new
 ## ability goes into the first empty slot the moment set_level() takes it to 1 or more. See
 ## add_ability() / set_level() / slot_of() below.
@@ -62,15 +67,15 @@ var _slots: Dictionary = {}
 var _echo_pose_until: Dictionary = {}
 
 # host only
-var _hive_hp: Dictionary = {}          # peer id -> hp when the view started
-var _cd: Dictionary = {}               # "echo:<peer>" / "hive:<peer>" -> world_time it is ready
-var _press_grace: Dictionary = {}      # peer id -> world_time before which R is ignored
+var _puppet_hp: Dictionary = {}        # peer id -> hp when the puppeting started
+var _cd: Dictionary = {}               # "echo:<peer>" / "puppet:<peer>" -> world_time it is ready
+var _press_grace: Dictionary = {}      # peer id -> world_time before which slot presses are ignored
 var _hint_at: Dictionary = {}          # peer id -> world_time of the last "Nothing happens."
 
 var _level_node: Node = null
 
 var echo_view: Node = null
-var hive_view: Node = null
+var puppet_view: Node = null
 
 ## Test seams: the last Echo started on this machine and the last ability result on the host.
 var last_echo := {}
@@ -83,10 +88,10 @@ func setup(g: Node) -> void:
 	echo_view.name = "EchoView"
 	add_child(echo_view)
 	echo_view.setup(g)
-	hive_view = HiveViewScript.new()
-	hive_view.name = "HiveView"
-	add_child(hive_view)
-	hive_view.setup(g)
+	puppet_view = PuppetViewScript.new()
+	puppet_view.name = "PuppetView"
+	add_child(puppet_view)
+	puppet_view.setup(g)
 
 
 # =========================================================================
@@ -143,12 +148,12 @@ func clear_ability(peer_id: int, id: String) -> void:
 		var lv: Array = (_levels[peer_id] as Array).duplicate()
 		lv[pi] = 0
 		_levels[peer_id] = lv
-	if id == "hive_in" and _hive.has(peer_id):
-		_end_hive(peer_id, "")
+	if id == "puppet" and _puppet.has(peer_id):
+		_end_puppet(peer_id, "")
 
 
 ## Host (grafting, dev and tests): set the level of an ability directly. `id` must be a known
-## ability id (echo / hive_in); a level of 1 or more also grants the slot. This is the whole
+## ability id (echo / puppet); a level of 1 or more also grants the slot. This is the whole
 ## earning path now that brains are gone -- see the note at the top of this file.
 func set_level(peer_id: int, id: String, lvl: int) -> void:
 	var path: String = String(ABILITY_ID_TO_PATH.get(id, ""))
@@ -170,25 +175,26 @@ func echo_seconds(lvl: int) -> float:
 	return ECHO_SECONDS + ECHO_SECONDS_PER_LEVEL * lvl
 
 
-func hive_range(lvl: int) -> float:
-	return HIVE_RANGE + HIVE_RANGE_PER_LEVEL * lvl
+func puppet_range(lvl: int) -> float:
+	return PUPPET_RANGE + PUPPET_RANGE_PER_LEVEL * lvl
 
 
-func hive_seconds(lvl: int) -> float:
-	return HIVE_SECONDS + HIVE_SECONDS_PER_LEVEL * lvl
+## How long you drive the Hive once you are in it (the fly-in comes on top).
+func puppet_seconds(lvl: int) -> float:
+	return PUPPET_SECONDS + PUPPET_SECONDS_PER_LEVEL * lvl
 
 
 ## Host: seconds until an ability is ready for this player (0 = ready).
 func cooldown_left(peer_id: int, path: String) -> float:
-	var key := ("hive:%d" if path == "hive" else "echo:%d") % peer_id
+	var key := ("puppet:%d" if path == "hive" else "echo:%d") % peer_id
 	return maxf(0.0, float(_cd.get(key, -1.0)) - float(game.world_time))
 
 
 ## Host: game over. Every ability goes with the money (grafts go at the same time, and they are
 ## what grants them, so nothing is left dangling).
 func on_reset() -> void:
-	for peer in _hive.keys():
-		_end_hive(peer, "")
+	for peer in _puppet.keys():
+		_end_puppet(peer, "")
 	_levels.clear()
 	_cd.clear()
 	_press_grace.clear()
@@ -201,8 +207,8 @@ func on_reset() -> void:
 # =========================================================================
 
 ## Host: p pressed Alt+(slot_idx+1). Per-slot dispatch: each slot's ability (if any) runs on its
-## own cooldown (echo:/hive: keys in _cd, unchanged by the slot it sits in). Pressing the slot again
-## while its ability is active (Hive Eyes) ends it.
+## own cooldown (echo:/puppet: keys in _cd, unchanged by the slot it sits in). Pressing the slot again
+## while its ability is active (Puppet) ends it.
 func ability_slot(p: Node, slot_idx: int) -> void:
 	if game == null or not game.is_host() or p == null:
 		return
@@ -217,9 +223,9 @@ func ability_slot(p: Node, slot_idx: int) -> void:
 			_hint_at[peer] = game.world_time
 			game.tell(p, "Nothing happens.", 1.5)
 		return
-	if id == "hive_in" and _hive.has(peer):
-		_end_hive(peer, "")
-		last_result = "hive_end"
+	if id == "puppet" and _puppet.has(peer):
+		_end_puppet(peer, "")
+		last_result = "puppet_end"
 		return
 	if float(game.world_time) < float(_press_grace.get(peer, -1.0)):
 		last_result = "grace"
@@ -237,7 +243,7 @@ func ability_slot(p: Node, slot_idx: int) -> void:
 	if path == "sonographer":
 		_echo(p, lvl)
 	else:
-		_start_hive(p, lvl)
+		_start_puppet(p, lvl)
 
 
 func _echo(p: Node, lvl: int) -> void:
@@ -248,7 +254,8 @@ func _echo(p: Node, lvl: int) -> void:
 	last_result = "echo"
 
 
-## The nearest Hive within range of p, through walls; null if none. Sedated ones do not count.
+## The nearest Hive within range of p, through walls; null if none. Sedated ones do not count, nor
+## one somebody else is already driving.
 func nearest_hive(p: Node, range_m: float) -> Node:
 	var best: Node = null
 	var best_d := range_m
@@ -257,6 +264,8 @@ func nearest_hive(p: Node, range_m: float) -> Node:
 			continue
 		if m.has_method("is_sedated") and m.is_sedated():
 			continue
+		if int(m.get("puppet_by")) != 0:
+			continue
 		var d: float = (m.global_position as Vector3).distance_to(p.global_position)
 		if d <= best_d:
 			best_d = d
@@ -264,78 +273,94 @@ func nearest_hive(p: Node, range_m: float) -> Node:
 	return best
 
 
-func _start_hive(p: Node, lvl: int) -> void:
+func _start_puppet(p: Node, lvl: int) -> void:
 	if p.carrying != 0 or p.operating:
 		last_result = "busy"
 		game.tell(p, "Not now: your hands are busy.", 1.5)
 		return
-	var m := nearest_hive(p, hive_range(lvl))
+	var m := nearest_hive(p, puppet_range(lvl))
 	if m == null:
 		last_result = "no_hive"
-		game.tell(p, "No Hive close enough to see through.", 2.0)
+		game.tell(p, "No Hive close enough to climb into.", 2.0)
 		return
 	var peer: int = p.peer_id
-	# SWEEP 4A HOOK (Hive Eyes fly-through, chunk 4): the duration only starts once the local
-	# fly-through has landed, so the authoritative end time carries the flight time too.
-	_hive[peer] = [int(m.monster_id), snappedf(float(game.world_time) + HiveViewScript.FLIGHT_IN + hive_seconds(lvl), 0.1)]
-	_hive_hp[peer] = int(p.hp)
-	p.hive_view = true
-	_emit("ab_hive", {"id": peer, "on": true})
-	last_result = "hive"
+	# The seconds only start once the local fly-in has landed, so the authoritative end time carries
+	# the flight too, and the Hive stands still (already out of its own head) until then.
+	var arrive := float(game.world_time) + PuppetViewScript.FLIGHT_IN
+	_puppet[peer] = [int(m.monster_id), snappedf(arrive + puppet_seconds(lvl), 0.1)]
+	_puppet_hp[peer] = int(p.hp)
+	m.puppet_by = peer
+	m.puppet_from = arrive
+	p.puppeting = true
+	p.puppet_move = Vector2.ZERO
+	p.puppet_yaw = (m as Node3D).rotation.y
+	_emit("ab_puppet", {"id": peer, "on": true})
+	last_result = "puppet"
 
 
-## Host: the view ends. `why` ("" for a quiet end) goes to that player.
-func _end_hive(peer: int, why: String) -> void:
-	if not _hive.has(peer):
+## Host: the puppeting ends; the Hive gets its own head back. `why` ("" for a quiet end) goes to
+## that player.
+func _end_puppet(peer: int, why: String) -> void:
+	if not _puppet.has(peer):
 		return
-	_hive.erase(peer)
-	_hive_hp.erase(peer)
-	_cd["hive:%d" % peer] = float(game.world_time) + HIVE_COOLDOWN
-	_press_grace[peer] = float(game.world_time) + HIVE_PRESS_GRACE
+	var m = game.monsters.get(int(_puppet[peer][0]))
+	if m != null and is_instance_valid(m) and int(m.get("puppet_by")) == peer:
+		m.puppet_release()
+	_puppet.erase(peer)
+	_puppet_hp.erase(peer)
+	_cd["puppet:%d" % peer] = float(game.world_time) + PUPPET_COOLDOWN
+	_press_grace[peer] = float(game.world_time) + PUPPET_PRESS_GRACE
 	var p = game.players.get(peer)
 	if p != null and is_instance_valid(p):
-		p.hive_view = false
+		p.puppeting = false
+		p.puppet_move = Vector2.ZERO
 		if why != "":
 			game.tell(p, why, 2.5)
-	_emit("ab_hive", {"id": peer, "on": false})
+	_emit("ab_puppet", {"id": peer, "on": false})
 
 
-func _tick_hive() -> void:
-	for peer in _hive.keys():
+## Host, every frame. Snap back when the Hive dies, is strapped or goes under, or when your own
+## body is hurt, stunned, downed, carried or grabbed; come back quietly when the time is up. A hit
+## on the HIVE does not end it: it knocks the Hive about with you in it (Monster._physics_process).
+func _tick_puppet() -> void:
+	for peer in _puppet.keys():
 		var p = game.players.get(peer)
 		if p == null or not is_instance_valid(p):
-			_hive.erase(peer)
-			_hive_hp.erase(peer)
+			var gone = game.monsters.get(int(_puppet[peer][0]))
+			if gone != null and is_instance_valid(gone) and int(gone.get("puppet_by")) == int(peer):
+				gone.puppet_release()
+			_puppet.erase(peer)
+			_puppet_hp.erase(peer)
 			continue
-		var m = game.monsters.get(int(_hive[peer][0]))
+		var m = game.monsters.get(int(_puppet[peer][0]))
 		if m == null or not is_instance_valid(m):
-			_end_hive(peer, "The Hive is gone. You snap back into your body.")
+			_end_puppet(peer, "The Hive is gone. You snap back into your body.")
 		elif m.has_method("is_sedated") and m.is_sedated():
-			_end_hive(peer, "The Hive goes under. You are back in your body.")
-		elif not p.alive or p.downed or int(p.hp) < int(_hive_hp.get(peer, p.hp)) or float(p.stun) > 0.0 or p.carried_by != 0 or int(p.held_by) >= 0:
-			_end_hive(peer, "Something hits you. You snap back into your body.")
-		elif float(game.world_time) >= float(_hive[peer][1]):
-			_end_hive(peer, "")
+			_end_puppet(peer, "The Hive goes under. You are back in your body.")
+		elif not p.alive or p.downed or int(p.hp) < int(_puppet_hp.get(peer, p.hp)) or float(p.stun) > 0.0 or p.carried_by != 0 or int(p.held_by) >= 0:
+			_end_puppet(peer, "Something hits you. You snap back into your body.")
+		elif float(game.world_time) >= float(_puppet[peer][1]):
+			_end_puppet(peer, "")
 
 
-## Every machine: is the LOCAL player looking through a Hive right now?
-func local_hive_active() -> bool:
-	return hive_view != null and hive_view.active
+## Every machine: is the LOCAL player inside a Hive right now (the fly-back included)?
+func local_puppet_active() -> bool:
+	return puppet_view != null and puppet_view.active
 
 
-## Every machine: the camera main.gd should render through (Hive Eyes), else null.
+## Every machine: the camera main.gd should render through (Puppet), else null.
 func camera() -> Camera3D:
-	if local_hive_active() and game.monsters.has(hive_view.monster_id):
-		return hive_view.camera
+	if local_puppet_active() and game.monsters.has(puppet_view.monster_id):
+		return puppet_view.camera
 	return null
 
 
-## Every machine: the local player pressed Esc during Hive Eyes (same as pressing its slot again).
+## Every machine: the local player pressed Esc while puppeting (same as pressing its slot again).
 func local_exit() -> void:
 	var me = game.local_player() if game != null else null
 	if me == null:
 		return
-	var i := slot_of(me.peer_id, "hive_in")
+	var i := slot_of(me.peer_id, "puppet")
 	if i >= 0:
 		me.ability_slot_press[i] = int(me.ability_slot_press[i]) + 1
 
@@ -352,13 +377,13 @@ func physics_tick(_delta: float) -> void:
 		_level_node = game.level
 		echo_view.stop()
 	if game.is_host():
-		_tick_hive()
+		_tick_puppet()
 	var me = game.local_player()
-	var h = _hive.get(me.peer_id) if me != null else null
+	var h = _puppet.get(me.peer_id) if me != null else null
 	if h != null:
-		hive_view.set_target(int(h[0]), float(h[1]))
+		puppet_view.set_target(int(h[0]), float(h[1]))
 	else:
-		hive_view.set_target(-1, 0.0)
+		puppet_view.set_target(-1, 0.0)
 
 
 # =========================================================================
@@ -371,20 +396,20 @@ func net_state() -> Dictionary:
 	for peer in _levels.keys():
 		var a: Array = _levels[peer]
 		lv[peer] = [int(a[0]), int(a[1])]
-	var hv := {}
-	for peer in _hive.keys():
-		hv[peer] = [int(_hive[peer][0]), snappedf(float(_hive[peer][1]), 0.1)]
+	var pp := {}
+	for peer in _puppet.keys():
+		pp[peer] = [int(_puppet[peer][0]), snappedf(float(_puppet[peer][1]), 0.1)]
 	var sl := {}
 	for peer in _slots.keys():
 		sl[peer] = (_slots[peer] as Array).duplicate()
-	return {"lv": lv, "hv": hv, "sl": sl}
+	return {"lv": lv, "pp": pp, "sl": sl}
 
 
 func apply_net_state(s: Dictionary) -> void:
 	if game == null or game.is_host():
 		return
 	_levels = (s.get("lv", {}) as Dictionary).duplicate(true)
-	_hive = (s.get("hv", {}) as Dictionary).duplicate(true)
+	_puppet = (s.get("pp", {}) as Dictionary).duplicate(true)
 	_slots = (s.get("sl", {}) as Dictionary).duplicate(true)
 
 
@@ -412,8 +437,8 @@ func on_event(kind: String, data: Dictionary) -> void:
 					echo_view.start(me, pos, float(data.get("r", ECHO_RADIUS)), float(data.get("s", ECHO_SECONDS)))
 			else:
 				Audio.play("ability_shriek", pos + Vector3.UP * 1.5, 6.0)
-		"ab_hive":
-			pass   # the local view follows `_hive`; the event keeps the one-off moment ordered
+		"ab_puppet":
+			pass   # the local view follows `_puppet`; the event keeps the one-off moment ordered
 
 
 ## SWEEP 4A HOOK (Echo polish, chunk 4): a quick expanding ring at `pos`, on every machine, so a
@@ -458,7 +483,7 @@ func dev_request(sender: int, action: String, a: Dictionary) -> void:
 			var lvl := int(a.get("level", MAX_LEVEL))
 			for ability_id in ABILITY_ID_TO_PATH.keys():
 				set_level(id, String(ability_id), lvl)
-			game.say("Abilities: Hive Eyes %d, Echo %d." % [level(id, "hive"), level(id, "sonographer")], 2.5)
+			game.say("Abilities: Puppet %d, Echo %d." % [level(id, "hive"), level(id, "sonographer")], 2.5)
 		"ab_reset":
 			on_reset()
 			game.say("Abilities reset.", 2.0)
@@ -466,4 +491,4 @@ func dev_request(sender: int, action: String, a: Dictionary) -> void:
 
 static func warm(parent: Node3D) -> void:
 	EchoViewScript.warm(parent)
-	HiveViewScript.warm(parent)
+	PuppetViewScript.warm(parent)

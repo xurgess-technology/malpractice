@@ -28,6 +28,10 @@
 //                          both ends; it must never hurt a real player's ears.
 //   monsters_sono_rush     chunk B: the continuous rattling shriek while it rushes
 //   monsters_sono_wail     chunk B: the grunts and wet blows while it is on somebody
+//   monsters_dog_growl     the Service Dog's warning growl as its fetch clock starts: a low,
+//                          rolling rumble with something almost like a voice inside it
+//   monsters_dog_snarl     the Service Dog rearing up (and each swipe): a wet, open-mouthed snarl
+//   monsters_dog_step      the Service Dog's long nails ticking on lino, one per footfall
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -550,6 +554,73 @@ function sonoWail(v) {
   return fadeEdges(room(out, 0.26, 0.9));
 }
 
+// ---------------------------------------------------------------- the Service Dog
+
+/** A low growl: a rumbling glottal source (amplitude rolled at ~22-30 Hz) through a closed-mouth
+ *  formant, with a faint vowel under it so it is not quite a dog. */
+function dogGrowl(v) {
+  const r = rngFor('dog_growl' + v);
+  const len = r.range(1.0, 1.4);
+  const out = buf(len + 0.4);
+  const base = r.range(62, 78);
+  const roll = r.range(22, 30);
+  const f1 = biquad('bandpass', 2.2), f2 = biquad('bandpass', 3.5), lp = biquad('lowpass', 0.8);
+  let ph = 0;
+  for (let i = 0; i < len * SR; i++) {
+    const t = i / SR, u = t / len;
+    const f0 = base * (1 + 0.12 * Math.sin(Math.PI * u) + 0.03 * (r() - 0.5));
+    ph += f0 / SR; ph -= Math.floor(ph);
+    const saw = 2 * ph - 1;
+    const rattle = 0.55 + 0.45 * Math.sin(TAU * roll * t + 0.8 * Math.sin(TAU * 3.1 * t));
+    const src = (saw * 0.8 + (r() * 2 - 1) * 0.35) * rattle;
+    const e = Math.min(1, t / 0.12) * Math.pow(Math.max(0, 1 - u), 0.5);
+    out[i] += (f1(src, 320 + 60 * Math.sin(TAU * 0.7 * t)) * 1.0 + f2(src, 780) * 0.35 + lp(src, 180) * 0.8) * e;
+  }
+  // The almost-voice: a breathy "hhh-uh" a fifth above, very quiet.
+  voice(out, len * 0.15, len * 0.6, base * 1.5, base * 1.35, [520, 1150, 2400], 0.12, r, 0.8);
+  return fadeEdges(room(out, 0.25, 0.9), 20, 120);
+}
+
+/** An open-mouthed snarl: a bark-like attack, then a noisy, higher, tearing rumble. */
+function dogSnarl(v) {
+  const r = rngFor('dog_snarl' + v);
+  const len = r.range(0.7, 1.0);
+  const out = buf(len + 0.4);
+  const base = r.range(110, 140);
+  const bp = biquad('bandpass', 1.4), bp2 = biquad('bandpass', 5);
+  let ph = 0;
+  for (let i = 0; i < len * SR; i++) {
+    const t = i / SR, u = t / len;
+    const f0 = base * (1.25 - 0.35 * u) * (1 + 0.05 * (r() - 0.5));
+    ph += f0 / SR; ph -= Math.floor(ph);
+    const rattle = 0.5 + 0.5 * Math.sin(TAU * r.range(28, 34) * t);
+    const src = ((2 * ph - 1) * 0.7 + (r() * 2 - 1) * 0.6) * rattle;
+    const e = env(t, 0.015, 0.09) * 0.8 + Math.min(1, t / 0.05) * Math.pow(Math.max(0, 1 - u), 0.7) * 0.7;
+    out[i] += (bp(src, 900 + 500 * Math.exp(-t / 0.08)) + bp2(src, 2300) * 0.3) * e;
+  }
+  voice(out, 0.0, len * 0.35, base * 1.1, base * 0.8, [650, 1400, 2600], 0.35, r, 0.9);
+  return fadeEdges(room(out, 0.28, 1.0), 2, 90);
+}
+
+/** Long nails on lino: two ticks close together, dry and bright. */
+function dogStep(v) {
+  const r = rngFor('dog_step' + v);
+  const len = 0.12;
+  const out = buf(len + 0.12);
+  const bp = biquad('bandpass', 6), bp2 = biquad('bandpass', 6);
+  const f = r.range(3200, 4400), gap = r.range(0.018, 0.035);
+  for (let i = 0; i < len * SR; i++) {
+    const t = i / SR;
+    const n = r() * 2 - 1;
+    out[i] += bp(n, f) * Math.exp(-t / 0.003) * 1.4;
+    const t2 = t - gap;
+    if (t2 > 0) out[i] += bp2(n, f * 0.85) * Math.exp(-t2 / 0.003) * 0.9;
+    // the pad setting down under the nails
+    out[i] += Math.sin(TAU * 180 * t) * Math.exp(-t / 0.02) * 0.25;
+  }
+  return fadeEdges(room(out, 0.2, 0.8), 1, 20);
+}
+
 // ---------------------------------------------------------------- main
 
 const CUES = [
@@ -573,6 +644,10 @@ const CUES = [
   ['monsters_sono_squeal', 2, sonoSqueal, -17],
   ['monsters_sono_rush', 2, sonoRush, -7],
   ['monsters_sono_wail', 3, sonoWail, -6],
+  // the Service Dog
+  ['monsters_dog_growl', 3, dogGrowl, -5],
+  ['monsters_dog_snarl', 2, dogSnarl, -5],
+  ['monsters_dog_step', 4, dogStep, -14],
 ];
 
 function writeWav(file, a) {

@@ -310,9 +310,9 @@ func _build_spawn(col: VBoxContainer) -> void:
 
 	_section(col, "Monsters")
 	var s2 := _row(col)
-	var monsters := _option(s2, ["The Hive", "The Sonographer", "The Night Nurse"])  # SWEEP 3 HOOK (monsters): the Hive
+	var monsters := _option(s2, ["The Hive", "The Sonographer", "The Night Nurse", "The Service Dog"])  # SWEEP 3 HOOK (monsters): the Hive
 	monsters.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var kinds := ["hive", "sonographer", "night_nurse"]
+	var kinds := ["hive", "sonographer", "night_nurse", "service_dog"]
 	_button(s2, "Spawn", func(): _req("spawn_monster", {"kind": kinds[monsters.selected], "where": "front"}))
 	var s3 := _row(col)
 	_button(s3, "Kill all monsters", func(): _req("kill_monsters"))

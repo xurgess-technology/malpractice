@@ -13,7 +13,7 @@ extends RefCounted
 ## Personnel mirrors and the carry camera.
 ##
 ## `set_lock` drives the Hive eye material's `Lock`: 0 a low pinpoint, 1 the whole ball lit. Grafts
-## keeps it low normally and high while the surgeon is in Hive Eyes.
+## keeps it low normally and high while the surgeon is puppeting a Hive.
 
 const HumanModel := preload("res://scripts/human/human_model.gd")
 

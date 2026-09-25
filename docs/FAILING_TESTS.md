@@ -226,6 +226,47 @@ pockets, and separately `--seeds=8 --builds=8` with `--build_pocket=none` and
   report `navigation map never synchronised` on one seed under a loaded machine -- a timing flake,
   confirmed here on seed 8 with `--build_pocket=factory` (fails in an 8-seed batch, passes alone).
 
+## 1n. nettest `bandwidth` (Bob's gunshot, seed 4242): stuck at step 1, cause not yet fixed
+
+**In progress, handed off 2026-09-25.** `bandwidth` (`tools/nettest_run.gd -- --only=bandwidth`)
+got stuck at GW step 1 ("extract", DODGE!/`forceps`) for ~850 s before timing out at 890 s, on a
+run logged at `tools/nettest_logs/bandwidth_*.log`. `full_shift_lag` (a different scenario config,
+same `full_shift` handler) passes, so this is not a blanket `full_shift` break.
+
+- **What the logs show:** every one of the four players' hands arrays, for the whole stuck period,
+  show only `anesthetic` or `gauze` -- `forceps` never once appears in anyone's hands. Nobody ever
+  picked it up.
+- **Leading theory, not yet confirmed by instrumentation:** `tools/nettest.gd`'s `_shift_bot` only
+  calls `_nearest_item(kind)` to fetch an item when that kind is in `short` (`need - game.shelf_count
+  (kind)`, `_shift_bot` around line 2690). `shelf_count()` (`scripts/game.gd:1690`) counts an item
+  sitting in an OR storage container as already "there", same as one already in a player's hand. A
+  reusable tool that spawned onto the OR shelf (rather than loose in the world) satisfies `short`
+  immediately, so the bot never walks to the shelf and picks it up -- it behaves as if "someone
+  else is holding it" (the comment at that `return`), when actually nobody is. `can_begin()`
+  (`scripts/surgery/surgery_system.gd:189`) is unchanged and firmly requires the item held in hand
+  to operate, so if this is right, the fetch-from-shelf step is the one the bot skips.
+- **What is NOT yet checked:** whether `forceps` actually spawned into a `storage_` container this
+  seed (vs. loose in the world, vs. not spawned at all -- `ItemSpawner.plan` still includes it via
+  `Items.SURGICAL`, unaffected by the arcade rebuild, so it should spawn same as always). Also not
+  yet checked: whether this same shelf-vs-hand gap would already have bitten `tourniquet` /
+  `bone_saw` (also reusable tools, uses=0) in the amputation case, which would mean it is not new
+  and not specific to DODGE!/forceps at all. `full_shift_lag` uses seed 4247, a different roll, so
+  it does not rule this out either way.
+- **Next step:** instrument `_shift_bot`'s `short` and `game.shelf_count("forceps")` on a scratch
+  run of `--only=bandwidth`, or dump `game.world_items` for the `forceps` stack, to see whether it
+  really is parked in a container the bot is ignoring. If confirmed, the fix is teaching
+  `_shift_bot` (test-side) to also fetch a reusable tool out of `short`'s blind spot -- or, if a
+  reusable tool sitting unclaimed on a shelf is a real softlock a human player could also hit, this
+  is a product bug in `_shift_bot`'s design assumption, not just the bot.
+- **`vats.gd` shutdown error, separately confirmed harmless:** every stuck run ends with
+  `SCRIPT ERROR: Trying to assign invalid previously freed instance. at: Vats._arm_markers
+  (res://scripts/grafting/vats.gd:545)`, called from `_physics_process` (line 496), immediately
+  after `[net] peer N disconnected` at the 890 s timeout kill. It only ever appears at/after
+  process teardown once the host or a client has already torn its world down, so it reads as a
+  freed-node touch during shutdown racing the physics tick, not a cause of the stall. Not
+  investigated further; low priority, but worth a five-minute look (guard `_arm_markers` with an
+  `is_instance_valid` check on whatever it assigns) next time someone is in `vats.gd`.
+
 How to run things is at the bottom of this file.
 
 ---
@@ -329,7 +370,7 @@ The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\
 - **Run headless tests one at a time per checkout.** Parallel runs in the same directory segfault.
 - Test scenes, each prints `result=PASS` or `FAIL` at the end: `tools/*test.tscn` (carrycamtest,
   combattest, controlstest, databasetest, devtest, doortest,
-  downedtest, fogtest, inventorytest, looptest, orscreentest, pockettest, settingstest,
+  downedtest, dogtest, fogtest, gurneytest, handstest, inventorytest, looptest, orscreentest, pockettest, settingstest,
   straptest) and
   `tools/monster_lab.tscn`
 - A bot plays a whole shift: `tools/playtest.tscn -- --god --seed=N`

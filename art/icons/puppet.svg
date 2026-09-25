@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Puppet: the Hive's eyeball, hung on strings from a puppeteer's control bar. -->
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="ball"><circle cx="128" cy="136" r="58"/></clipPath>
+  </defs>
+
+  <!-- the ability slot -->
+  <circle cx="128" cy="128" r="122" fill="#0b1416"/>
+
+  <!-- the control bar and its strings, behind the eye -->
+  <g stroke-linecap="round">
+    <g stroke="#e8dcc0" stroke-width="3.5" fill="none">
+      <path d="M84 46 L90 96"/>
+      <path d="M172 46 L166 96"/>
+      <path d="M128 40 L128 70"/>
+    </g>
+    <path d="M78 46 L178 46" stroke="#8a5a2c" stroke-width="12"/>
+    <path d="M128 30 L128 62" stroke="#8a5a2c" stroke-width="12"/>
+    <path d="M78 46 L178 46 M128 30 L128 62" stroke="#4a2a10" stroke-width="3" fill="none"/>
+  </g>
+
+  <g transform="translate(0,-8)">
+  <g filter="url(#glow)">
+    <!-- the eyeball -->
+    <circle cx="128" cy="136" r="60" fill="#ff8a2a"/>
+
+    <!-- bloodshot veins -->
+    <g clip-path="url(#ball)" fill="none" stroke="#c0341c" stroke-linecap="round" stroke-linejoin="round">
+      <g stroke-width="5">
+        <path d="M86 96 Q98 110 97 120"/>
+        <path d="M184 130 Q170 133 160 128"/>
+        <path d="M138 194 Q137 180 143 170"/>
+        <path d="M72 160 Q84 156 93 158"/>
+      </g>
+      <g stroke-width="3">
+        <path d="M94 106 Q104 106 108 112"/>
+        <path d="M137 184 Q128 181 124 175"/>
+      </g>
+    </g>
+
+    <!-- iris, pupil, glint -->
+    <circle cx="128" cy="136" r="26" fill="#ffc45e"/>
+    <circle cx="128" cy="136" r="15" fill="#2a0e03"/>
+    <circle cx="117" cy="123" r="6" fill="#fff6e6"/>
+
+    <!-- chunky outline -->
+    <circle cx="128" cy="136" r="60" fill="none" stroke="#4a1a06" stroke-width="9"/>
+  </g>
+  </g>
+
+  <!-- the strings tie on over the outline -->
+  <g fill="#e8dcc0">
+    <circle cx="90" cy="96" r="4"/>
+    <circle cx="166" cy="96" r="4"/>
+    <circle cx="128" cy="70" r="4"/>
+  </g>
+</svg>

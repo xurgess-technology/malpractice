@@ -588,9 +588,9 @@ func _doors_hallway() -> void:
 			_look(from, d.global_position + d.normal * 0.2 + d.along * 7.0 + Vector3.UP * 1.2)
 
 
-## ABILITIES (--abilities): what Echo and Hive Eyes cost at medium. The pharmacy with its
+## ABILITIES (--abilities): what Echo and Puppet cost at medium. The pharmacy with its
 ## containers open and the long corridor, each with nothing, Echo at level 3 (30 m, as many outlines
-## as it allows, held on for the whole measurement) and Hive Eyes through a Hive standing there.
+## as it allows, held on for the whole measurement) and Puppet through a Hive standing there.
 ## Twice, so the noise shows.
 func _run_abilities() -> void:
 	main.set_quality(1, false)
@@ -608,11 +608,11 @@ func _run_abilities() -> void:
 			b.echo_view.stop()
 			var wi: Node = game.spawn_hive(bot.global_position - bot.global_transform.basis.z * 3.0)
 			wi.set_physics_process(false)
-			b._hive[bot.peer_id] = [int(wi.monster_id), game.world_time + 600.0]
-			b._hive_hp[bot.peer_id] = bot.hp
-			bot.hive_view = true
-			await _measure("%s: Hive Eyes %d" % [scen.name, pass_i + 1], 1)
-			b._end_hive(bot.peer_id, "")
+			b._puppet[bot.peer_id] = [int(wi.monster_id), game.world_time + 600.0]
+			b._puppet_hp[bot.peer_id] = bot.hp
+			bot.puppeting = true
+			await _measure("%s: Puppet %d" % [scen.name, pass_i + 1], 1)
+			b._end_puppet(bot.peer_id, "")
 			game.kill_monster(wi)
 			for i in 10:
 				await get_tree().process_frame
