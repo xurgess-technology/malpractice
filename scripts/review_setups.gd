@@ -33,6 +33,11 @@ const MirrorsScript := preload("res://scripts/personnel/mirrors.gd")
 
 const SETUPS := {
 	"icons": {"seed": 4242, "stage": "_icons"},
+	# BETTER HANDS: in the OR with a bone saw, a scalpel, anesthetic and the reflex hammer in hand
+	# (scroll through them; click to swing the saw, jab, bonk; hold G to throw), and every other
+	# holdable item laid out on the floor ahead to pick up and look at. Toggle the torch (F) to see its
+	# lens go dark.
+	"hands": {"seed": 4242, "stage": "_hands"},
 	# POCKETS 2 phase 2 (docs/POCKET_SPACES_2.md): standing on the Natatorium's deck at the water's
 	# edge, a lifeguard whistle and a pool chemical drum to hand, the stocked first-aid cabinet on the
 	# lifeguard stand behind you. Walk the pool and walk the deck and listen to the difference.
@@ -344,6 +349,36 @@ static func _icons(game: Game) -> void:
 	game.local_player().selected = 0
 	floor_item(game, "heart_monitor", t + Vector3(0.1, 0, 2.3), 1, 200)
 	floor_item(game, "defibrillator", t + Vector3(1.1, 0, 2.3), 1, 300)
+
+
+## BETTER HANDS: see SETUPS. The floor rows run across the open side of the room in front of you.
+static func _hands(game: Game) -> void:
+	var t: Vector3 = game.table_pos()
+	var eye := t + Vector3(0.6, 0, 3.4)
+	var dir := open_direction(game, eye + Vector3.UP * 0.5, 6.0)
+	var side := Vector3(-dir.z, 0.0, dir.x)
+	place(game, eye, eye + dir * 2.0 + Vector3.UP * 0.9)
+	clear_hands(game)
+	give(game, "bone_saw")
+	give(game, "scalpel")
+	give(game, "anesthetic", 3)
+	give(game, "reflex_hammer", 1, 60)
+	game.local_player().selected = 0
+	var held := ["bone_saw", "scalpel", "anesthetic", "reflex_hammer", "rocket_boots"]
+	var kinds: Array = []
+	for k in Items.ITEMS.keys():
+		if not held.has(k) and not Items.is_worn(k):
+			kinds.append(k)
+	for k in preload("res://scripts/economy/loot_table.gd").kinds():
+		if not held.has(k) and not kinds.has(k):
+			kinds.append(k)
+	var per_row := 7
+	for i in kinds.size():
+		var row := i / per_row
+		var col := i % per_row
+		var at := eye + dir * (1.2 + row * 0.7) + side * ((col - (per_row - 1) * 0.5) * 0.55)
+		var n := 3 if Items.stacks(String(kinds[i])) else 1
+		floor_item(game, String(kinds[i]), at, n, 50 if Items.is_loot(String(kinds[i])) else 0)
 
 
 ## TAB SHEET (2026-09-22): open floor by the OR, hands part full, both abilities at level 2 and

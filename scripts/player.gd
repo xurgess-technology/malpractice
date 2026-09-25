@@ -2122,6 +2122,19 @@ func _put_on_self_layer(root: Node) -> void:
 ## frame by the hands). Batches show as a small bundle; bulky loot and big loot are scaled down in
 ## first person so they do not fill the screen. HANDS HOOK.
 func _held_model(kind: String, count: int, first_person: bool) -> Node3D:
+	if first_person:
+		# BETTER HANDS: the baked first-person grip (grips.gd fp_held), when the kind has one.
+		var n := Grips.fp_shown_count(kind, count)
+		var h := Grips.fp_held(kind, n)
+		if not h.is_empty():
+			var m := ItemModels.make_tinted(kind, n, true)
+			m.scale = Vector3.ONE * float(h.k)
+			var pv := Node3D.new()
+			pv.name = "Held"
+			pv.add_child(m)
+			pv.transform = h.xf
+			HandsFP.dress(pv)
+			return pv
 	var model := ItemModels.make_tinted(kind, Grips.shown_count(kind, count), first_person)
 	var k: float = HandsFP.fp_scale(kind) if first_person else _tp_scale(kind)
 	model.scale = Vector3.ONE * k
