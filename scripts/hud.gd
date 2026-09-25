@@ -95,7 +95,7 @@ func _draw() -> void:
 	# CUSTOMIZATION: the mirror menu's own third-person camera gets the same treatment as surgery's
 	# -- the crosshair, prompt, hands and ability bar are all about aiming and acting in the world,
 	# which is not what either of these dedicated views is for.
-	var in_surgery: bool = game.surgery_camera() != null or game.mirror_menu_open()  # downed hook: either table
+	var in_surgery: bool = game.surgery_camera() != null or game.mirror_menu_open() or game.vein_open()  # downed hook: either table; SKILL TREE: the vein machine
 	_draw_vignette(w, h)
 	var me = game.driving_player()   # GRAFT HOOK: the hands and prompt of whoever you are driving
 	if me != null and me.alive and not game.paused and not in_surgery:

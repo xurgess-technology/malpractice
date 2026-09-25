@@ -397,6 +397,7 @@ static func commit_steps(p: Dictionary, parent: Node3D) -> Array:
 		steps.append(func(): _commit_lectern(p, parent))
 		steps.append(func(): _commit_mirrors(p, parent))
 		steps.append(func(): _commit_showers(p, parent))
+		steps.append(func(): _commit_vein_machine(p, parent))
 	mark.call("anchors")
 	# Lights.
 	var llist: Array = p.lights
@@ -1340,6 +1341,19 @@ static func _commit_showers(p: Dictionary, root: Node3D) -> void:
 	var showers: Node3D = ShowersScript.new()
 	root.add_child(showers)
 	showers.setup(spots.personnel.showers, func(pos: Vector2, y: float) -> Vector3: return _w(pos, y))
+
+
+## SKILL TREE: the vein machine's working parts (scripts/personnel/vein_machine.gd): the skill tree
+## on its big screen, the glowing hand plate and the E target. `load`, not `preload`: it names the
+## Net / Audio autoloads, which `godot -s` (tools/mapcheck.gd) never has (see mirrors.gd).
+static func _commit_vein_machine(p: Dictionary, root: Node3D) -> void:
+	var spots: Dictionary = p.gen.spots
+	if not spots.has("personnel") or not (spots.personnel as Dictionary).has("scanner") 			or not MirrorsScript._autoloads_present():
+		return
+	var vm: Node3D = load("res://scripts/personnel/vein_machine.gd").new()
+	vm.setup(spots.personnel, func(pos: Vector2, y: float) -> Vector3: return _w(pos, y),
+			LightRooms.ensure(p.gen))
+	root.add_child(vm)
 
 
 ## Builds at the "lectern" spot MapGen reserved in the break room (docs/CONTRACTS.md "Hospital"

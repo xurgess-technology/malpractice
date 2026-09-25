@@ -135,6 +135,8 @@ info["personnel"]     = {mirror, scanner (the vein machine's hand plate): {posit
                          screen: {position (the glass's centre), yaw, height: float, size: Vector2 (3.2 x 1.7 m)},
                          lockers: [{position, yaw}] (4, one per player, left to right from the room),
                          sinks: [{position, yaw}] (5)}   # set dressing, but the mirrors reflect:
+# scripts/personnel/vein_machine.gd (SKILL TREE, built from spots.personnel scanner + screen) draws the
+# skill tree on that screen and makes the plate an E target ("vein_scanner"); docs/SKILL_TREE.md.
 # scripts/personnel/mirrors.gd (built by HospitalBuilder from the same spots) renders the big mirror
 # and the sink mirrors from reflected cameras, and shows the local player's own body to them only
 # (Player.set_mirror_self; the body is on LightRooms.SELF = layer bit 16, which the first-person

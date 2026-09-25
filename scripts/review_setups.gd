@@ -153,6 +153,9 @@ const SETUPS := {
 	"tumble": {"seed": 4242, "stage": "_tumble"},
 	# SHOWERS (2026-09-24): standing beside a personnel shower with an empty hand. Press E.
 	"showers": {"seed": 4242, "stage": "_showers"},
+	# SKILL TREE (docs/SKILL_TREE.md): at the vein machine in Personnel, a step back from the hand
+	# plate with a few skill points to spend. Press E. `--fresh` forgets every skill first.
+	"skill_tree": {"seed": 4242, "stage": "_skill_tree"},
 }
 
 
@@ -1819,3 +1822,27 @@ static func _tumble(game: Game) -> void:
 	game.local_player().selected = 0
 	game.say("Hold right-click to charge a throw. Try a flat toss, a high arc, straight down and one at the wall behind you.", 10.0)
 
+
+## SKILL TREE (docs/SKILL_TREE.md): a step back from the vein machine's hand plate, facing it, hands
+## empty, with at least 6 skill points. Press E: the reader scans your palm, the veins grow across the
+## big screen, and the nodes on them are the skill tree. `--fresh` forgets every skill first (and
+## the points with them, before the top-up). Skills are saved per machine, so what you buy here is
+## still there next time (that is the persistence to check).
+static func _skill_tree(game: Game) -> void:
+	var pr: Dictionary = game.level_info.get("personnel", {})
+	var sc: Dictionary = pr.get("scanner", {})
+	var sr: Dictionary = pr.get("screen", {})
+	if sc.is_empty() or sr.is_empty():
+		print("[review] skill_tree: this level has no vein machine")
+		return
+	if OS.get_cmdline_user_args().has("--fresh"):
+		Skills.wipe()
+	Skills.top_up(6)
+	var plate: Vector3 = sc.position
+	var glass: Vector3 = sr.position
+	var out := Vector3(plate.x - glass.x, 0.0, plate.z - glass.z).normalized()
+	place(game, game._floor_at(plate + out * 1.4), plate + Vector3(0.0, 1.0, 0.0) - out * 0.4)
+	clear_hands(game)
+	game.local_player().selected = 0
+	game.say("Put your palm on the reader (E). Watch the scan and the veins grow, click a node, INFUSE it. Esc steps away.", 9.0)
+	print("[review] skill_tree: %d points, %d skills unlocked" % [Skills.points, Skills.unlocked.size()])

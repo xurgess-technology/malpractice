@@ -185,6 +185,7 @@ func _run() -> void:
 		"wall": await _sc_wall()   # terminal redesign, chunk 4
 		"rocket_boots": await _sc_rocket_boots()   # ROCKET BOOTS
 		"syringe_draw": await _sc_syringe_draw()   # SYRINGE DRAW: two handheld draws at once
+		"veins": await _sc_veins()   # SKILL TREE: the vein machine shared
 		_: _end(false, "unknown scenario " + scenario)
 
 
@@ -375,6 +376,85 @@ func _sc_wall():
 	if not await _until(func(): return _count_msgs("wall_out") > 0 and int(game.wall.user) == 0 and String(wt.ui.page.kind) == "home", 60.0, "everyone signed out and HOME"):
 		return
 	await _finish_together("followed the screen")
+
+
+## SKILL TREE: client 1 puts its palm on the vein machine and buys a skill; the host's
+## Skills.has_skill sees it; client 2 is refused the reader while client 1 holds it, and watches the
+## same node picked and filled on its own copy of the screen. Then client 1 steps away and the reader
+## is free everywhere.
+func _sc_veins():
+	var vm_of := func() -> Node:
+		return game.level.find_child("VeinMachine", true, false) if game.level != null else null
+	if role == "host":
+		if not await _until(func(): return Net.names.size() == clients + 1 and game.players.size() == clients + 1 and vm_of.call() != null, 90.0, "everyone and the vein machine"):
+			return
+		_send("veins_go", {})
+		var c1 := _peer_of(1)
+		if not await _until(func(): return Net.station_user("veins") == c1, 60.0, "client 1 at the reader"):
+			return
+		if not await _until(func(): return Skills.has_skill(c1, "surg_steady"), 90.0, "client 1's skill on the host (%s)" % str(Net.skills_for(c1))):
+			return
+		_say("the host sees client 1 has surg_steady")
+		if not await _until(func(): return _count_msgs("veins_seen") >= 1, 60.0, "client 2 to see it"):
+			return
+		_send("veins_leave", {})
+		if not await _until(func(): return Net.station_user("veins") == 0, 30.0, "the reader freed"):
+			return
+		await _finish_together("client 1 bought a skill at the reader, the host knows, client 2 watched and was refused")
+		return
+	if not await _until(func(): return game.phase != Game.Phase.MENU and _me() != null and vm_of.call() != null and _count_msgs("veins_go") > 0, 90.0, "the vein machine and the go"):
+		return
+	var me := _me()
+	me.bot_active = true
+	me.bot_invulnerable = true
+	var vm: Node = vm_of.call()
+	var scratch := "user://nettest_veins_c%d.save" % index
+	Skills.use_path(scratch)
+	Skills.wipe()
+	if index == 1:
+		Skills.grant(3)
+		vm._pending = me
+		Net.claim_station("veins")
+		if not await _until(func(): return vm.is_open(), 30.0, "the reader to open for me"):
+			return
+		if not await _until(func(): return vm.screen.grown(), 30.0, "the tree to grow"):
+			return
+		vm.click(vm.screen.node_position("surg_steady"))
+		if not await _until(func(): return vm.screen.button_rect().has_area(), 10.0, "INFUSE offered"):
+			return
+		vm.click(vm.screen.button_rect().get_center())
+		if not await _until(func(): return Skills.local_has("surg_steady") and Skills.points == 2, 10.0, "the skill bought"):
+			return
+		_say("bought surg_steady at the reader")
+		if not await _until(func(): return _count_msgs("veins_leave") > 0, 90.0, "the host's go to step away"):
+			return
+		vm.close()
+		if not await _until(func(): return Net.station_user("veins") == 0, 30.0, "the reader freed on my machine"):
+			return
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(scratch))
+		await _finish_together("bought a skill and stepped away")
+		return
+	# Client 2: watch, and try to butt in.
+	var c1 := _peer_of(1)
+	if not await _until(func(): return Net.station_user("veins") == c1 and int(vm.screen.user) == c1, 60.0, "client 1 on my screen"):
+		return
+	var aim: Node = game.find_interactable("vein_scanner")
+	if aim == null or not String(aim.interact_prompt(me)).begins_with("!"):
+		return _end(false, "the reader did not refuse me while client 1 held it")
+	vm._pending = me
+	Net.claim_station("veins")
+	await _wall_wait(1.5)
+	if vm.is_open() or Net.station_user("veins") != c1:
+		return _end(false, "I got into a reader client 1 was using")
+	vm._pending = null
+	if not await _until(func(): return vm.screen.unlocked.has("surg_steady") and String(vm.screen.focus) == "surg_steady", 90.0, "client 1's pick and its blood on my screen (focus '%s', %s)" % [vm.screen.focus, str(vm.screen.unlocked.keys())]):
+		return
+	_say("I see client 1's Steady Hand picked and filled")
+	_send("veins_seen", {})
+	if not await _until(func(): return Net.station_user("veins") == 0 and int(vm.screen.user) == 0, 60.0, "the reader free again"):
+		return
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(scratch))
+	await _finish_together("was refused the reader and watched client 1's skill fill")
 
 
 func _sc_names():

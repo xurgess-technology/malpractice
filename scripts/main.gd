@@ -632,6 +632,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# SKILL TREE: Esc at the vein machine steps away from it instead of pausing.
+	if event.is_action_pressed("pause") and not game.paused and game.vein_open():
+		game.vein_local_exit()
+		get_viewport().set_input_as_handled()
+		return
+
 	# Esc while operating leaves the operation instead of pausing.
 	if event.is_action_pressed("pause") and game.surgery_wants_mouse():  # downed hook: either table
 		game.surgery_local_exit()
@@ -678,7 +684,7 @@ func _update_mouse() -> void:
 \
 		or (game.economy != null and game.economy.fax_ui_open()) \
 		or game.surgery_wants_mouse() \
-		or game.mirror_menu_open() \
+		or game.mirror_menu_open() 		or game.vein_open() \
 		or (dev_panel != null and dev_panel.is_open()) \
 		or (char_sheet != null and char_sheet.open)  # TAB SHEET: the cursor is how you hover a slot
 	var want := Input.MOUSE_MODE_VISIBLE if free else Input.MOUSE_MODE_CAPTURED
@@ -715,6 +721,10 @@ func _process(_delta: float) -> void:
 	var mirror_cam: Camera3D = game.mirror_camera() if game.phase != Game.Phase.MENU else null
 	if mirror_cam != null:
 		surgery_cam = mirror_cam
+	# SKILL TREE: the vein machine's camera, while this machine's player is at the reader.
+	var vein_cam: Camera3D = game.vein_camera() if game.phase != Game.Phase.MENU else null
+	if vein_cam != null:
+		surgery_cam = vein_cam
 	# Puppet renders through the Hive it is driving.
 	var puppet_cam: Camera3D = game.abilities.camera() if game.phase != Game.Phase.MENU and game.abilities != null else null
 	if puppet_cam != null:
