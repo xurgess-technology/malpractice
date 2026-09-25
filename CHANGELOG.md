@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-24 (0.11.x)**
 
+- **0.11.4**: PUPPET! 🎭
+    - Changed: Hive Eyes is gone, and Puppet takes its place. Fire it and you fly into the nearest Hive's head, like before -- but now you can look around yourself and walk it, for 4 to 6 seconds depending on level. Your own body stands there slumped and glassy-eyed while you're gone.
+    - Changed: You snap back the moment your body gets hit, grabbed or downed, or the Hive dies or goes under. Everyone else just sees a Hive walking somewhere it probably shouldn't.
+    - Changed: The Hive-eye graft grants Puppet now, with a new icon to match.
 - **0.11.3**: Thrown things settle, and the showers run 🚿
     - Changed: A thrown item stops tumbling as soon as it actually stops moving and eases up into its hover, instead of rolling around for up to three seconds first. It never takes more than a second.
     - Added: The personnel room showers turn on and off with E. They don't do anything. They're just showers.
