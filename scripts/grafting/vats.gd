@@ -541,11 +541,14 @@ func _show() -> void:
 func _arm_markers() -> void:
 	var me = game.local_player()
 	var carrying: bool = me != null and held_vat(me) >= 0
+	# Untyped on purpose: a level teardown frees the markers before this list is rebuilt, and
+	# assigning a freed instance to an `Area3D` variable is itself a SCRIPT ERROR, before the
+	# is_instance_valid below can say so (docs/FAILING_TESTS.md 1n, seen mid-run in downedtest too).
 	for i in _markers.size():
-		var m: Area3D = _markers[i]
+		var m = _markers[i]
 		if is_instance_valid(m):
-			m.collision_layer = C.L_INTERACT if (carrying and spot_free(i)) else 0
+			(m as Area3D).collision_layer = C.L_INTERACT if (carrying and spot_free(i)) else 0
 	for i in _place_markers.size():
-		var m: Area3D = _place_markers[i]
+		var m = _place_markers[i]
 		if is_instance_valid(m):
-			m.collision_layer = C.L_INTERACT if (carrying and place_free(i)) else 0
+			(m as Area3D).collision_layer = C.L_INTERACT if (carrying and place_free(i)) else 0
