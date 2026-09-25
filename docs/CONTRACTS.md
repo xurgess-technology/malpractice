@@ -2327,6 +2327,26 @@ p.carry_cam.front_view()                     # swung round facing the player: no
   (`Body/HeldThirdPerson`) keep their paths: each frame they are moved onto the socket, and their
   child `Held` carries the grip transform (first person: two-handed things fit 0.22 m, big loot
   0.13 m; third person two-handed things 0.55 m).
+- **First-person grips (2026-09-24, BETTER HANDS)**: the first-person hands no longer use the table
+  above (the body still does). `fp_arms.gd` is a gloved hand: a rounded palm, four fingers of three
+  bones (`Rig/F0..F3`, `J1`, `J2`), a three-bone thumb (`Rig/Thumb`, `T1`, `T2`) and a forearm that
+  bends at the wrist (`Rig/Forearm`, aimed each frame at an elbow below the camera, `ELBOW_L/R`, at
+  most `WRIST_MAX`). A hand's pose is a *shape* `{f: [[knuckle, middle, tip] x4], t: [opposition,
+  base, middle, tip]}` (`Arms.apply(arm, shape, side)`, `shape_from_curl(c)`, `blend_shapes`);
+  `Arms.chain(shape, side)` gives the same bones as capsules. Every kind names a grip in
+  `Grips.FP` -- `power` (a fist across a handle: saw, scalpel, hammer, bottles), `hook` (a bail in the
+  fingers), `pinch` (forceps, pulse ox), `palm` (the default: on the palm, fingers cupped) -- plus the
+  model point, `axis` and `face` (see grips.gd), and `__torch` / `__jab` for the torch and the jab's
+  syringe. `tools/gripbake.tscn` places each model and runs `grip_solver.gd` (the palm pushes the model
+  out of itself; each finger and the thumb close until a bone touches the model's surface) and writes
+  `scripts/hands/grip_bake.gd`; the game reads only that: `Grips.fp_held(kind, n) -> {xf, k, grip,
+  shape, shape_r, spread}` (`n` = `Grips.fp_shown_count`). **A new holdable kind, a changed item model
+  or a changed hand needs `godot --headless --path . res://tools/gripbake.tscn` re-run**
+  (`-- --only=kind`); `tools/handstest.tscn` fails on any kind without a clean bake. Fist poses are
+  aimed by their handle: `Poses.grip_pose(p, h, n, side)` (`TORCH_GRIP`, `LEFT_POWER`, `JAB_GRIP`,
+  `THROW_FIST` for a one-handed fist's throw, saw swing and hammer bonk). The first-person torch
+  lens is dark while the light is off (`Arms.lens_material(lit)`; scan_fx still tints it blue).
+  Contact sheet: `tools\handshot.ps1` (tools/hand_shots/). Review: `--setup=hands`.
 - **First person**: right hand the torch (thumb up), left hand the selected stack; two-handed things
   take both hands and the torch tucks down at the right. Poses (camera space, `hand_poses.gd`) blend
   the wind-up / strike / recover of `combat.action_of`; walk bob, sway lagging the mouse, a 0.38 s

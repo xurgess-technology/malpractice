@@ -18,3 +18,4 @@ Co-op hospital horror in Godot 4.7 / GDScript. The game is **Malpractice** and t
 - `.bat` files must keep CRLF line endings (`.gitattributes` handles checkout; don't rewrite them with tools that emit LF).
 - Sounds are generated, not recorded: `node tools/gen_audio.mjs` rewrites `audio/` deterministically. Numbered files (`x_01.wav`, `x_02.wav`) are one cue, `x`.
 - New content that draws for the first time must be registered in `scripts/warmup.gd`, or it stutters on first use.
+- A new holdable item (or a changed item model) needs its first-person grip baked: `godot --headless --path . res://tools/gripbake.tscn -- --only=<kind>` (docs/CONTRACTS.md "Player: hands"); `tools/handstest.tscn` catches a missing one.

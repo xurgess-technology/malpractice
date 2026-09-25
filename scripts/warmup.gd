@@ -140,6 +140,18 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	var fp_torch: Node3D = preload("res://scripts/hands/fp_arms.gd").make_torch()
 	shelf.add_child(fp_torch)
 	fp_torch.position = Vector3(x + 0.4, 0.3, 0.3)
+	# BETTER HANDS: a gloved hand closed in a fist (every bone, the cuff and the bent wrist), and the
+	# torch with its lens dark (the light switched off).
+	var arms_script := preload("res://scripts/hands/fp_arms.gd")
+	var fp_fist: Node3D = arms_script.make_arm(1.0, C.PLAYER_COLORS[0])
+	shelf.add_child(fp_fist)
+	fp_fist.position = Vector3(x + 0.2, 0.3, 0.6)
+	arms_script.apply(fp_fist, arms_script.SHAPE_FIST, 1.0)
+	arms_script.aim_forearm(fp_fist, Vector3(0.3, -0.5, 1.0))
+	var fp_torch_off: Node3D = arms_script.make_torch()
+	shelf.add_child(fp_torch_off)
+	fp_torch_off.position = Vector3(x + 0.4, 0.3, 0.6)
+	(fp_torch_off.get_node("Lens") as MeshInstance3D).material_override = arms_script.lens_material(false)
 	# FLASHLIGHT POSE: the torch a teammate's body holds, lit (its lens, flare and shaft shaders).
 	var tp_torch = preload("res://scripts/hands/body_torch.gd").new()
 	shelf.add_child(tp_torch)
