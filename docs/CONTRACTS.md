@@ -558,6 +558,21 @@ distance** (nothing inside 6 m, full by 22 m) so it stays legible at the range i
 without swallowing the head up close. The database entry caps at tier 2 with no special case: tier
 3 is `harvested`, and there is nothing here to harvest.
 
+**Its shadow and its poof (2026-09-24).** The body's material is `shaders/onlooker_body.gdshader`:
+still unshaded near-black, now with an edge torn by crawling noise (worst at the arms and the hem)
+and a noise dissolve driven by `presence`, so it gathers out of smoke coming in and comes apart
+going -- it no longer squashes down into the floor. It stands in `scripts/monsters/onlooker_smoke.gd`
+smoke: a shroud riding the body (local coords) and wisps trailing off it (world coords). **When
+`present` drops, every machine leaves a poof where it stood** (`Monster._onlooker_poof`: a burst,
+a cloud that thins out over ~5 s, the eyes for a quarter second longer), then the poof frees
+itself. It keys off `present` -- the replicated `"pr"` -- so nothing new crosses the wire; only when
+it was actually there to see (`presence` > 0.4 the last frame it stood). `Monster.poofs` counts them
+per machine, for the tests. Body and smoke both have **fog disabled**: the pockets' lit volumetric
+air painted a fogged body and its smoke the colour of the room, which is what the unshaded black is
+there to prevent; the smoke thins with distance instead. Every smoke material and particle program
+is built once and shared, and warmup draws a poof. Nettest `onlooker_poof` proves the poof on a
+client; `tools/onlookershot.ps1` photographs it in every pocket; review with `--setup=onlooker_rush`.
+
 ### Monsters, sweep 3 (monsters worker): the Hive, fighting and capturing
 
 Kinds: `Monster.HIVE` `"hive"`, `DISCHARGED`, `NIGHT_NURSE` (`Monster.KINDS`).

@@ -71,6 +71,7 @@ const HiveRig := preload("res://scripts/monsters/hive_rig.gd")
 const NurseGrab := preload("res://scripts/monsters/nurse_grab.gd")
 const OnlookerBrain := preload("res://scripts/monsters/onlooker_brain.gd")
 const OnlookerRig := preload("res://scripts/monsters/onlooker_rig.gd")
+const OnlookerSmoke := preload("res://scripts/monsters/onlooker_smoke.gd")
 
 var monster_id: int = 0
 var kind: String = SONOGRAPHER
@@ -122,6 +123,11 @@ var presence: float = 0.0
 ## first one always snaps -- which is exactly what a client joining mid-encounter wants.
 var teleports: int = 0
 var _teleports_seen: int = -1
+## The Onlooker's poof (onlooker_smoke.gd): `present` as this machine last saw it, and how many
+## poofs this machine has left behind (for the tests; not replicated -- each machine counts its own).
+var _was_present: bool = false
+var _poof_presence: float = 0.0
+var poofs: int = 0
 
 var agent: NavigationAgent3D
 var model: Node3D
@@ -1221,10 +1227,25 @@ func _nurse_visual(delta: float) -> void:
 ## A client eases `presence` from the replicated `pr` rather than being sent the curve, so a hop
 ## costs one bool on the wire. While it is away the collider goes off with the body: an invisible
 ## thing you can walk into is the worst possible outcome for a monster that pops out for 75 seconds.
+##
+## **When it goes it poofs (2026-09-24)**, rather than sinking into the floor: on the frame `present`
+## drops, this leaves an onlooker_smoke.gd poof in the world where it stood -- a burst of dark smoke
+## and a cloud that thins out over a few seconds -- while the body dissolves into it. It keys off
+## `present`, which is the replicated `pr`, so every machine makes its own from the same event and
+## nothing new crosses the wire. Only when it was actually there to see (`presence` well up the last
+## frame it stood there): a vanish mid-pop-in is not worth a cloud.
 func _onlooker_visual(delta: float) -> void:
 	if game != null and not game.is_host():
 		presence = move_toward(presence, 1.0 if present else 0.0,
 			delta / (OnlookerBrain.FADE_IN if present else OnlookerBrain.FADE_OUT))
+	if present != _was_present:
+		_was_present = present
+		if not present and _poof_presence > 0.4:
+			_onlooker_poof()
+	if present:
+		# How solid it was the last frame it was there, which is what the poof goes by: by the frame
+		# this machine notices it has gone, the fade out may already have eaten into `presence`.
+		_poof_presence = presence
 	var solid := presence > 0.002
 	if _shape != null and _shape.disabled == solid:
 		_shape.disabled = not solid
@@ -1239,6 +1260,18 @@ func _onlooker_visual(delta: float) -> void:
 			# out from its own camera, so nothing about it crosses the wire.
 			var viewer: Node = game.viewed_player() if game != null and game.has_method("viewed_player") else null
 			rg.tick(delta, viewer.global_position + Vector3.UP * C.EYE_H if viewer != null else Vector3.INF)
+
+
+func _onlooker_poof() -> void:
+	var at := get_parent()
+	if at == null or model == null:
+		return
+	var rg = model.rig
+	var head: Node3D = rg.get("head") if rg != null else null
+	var eye_xf: Transform3D = head.global_transform if head != null and head.is_inside_tree() 		else global_transform * Transform3D(Basis(), Vector3.UP * OnlookerRig.TALL * OnlookerRig.EYE_AT)
+	OnlookerSmoke.poof(at, global_position, rotation.y, eye_xf, OnlookerRig.EYE_GAP, OnlookerRig.EYE_R,
+		OnlookerRig.EYE_COLOR, OnlookerRig.EYE_ENERGY * clampf(_poof_presence, 0.0, 1.0))
+	poofs += 1
 
 
 ## Dev mode's settings for the Night Nurse (dev_controller.gd `nurse_settings()`): {ignore_watch,

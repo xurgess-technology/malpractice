@@ -48,6 +48,9 @@ func run(gs: Node, pocket_kind: String) -> void:
 	# the shot was simply taken before its air arrived. Ninety frames deep inside it first.
 	_pose(p.spawn, p.spawn + Vector3.FORWARD * 4.0)
 	await _settle(90)
+	if String(gs._only) == "onlooker":
+		await _onlooker_look(p)
+		return
 	if kind == "factory":
 		bot.set_flashlight(false)
 		await _shot("p_factory_1_hall", w.call(Vector2(14, 50)), w.call(Vector2(60, 16), 6.0))
@@ -213,6 +216,82 @@ func _onlooker_shot(w: Callable) -> void:
 	Watch.force = was
 	game._clear_monsters()
 	await _settle(4)
+
+
+## 2026-09-24: the Onlooker's shadow and its poof, in this pocket's own light and air
+## (`--pocket=<kind> --only=onlooker`; tools/onlookershot.ps1 runs every space).
+##
+##   p_<kind>_o1_near      it at 11 m, torch on: the eroded edge and the smoke round it
+##   p_<kind>_o2_dark      the same, torch off
+##   p_<kind>_o3_far       it as far down the room as there is room for (up to 30 m), torch off
+##   p_<kind>_o4_poof_*    running at it: the frame it goes, then 0.15, 0.5, 1.5, 3 and 5 s after,
+##                         from where the runner stands
+func _onlooker_look(p: Dictionary) -> void:
+	var Watch := preload("res://scripts/monsters/onlooker_watch.gd")
+	Watch.force = "off"
+	game.onlooker_watch.rearm()
+	game._clear_monsters()
+	var centre: Vector3 = p.spawn
+	var dir: Vector3 = ReviewSetups.open_heading(game, centre + Vector3.UP * 1.5, 40.0)
+	var space := game.get_world_3d().direct_space_state
+	var q := PhysicsRayQueryParameters3D.create(centre + Vector3.UP * 1.5, centre + Vector3.UP * 1.5 + dir * 40.0)
+	q.collision_mask = C.L_WORLD
+	var hit := space.intersect_ray(q)
+	var room: float = 40.0 if hit.is_empty() else (centre + Vector3.UP * 1.5).distance_to(hit.position)
+	print("[gameshot] onlooker: %.1f m of room down the heading" % room)
+	# From behind the spawn a little, so the near shot has the whole figure in frame.
+	var eye_at := func(d: float) -> Vector3:
+		return centre + dir * d + Vector3.UP * 1.45
+	bot.set_flashlight(true)
+	_pose(centre, eye_at.call(11.0))
+	await _settle(20)
+	var o: Node = ReviewSetups.onlooker_ahead(game, 11.0, false)
+	if o == null:
+		print("[gameshot] onlooker: could not add one")
+		return
+	await _settle(90)
+	await _shot_here("p_%s_o1_near" % kind)
+	bot.set_flashlight(false)
+	await _settle(30)
+	await _shot_here("p_%s_o2_dark" % kind)
+	var far := clampf(room - 3.0, 14.0, 30.0)
+	o.global_position = game._floor_at(centre + dir * far)
+	o.brain.placements += 1
+	await _settle(60)
+	await _shot_here("p_%s_o3_far" % kind)
+	print("[gameshot] onlooker: far shot at %.1f m" % far)
+	# Back to 11 m, torch on, then run at it: 5 m short, which is inside the banish range.
+	o.global_position = game._floor_at(centre + dir * 11.0)
+	o.brain.placements += 1
+	bot.set_flashlight(true)
+	await _settle(40)
+	var at: Vector3 = o.global_position
+	var poofs0 := int(o.poofs)
+	_pose(centre + dir * 5.5, at + Vector3.UP * 1.3)
+	var t0 := Time.get_ticks_msec()
+	for _i in 120:
+		await shot.get_tree().physics_frame
+		if int(o.poofs) > poofs0:
+			break
+	if int(o.poofs) <= poofs0:
+		print("[gameshot] onlooker: it did not poof (present=%s)" % str(o.present))
+		return
+	print("[gameshot] onlooker: poofed %d ms after the rush began" % (Time.get_ticks_msec() - t0))
+	t0 = Time.get_ticks_msec()
+	# Step back to where the rush began so the cloud is framed, the way a teammate would see it.
+	_pose(centre + dir * 2.5, at + Vector3.UP * 1.2)
+	var marks := [0.0, 0.15, 0.5, 1.5, 3.0, 5.0]
+
+	for t in marks:
+		# At least one fresh frame between shots: reading a shot back stalls long enough that the
+		# next mark can already be due, and then two shots would be the same frame.
+		await shot.get_tree().process_frame
+		while float(Time.get_ticks_msec() - t0) / 1000.0 < t:
+			await shot.get_tree().process_frame
+		print("[gameshot] onlooker: poof +%.2f s (presence %.2f)" % [float(Time.get_ticks_msec() - t0) / 1000.0, float(o.presence)])
+		await _shot_here("p_%s_o4_poof_%s" % [kind, String.num(t, 2).replace(".", "_")])
+	print("[gameshot] onlooker: poofed, %d poof(s) left" % (int(o.poofs) - poofs0))
+	Watch.force = ""
 
 
 ## A shot from exactly where the camera already stands (see _onlooker_shot: re-posing would move

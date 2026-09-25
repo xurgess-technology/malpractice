@@ -12,6 +12,12 @@ extends Node3D
 ## there. Unshaded, it is the same hole in the world under every light in the game. The eyes are
 ## unshaded too, at the other end: a pair of small bright discs that read before the body does.
 ##
+## **It is hard to really see, on purpose (2026-09-24).** The silhouette is still that hole in the
+## world, but it does not resolve: its edge is eaten by a slow crawling noise and its hem thins out
+## above the floor (shaders/onlooker_body.gdshader), and it stands in dark smoke that comes off it
+## and trails away (onlooker_smoke.gd). A dark presence you cannot pin down rather than a cut-out.
+## The eyes are untouched -- they are still the thing that reads first.
+##
 ## `build(model)` matches the other rigs' contract enough for MonsterModel.setup -- it parents
 ## itself under the model, sets `rig`, and adds a Node3D named `Head` where Monster.eye_transform
 ## looks for one. It sets no `skeleton` and no `anim`, so MonsterModel.play() is a no-op on it, and
@@ -63,7 +69,13 @@ const GLOW_ENERGY := 1.5
 const SWAY := 0.022
 const SWAY_SECONDS := 7.3
 
+const BodyShader := preload("res://shaders/onlooker_body.gdshader")
+const Smoke := preload("res://scripts/monsters/onlooker_smoke.gd")
+
 var eyes: Array[MeshInstance3D] = []
+var body_mat: ShaderMaterial = null
+var wisps: GPUParticles3D = null
+var shroud: GPUParticles3D = null
 var glow_ball: MeshInstance3D = null
 var head: Node3D = null
 var _t := 0.0
@@ -81,12 +93,15 @@ static func build(model: Node3D) -> bool:
 
 func _make() -> void:
 	_phase = randf() * TAU
-	var body := StandardMaterial3D.new()
-	body.albedo_color = SHADOW
-	body.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	body.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 	# It is a shape, not a surface: nothing on it should ever catch a highlight or a shadow edge.
-	body.disable_receive_shadows = true
+	# Unshaded near-black as it always was; the shader adds the edge that will not resolve and the
+	# hem that thins out above the floor (shaders/onlooker_body.gdshader), and the dissolve that
+	# the pop in and the poof both use.
+	var body := ShaderMaterial.new()
+	body.shader = BodyShader
+	body.set_shader_parameter(&"shade", SHADOW)
+	body.set_shader_parameter(&"tall", TALL)
+	body_mat = body
 
 	# A tapered trunk -- wide at the hem, narrow at the shoulders -- a narrow neck and a small head.
 	# Three cylinders is all the shape a silhouette needs, and the taper is what stops it reading as
@@ -150,6 +165,15 @@ func _make() -> void:
 	glow_ball.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	head.add_child(glow_ball)
 
+	# The smoke it stands in (onlooker_smoke.gd): a shroud riding the body, and wisps off the trunk
+	# in world space so they trail.
+	shroud = Smoke.make_shroud()
+	shroud.position = Vector3(0.0, TALL * 0.43, 0.0)
+	add_child(shroud)
+	wisps = Smoke.make_wisps()
+	wisps.position = Vector3(0.0, TALL * 0.45, 0.0)
+	add_child(wisps)
+
 
 func _limb(mat: Material, at: Vector3, bottom: float, top: float, tall: float) -> void:
 	var m := CylinderMesh.new()
@@ -186,18 +210,30 @@ func tick(delta: float, viewer := Vector3.INF) -> void:
 	position.x = sin(a) * SWAY
 	position.z = sin(a * 0.61) * SWAY * 0.6
 	rotation.z = sin(a) * 0.012
+	if body_mat != null:
+		var feet: Vector3 = (get_parent() as Node3D).global_position if get_parent() is Node3D else global_position
+		body_mat.set_shader_parameter(&"ground_y", feet.y)
+		body_mat.set_shader_parameter(&"axis_xz", Vector2(feet.x, feet.z))
 
 
-## How solid it is, 0 gone to 1 there. The pop in and out is a scale-and-fade rather than a cut, so
-## a hop reads as a relocation rather than a dropped frame.
+## How solid it is, 0 gone to 1 there. The pop in and out is a dissolve rather than a cut: it
+## gathers out of its own smoke coming in, and comes apart into it going (with the poof
+## onlooker_smoke.gd leaves behind). It used to squash down as it faded, which read as sinking into
+## the floor; now it swells a touch as it goes, which reads as bursting.
 var _presence := 1.0
 
 func set_presence(k: float) -> void:
 	_presence = k
 	visible = k > 0.002
+	if wisps != null:
+		wisps.emitting = k > 0.3
+		shroud.emitting = k > 0.3
 	if not visible:
 		return
-	scale = Vector3(1.0, lerpf(0.55, 1.0, k), 1.0)
+	var swell := 1.0 + (1.0 - k) * 0.18
+	scale = Vector3(swell, 1.0, swell)
+	if body_mat != null:
+		body_mat.set_shader_parameter(&"presence", k)
 	for e in eyes:
 		var mat := e.material_override as StandardMaterial3D
 		if mat != null:

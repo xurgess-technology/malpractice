@@ -265,6 +265,16 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 			model.set_sono_look(0.6, 0.6, "charging")
 		mx += 1.0
 		await _slice(slice)
+	# 2026-09-24: the Onlooker's rig above also builds its wisps (the smoke shader's first draw and
+	# the wisp particle program); its poof is two more particle programs (the burst and the cloud)
+	# and a fading pair of eyes, drawn the first time anybody runs at it. Left on the shelf, it frees
+	# itself when its cloud is gone.
+	const OnlookerRig := preload("res://scripts/monsters/onlooker_rig.gd")
+	const OnlookerSmoke := preload("res://scripts/monsters/onlooker_smoke.gd")
+	OnlookerSmoke.poof(shelf, shelf.to_global(Vector3(mx, -1.6, -2.0)), 0.0,
+		shelf.global_transform * Transform3D(Basis(), Vector3(mx, -0.4, -2.0)), OnlookerRig.EYE_GAP, OnlookerRig.EYE_R,
+		OnlookerRig.EYE_COLOR, OnlookerRig.EYE_ENERGY)
+	await _slice(slice)
 	_inert(shelf)
 	_report(progress, "monsters")
 
