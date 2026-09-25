@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-25 (0.12.x)**
 
+- **0.12.5**: A surgical robot, for solo grafts 🤖
+    - Added: A $500 robot core from the pharmacy, plugged into a fixture by the OR's first patient table. Press P from anywhere to remote in, and its camera runs the normal surgery flow -- including strapping yourself to its table and grafting solo.
+    - Fixed: Pressing P while pushing the gurney used to freeze you mid-push; it now refuses with a reason instead.
 - **0.12.4**: Skill tree v1 at the vein scanner 🌿
     - Added: The personnel room's palm scanner now grows a skill tree -- Surgery, Anatomy, Pharmacology, Survival and Logistics, one point per shift you clock out of. Progress is per player and survives a game over. Nothing spends a point yet; this is the tree and the save, not the payoffs.
 - **0.12.3**: THE SERVICE DOG 🐕
