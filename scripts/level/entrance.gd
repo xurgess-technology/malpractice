@@ -192,6 +192,9 @@ static func build(st: S, ox: int, oy: int) -> void:
 	for x in [8.55, 11.0]:
 		put.call("anesthesia_cart", x, 6.0 + depth.call("anesthesia_cart"), SOUTH, or_room)
 	put.call("crash_cart", 5.0 + depth.call("crash_cart"), 9.45, E, or_room)
+	# OR GURNEY (scripts/gurney/gurney.gd): parked down the middle of the room, clear of the tables and
+	# the lab wall, its front end toward the doors so whoever takes the handle heads straight out.
+	st.spots["gurney"] = {"pos": Vector2(ox + 9.5, oy + 10.5), "yaw": Defs.yaw_facing(E)}
 	put.call("wall_clock", 5.0, 8.6, E, or_room)
 	# The lab wall, across from the tables (the south wall, on your left coming in the doors): one
 	# station per tile, the fume hood at the far end and the sink by the doors. Set dressing so far;

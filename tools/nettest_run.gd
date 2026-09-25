@@ -41,6 +41,8 @@ const SCENARIOS := [
 	# Seed 4247 is the seal with an amputation: four steps, the longest case.
 	{"name": "economy", "scenario": "economy", "clients": 3, "timeout": 300, "start_after": {3: "[marker] economy_bought"}},
 	{"name": "downed", "scenario": "downed", "clients": 2, "timeout": 300},
+	# OR GURNEY: a client pushes the gurney to a downed client and wheels them onto a table.
+	{"name": "gurney", "scenario": "gurney", "clients": 2, "timeout": 300},
 	{"name": "full_shift_lag", "scenario": "full_shift", "clients": 2, "timeout": 900, "lag": true, "extra": ["--seed=4247"]},
 	# loop (sweep 2): two patients on two tables, two clients operating at once.
 	{"name": "two_patients", "scenario": "two_patients", "clients": 2, "timeout": 300},

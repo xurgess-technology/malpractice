@@ -1276,6 +1276,9 @@ static func _fill_landmarks(gen: Dictionary, info: Dictionary) -> void:
 		info["storage"] = st
 	if spots.has("lectern"):
 		info["lectern"] = {"position": _w(spots.lectern.pos), "yaw": float(spots.lectern.yaw)}
+	if spots.has("gurney"):
+		# OR GURNEY: where the OR's gurney parks at the start of every shift.
+		info["gurney"] = {"position": _w(spots.gurney.pos), "yaw": float(spots.gurney.yaw)}
 	if spots.has("lab"):
 		# The OR's lab wall (entrance.gd): each station by name (centrifuge, vials, microscope, ...).
 		var lab := {}

@@ -226,6 +226,9 @@ const GraftsScript := preload("res://scripts/grafting/grafts.gd")
 const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
 var sono_echo: Node = null    # the Sonographer's echo: the fan, the imaging flash, the deafen squeal
 var combat: Node = null       # bone saw swings, anesthetic jabs, dragging and strapping monsters
+## The OR's player-pushed gurney (scripts/gurney/gurney.gd), child "Gurney" of Game, every machine.
+const GurneyScript := preload("res://scripts/gurney/gurney.gd")
+var gurney: Node = null
 var dissection: Node = null   # monster cases on the patient tables: sedation and re-dosing the Hive
 var _step_operator := 0     # host: who finished the step that is finishing the case (only inside surgery_step_done)
 var vats: Node = null         # GRAFTING part one: specimen vats, eye spoilage (scripts/grafting/vats.gd)
@@ -324,6 +327,11 @@ func _ready() -> void:
 	combat.name = "Combat"
 	add_child(combat)
 	combat.setup(self)
+	# OR GURNEY: pushed from the OR to whoever is down, and back to a table.
+	gurney = GurneyScript.new()
+	gurney.name = "Gurney"
+	add_child(gurney)
+	gurney.setup(self)
 	dissection = DissectionScript.new()
 	dissection.name = "Dissection"
 	add_child(dissection)
@@ -550,6 +558,7 @@ func _populate_shift_world() -> void:
 		if n.has_method("is_open") and n.is_open():
 			n.set_open(false, false)
 	spawn_suture_kits()  # downed: every shift has suture kits for the player table
+	gurney.park()  # OR GURNEY: every shift starts with it parked in the OR
 	spawn_syringes()     # SYRINGE DRAW: and syringes to pre-load a dose into
 	stock_first_aid_cabinets()  # POCKETS 2 phase 2: the Natatorium's cabinet is never empty
 	spawn_loot()
@@ -1086,6 +1095,7 @@ func _add_landmarks() -> void:
 		_add_proxy(table_interact_id(ti), (t.position as Vector3) + Vector3.UP * 1.1, 1.2, 0.0,
 			func(p): return _table_prompt(p, ti))
 	_add_player_table()  # downed: the OR's player table
+	gurney.on_level_built(level, level_info)  # OR GURNEY
 	# Terminal redesign: E on the projector hung across the break room switches it on and off.
 	var wt := wall_terminal()
 	if wt != null:
@@ -2580,6 +2590,7 @@ func _physics_process(delta: float) -> void:
 	loop.physics_tick(delta)
 	# SWEEP 3 HOOK: every machine; each system does its host-only work behind is_host().
 	combat.physics_tick(delta)
+	gurney.physics_tick(delta)   # OR GURNEY: every machine; the host decides
 	dissection.physics_tick(delta)
 	abilities.physics_tick(delta)
 	trinkets.physics_tick(delta)   # TRINKETS chunk B: rings, heartbeats, the EpiPen's boost
@@ -2977,6 +2988,7 @@ func damage_player(p: Node, amount: int, source: String, knock: Vector3 = Vector
 	if p.carrying != 0:
 		drop_carried(p)   # downed: getting hit drops whoever you carry
 	combat.drop_dragged(p)   # SWEEP 3 HOOK (combat): and the monster you drag
+	gurney.release_if_pusher(p)   # OR GURNEY: and the gurney's handle
 	if p.hp <= 0:
 		down_player(p, source, knock)
 
@@ -3127,6 +3139,10 @@ func _release_downed_links(p: Node) -> void:
 		if c != null and c.carrying == p.peer_id:
 			drop_carried(c)
 		p.carried_by = 0
+	if gurney != null:
+		if p.on_gurney:
+			gurney.drop_rider_player(p)   # OR GURNEY
+		gurney.release_if_pusher(p)
 	if p.on_table:
 		p.on_table = false
 		if player_surgery.patient() == p:
@@ -3156,11 +3172,11 @@ func _tick_downed(_delta: float) -> void:
 func can_pick_up(q: Node, p: Node, check_hands: bool = true) -> bool:
 	if q == null or p == null or q == p or phase != Phase.SHIFT:
 		return false
-	if not q.alive or q.downed or q.carrying != 0 or q.carried_by != 0:
+	if not q.alive or q.downed or q.carrying != 0 or q.carried_by != 0 or q.pushing_gurney():
 		return false
 	if combat != null and combat.dragging(q) >= 0:
 		return false   # SWEEP 3 HOOK (combat): hands full of monster
-	if not p.alive or not p.downed or p.carried_by != 0 or p.on_table:
+	if not p.alive or not p.downed or p.carried_by != 0 or p.on_table or p.on_gurney:
 		return false
 	return not check_hands or q.hands_empty()
 
@@ -3294,6 +3310,11 @@ func carrier_pressed_interact(q: Node, aim: String) -> void:
 	if corpses.is_body(q.carrying):
 		corpses.carrier_pressed(q, aim)   # patient exits: into the furnace, or down on the floor
 		return
+	if aim == GurneyScript.AIM_ID:
+		var gn := find_interactable(aim)
+		if gn != null and _within_reach(q, gn) and gurney.aim_prompt(q).begins_with("Place"):
+			gurney.take_from_carrier(q)   # OR GURNEY: onto the parked gurney
+			return
 	if aim == "player_table":
 		var node := find_interactable("player_table")
 		if node != null and _within_reach(q, node) and player_table_prompt(q).begins_with("Place"):
@@ -3523,7 +3544,7 @@ func player_table_prompt(q: Node) -> String:
 func strap_in_prompt(q: Node) -> String:
 	if q == null or not q.alive or q.downed or q.on_table or q.carried_by != 0 or int(q.held_by) >= 0:
 		return ""
-	if q.dragging_monster >= 0 or q.carrying != 0 or q.hive_view:
+	if q.dragging_monster >= 0 or q.carrying != 0 or q.hive_view or q.on_gurney or q.pushing_gurney():
 		return ""
 	if phase != Phase.SHIFT:
 		return ""
@@ -3562,6 +3583,14 @@ func place_on_player_table(q: Node, table_index := -1) -> void:
 	if p == null or p.carried_by != q.peer_id:
 		return
 	p.carried_by = 0
+	lay_on_table(p, table_index)
+
+
+## Host: a downed player (off anyone's shoulder, off the gurney) goes onto a table and the
+## stitches case starts. The carry and the OR gurney both end here.
+func lay_on_table(p: Node, table_index := -1) -> void:
+	if not is_host() or p == null or not is_instance_valid(p):
+		return
 	p.on_table = true
 	# The case first: on the hub it names the table, which pinned_pose reads through player_table.
 	player_surgery.start(p, table_index)
@@ -3711,6 +3740,8 @@ func pinned_pose(p: Node) -> Transform3D:
 			var cb := Basis(Vector3.UP, c.rotation.y)
 			# the left shoulder: the carrier's over-the-shoulder camera looks over the right one
 			return Transform3D(cb, c.global_position + cb * Vector3(-0.55, 1.3, 0.0))
+	if p.on_gurney and gurney != null:
+		return gurney.rider_player_pose()   # OR GURNEY: lying on it, head at the handle end
 	return p.global_transform
 
 
@@ -3792,6 +3823,9 @@ func player_shoved(p: Node, charge: float = -1.0) -> void:
 		if combat.dragging(q) >= 0:
 			combat.drop_dragged(q)   # SWEEP 3 HOOK (combat): a shoved dragger lets go
 			say("%s shoved %s off the monster." % [p.player_name, q.player_name], 3.0)
+		elif q.pushing_gurney():
+			gurney.release()   # OR GURNEY
+			say("%s shoved %s off the gurney." % [p.player_name, q.player_name], 3.0)
 		elif q.carrying != 0:
 			var carried = players.get(q.carrying)
 			var what: String = corpses.carried_label(q) if corpses.is_body(q.carrying) else (carried.player_name if carried != null else "someone")
@@ -4422,6 +4456,7 @@ func _global_fields() -> Dictionary:
 		"pn": pill_notes.duplicate(),  # SWEEP 4A HOOK (pharmacy, chunk 3): OR green blip notes
 		# SWEEP 3 HOOK: small dictionaries of quantized values only (see docs/SWEEP3.md)
 		"cb": combat.net_state(), "dx": dissection.net_state(), "ab": abilities.net_state(),
+		"gu": gurney.net_state(),   # OR GURNEY: where it rests, who pushes it, who rides it
 		"gf": grafts.net_state(),   # GRAFTING chunk C: who has a grafted part
 		"tk": trinkets.net_state(),   # TRINKETS chunk B: rings, laptop screens, tagged monsters, EpiPens
 	}
@@ -4675,6 +4710,7 @@ func _apply_state(state: Dictionary, msg: Dictionary, keyframe: bool) -> void:
 	pill_notes = (g.get("pn", pill_notes) as Dictionary).duplicate()   # SWEEP 4A HOOK (pharmacy, chunk 3)
 	# SWEEP 3 HOOK
 	combat.apply_net_state(g.get("cb", {}))
+	gurney.apply_net_state(g.get("gu", {}))   # OR GURNEY
 	dissection.apply_net_state(g.get("dx", {}))
 	abilities.apply_net_state(g.get("ab", {}))
 	grafts.apply_net_state(g.get("gf", {}))   # GRAFTING chunk C
@@ -4702,7 +4738,7 @@ func _apply_state(state: Dictionary, msg: Dictionary, keyframe: bool) -> void:
 			continue
 		if keyframe or pl_changed.has(id) or int(_pl_applied.get(id, 0)) != p.get_instance_id():
 			_pl_applied[id] = p.get_instance_id()
-			var was_pinned: bool = p.on_table or p.carried_by != 0
+			var was_pinned: bool = p.on_table or p.carried_by != 0 or p.on_gurney
 			p.apply_remote_full(state.pl[id])
 			# downed: the reliable "revive" event put me beside the table, then an older snapshot
 			# pinned me back onto it; now that the snapshot lets go, stand where the host put me.
@@ -4872,6 +4908,8 @@ func _event(kind: String, data: Dictionary) -> void:
 			Audio.play(data.cue, data.get("at"))
 		"cremate":
 			corpses.play_cremation(data)   # patient exits: a body into the furnace
+		"gu_grab":
+			gurney.on_grab(data)   # OR GURNEY: someone took the handle; the pusher's machine moves them to it
 		"sting":
 			Audio.sting(String(data.cue))  # loop: a patient saved or lost
 		"loop":
@@ -4922,6 +4960,7 @@ func _event(kind: String, data: Dictionary) -> void:
 			var pd = players.get(data.id)
 			if pd != null:
 				pd.carried_by = 0   # the snapshot agrees a moment later
+				pd.on_gurney = false   # OR GURNEY: tipped off the gurney lands the same way
 				pd.teleport(data.pos)
 				pd.refresh_downed_visuals()
 		"stun":

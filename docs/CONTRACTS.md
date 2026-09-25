@@ -2117,6 +2117,61 @@ game.downed_view           # scripts/downed/downed_view.gd: blood trails, the lo
 - Tests: `tools/downedtest.tscn` (headless), `tools/downedshot.tscn` (windowed shots into
   `tools/downed_shots/`), nettest scenario `downed`, devtest downed checks.
 
+### The OR gurney (`or-gurney`, 2026-09-24)
+
+`scripts/gurney/gurney.gd`, `game.gurney` (child "Gurney" of Game, every machine). The paramedics'
+gurney model (`crew.gd` `make_gurney_model()`, static, shared mesh), player-pushed. Host
+authoritative; the snapshot's global field `gu` is `{p, y, u, k, r}` (rest position and yaw, the
+pusher's peer id, rider kind "" / "player" / "monster", rider id).
+
+```gdscript
+Gurney.HANDLE_BACK 1.5  NOSE 1.05  SPEED_K 1.0  TURN_RATE 2.4 rad/s  TOP_Y 0.8  LOAD_REACH 1.8  TABLE_REACH 2.8
+g.pose() -> Transform3D           # every machine: pushed, derived from its copy of the pusher (never sent); else the rest pose
+g.pusher / pusher_node() / pose_yaw() / nose() / lie_yaw() / lie_top() / rider_player_pose() / monster_pose()
+g.rider_kind / rider_id / has_rider() / rides(kind, id) / rider_name()
+g.load_candidate(q) -> {kind, id, aim, name}   # nearest downed teammate / sedated undragged monster within LOAD_REACH of its long axis
+g.table_target() -> {id, index}   # the free table (TABLE_REACH, middle to middle) the rider would go onto
+g.pusher_aim(q) -> [aim id, E prompt, drop-key text]   # Player._update_aim_core while pushing
+g.aim_prompt(q)                   # the parked gurney's aim box ("gurney"): push it / "Place X on the gurney" for a carrier
+g.grab(q) / release() / release_if_pusher(q) / pusher_pressed(q, aim) / pusher_drop(q)   # host
+g.take_from_carrier(q) / take_from_dragger(q) / unload_to_table(q, ti) / tip_off() / park()  # host
+g.steer(q, from_yaw, want_yaw, delta) -> float   # the pusher's machine: capped turn, refused into walls
+game.lay_on_table(p, ti)          # host: a downed player onto a table (place_on_player_table ends here too)
+combat.strap_monster(m, ti, q)    # host: a monster case on table ti (combat.strap ends here too)
+Combat.GURNEY_DRAGGER (-900000)   # a monster's dragged_by while it lies on the gurney
+Player.on_gurney ("og") / pushing_gurney() / look_along_gurney()
+```
+
+- **Parked**: `level_info.gurney` (`entrance.gd` spot `gurney`: the middle of the OR, front end to the
+  doors), else 2.9 m off the OR table. `game._populate_shift_world` calls `park()` every shift: back
+  there, let go, empty. Parked, it has a world-layer blocker (solid to everyone) and the aim box.
+- **Pushing**: E on the aim box with empty hands (and not carrying, dragging, operating, downed...)
+  takes the handle: the host moves the pusher to the handle, facing along it (the reliable
+  `gu_grab` event does it on the pusher's own machine), flipping ends if the handle side is
+  blocked. Pushed, the blocker and aim box switch off and the pusher's own body gets the gurney's
+  box as a second `CollisionShape3D` ("GurneyShape", only on the machine that moves that body), so
+  walls and shut doors stop it; `steer` caps the turn and refuses a turn into something solid.
+  Walk speed, no sprint, jump, crouch, shove or use. Doors sense a pusher as a carrier standing at
+  the gurney's nose. The host lets go for them when they can't push any more (hit, shoved,
+  downed, stunned, grabbed, left); the gurney stays where it was. Rattle (`loop_gurney`) and a 0.3
+  noise every second while it rolls.
+- **E while pushing** (host re-decides from its own state; the aim id only guards against surprise):
+  rider and a table in reach -> `unload_to_table`; nothing on it and someone in reach -> load them;
+  else let go. **G** tips the rider off beside it (a downed rider gets the `placed` event), else
+  lets go. A carrier's E on the parked gurney (`carrier_pressed_interact`, aim "gurney") and a
+  dragger's (`combat.dragger_pressed_interact`) load straight from the shoulder or the drag.
+- **A downed rider**: `on_gurney`, pinned by `game.pinned_pose` (and again in `Player._process`, so it
+  never trails its pusher by a frame), lying in the table frame `lie_yaw` / `lie_top` with the head
+  at the handle end, the `Lying` clip, eye 0.28 m; the local rider's look turns with the gurney.
+  Nobody can lift them off by hand (their aim box is off); they keep bleeding at the normal rate.
+  Bled out or gone, the host clears the rider.
+- **A monster rider**: `dragged_by = GURNEY_DRAGGER`, so it thinks no more than a dragged one, every
+  machine pins it through `combat.monster_pin` (-> `monster_pose`), and nobody can drag it. Only a
+  kind with a monster case (the Hive) is offered a table; anything else only comes off with G. If it
+  wakes (`monster.wake` clears `dragged_by`) the host rolls it off beside the gurney and it hunts.
+- Tests: `tools/gurneytest.tscn` (headless), nettest `gurney`, the smoke look `tools\gurneyshot.ps1`
+  (shots into `tools/gurney_shots/`), review setup `gurney`.
+
 ### Strapping yourself down (grafting chunk B, 2026-09-18, docs/GRAFTING.md)
 
 A healthy surgeon can lie on the table themselves, awake, and hold E to get up. The state is the
@@ -3057,4 +3112,4 @@ shift 2), nettest scenario `doors`, devtest door checks, `tools/perfprobe.tscn -
 (`{"seed": 4242, "stage": "_name"}`) and one static function that stages things with the helpers
 `place`, `clear_hands`, `give` (a stack, with extra stack keys like `bt`, `used`, `x`), `give_abilities`
 and `floor_item`. An unknown name is logged with the known ones and the menu opens as usual. Setups so
-far: `icons`, `items`, `graft`, `graft_back`, `trinkets`.
+far: `icons`, `items`, `graft`, `graft_back`, `trinkets`, `gurney` (and more: `SETUPS` is the list).

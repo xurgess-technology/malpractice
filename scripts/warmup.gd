@@ -281,6 +281,12 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	# models now; their skinning and the merged gurney compile here).
 	for n in crew.find_children("*", "CollisionObject3D", true, false):
 		n.queue_free()
+	# OR GURNEY: the OR's own player-pushed gurney is this same model (crew.gd make_gurney_model);
+	# drawn here on its own too, so the pushed one never stalls on first sight.
+	var or_gurney: Node3D = (load("res://scripts/loop/crew.gd") as GDScript).make_gurney_model()
+	or_gurney.scale = Vector3.ONE * 0.4
+	or_gurney.position = Vector3(0.4, -0.6, -1.4)
+	shelf.add_child(or_gurney)
 	var ph: Node3D = (load("res://scripts/loop/phone.gd") as GDScript).create()
 	ph.remove_from_group("interactable")   # only a look-alike: never the real "phone"
 	ph.remove_meta("interact_id")

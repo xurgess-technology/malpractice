@@ -125,6 +125,9 @@ const SETUPS := {
 	# at your feet. The vats have always been ordinary bulky items; their bench's collider used to
 	# bury them, so E never saw them at all.
 	"vats": {"seed": 4242, "stage": "_vats"},
+	# OR GURNEY (2026-09-24): beside the OR's gurney with empty hands; a downed teammate in the hall
+	# outside the OR doors and a sedated Hive further down it. Push it out, load them, bring them back.
+	"gurney": {"seed": 4242, "stage": "_gurney"},
 }
 
 
@@ -1128,6 +1131,57 @@ static func _downed(game: Game) -> void:
 	floor_item(game, "suture_kit", t + side * 1.2 + b * Vector3(-0.5, 0.0, 0.0))
 	game.say("Hands empty: hold E on Dr. Bled, carry them to a table, E anywhere at it lays them down (G drops them on the floor), then stitch.", 12.0)
 	print("[review] downed: bot %d down at %s, free table %d at %s" % [bid, mate_at, table, t])
+
+
+## OR GURNEY (2026-09-24, scripts/gurney/gurney.gd): standing beside the OR's gurney where it parks,
+## hands empty. Dr. Bled (a bot) lies downed in the hall just outside the OR's double doors, and a
+## sedated Hive (asleep for ten minutes) lies further down the same hall. E on the gurney takes the
+## handle; push it out through the doors, bring it alongside Dr. Bled and E loads them; push them back
+## in and E beside a free table lays them on it (the stitches start, as after a carry). The Hive the
+## same way: its Eyeball Extraction starts on the table. G tips a rider off; E with nothing near lets go.
+## Dev mode is on (F1) with monsters off and no game over. With `-Count 2` the second window stands
+## beside you: that is the view of a teammate watching the gurney go by.
+static func _gurney(game: Game) -> void:
+	var tree := game.get_tree()
+	var me = game.local_player()
+	game.set_dev_tools(true, me)
+	var dev = game.dev
+	dev.request("monsters_off", {"on": true})
+	dev.request("no_game_over", {"on": true})
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	dev.request("clear_patient")
+	var g = game.gurney
+	var park: Vector3 = g.park_pos
+	var b := Basis(Vector3.UP, float(g.park_yaw))
+	# The entrance building's own grid (scripts/level/entrance.gd): the gurney parks at tile (9.5, 10.5),
+	# the OR doors are at x 14, rows 8-9, and the hall outside (the spine) is x 15-17.
+	var ot: Vector3 = park - Vector3(9.5, 0.0, 10.5) * C.TILE
+	var mate_at: Vector3 = game._floor_at(ot + Vector3(16.3, 0.0, 12.0) * C.TILE)
+	var hive_at: Vector3 = game._floor_at(ot + Vector3(16.3, 0.0, 16.5) * C.TILE)
+	var bid: int = dev.spawn_bot("bot", me, "Dr. Bled")
+	for i in 4:
+		await tree.physics_frame
+	var mate = game.players.get(bid)
+	if mate != null and is_instance_valid(mate):
+		dev.brains.erase(bid)   # no orders, no wandering: it is a body to fetch
+		mate.teleport(mate_at)
+		await tree.physics_frame
+		game.knock_down_player(mate, "review")
+	var m = game._add_monster("hive", hive_at)
+	if m != null:
+		for i in 3:
+			await tree.physics_frame
+		m.sedate(600.0)
+	# Beside the handle end, looking at the gurney with the doors beyond it.
+	var stand: Vector3 = park + b * Vector3(-0.9, 0.0, 2.1)
+	place(game, game._floor_at(stand), park + b * Vector3(0.0, 0.8, -1.2))
+	clear_hands(game)   # the handle needs both hands
+	for i in 30:
+		await tree.physics_frame
+	game.say("E on the gurney to push it. Dr. Bled is down in the hall outside, a sleeping Hive past them: E loads, E beside a free table unloads, G tips off.", 14.0)
+	print("[review] gurney: parked at %s, Dr. Bled (bot %d) down at %s, hive %s at %s" % [park, bid, mate_at, str(m != null), hive_at])
 
 
 ## MINIMAP: a free run of the hospital with the fogged floor plan in the top right corner. Nothing
