@@ -309,7 +309,9 @@ static func build_steps(lay: Dictionary, origin: Vector2i, out: Dictionary, root
 		var belt_mesh := Common.cached_mesh("fac_belt", func():
 			var mb := Common.MeshBuilder.new()
 			mb.box("s", steel, Transform3D(Basis(), Vector3(0, 0.82, 0)), Vector3(T, 0.16, 1.1))
-			mb.box("r", rubber, Transform3D(Basis(), Vector3(0, 0.91, 0)), Vector3(T, 0.03, 0.9))
+			# The belt lies ON the frame (0.90 up), not 5 mm into it: sunk, its ends shared the frame's
+			# end planes at the end of every line and flickered (fix-pocket-zfighting).
+			mb.box("r", rubber, Transform3D(Basis(), Vector3(0, 0.915, 0)), Vector3(T, 0.03, 0.9))
 			for sx in [-0.55, 0.55]:
 				mb.box("y", paint_y, Transform3D(Basis(), Vector3(0, 0.95, sx)), Vector3(T, 0.12, 0.06))
 			for lx in [-0.6, 0.6]:
@@ -617,7 +619,11 @@ static func _build_offices(root: Node3D, body: StaticBody3D, props: Common.Props
 	var mb := Common.MeshBuilder.new()
 	var a: Vector3 = world.call(Vector2(OFFICE_BLOCK.position), OFFICE_CEIL)
 	var b: Vector3 = world.call(Vector2(OFFICE_BLOCK.end), OFFICE_TOP)
-	mb.box("s", slab, Transform3D(Basis(), (a + b) * 0.5), b - a)
+	# Drawn a centimetre inside the block's own faces (the collider keeps the full size): flush, its
+	# underside sat in the office ceilings' plane and its sides in the hall walls' planes, and each
+	# pair fought for the pixels (fix-pocket-zfighting; the Chapel's sacristy roof is the same).
+	var inset := Vector3(0.01, 0.0, 0.01)
+	mb.box("s", slab, Transform3D(Basis(), (a + b) * 0.5 + Vector3(0, 0.005, 0)), b - a - inset * 2.0 - Vector3(0, 0.01, 0))
 	Common.collider(body, Transform3D(Basis(), (a + b) * 0.5), b - a)
 	var desk := Common.tri_mat("fac_desk", "mat/metal", Color(0.35, 0.37, 0.36), 1.0, 0.6, 0.4)
 	var wood := Common.tri_mat("fac_wood", "mat/floor", Color(0.40, 0.30, 0.20), 1.0, 0.8)

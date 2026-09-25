@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-24 (0.11.x)**
 
+- **0.11.2**: The pocket spaces stop flickering 🧺
+    - Fixed: Every prop in every pocket space was being drawn inside out -- you were seeing the insides of washers, starting blocks and pews, and their bottoms fought the floor for every pixel. That was the flicker at the feet of the laundry machines and the blocks at the far end of the pool. Props look properly solid now, so expect everything back there to be shaded a little differently.
+    - Fixed: A handful of surfaces that sat exactly on top of each other (chapel roofs and pillars, the factory office roof and conveyor, restaurant booths, the pool's edge) no longer shimmer.
 - **0.11.1**: The Onlooker is made of smoke now 👤
     - Changed: The Onlooker is a torn black shape wrapped in drifting dark smoke -- his edges never quite settle, so you can't really get a look at him. At a distance in fog he's a dark presence instead of a pale dot.
     - Changed: Rush him and he bursts into smoke instead of sinking into the floor, leaving a cloud that hangs there and fades over a few seconds. His eyes go last.

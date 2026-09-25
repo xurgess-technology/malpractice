@@ -421,10 +421,14 @@ static func _basin(root: Node3D, world: Callable, geo: Common.Geo) -> void:
 	var cz := (a.z + b.z) * 0.5
 	var w := b.x - a.x
 	var d := b.z - a.z
-	mb.box("f", floor_mat, Transform3D(Basis(), Vector3(cx, -POOL_DEPTH, cz)), Vector3(w, 0.02, d))
+	# The walls stand just INSIDE the pool's edge, outer faces on it, and the floor fits between them.
+	# Centred on the edge, the outer half of each wall's top lay in the deck floor's own plane at y = 0
+	# and fought it for the pixels (only the coping hid it). No two faces here share a plane now.
+	var t := 0.05
+	mb.box("f", floor_mat, Transform3D(Basis(), Vector3(cx, -POOL_DEPTH, cz)), Vector3(w - t * 2.0, 0.02, d - t * 2.0))
 	for side in [-1, 1]:
-		mb.box("w", wall_mat, Transform3D(Basis(), Vector3(cx, -POOL_DEPTH * 0.5, a.z if side < 0 else b.z)), Vector3(w, POOL_DEPTH, 0.05))
-		mb.box("w", wall_mat, Transform3D(Basis(), Vector3(a.x if side < 0 else b.x, -POOL_DEPTH * 0.5, cz)), Vector3(0.05, POOL_DEPTH, d))
+		mb.box("w", wall_mat, Transform3D(Basis(), Vector3(cx, -POOL_DEPTH * 0.5, (a.z + t * 0.5) if side < 0 else (b.z - t * 0.5))), Vector3(w, POOL_DEPTH, t))
+		mb.box("w", wall_mat, Transform3D(Basis(), Vector3((a.x + t * 0.5) if side < 0 else (b.x - t * 0.5), -POOL_DEPTH * 0.5, cz)), Vector3(t, POOL_DEPTH, d - t * 2.0))
 	var mi := MeshInstance3D.new()
 	mi.name = "Basin"
 	mi.mesh = mb.commit()
@@ -441,9 +445,11 @@ static func _coping(root: Node3D, world: Callable, paint: Material) -> void:
 	var b: Vector3 = world.call(Vector2(POOL.end))
 	var cx := (a.x + b.x) * 0.5
 	var cz := (a.z + b.z) * 0.5
+	# The long sides run corner to corner and the short sides fit between them: butted, not
+	# overlapped, so no two faces of the lip share a plane (fix-pocket-zfighting).
 	for side in [-1, 1]:
-		mb.box("c", paint, Transform3D(Basis(), Vector3(cx, 0.07, a.z if side < 0 else b.z)), Vector3(b.x - a.x + 0.6, 0.14, 0.3))
-		mb.box("c", paint, Transform3D(Basis(), Vector3(a.x if side < 0 else b.x, 0.07, cz)), Vector3(0.3, 0.14, b.z - a.z + 0.6))
+		mb.box("c", paint, Transform3D(Basis(), Vector3(cx, 0.07, a.z if side < 0 else b.z)), Vector3(b.x - a.x + 0.3, 0.14, 0.3))
+		mb.box("c", paint, Transform3D(Basis(), Vector3(a.x if side < 0 else b.x, 0.07, cz)), Vector3(0.3, 0.14, b.z - a.z - 0.3))
 	var mi := MeshInstance3D.new()
 	mi.name = "Coping"
 	mi.mesh = mb.commit()

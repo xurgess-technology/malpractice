@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cbzfightshot1"]
+
+[ext_resource type="Script" path="res://tools/zfightshot.gd" id="1_zf"]
+
+[node name="ZFightShot" type="Node"]
+script = ExtResource("1_zf")

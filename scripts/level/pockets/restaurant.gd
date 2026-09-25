@@ -497,7 +497,8 @@ static func _booths(props: Common.Props, body: StaticBody3D, lay: Dictionary, wo
 		for sx in [-1.12, 1.12]:
 			var inward := -signf(sx)
 			mb.box("w", wood, Transform3D(Basis(), Vector3(sx, 0.22, 0)), Vector3(0.62, 0.44, 1.3))
-			mb.box("v", vinyl, Transform3D(Basis(), Vector3(sx + inward * 0.03, 0.48, 0)), Vector3(0.56, 0.1, 1.25))
+			# 0.54 wide, so its front sits a centimetre behind the base's instead of in its plane.
+			mb.box("v", vinyl, Transform3D(Basis(), Vector3(sx + inward * 0.03, 0.48, 0)), Vector3(0.54, 0.1, 1.25))
 			mb.box("w", wood, Transform3D(Basis(), Vector3(sx - inward * 0.27, 0.8, 0)), Vector3(0.08, 1.6, 1.3))
 			mb.box("v", vinyl, Transform3D(Basis(), Vector3(sx - inward * 0.2, 0.85, 0)), Vector3(0.08, 0.7, 1.2))
 		mb.box("w", wood, Transform3D(Basis(), Vector3(0, 0.74, -0.05)), Vector3(1.3, 0.05, 1.1))
