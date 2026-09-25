@@ -460,6 +460,13 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	# Keep everything alive so its shaders stay compiled, but out of sight and asleep.
 	shelf.visible = false
 	root.process_mode = Node.PROCESS_MODE_DISABLED
+	# ...and stop its screens. A SubViewport renders on its own schedule whatever its parent's
+	# visibility, so a warm() that left one on UPDATE_ALWAYS kept redrawing it, unseen, every frame
+	# of the session: the vein machine's screen alone was ~800 draw calls a frame in every view
+	# (measured 2026-09-25, perfprobe draws up ~810 everywhere against 0.10.55), and the wall
+	# terminal's another ~60. Their shaders are compiled already; the texture keeps its last frame.
+	for vp in root.find_children("*", "SubViewport", true, false):
+		(vp as SubViewport).render_target_update_mode = SubViewport.UPDATE_DISABLED
 	for bi in muted.keys():
 		AudioServer.set_bus_mute(bi, muted[bi])
 	cover.queue_free()
