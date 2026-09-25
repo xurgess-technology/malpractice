@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-25 (0.12.x)**
 
+- **0.12.1**: The OR has a gurney 🛏️
+    - Added: A gurney parks in the OR every shift. Grab it with empty hands and push it at full walking speed -- much faster than lugging someone over your shoulder -- but you have to wheel it to them. Load a downed teammate or a sedated monster, bring them back, and slide them onto the table to start surgery.
+    - Added: G tips whoever's on it onto the floor. Get hit while pushing and you let go; the gurney stays put with its passenger. A monster that wakes up on it rolls off and comes for you.
+    - Note: Riding it, you look past your own feet as you roll. It rattles, and the Sonographer can hear it.
 - **0.12.0**: Real hands 🧤
     - Changed: Your first-person hands are gloved surgical hands with real fingers now, not lego blocks. They close around whatever you're holding -- a fist on the saw, the scalpel and the hammer, a pinch on the forceps, a hook through the bucket handle -- and nothing clips through them.
     - Changed: The swing, jab, throw and bonk all use the new grip.
