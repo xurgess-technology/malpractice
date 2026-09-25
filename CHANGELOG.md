@@ -3,6 +3,13 @@
 Everything that changes in **Malpractice**, newest first. One minor version per day of work, one
 patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog).
 
+**2026-09-25 (0.12.x)**
+
+- **0.12.0**: Real hands 🧤
+    - Changed: Your first-person hands are gloved surgical hands with real fingers now, not lego blocks. They close around whatever you're holding -- a fist on the saw, the scalpel and the hammer, a pinch on the forceps, a hook through the bucket handle -- and nothing clips through them.
+    - Changed: The swing, jab, throw and bonk all use the new grip.
+    - Fixed: Your own flashlight lens no longer glows while the light is off.
+
 **2026-09-24 (0.11.x)**
 
 - **0.11.4**: PUPPET! 🎭
