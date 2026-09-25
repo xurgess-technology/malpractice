@@ -8,8 +8,13 @@ blender was the only way to earn them. That was reversed the same day: **the abi
 and only brains stayed gone.** This file is the record of what changed in between, and of the one
 real hole the removal left.
 
-The system now lives in `scripts/abilities/` (`abilities.gd`, `echo_view.gd`, `hive_view.gd`) as
+The system now lives in `scripts/abilities/` (`abilities.gd`, `echo_view.gd`, `puppet_view.gd`) as
 the `Abilities` child of Game, reached as `game.abilities`.
+
+**2026-09-24: Hive Eyes is gone, replaced by Puppet** (same slot, key, cooldown and level structure,
+same graft; you climb into the Hive and walk it about instead of only looking). Everything below
+that described Hive Eyes' API now describes Puppet's; docs/CONTRACTS.md "Abilities" has the whole
+thing.
 
 ---
 
@@ -17,8 +22,9 @@ the `Abilities` child of Game, reached as `game.abilities`.
 
 Brains were the earning mechanic. With them gone:
 
-- **Hive Eyes is earned by grafting.** An `eye_hive` graft grants it at level 1, and taking the part
-  out takes it away again (`scripts/grafting/grafts.gd`, `PART_ABILITY := {"eye_hive": "hive_in"}`).
+- **Puppet (was Hive Eyes) is earned by grafting.** An `eye_hive` graft grants it at level 1, and
+  taking the part out takes it away again (`scripts/grafting/grafts.gd`,
+  `PART_ABILITY := {"eye_hive": "puppet"}`).
   That code already existed before any of this; it is now the *only* source of an ability in the
   game. This was always where it was heading — the old `brains.gd` comment said `add_ability()` /
   `set_level()` / `slot_of()` were kept deliberately independent of how a level is earned, precisely
@@ -37,7 +43,7 @@ Brains were the earning mechanic. With them gone:
 
   ```gdscript
   # scripts/grafting/grafts.gd
-  const PART_ABILITY := {"eye_hive": "hive_in", "trachea_sonographer": "echo"}
+  const PART_ABILITY := {"eye_hive": "puppet", "trachea_sonographer": "echo"}
   ```
 
   `grafts.gd` is generic over part kinds on purpose — its own header says part two "slots in
@@ -77,7 +83,7 @@ it. Nothing re-packs the slots; `clear_ability` leaves a hole that the next new 
 
 | path | ability id | name | source |
 |---|---|---|---|
-| `"hive"` | `"hive_in"` | Hive Eyes | the `eye_hive` graft |
+| `"hive"` | `"puppet"` | Puppet (was Hive Eyes, id `hive_in`) | the `eye_hive` graft |
 | `"sonographer"` | `"echo"` | Echo | **nothing — see above** |
 
 `PATHS` is `["hive", "sonographer"]`; the **order matters**, it indexes the level array.
@@ -86,28 +92,29 @@ it. Nothing re-packs the slots; `clear_ability` leaves a hole that the next new 
 ```gdscript
 func echo_radius(lvl: int)  -> float: return 12.0 + 6.0  * lvl
 func echo_seconds(lvl: int) -> float: return 2.5  + 0.75 * lvl
-func hive_range(lvl: int)   -> float: return 20.0 + 10.0 * lvl
-func hive_seconds(lvl: int) -> float: return 5.0  + 2.0  * lvl
+func puppet_range(lvl: int)   -> float: return 20.0 + 10.0 * lvl
+func puppet_seconds(lvl: int) -> float: return 3.0  + 1.0  * lvl   # after the 1 s fly-in
 
 const ECHO_COOLDOWN := 20.0     # from the moment it fires
 const ECHO_NOISE    := 1.2      # emit_noise(), so Echo is LOUD -- it attracts monsters
-const HIVE_COOLDOWN := 12.0     # counted from when the view ENDS, not when it starts
-const HIVE_PRESS_GRACE := 0.5   # after a view ends, ignore that player's presses this long
+const PUPPET_COOLDOWN := 12.0     # counted from when you come BACK, not when it starts
+const PUPPET_PRESS_GRACE := 0.5   # after it ends, ignore that player's presses this long
 ```
 
 ## How it replicates
 
 - **Global snapshot field `ab`** (was `br`), from `Abilities.net_state()`:
   - `lv` — peer id -> `[hive level, sonographer level]` (ints)
-  - `hv` — peer id -> `[monster id, world_time the view ends]`, snapped to 0.1
+  - `pp` (was `hv`) — peer id -> `[monster id, world_time it ends]`, snapped to 0.1
   - `sl` — peer id -> `Array[MAX_SLOTS]` of ability id, `""` for empty
-- **Player report key `hv`** — `Player.hive_view: bool`, so every machine can pose a player who is
-  away in a Hive (head droops, eyes glaze for teammates) and so the grafted eye's glow matches.
+- **Player report key `pp`** (was `hv`) — `Player.puppeting: bool`, so every machine can pose a player
+  who is away in a Hive (head droops, eyes glaze for teammates) and so the grafted eye's glow matches.
+  A puppeting client also sends `puppet_move` / `puppet_yaw` in its report_state (`[20]`, `[21]`).
 - **Player input** — `ability_slot_press: Array = [0,0,0,0]`, a press counter per slot at indices
   10..13 of the report array, dispatched host-side through `game.player_ability_slot(p, i)`.
   Edge-detected against `_ability_slot_seen`, so a dropped packet cannot lose a press.
-- **Reliable events** — `ab_echo` `{id, pos, r, s}` and `ab_hive` `{id, on}` (were `br_echo` /
-  `br_hive`). `ab_hive` carries no state (the view follows `hv`); it exists to keep the one-off
+- **Reliable events** — `ab_echo` `{id, pos, r, s}` and `ab_puppet` `{id, on}` (were `br_echo` /
+  `br_hive`, then `ab_hive`). `ab_puppet` carries no state (the view follows `pp`); it exists to keep the one-off
   moment ordered. `br_drink` is gone for good — it was the blender.
 - **Nothing is saved.** Levels and slots live only in memory and are wiped by `on_reset()` on game
   over, at the same time as the grafts that grant them.
@@ -117,9 +124,9 @@ const HIVE_PRESS_GRACE := 0.5   # after a view ends, ignore that player's presse
 - Input action **`ability_alt`**, rebindable as `key_ability_alt` (the settings row is "Ability").
   Holding it grows the four circular slots out of the item bar; **Alt+1..4** fires a slot.
 - `scripts/hud.gd` `_draw_ability_bar()` draws them, with a per-ability glyph, a cooldown wedge,
-  level pips and a first-time "New ability" card. Icons are `art/icons/hive_eyes.svg` and
+  level pips and a first-time "New ability" card. Icons are `art/icons/puppet.svg` and
   `art/icons/echolocation.svg`, coloured `#ff8a2a` and `#9b6bff` via `ItemIcons.ability(id)`.
-- Esc during Hive Eyes calls `Abilities.local_exit()`, which bumps that slot's press counter.
+- Esc while puppeting calls `Abilities.local_exit()`, which bumps that slot's press counter.
 - Audio: `ability_shriek`, `ability_hive_in`, `ability_hive_out`, generated by
   `tools/gen_audio_abilities.mjs`. The blender's own cues (`brains_blend`, `brains_gulp`,
   `brains_squelch`) are gone.

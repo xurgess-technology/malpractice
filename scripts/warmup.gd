@@ -113,7 +113,7 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	syringe.position = Vector3(x, 0.3, 0.3)
 	_inert(shelf)
 	_report(progress, "terminal")
-	# Echo's ghosts and veil, and the Hive Eyes screen.
+	# Echo's ghosts and veil, and the Puppet screen.
 	preload("res://scripts/abilities/abilities.gd").warm(shelf)
 	_inert(shelf)
 	_report(progress, "abilities")

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tools/gen_audio_abilities.mjs: offline synth for the two surgeon abilities (Echo and Hive Eyes).
+// tools/gen_audio_abilities.mjs: offline synth for the two surgeon abilities (Echo and Puppet).
 //
 //   node tools/gen_audio_abilities.mjs          # write audio/sfx/ability_*.wav
 //   node tools/gen_audio_abilities.mjs --check  # render and report, write nothing
@@ -8,7 +8,7 @@
 // produces byte-identical output.
 //
 //   ability_shriek   Echo: a rising, throat-tearing shriek with a ringing tail
-//   ability_hive_in  into a Hive's eyes: a sucking whoosh into a sick low drone
+//   ability_hive_in  Puppet, into a Hive: a sucking whoosh into a sick low drone
 //   ability_hive_out back into your body: a snap and a falling breath
 
 import fs from 'node:fs';

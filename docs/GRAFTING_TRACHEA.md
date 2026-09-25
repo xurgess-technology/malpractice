@@ -8,7 +8,7 @@ otherwise.
 
 ## The goal
 
-**Echo comes from a graft, the same way Hive Eyes does.** The team catches a Sonographer, takes
+**Echo comes from a graft, the same way Puppet (then Hive Eyes) does.** The team catches a Sonographer, takes
 its glowing trachea out on an OR table, keeps it in a vat, then swaps it with a surgeon's trachea
 on the player table. The grafted surgeon's throat glows violet through the skin, and they get
 **Echo**.

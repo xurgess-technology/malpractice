@@ -213,11 +213,18 @@ const ROCKET_EYE_H := 0.55
 ## Not replicated: every machine computes its own from its own aim, same as aim_id/aim_prompt.
 var scan_progress: float = 0.0
 var scan_target_id: int = -1
-## looking through a Hive's eyes (Hive Eyes). Host authoritative, report
-## key `hv`. The body stands still and helpless: no moving, looking, using or picking up; E or R
-## (or Esc, main.gd) ends it; others see the head droop.
-var hive_view: bool = false
+## Inside a Hive, driving it (Puppet, scripts/abilities/). Host authoritative, report key `pp`.
+## The body stands still and helpless: no moving, looking, using or picking up; E, the slot again
+## or Esc (main.gd) ends it; others see the head droop and the eyes glaze.
+var puppeting: bool = false
+## While puppeting: the walk the player is asking the Hive for (the move keys, x right / y back,
+## as Input.get_vector gives it) and the yaw they look along inside it (the Puppet camera's own
+## mouse look). Client -> host in report_state [20] and [21]; the host's Monster reads them from
+## here (Monster._puppet_step). Zero whenever the player is not puppeting.
+var puppet_move := Vector2.ZERO
+var puppet_yaw := 0.0
 var _hive_pitch := 0.0
+var _hive_yaw := 0.0
 var _was_hive := false
 
 ## SWEEP 4A HOOK (pharmacy, chunk 3): the placebo pill's warm screen effect. Purely local
@@ -431,7 +438,7 @@ var _was_on_floor: bool = true
 
 var head: Node3D
 var fx: Node3D
-var _hive_glaze: MeshInstance3D   # SWEEP 4A HOOK (Hive Eyes, chunk 4): glazed eyes, teammates only
+var _hive_glaze: MeshInstance3D   # SWEEP 4A HOOK (Puppet, chunk 4): glazed eyes, teammates only
 var camera: Camera3D
 var flashlight: SpotLight3D
 var body_visual: Node3D
@@ -557,8 +564,8 @@ func _build() -> void:
 	head.position.y = C.EYE_H
 	add_child(head)
 
-	# SWEEP 4A HOOK (Hive Eyes, chunk 4): a glazed-eyes glow teammates see on the existing head
-	# while this player is in Hive Eyes (docs/SWEEP4A.md "Teammates can see it"). A material swap
+	# SWEEP 4A HOOK (Puppet, chunk 4): a glazed-eyes glow teammates see on the existing head
+	# while this player is puppeting a Hive (docs/SWEEP4A.md "Teammates can see it"). A material swap
 	# on the exact eye geometry would need the specific rig (Blender human or the primitive
 	# fallback); an emissive quad at eye height reads the same at a glance on either body.
 	_hive_glaze = MeshInstance3D.new()
@@ -785,7 +792,7 @@ func _make_body() -> Node3D:
 func _input(event: InputEvent) -> void:
 	if not view_local() or not alive:
 		return
-	if hive_view or dev_input_held:
+	if puppeting or dev_input_held:
 		return   # the mouse is not yours while you look through a Hive
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		# Settings hook: "sensitivity" multiplies the base look speed.
@@ -874,7 +881,7 @@ func _local_step(delta: float) -> void:
 			_bot_crouch_press_seen = bot_crouch_press
 			crouch_pressed = true
 		crouch_held = bot_rocket_hold
-		scan_holding = bot_scan and not hive_view and not downed and not diving
+		scan_holding = bot_scan and not puppeting and not downed and not diving
 		laser_held = scan_holding and bot_laser_hold
 		if bot_laser_click != _bot_laser_click_seen:
 			_bot_laser_click_seen = bot_laser_click
@@ -912,30 +919,41 @@ func _local_step(delta: float) -> void:
 			_stance_want = STAND
 		crouch_pressed = Input.is_action_just_pressed("crouch")
 		crouch_held = Input.is_action_pressed("crouch")
-		scan_holding = Input.is_action_pressed("scan") and not hive_view and not downed and not diving
+		scan_holding = Input.is_action_pressed("scan") and not puppeting and not downed and not diving
 	else:
 		wants_interact = false
 		scan_holding = false
-	# Hive Eyes freezes the body; E or R asks to come back.
-	if hive_view != _was_hive:
-		_was_hive = hive_view
-		if hive_view:
+	# Puppet freezes the body and hands the move keys to the Hive; E asks to come back.
+	if puppeting != _was_hive:
+		_was_hive = puppeting
+		if puppeting:
 			_hive_pitch = _pitch
+			_hive_yaw = _yaw
 		else:
 			_pitch = _hive_pitch
-	if hive_view:
+			_yaw = _hive_yaw
+		_refresh_self_body()
+	if puppeting:
+		puppet_move = input_dir.limit_length(1.0) if can_move else Vector2.ZERO
+		if bot_active:
+			puppet_yaw = bot_yaw   # a bot looks along bot_yaw inside the Hive; its own body keeps still
+		elif g != null and g.abilities != null:
+			puppet_yaw = float(g.abilities.puppet_view.look_yaw)
+		_yaw = _hive_yaw
 		input_dir = Vector2.ZERO
 		want_sprint = false
 		wants_interact = false
 		_pitch = move_toward(_pitch, -0.95, delta * 2.5)
 		if can_move and not bot_active and Input.is_action_just_pressed("interact") and game != null and game.abilities != null:
-			var hi: int = game.abilities.slot_of(peer_id, "hive_in")
+			var hi: int = game.abilities.slot_of(peer_id, "puppet")
 			if hi >= 0:
 				ability_slot_press[hi] = int(ability_slot_press[hi]) + 1
+	else:
+		puppet_move = Vector2.ZERO
 
 	_update_aim()
 	_update_scan_progress(delta)
-	if can_move and not bot_active and not hive_view and not diving and Input.is_action_just_pressed("interact") \
+	if can_move and not bot_active and not puppeting and not diving and Input.is_action_just_pressed("interact") \
 			and aim_id != "" and aim_hold <= 0.0 and not aim_prompt.begins_with("!") 			and not aim_prompt.begins_with("Hold E"):   # GRAFT HOOK: held prompts are timed by the host
 		interact_count += 1
 	# Downed hook: downed, E calls for help; carrying, E puts them down (or on the table, above).
@@ -1137,7 +1155,7 @@ func _local_step(delta: float) -> void:
 	elif was_air and is_on_floor() and fall_speed < -4.0 and fx.has_method("land"):
 		fx.land(clampf(-fall_speed / 14.0, 0.0, 1.0))
 
-	if can_move and not bot_active and not hive_view:   # helpless in Hive Eyes
+	if can_move and not bot_active and not puppeting:   # helpless while puppeting
 		if Input.is_action_just_pressed("flashlight"):
 			set_flashlight(not flashlight_on)
 			Audio.play("click")
@@ -1212,7 +1230,7 @@ func _local_step(delta: float) -> void:
 
 	# THROW HOOK: a throw charge is cancelled (no drop) by a menu / freed mouse, a dive, a stun, going
 	# down, carrying, dragging, a wind-up or the hand emptying; the arms ease back (throw_pose.gd).
-	if _drop_holding and (not (can_move and not hive_view) or bot_active or diving or downed or carrying != 0 			or dragging_monster >= 0 or winding or selected_stack().kind == ""):
+	if _drop_holding and (not (can_move and not puppeting) or bot_active or diving or downed or carrying != 0 			or dragging_monster >= 0 or winding or selected_stack().kind == ""):
 		_drop_holding = false
 		throw_wind = 0.0
 	if _throw_follow_t > 0.0:
@@ -1223,7 +1241,7 @@ func _local_step(delta: float) -> void:
 		throw_wind = 0.0   # TRINKETS chunk B: a hammer swing owns throw_wind while it plays
 
 	# HANDS HOOK: the mouse was freed (a menu, the terminal) mid-charge: the shove goes off.
-	if _charging_with != "" and not (can_move and not hive_view) and g != null and g.combat != null:
+	if _charging_with != "" and not (can_move and not puppeting) and g != null and g.combat != null:
 		_charging_with = ""
 		g.combat.local_shove_release(self)
 
@@ -1318,9 +1336,9 @@ func _remote_step(delta: float) -> void:
 		k = 1.0
 	global_position = global_position.lerp(_target_pos, k)
 	rotation.y = lerp_angle(rotation.y, _target_yaw, k)
-	head.rotation.x = lerpf(head.rotation.x, -0.95 if hive_view else _pitch, k)   # head droops
+	head.rotation.x = lerpf(head.rotation.x, -0.95 if puppeting else _pitch, k)   # head droops
 	if _hive_glaze != null:
-		_hive_glaze.visible = hive_view   # SWEEP 4A HOOK (Hive Eyes, chunk 4): glazed eyes for teammates
+		_hive_glaze.visible = puppeting   # SWEEP 4A HOOK (Puppet, chunk 4): glazed eyes for teammates
 	var wading := _in_water()   # POCKETS 2 phase 2: a teammate crossing the pool is loud from here too
 	if moving and not downed and (not crouching or wading):
 		_step_accum += delta * (3.0 if sprinting else 1.9)
@@ -1431,7 +1449,7 @@ func _consume_actions() -> void:
 	if game == null:
 		return
 	# Downed hook: a downed player only calls for help; a carrier only puts down or places.
-	var busy := downed or carrying != 0 or dragging_monster >= 0 or hive_view or held_by >= 0   # SWEEP 3 HOOK (combat: dragging; helpless in Hive Eyes); the Nurse's grab
+	var busy := downed or carrying != 0 or dragging_monster >= 0 or puppeting or held_by >= 0   # SWEEP 3 HOOK (combat: dragging; helpless while puppeting); the Nurse's grab
 	# SWEEP 3 HOOK: item use and the brain ability (the systems decide what a busy player may do).
 	if use_count != _use_seen:
 		_use_seen = use_count
@@ -1461,13 +1479,13 @@ func _consume_actions() -> void:
 	if drop_count != _drop_seen:
 		_drop_seen = drop_count
 		# PLAYTEST 2026-09-22: the deliberate floor drop while carrying a teammate (or a body).
-		if alive and not downed and carrying != 0 and not hive_view and held_by < 0:
+		if alive and not downed and carrying != 0 and not puppeting and held_by < 0:
 			game.drop_carried(self)
 		elif alive and not busy:
 			game.drop_selected(self, drop_charge)   # SWEEP 4A HOOK (pharmacy, chunk 3): charged throw
 	if interact_count != _interact_seen:
 		_interact_seen = interact_count
-		if hive_view or held_by >= 0:
+		if puppeting or held_by >= 0:
 			pass   # held by the Nurse, nobody is coming in time
 		elif alive and downed:
 			game.downed_call_out(self)
@@ -1578,7 +1596,7 @@ func _update_aim_core() -> void:
 	aim_id = ""
 	aim_prompt = ""
 	aim_hold = 0.0
-	if not alive or hive_view:   # nothing in reach while you are elsewhere
+	if not alive or puppeting:   # nothing in reach while you are elsewhere
 		return
 	# Downed hook: on the floor or the table there is nothing to use, only a call for help.
 	if downed:
@@ -2096,7 +2114,8 @@ func _refresh_self_body() -> void:
 		return
 	# GRAFTING chunk C: while a lying stand-in body is on the table for you, your own never draws --
 	# not even for the mirrors, the carry camera or the body Dr. Botsworth is driven past.
-	var show := (_mirror_self or _carry_body or dev_body_shown) and not (on_table and stand_in)
+	# PUPPET: from inside a Hive you can turn round and see yourself standing there, slumped.
+	var show := (_mirror_self or _carry_body or dev_body_shown or puppeting) and not (on_table and stand_in)
 	if body_visual != null:
 		body_visual.visible = show
 		if show and not dev_body_shown:
@@ -2245,7 +2264,7 @@ func revive_full() -> void:
 	selected = 0
 	operating = false
 	dragging_monster = -1   # SWEEP 3 HOOK (combat)
-	hive_view = false
+	puppeting = false
 	crouching = false   # SWEEP 4A HOOK (controls)
 	prone = false
 	_stance_want = STAND
@@ -2536,7 +2555,7 @@ func _update_down_pose(delta: float) -> void:
 		# HUMAN HOOK: the human lies, crawls and hangs over the shoulder by its own clips; the Carried
 		# clip's origin (the belly on the shoulder) goes onto the carrier's left shoulder, mirrored.
 		# The whole transform (not rotation/position) so the carry's mirror never outlives it.
-		body_visual.transform = Transform3D(Basis(Vector3.RIGHT, -0.2 if hive_view else 0.0), Vector3.ZERO)
+		body_visual.transform = Transform3D(Basis(Vector3.RIGHT, -0.2 if puppeting else 0.0), Vector3.ZERO)
 		var carrier = game.players.get(carried_by) if carried_by != 0 and game != null else null
 		if carrier != null and is_instance_valid(carrier):
 			body_visual.global_transform = human_carried_pose(carrier)
@@ -2553,7 +2572,7 @@ func _update_down_pose(delta: float) -> void:
 	# SWEEP 4A HOOK (Echo polish, chunk 4): a brief lean-back as the shriek goes out, so it visibly
 	# comes from whoever used it (docs/SWEEP4A.md "Echo"), on every machine's copy of that player.
 	var echo_tilt := -0.4 * _echo_pose_weight()
-	var tilt := -PI * 0.47 if down else (-0.2 if hive_view else echo_tilt)   # slumped in Hive Eyes
+	var tilt := -PI * 0.47 if down else (-0.2 if puppeting else echo_tilt)   # slumped while puppeting
 	if not is_equal_approx(body_visual.rotation.x, tilt):
 		body_visual.rotation.x = move_toward(body_visual.rotation.x, tilt, delta * 6.0)
 		body_visual.position.y = 0.3 * (body_visual.rotation.x / (-PI * 0.47))
@@ -2568,7 +2587,7 @@ func _update_down_pose(delta: float) -> void:
 ##   [position, yaw, pitch, flag bits (1 light, 2 sprint, 4 moving, 8 holding E, 16 crouching,
 ##    32 scan-holding, 64 prone, 128 in the air in a dive, 256 rocket boots burning), shove count, drop count, aim id,
 ##    interact count, selected hand, use count, ability slot 1..4 press counts, drop charge, throw wind-up, faceplant count,
-##    vat count, unequip count]
+##    vat count, unequip count, rocket count, puppet move (Vector2), puppet yaw]
 func report_state() -> Array:
 	var bits := (1 if flashlight_on else 0) | (2 if sprinting else 0) | (4 if moving else 0) | (8 if wants_interact else 0) \
 		| (16 if crouching else 0) | (32 if scan_holding else 0) | (64 if prone else 0) | (128 if dive_in_air() else 0) \
@@ -2580,7 +2599,9 @@ func report_state() -> Array:
 		faceplant_count,   # ROCKET BOOTS
 		vat_count,   # GRAFTING part one
 		unequip_count,   # TAB SHEET
-		rocket_count]   # ROCKET BOOTS
+		rocket_count,   # ROCKET BOOTS
+		puppet_move.snappedf(1.0 / 64.0),   # PUPPET: the walk asked of the Hive
+		snappedf(puppet_yaw, 1.0 / 128.0)]   # PUPPET: the look inside it
 
 
 func apply_remote_state(s: Array) -> void:
@@ -2629,6 +2650,9 @@ func apply_remote_state(s: Array) -> void:
 		unequip_count = int(s[18])
 	if s.size() >= 20:   # ROCKET BOOTS: the boots lighting, counted
 		rocket_count = int(s[19])
+	if s.size() >= 22:   # PUPPET: what this player asks of the Hive they are driving
+		puppet_move = (s[20] as Vector2).limit_length(1.0) if s[20] is Vector2 else Vector2.ZERO
+		puppet_yaw = float(s[21])
 	_consume_actions()
 
 
@@ -2646,7 +2670,7 @@ func report_full() -> Dictionary:
 		"nh": held_by,   # the Night Nurse's grab
 		"ch": snappedf(carry_hold, 0.1),
 		"dm": dragging_monster,   # SWEEP 3 HOOK (combat)
-		"hv": hive_view,
+		"pp": puppeting,
 		"cr": crouching,   # SWEEP 4A HOOK (controls)
 		"pr": prone,
 		"da": dive_in_air(),   # SPRINT-DIVE HOOK
@@ -2691,7 +2715,7 @@ func apply_remote_full(s: Dictionary) -> void:
 		teleport(held_from)   # she let go: I own my position, so I drop back onto that spot myself
 	held_by = nh
 	dragging_monster = int(s.get("dm", -1))   # SWEEP 3 HOOK (combat)
-	hive_view = bool(s.get("hv", false))
+	puppeting = bool(s.get("pp", false))
 	var host_bleed := float(s.get("bl", 0.0))
 	if not downed or absf(host_bleed - bleed) > 1.5:
 		bleed = host_bleed

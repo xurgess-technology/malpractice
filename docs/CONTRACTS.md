@@ -768,7 +768,7 @@ poser.dangle / dangle_t     # hanging: arms limp at the sides, legs limp and kic
 - While she holds someone her brain ignores being watched (`observed` stays false) and she does not
   move; the clip stops dead (`anim.speed_scale 0`) and the pose does everything.
 - The victim can do nothing (every action is refused, E does not call for help, the first-person hands
-  hide); nothing else can hurt them (`monster_hit_player` skips the held); Hive Eyes ends; whatever they
+  hide); nothing else can hurt them (`monster_hit_player` skips the held); Puppet ends; whatever they
   held drops and whoever they carried falls, as a hit would.
 - She vanishes (`NurseBrain._vanish`) to a random navigation point at least `VANISH_MIN` 22 m from every
   living surgeon and out of everyone's light (the farthest candidate if none qualifies), calm for
@@ -797,7 +797,7 @@ HiveRig.WALK_SPEED 0.85      # rate = speed / WALK_SPEED (0.4..2.4x)
 ```
 
 - A node named `Head` rides the head bone, turned so its axes are the model's at rest (+Y up, +Z the
-  face): `Monster.eye_transform`, Hive Eyes.
+  face): `Monster.eye_transform`, the Puppet camera.
 - `Monster._hive_visual` (every machine, from the report): RUSH raises `lock` (0 -> 1 in a third of a
   second, back down over a second and a bit); the look target is the nearest standing player within
   14 m in front of it, at eye height, so clients need nothing extra replicated. The eyes
@@ -2033,7 +2033,7 @@ OrScreenModel.build(game) -> Dictionary # scripts/orscreen/or_screen_model.gd, p
   `hive_eyeball`). Icons are imported with mipmaps, so draw them on a CanvasItem with
   `texture_filter = TEXTURE_FILTER_LINEAR_WITH_MIPMAPS` (the HUD, the OR monitor canvas and the
   database do). `Warmup` calls `ItemIcons.preload_all()`.
-- Icons elsewhere: the ability bar draws `art/icons/hive_eyes.svg` / `echolocation.svg` in its round
+- Icons elsewhere: the ability bar draws `art/icons/puppet.svg` / `echolocation.svg` in its round
   slots with a glow in the ability's colour (steady ready, stronger in use, dim on cooldown; the radial
   sweep stays; an ability with no icon keeps its glyph). The database's item and procedure pages show
   the framed icon(s) beside the turntable and the item grids put it on each card. The OR monitor shows
@@ -2267,7 +2267,7 @@ game.combat.last_result / swings_seen / rng / break_chance / anim_freeze / pose_
   `_jab`, `strike_shove`), so the target is checked then (a monster that got up during a jab's
   wind-up shrugs it off). Cooldowns (unchanged values) start at the strike, and at a cancel. While
   winding: walk speed, no sprint, no slot change, no drop. Hit, shoved, knocked out, downed, stunned,
-  carried, carrying, dragging, operating or in Hive Eyes: the host cancels with no strike.
+  carried, carrying, dragging, operating or puppeting a Hive: the host cancels with no strike.
 - **Shove** (`game.player_shoved(p, charge := -1.0)`): charge 0 (a tap) is the old shove (2 s stun);
   a charged shove stuns a capturable monster `lerp(2.0, 3.5, c)` s with `lerp(1.05, 1.9, c)` m of push
   (`Monster.shoved(dir, charge)`) and knocks a player back `lerp(11, 16, c)`; noise `0.6 + 0.25 c`.
@@ -2382,7 +2382,7 @@ p.carry_cam.front_view()                     # swung round facing the player: no
   goes into the head. Facing the player (`front_view()`) the HUD skips the crosshair and
   `aim_segment` is the head's own ray. The torch always follows the head, never the camera. Carrying
   or dragging swing back behind to their arms; `wants()` still
-  gives the head back while operating, in Hive Eyes, downed, carried, on the table or dead. The
+  gives the head back while operating, puppeting, downed, carried, on the table or dead. The
   local held stack shows in the body's hand while the body shows (`_held_tp`). First person stays
   the default. Test: `tools/controlstest.tscn` ("over-the-shoulder camera").
 - **Carry camera** (`scripts/camera/carry_camera.gd`): while the local player carries a downed player
@@ -2576,31 +2576,35 @@ Tests: `godot --headless --path . --script tools/nettest_run.gd` runs every mult
 scenario (`-- --only=a,b`, `--lag=MS --jitter=MS --loss=P`, `--only=bandwidth`). Add a scenario
 for anything that changes what crosses the wire.
 
-## Abilities (sweep 3; grafting is the only source since 2026-09-22)
+## Abilities (sweep 3; grafting is the only source since 2026-09-22; Puppet replaced Hive Eyes 2026-09-24)
 
 `game.abilities` (`scripts/abilities/abilities.gd`, child "Abilities" of Game on every machine;
-the two views beside it: `echo_view.gd`, `hive_view.gd`).
+the two views beside it: `echo_view.gd`, `puppet_view.gd`).
 
 Two surgeon abilities -- **Echo** (id `echo`, path `sonographer`: a shriek that outlines everything
-nearby through walls) and **Hive Eyes** (id `hive_in`, path `hive`: see through a nearby Hive for a
-few seconds) -- each at a level 0..3, sitting in one of four per-player ability slots.
+nearby through walls) and **Puppet** (id `puppet`, path `hive`: climb into a nearby Hive for a few
+seconds, look around in it and walk it about) -- each at a level 0..3, sitting in one of four
+per-player ability slots. Puppet replaced Hive Eyes (see through a Hive, no control) outright; the
+path keeps the name `hive` because it is the Hive's ability.
 
 **Where a level comes from: grafting, and nothing else.** `Grafts.PART_ABILITY` maps `eye_hive` ->
-`hive_in`: finishing the graft calls `abilities.set_level(peer, "hive_in", 1)` and swapping the part
-back out calls `abilities.clear_ability(peer, "hive_in")`. Brains and the break-room blender used to
+`puppet`: finishing the graft calls `abilities.set_level(peer, "puppet", 1)` and swapping the part
+back out calls `abilities.clear_ability(peer, "puppet")`. Brains and the break-room blender used to
 be the other source and are gone (docs/backlog/ABILITIES_REMOVED.md), which is why a level is now
 simply **set** rather than accumulated: there are no fractional points any more. **Echo therefore has
 no source in the game today** -- only dev, tests and review setups can hand it out. See KNOWN_ISSUES.md.
 
-Authority: the host decides everything (levels, slots, cooldowns, who is looking through which Hive).
-Clients get it through `net_state()` (global snapshot field `ab`), the Player field `hive_view`
-(report key `hv`) and the reliable events `ab_echo` / `ab_hive`. The views run on every machine from
-that state.
+Authority: the host decides everything (levels, slots, cooldowns, who is driving which Hive, and
+where that Hive walks). Clients get it through `net_state()` (global snapshot field `ab`), the Player
+field `puppeting` (report key `pp`), the Hive's ordinary Monster report, and the reliable events
+`ab_echo` / `ab_puppet`. A puppeting client sends what it asks of the Hive in its own
+`report_state` (`[20]` `puppet_move`, `[21]` `puppet_yaw`). The views run on every machine from that
+state.
 
 ```gdscript
-Abilities.ABILITY_ID := {"sonographer": "echo", "hive": "hive_in"}   # path -> ability id
-Abilities.ABILITY_ID_TO_PATH := {"echo": "sonographer", "hive_in": "hive"}
-Abilities.ABILITY_NAME := {"hive": "Hive Eyes", "sonographer": "Echo"}
+Abilities.ABILITY_ID := {"sonographer": "echo", "hive": "puppet"}   # path -> ability id
+Abilities.ABILITY_ID_TO_PATH := {"echo": "sonographer", "puppet": "hive"}
+Abilities.ABILITY_NAME := {"hive": "Puppet", "sonographer": "Echo"}
 Abilities.MAX_SLOTS 4 / MAX_LEVEL 3
 game.abilities.level(peer_id, path) -> int        # 0..3; path "hive" | "sonographer"
 game.abilities.set_level(peer_id, id, lvl)        # host (grafting, dev, tests): sets the level
@@ -2611,30 +2615,41 @@ game.abilities.add_ability(peer_id, id) -> bool   # host: id into the first empt
 game.abilities.slots_for(peer_id) -> Array        # this player's 4 slots, ability id or ""
 game.abilities.slot_of(peer_id, id) -> int        # slot index, or -1
 game.abilities.clear_ability(peer_id, id)         # host: empties the slot, zeroes the level and ends
-    # any Hive Eyes view in progress (a grafted Hive eye coming back out)
+    # any puppeting in progress (a grafted Hive eye coming back out)
 game.abilities.ability_slot(p, slot_idx)          # host, from game.player_ability_slot (Alt+1..4):
     # per-slot dispatch. Each slot's ability cools down on its own path's key (echo:<peer> /
-    # hive:<peer>), unaffected by which slot it sits in. Pressing the slot again while Hive Eyes is
-    # active ends it.
-game.abilities.echo_radius(lvl) / echo_seconds(lvl) / hive_range(lvl) / hive_seconds(lvl)
+    # puppet:<peer>), unaffected by which slot it sits in. Pressing the slot again while puppeting
+    # ends it.
+game.abilities.echo_radius(lvl) / echo_seconds(lvl) / puppet_range(lvl) / puppet_seconds(lvl)
 game.abilities.cooldown_left(peer_id, path) -> float
-game.abilities.nearest_hive(p, range_m) -> Node
-game.abilities.camera() -> Camera3D        # every machine: the Hive Eyes camera while the LOCAL
-                                           # player looks through a Hive (main.gd renders it), else null
-game.abilities.local_hive_active() / local_exit()   # main.gd: Esc during Hive Eyes
+game.abilities.nearest_hive(p, range_m) -> Node   # not sedated, not already puppeted
+game.abilities.camera() -> Camera3D        # every machine: the Puppet camera while the LOCAL
+                                           # player is inside a Hive (main.gd renders it), else null
+game.abilities.local_puppet_active() / local_exit()   # main.gd: Esc while puppeting
 game.abilities.on_reset()                  # host, from game.reset_money (game over, new session)
 game.abilities.dev_request(sender, action, args)    # "ab_levels" {id, level}, "ab_reset"
                                            # (dev_controller.gd forwards ab_*)
 game.spawn_hive(pos) -> Node               # host (dev, tests): a Hive. It lives on game.gd, not here.
+
+# Monster (scripts/monster.gd), host
+monster.puppet_by: int        # peer driving it, 0 nobody; its brain does not think while set
+monster.puppet_from: float    # world_time the puppeteer arrives (end of the fly-in); it stands until then
+monster.puppet_release()      # puppet_by = 0, and brain.puppet_released() (Hive: forgets its target,
+                              # home = where it was left, a short idle, then its own wandering)
+Monster.PUPPET_SPEED 2.0 m/s  # a little over its own chase speed (1.8)
+# Player (scripts/player.gd)
+player.puppeting: bool        # host authoritative, report_full key "pp"
+player.puppet_move: Vector2   # the move keys while puppeting (Input.get_vector: x right, y back)
+player.puppet_yaw: float      # the look inside the Hive (the Puppet camera's own mouse yaw)
 ```
 
 - **Alt+1..4:** fires that slot's ability through `ability_slot`; an empty slot (or the slot pressed
-  again while its ability is active, other than ending Hive Eyes): "Nothing happens." (at most once a
-  second). Cooldowns: Echo 20 s from the shriek, Hive Eyes 12 s from when the view ends (presses in
-  the `HIVE_PRESS_GRACE` 0.5 s after a view ends are ignored). Not while downed; Hive Eyes not while
+  again while its ability is active, other than ending Puppet): "Nothing happens." (at most once a
+  second). Cooldowns: Echo 20 s from the shriek, Puppet 12 s from when you come back (presses in
+  the `PUPPET_PRESS_GRACE` 0.5 s after it ends are ignored). Not while downed; Puppet not while
   carrying or operating. Scaling is literal: `12 + 6 * level` m and `2.5 + 0.75 * level` s for Echo,
-  `20 + 10 * level` m and `5 + 2 * level` s for Hive Eyes. R itself does not fire an ability
-  (docs/SWEEP4A.md "Controls"): it holds the built-in scanner instead, and the guide opens on E.
+  `20 + 10 * level` m and `3 + 1 * level` s (4 / 5 / 6 s) for Puppet. R itself does not fire an
+  ability (docs/SWEEP4A.md "Controls"): it holds the built-in scanner instead, and the guide opens on E.
 - **Echo** (host): `game.emit_noise(pos + 1.5 up, 1.2, "echo")`, event `ab_echo {id, pos, r, s}`:
   everyone hears `ability_shriek` at pos (the shrieker hears it 2D); the shrieker's machine runs
   `echo_view.start`: a dark veil quad on the camera and at most 40 things / 150 mesh outlines
@@ -2645,32 +2660,42 @@ game.spawn_hive(pos) -> Node               # host (dev, tests): a Hive. It lives
   local one-shot pose timer (`Abilities._echo_pose_until[shrieker peer] = world_time + 0.5`, not
   replicated -- every machine sets it the same way from the same reliable event) that leans the
   shrieker's `body_visual` back briefly, so the shriek visibly comes from them too.
-- **Hive Eyes** (host): the nearest `kind == "hive"` monster within range (through walls, not
-  `is_sedated()`); `Player.hive_view = true` (report key `hv`), the abilities node's `hv[peer] =
-  [monster id, end world_time]`, event `ab_hive {id, on}`. Ends on time, its slot / E / Esc, the
-  monster leaving `game.monsters` (killed, strapped) or `is_sedated()`, and the player's hp dropping,
-  being downed, stunned or carried. While `hive_view` the Player ignores movement, mouse look, aim,
-  use, shove, drop and interact (E bumps the Hive Eyes slot's `ability_slot_press`); remote copies
-  droop the head and lean, and show a glazed-eyes glow (`Player._hive_glaze`, an emissive quad on the
-  head -- teammates only, toggled in `_remote_step`).
-  **Fly-through (`scripts/abilities/hive_view.gd`, local/cosmetic only):** `end_at` carries
-  `HiveView.FLIGHT_IN` (1.2 s) on top of `hive_seconds(lvl)`, so the duration timer only really starts
-  once the flight lands. The local camera leaves the player's own camera transform and glides along
-  `NavigationServer3D.map_get_path` (the default map; a straight line when none is found) to the
-  Hive's eyes over `FLIGHT_IN`, looking ahead along the path; `hive_view._phase` is `"in"` (flying),
-  `"settled"` (riding the eyes) or `"out"` (a `FLIGHT_OUT`, 0.3 s, glide back to wherever the body
-  currently is). Ending is instant (no `"out"` phase) when the monster is gone, or when the local
-  player's hp dropped since the flight started, or they are downed/carried (`hive_view._begin_end`'s
-  own comparison against `_start_hp`, captured client-side -- nothing extra on the wire for this).
-  A quiet end (the slot again, or time running out) gets the `"out"` glide instead.
-  **Known gap:** cycling between Hives at level 2+ and the hold-to-exit key are not wired up
-  (`hive_view._begin_cycle` exists but nothing calls it) -- see KNOWN_ISSUES.md.
-- **The grafted Hive eye's glow** follows `hive_view`: see "Eyeball Grafting" below.
-- **Replication:** `net_state()` = `{"lv": {peer: [hive level, sonographer level]}, "hv": {peer: [id,
+- **Puppet** (host): the nearest `kind == "hive"` monster within range (through walls, not
+  `is_sedated()`, not already puppeted); `Player.puppeting = true` (report key `pp`), the abilities
+  node's `pp[peer] = [monster id, end world_time]`, `monster.puppet_by = peer`, `monster.puppet_from =
+  now + PuppetView.FLIGHT_IN`, event `ab_puppet {id, on}`. While `puppet_by` is set and the Hive is not
+  STUNNED / RETREATing, `Monster._puppet_step` replaces its brain: it turns to the puppeteer's
+  `puppet_yaw` and walks `puppet_move` (relative to that yaw) at `PUPPET_SPEED` with `move_and_slide`,
+  mode IDLE or WANDER, no lunges, no targets. A shove or a hit on the Hive still knocks it about (the
+  brain runs its stun/retreat, then the puppet takes over again) and does NOT end Puppet. Ends on time,
+  its slot / E / Esc, the monster leaving `game.monsters` (killed, strapped) or `is_sedated()`, and the
+  player's hp dropping, being downed, stunned, carried or grabbed -- all of those snap you back, and the
+  Hive gets `puppet_release()`. While `puppeting` the Player's body ignores movement, mouse look, aim,
+  use, shove, drop and interact (the move keys go to `puppet_move` instead; E bumps the Puppet slot's
+  `ability_slot_press`); remote copies droop the head and lean, and show a glazed-eyes glow
+  (`Player._hive_glaze`, an emissive quad on the head -- teammates only, toggled in `_remote_step`).
+  Other machines see the Hive walk through its ordinary report; the puppeteer's own screen sees it with
+  one round trip of lag (input to the host, snapshot back), which a few seconds of lumbering hides.
+  **The view (`scripts/abilities/puppet_view.gd`, local only):** `end_at` carries `FLIGHT_IN` (1.0 s)
+  on top of `puppet_seconds(lvl)`, so the seconds you drive it start once the flight lands. The local
+  camera leaves the player's own camera transform and glides along `NavigationServer3D.map_get_path`
+  (the default map; a straight line when none is found) to the Hive's head over `FLIGHT_IN`, turning
+  to the Hive's facing on the last stretch; `_phase` is `"in"`, `"settled"` (riding the head at
+  `Monster.eye_transform().origin`, 14 cm out along the look, with free mouse look: `look_yaw` /
+  `look_pitch`, pitch clamped to 1.2 rad, read from the view's own `_input`) or `"out"` (a
+  `FLIGHT_OUT`, 0.3 s, glide back to wherever the body is). The Player copies `look_yaw` into
+  `puppet_yaw` each frame. Ending is instant (no `"out"`) when the monster is gone, or the local
+  player's hp dropped since the flight started, or they are downed/carried (`_begin_end`'s own
+  comparison, client-side). The screen is Hive Eyes' old one: the sickly, grainy night-sight overlay.
+- **The grafted Hive eye's glow** follows `puppeting`: see "Eyeball Grafting" below.
+- **Replication:** `net_state()` = `{"lv": {peer: [hive level, sonographer level]}, "pp": {peer: [id,
   end]}, "sl": {peer: [4 ability ids]}}` (copies, quantized; empty dictionaries when idle).
-- Sounds `ability_shriek`, `ability_hive_in`, `ability_hive_out` (`tools/gen_audio_abilities.mjs`).
-- Tests: `tools/controlstest.tscn` (Alt+1..4 slot dispatch), `tools/grafttest.tscn` (Hive Eyes 1 in
-  and out off the graft), nettest scenario `graft`.
+- Sounds `ability_shriek`, `ability_hive_in`, `ability_hive_out` (`tools/gen_audio_abilities.mjs`;
+  the last two are the climb into and out of a Hive).
+- Tests: `tools/controlstest.tscn` (Alt+1..4 slot dispatch, and Puppet: the fly-in hold, walking along
+  the look, the body staying put, time out, a hit and sedation snapping back), `tools/grafttest.tscn`
+  (Puppet 1 in and out off the graft), nettest scenarios `puppet` (a client drives a Hive; the host
+  walks it, the other client sees it) and `graft`. Review setup `puppet`.
 
 ## The character sheet (Tab)
 
@@ -2839,16 +2864,16 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
   its pupil (-Z) looks out of the face: the skeleton's front is +Z. `LOCK_IDLE` keeps a low ember on it.
 - **The glow** is the Hive eye material's `Lock`, a new `instance uniform float lock` on the eye
   shader (0 a low pinpoint, 1 the whole ball lit). `Grafts` eases it from `LOCK_IDLE` to 1 while that
-  player's `hive_view` is on, which is already replicated, so every machine agrees. The first-person
+  player's `puppeting` is on, which is already replicated, so every machine agrees. The first-person
   tint reads the raw value (`local_lock`), not the floor.
 - **The work lamp.** `Minigame.lamp_scale()` (default 1.0) is how much of the operating camera's work
   lamp a step wants; `surgery_system._update_camera` multiplies `LAMP_ENERGY` by it. The eye steps put
   the camera 0.3 m off the site, which is right on a Hive's dark head and bleaches a surgeon's pale
   face to white, so `eye_ops.lamp_scale()` returns 0.3 when the patient is a player.
-- **The ability.** `Grafts.PART_ABILITY` maps `eye_hive` -> `hive_in`: finishing the graft calls
-  `abilities.set_level(peer, "hive_in", 1)` (the next free slot and the new-ability card), and swapping
+- **The ability.** `Grafts.PART_ABILITY` maps `eye_hive` -> `puppet`: finishing the graft calls
+  `abilities.set_level(peer, "puppet", 1)` (the next free slot and the new-ability card), and swapping
   back out calls `abilities.clear_ability(peer, id)`, which empties the slot, zeroes the level and ends
-  any Hive Eyes view in progress. **Grafting is now the only way to earn an ability** -- brains, which
+  any puppeting in progress. **Grafting is now the only way to earn an ability** -- brains, which
   used to be the other source, are gone (docs/backlog/ABILITIES_REMOVED.md), so Echo has no source in
   the game at all today. A graft lasts the run, through death, and `grafts.on_reset()` clears it on a
   game over with the money.
@@ -2857,7 +2882,7 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
   **above** the look pass's grain, vignette and teal grade (layer 50) that the HUD sits under -- a
   faint orange graded toward teal disappears completely. Local and cosmetic, from replicated state.
 - Tests: `tools/grafttest.tscn` (the graft section: the stands, the refusals, the four steps with
-  Dr. Botsworth operating, Hive Eyes 1 in and out, and not getting up after the scoop),
+  Dr. Botsworth operating, Puppet 1 in and out, and not getting up after the scoop),
   nettest scenario `graft`.
 
 ### Ability bar (HUD, local-only, sweep 4a)
@@ -2868,7 +2893,7 @@ to a small row where the abilities were. Each icon: `Alt+N`, a cooldown sweep, l
 tag (`Hud.ABILITY_COST`, e.g. Echo's "LOUD"), and while Alt is held, the ability's name and (greyed
 out) why it cannot fire right now (`Hud._slot_reason`: cooling down, hands busy, no Hive in
 range, downed). The first time an ability lands in a slot -- today, when an `eye_hive` graft grants
-Hive Eyes -- a short card names it, what it does, its key and its cost, and closes itself after 5 s
+Puppet -- a short card names it, what it does, its key and its cost, and closes itself after 5 s
 or on any key (`Hud._card_until` / `_card_seen`).
 
 ### Scanner (docs/SWEEP4A.md "Scanner", sweep 4a)
@@ -3088,4 +3113,4 @@ shift 2), nettest scenario `doors`, devtest door checks, `tools/perfprobe.tscn -
 (`{"seed": 4242, "stage": "_name"}`) and one static function that stages things with the helpers
 `place`, `clear_hands`, `give` (a stack, with extra stack keys like `bt`, `used`, `x`), `give_abilities`
 and `floor_item`. An unknown name is logged with the known ones and the menu opens as usual. Setups so
-far: `icons`, `items`, `graft`, `graft_back`, `trinkets`.
+far: `icons`, `items`, `graft`, `graft_back`, `trinkets`, `puppet` (and many more: `SETUPS` is the list).

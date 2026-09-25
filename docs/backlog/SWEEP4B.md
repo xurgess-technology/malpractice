@@ -6,8 +6,9 @@ grafting design that used to be here was dropped on 2026-09-18; grafting starts 
 
 ## Grafting, later
 - **Hives see through you.** Hives share a hive mind, so a surgeon with a grafted Hive eye is
-  part of it. Now and then the Hives see what that surgeon sees, and come to where they're looking.
-  This is the price of the graft. (Zach, 2026-09-18.)
+  part of it. Puppet is that surgeon climbing into a Hive; this is the hive mind climbing back.
+  Now and then the Hives see what that surgeon sees, and come to where they're looking. This is the
+  price of the graft. (Zach, 2026-09-18; reworded when Puppet replaced Hive Eyes, 2026-09-24.)
 - **Echo becomes the ping.** The trachea graft (`docs/GRAFTING_TRACHEA.md`) gives today's Echo --
   and is the only thing that would, now that brains are gone and grafting is the sole source of an
   ability. Later, Echo turns into the Sonographer's own echo: the same wedge, the grafted surgeon's
@@ -22,7 +23,8 @@ grafting design that used to be here was dropped on 2026-09-18; grafting starts 
 - Give money and placebo bottles.
 
 ## Not designed yet
-- **Abilities:** Puppet, Rise, ability side effects, moving abilities between slots.
+- **Abilities:** Rise, ability side effects, moving abilities between slots. (Puppet is built: it
+  replaced Hive Eyes on 2026-09-24.)
 - **Shop:** a gift shop, cosmetics.
 - **From the original design:** two-person steps, networked physics and a shopping cart, voice
   chat, classes, progression.

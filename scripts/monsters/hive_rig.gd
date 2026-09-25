@@ -3,7 +3,7 @@ extends SkeletonModifier3D
 ##
 ## `build(model)` spawns the GLB under the MonsterModel, points the model's `rig`, `skeleton` and `anim`
 ## at it and adds this modifier to its skeleton, plus a node named `Head` riding the head bone in the
-## model's own axes (+Y up, +Z its face; Monster.eye_transform and Hive Eyes look for it). The eyes get
+## model's own axes (+Y up, +Z its face; Monster.eye_transform and the Puppet camera look for it). The eyes get
 ## the glowing eye shader (shaders/hive_eye.gdshader).
 ##
 ## Clips (Assets anims): HiveIdle (5 s loop), HiveWalk (a shamble dragging the right leg, 0.85 m/s,

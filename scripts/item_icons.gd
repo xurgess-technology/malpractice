@@ -16,9 +16,9 @@ extends RefCounted
 
 const DIR := "res://art/icons/items/"
 const CATEGORIES := "res://art/icons/items/categories.json"
-const ABILITY_FILES := {"hive_in": "res://art/icons/hive_eyes.svg", "echo": "res://art/icons/echolocation.svg"}
+const ABILITY_FILES := {"puppet": "res://art/icons/puppet.svg", "echo": "res://art/icons/echolocation.svg"}
 ## Ability id -> its colour (the glow the HUD puts behind the round icon).
-const ABILITY_COLOR := {"hive_in": Color("ff8a2a"), "echo": Color("9b6bff")}
+const ABILITY_COLOR := {"puppet": Color("ff8a2a"), "echo": Color("9b6bff")}
 ## Game kinds whose art is filed under another name.
 const ALIAS := {"eye_hive": "hive_eyeball", "eye_surgeon": "surgeon_eyeball"}
 const DEFAULT_BORDER := Color("6a7378")

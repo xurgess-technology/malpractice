@@ -44,11 +44,11 @@ var _card_until: Dictionary = {}
 var _scan_banner_until := -1.0
 var _scan_banner_name := ""
 var _card_seen: Dictionary = {}
-const ABILITY_LABEL := {"echo": "Echo", "hive_in": "Hive Eyes"}
-const ABILITY_COST := {"echo": "LOUD", "hive_in": ""}
+const ABILITY_LABEL := {"echo": "Echo", "puppet": "Puppet"}
+const ABILITY_COST := {"echo": "LOUD", "puppet": ""}
 const ABILITY_DESC := {
 	"echo": "A shriek that outlines everything nearby through walls for a few seconds.",
-	"hive_in": "See through a nearby Hive's eyes for a few seconds.",
+	"puppet": "Climb into a nearby Hive for a few seconds: look around in it and walk it about.",
 }
 
 
@@ -754,9 +754,9 @@ func _draw_ability_bar(w: float, h: float, me) -> void:
 		else:
 			draw_circle(c, rad, Color(0, 0, 0, 0.55))
 		var ready_pulse := 0.0
-		# SWEEP 4A HOOK (Hive Eyes, chunk 4): a subtle pulse on the ring while a Hive is in range
+		# PUPPET (was Hive Eyes, sweep 4a chunk 4): a subtle pulse on the ring while a Hive is in range
 		# and the slot is otherwise idle, so you know it is worth pressing.
-		if id == "hive_in" and cd <= 0.0 and not me.get("hive_view") and b.nearest_hive(me, b.hive_range(lvl)) != null:
+		if id == "puppet" and cd <= 0.0 and not me.get("puppeting") and b.nearest_hive(me, b.puppet_range(lvl)) != null:
 			ready_pulse = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.006)
 			draw_arc(c, rad + 3.0, 0.0, TAU, 28, Color("9fe8a0", 0.35 + 0.35 * ready_pulse), 2.0 + ready_pulse * 1.5)
 		var border := Color("f0e6c8", 0.85) if id != "" else Color(0.5, 0.55, 0.6, 0.4)
@@ -790,15 +790,15 @@ func _draw_ability_bar(w: float, h: float, me) -> void:
 
 ## Whether the ability is running right now (a Hive view open; Echo's outline still showing).
 func _ability_in_use(me, b, id: String, lvl: int, cd: float) -> bool:
-	if id == "hive_in":
-		return bool(me.get("hive_view"))
+	if id == "puppet":
+		return bool(me.get("puppeting"))
 	if id == "echo":
 		return cd > b.ECHO_COOLDOWN - b.echo_seconds(lvl)
 	return false
 
 
 ## A small procedural glyph per ability, centered at `c` and scaled off the slot radius `rad`.
-## Echo: concentric arcs opening upward, like a sound pulse. Hive Eyes: a simple almond eye with
+## Echo: concentric arcs opening upward, like a sound pulse. Puppet: a simple almond eye on strings, with
 ## a pupil. Dimmed (usable == false) glyphs draw at lower alpha, same spirit as the old dim tint.
 func _draw_ability_icon(id: String, c: Vector2, rad: float, usable: bool) -> void:
 	var a := 1.0 if usable else 0.45
@@ -810,7 +810,7 @@ func _draw_ability_icon(id: String, c: Vector2, rad: float, usable: bool) -> voi
 				var r2: float = rad * (0.32 + ring * 0.22)
 				draw_arc(c, r2, -PI * 0.62, -PI * 0.38, 10, col, 2.0)
 				draw_arc(c, r2, PI * 0.38, PI * 0.62, 10, col, 2.0)
-		"hive_in":
+		"puppet":
 			var col := Color("9fe8a0", a)
 			var pts := PackedVector2Array()
 			var k := rad * 0.62
@@ -821,6 +821,10 @@ func _draw_ability_icon(id: String, c: Vector2, rad: float, usable: bool) -> voi
 				var u: float = lerpf(1.0, -1.0, float(i) / 12.0)
 				pts.append(c + Vector2(u * k, sqrt(maxf(0.0, 1.0 - u * u)) * k * 0.55))
 			draw_polyline(pts, col, 1.75, true)
+			# The strings, up to a control bar: it is a puppet now.
+			for sx in [-0.4, 0.0, 0.4]:
+				draw_line(c + Vector2(sx * k, -k * 0.5), c + Vector2(sx * k, -rad * 0.8), col, 1.0)
+			draw_line(c + Vector2(-k * 0.6, -rad * 0.8), c + Vector2(k * 0.6, -rad * 0.8), col, 2.0)
 			draw_circle(c, rad * 0.22, col)
 			draw_circle(c - Vector2(rad * 0.06, rad * 0.06), rad * 0.07, Color("0a0c0e", a))
 		_:
@@ -835,12 +839,12 @@ func _slot_reason(me, id: String, cd: float) -> String:
 		return "Not now"
 	if cd > 0.0:
 		return "Cooling down (%d s)" % ceili(cd)
-	if id == "hive_in" and (me.carrying != 0 or me.operating):
+	if id == "puppet" and (me.carrying != 0 or me.operating):
 		return "Hands busy"
-	if id == "hive_in" and not me.get("hive_view"):
+	if id == "puppet" and not me.get("puppeting"):
 		var b = game.abilities
 		var lvl: int = b.level(me.peer_id, "hive")
-		if b.nearest_hive(me, b.hive_range(lvl)) == null:
+		if b.nearest_hive(me, b.puppet_range(lvl)) == null:
 			return "No Hive in range"
 	return ""
 

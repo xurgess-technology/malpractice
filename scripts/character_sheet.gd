@@ -88,7 +88,7 @@ func _blocked() -> bool:
 		return true
 	if game.paused or game.surgery_camera() != null:
 		return true
-	if bool(me.get("hive_view")):
+	if bool(me.get("puppeting")):
 		return true
 	return false
 
@@ -367,7 +367,7 @@ func _level(id: String, me) -> int:
 # =========================================================================
 
 ## The card beside whatever the mouse is on. The ability lines are the point of the row: they read
-## the live curves out of `game.abilities`, so a level-2 Hive Eyes says 40 m and 9 s because that is
+## the live curves out of `game.abilities`, so a level-2 Puppet says 40 m and 5 s because that is
 ## what it will actually do, not because anyone typed it here.
 func _draw_hover_card(w: float, h: float) -> void:
 	if _hover.is_empty():
@@ -431,9 +431,9 @@ static func hover_lines(row: String, i: int, me, g) -> Array:
 			if id == "echo":
 				out2.append("Reaches %d m, outlines hold for %.1f s." % [roundi(b.echo_radius(lvl)), b.echo_seconds(lvl)])
 				out2.append("20 s cooldown. Everything nearby hears it.")
-			elif id == "hive_in":
-				out2.append("Finds a Hive up to %d m away, %.0f s inside it." % [roundi(b.hive_range(lvl)), b.hive_seconds(lvl)])
-				out2.append("12 s cooldown. Your body stands there while you are gone.")
+			elif id == "puppet":
+				out2.append("Finds a Hive up to %d m away and walks it for %.0f s." % [roundi(b.puppet_range(lvl)), b.puppet_seconds(lvl)])
+				out2.append("12 s cooldown. Your body stands there, helpless, while you are gone.")
 			if lvl < b.MAX_LEVEL:
 				out2.append("Level %d would make it %s." % [lvl + 1, _next_line(b, id, lvl + 1)])
 			var cd: float = b.cooldown_left(me.peer_id, path)
@@ -457,4 +457,4 @@ static func hover_lines(row: String, i: int, me, g) -> Array:
 static func _next_line(b, id: String, lvl: int) -> String:
 	if id == "echo":
 		return "%d m for %.1f s" % [roundi(b.echo_radius(lvl)), b.echo_seconds(lvl)]
-	return "%d m for %.0f s" % [roundi(b.hive_range(lvl)), b.hive_seconds(lvl)]
+	return "%d m for %.0f s" % [roundi(b.puppet_range(lvl)), b.puppet_seconds(lvl)]

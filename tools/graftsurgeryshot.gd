@@ -6,7 +6,7 @@ extends Node
 ##
 ## The whole loop once, solo: the stand with a vat beside an OR table, you strapped down looking up
 ## at Dr. Botsworth working on your eye, the swapped eye in third person and in the Personnel
-## mirror, its glow while Hive Eyes runs, and the orange down the left edge of your own view.
+## mirror, its glow while Puppet runs, and the orange down the left edge of your own view.
 
 const SHOT_DIR := "res://tools/graft_shots"
 var main: Node3D
@@ -263,7 +263,7 @@ func _run() -> void:
 		await _seconds(0.6)
 	await _until(func(): return game.grafts.graft_of(me.peer_id) == "eye_hive", 20.0)
 	print("[graftshot] graft=", game.grafts.graft_of(me.peer_id), " vat=", String(vat.x),
-		" slot=", game.abilities.slot_of(me.peer_id, "hive_in"))
+		" slot=", game.abilities.slot_of(me.peer_id, "puppet"))
 
 	# ---- back on your feet, and what everyone sees
 	game.get_up_from_table(me)
@@ -276,9 +276,9 @@ func _run() -> void:
 	print("[graftshot] lock=", game.grafts.local_lock(), " driving=", game.driving_player())
 	await _shot("60_first_person_tint")
 	print("[graftshot] tint drawn: ", main.graft_view.wash.showing)
-	await _hive_eyes(1.5)
+	await _puppet(1.5)
 	print("[graftshot] lock hot=", game.grafts.local_lock(), " tint drawn: ", main.graft_view.wash.showing)
-	await _shot("63_first_person_tint_hive_eyes")
+	await _shot("63_first_person_tint_puppet")
 	_hive_hold = false
 
 	# ---- the Personnel mirror
@@ -297,7 +297,7 @@ func _run() -> void:
 	me.apply_fov(24.0)   # a close look at your own face in the glass
 	await _seconds(1.0)
 	await _shot("65_mirror_close")
-	await _hive_eyes(1.5)
+	await _puppet(1.5)
 	await _shot("66_mirror_close_glow")
 	_hive_hold = false
 	# The same close look with the torch off: the torch sits by your chin and lights your own face
@@ -358,28 +358,28 @@ func _run() -> void:
 	fc.fov = 40.0
 	await _seconds(0.5)
 	await _shot("67d_other_camera_face_torch_on")
-	fc.stop()   # (no glow shot here: Hive Eyes takes the view over from the free camera)
+	fc.stop()   # (no glow shot here: Puppet takes the view over from the free camera)
 
 
-## Hive Eyes for the look only: the host clears `hive_view` whenever its own rules say so, so hold
+## Puppet for the look only: the host clears `puppeting` whenever its own rules say so, so hold
 ## it on for a moment instead of setting it once.
 var _hive_hold := false
 
 
-func _hive_eyes(seconds: float) -> void:
+func _puppet(seconds: float) -> void:
 	_hive_hold = true
 	var end := t + seconds
 	while t < end:
-		me.hive_view = true
+		me.puppeting = true
 		await get_tree().physics_frame
-	me.hive_view = true
+	me.puppeting = true
 
 
 func _process(_d: float) -> void:
 	if _hive_hold and me != null:
-		me.hive_view = true
-	elif me != null and me.hive_view and not _hive_hold:
-		me.hive_view = false
+		me.puppeting = true
+	elif me != null and me.puppeting and not _hive_hold:
+		me.puppeting = false
 
 
 ## The forceps seat step's stage (0 tray, 1 carried, 2 seating, 3 settling, 4 done), -1 for none.

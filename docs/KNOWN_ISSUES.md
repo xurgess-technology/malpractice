@@ -380,24 +380,28 @@ problems it did find were in the test bot, and are fixed. Resolved items are lis
 
 - **Echo has no source in the game.** Brains were the only way to earn it and they are gone
   (`docs/backlog/ABILITIES_REMOVED.md`); grafting is the only source of an ability now, and the
-  only graft that exists grants Hive Eyes (`scripts/grafting/grafts.gd` `PART_ABILITY`). Echo
+  only graft that exists grants Puppet (`scripts/grafting/grafts.gd` `PART_ABILITY`). Echo
   itself is built, tested and replicated, but nothing in a normal shift hands it out -- only the
   dev panel, `ReviewSetups.give_abilities` and the headless tests. The trachea graft
   (`docs/GRAFTING_TRACHEA.md`) is what would fix this.
-- **Hive Eyes was built against a stand-in Hive.** When it was written `Monster.HIVE` did not
-  exist, so `game.spawn_hive` made a Sonographer body with `kind = "hive"` (it still hunts by
-  sound). The camera sits at `m.height * 0.93` and 0.34 m in front of the monster's origin along
-  its facing; the real Hive model may need a different eye point (its head can block the view, or
-  the camera can poke through a wall the Hive faces). The sedation end is only reached through
-  `has_method("is_sedated")` and was not exercised.
-- **The HUD stays up during Hive Eyes** (crosshair, slots, messages): the view is the Hive's
-  but the HUD is yours. No HUD hook was added.
+- **Puppet (2026-09-24, replaced Hive Eyes): the puppeteer sees their own steering a round trip
+  late.** The walk is host-authoritative with no client-side prediction: move keys go out in the
+  client's report, the host moves the Hive, the Hive's position comes back in the next snapshot and
+  is lerped in. Invisible on localhost and fine on a LAN; under 150 ms+ of lag the Hive will feel
+  floaty to drive. The mouse look is local and never lags. Prediction (the client moving its own copy
+  of the Hive, as it does its own body) is the fix if it ever matters.
+- **Puppet: the camera rides the Hive's animated head** (`Monster.eye_transform().origin`, 14 cm out
+  along the look), so the walk clip's head bob comes through as is. Nothing stops the camera poking
+  into a wall the Hive has its face against, and a puppeted Hive walking through a pocket-space seam
+  (the host's generic monster transfer) was not tested.
+- **The HUD stays up while puppeting** (crosshair, slots, messages): the view is the Hive's but the
+  HUD is yours. No HUD hook was added.
 - **Echo's veil does not fully hide a lit flashlight cone** (volumetric fog and the post layer draw
   after it), so the spot on the nearest wall stays faintly visible under the outlines. Outlines of
   skinned meshes follow their skeleton; only the dev dummy surgeon was checked in a screenshot.
 - **Perf** (1600x900 medium, two passes, measured in sweep 3): pharmacy baseline 188-201 fps
   (1% low 134-150), Echo at level 3 with 66 outlines 180-192 (132-150); corridor baseline 88-94
-  (75-82), Echo 93-96 (81-86); Hive Eyes depends on what the Hive looks at (131-236). Starting
+  (75-82), Echo 93-96 (81-86); Hive Eyes (now Puppet, the same screen) depends on what the Hive looks at (131-236). Starting
   Echo takes 1.8-2.8 ms (it walks every container once).
 
 ## Monsters (sweep 3, monsters worker)
@@ -1133,21 +1137,13 @@ left below is what still applies to the shared strapped-monster infrastructure.
 
 ## Database terminal, guide removal, Hive Eyes and Echo polish (sweep 4a chunk 4, docs/SWEEP4A.md)
 
-- **Hive Eyes cycling and the hold-to-exit key (level 2+) were not built.** `docs/SWEEP4A.md`
-  asks for: at level 1 tapping the slot ends it (built, unchanged from sweep 3); at level 2+
-  tapping cycles to another Hive in range and holding the slot ~0.4 s ends it. Cycling needs
-  `abilities.ability_slot()` to pick a different Hive and retarget the same hive session instead
-  of ending it, and holding-vs-tapping needs real key-hold timing, not just the existing discrete
-  press counter (`Player.ability_slot_press`, incremented once per press with no duration). Both
-  would mean widening the replicated ability-press protocol; judged out of proportion to this
-  chunk's budget. What *is* built: `hive_view.gd`'s state machine already has a `_begin_cycle()`
-  path (a short fly-through between two Hives) ready for whoever wires the trigger up, and
-  ending Hive Eyes still works today exactly as it did in sweep 3 (the slot again, or Esc, both via
-  `ability_slot_press`). At any level, only the nearest Hive in range is ever picked.
+- **Hive Eyes' level 2+ cycling was never built, and went with Hive Eyes** (2026-09-24, replaced by
+  Puppet). Its unused `_begin_cycle()` was deleted. Puppet always takes the nearest Hive in range that
+  nobody else is driving; its levels only add range and seconds.
 - **The fly-through's "no path" straight-line glide was exercised, but only informally**: the test
   hospital's break room to a nearby Hive always has a navmesh path in practice, so the headless
   tests never hit the `NavigationServer3D.map_get_path` returning empty case in a real level.
-  `hive_view._path_from` falls back to a straight line correctly by inspection (and the fallback
+  `puppet_view._path_from` (was `hive_view`) falls back to a straight line correctly by inspection (and the fallback
   branch is exercised by construction whenever the map iteration id is 0, e.g. the very first
   physics frame after a level loads), but nobody has watched it happen on a level where the Hive
   truly has no path to the player (e.g. across a locked door).
@@ -1164,7 +1160,7 @@ left below is what still applies to the shared strapped-monster infrastructure.
   readable, but visually plainer than the old guide binder's hand-crafted paper aesthetic it
   replaces. No custom shader was added for it either way, so this did not need a
   `Minigame.cached_shader()` registration or a `warmup.gd` entry.
-- **The terminal and Hive Eyes' glazed-eyes glow use plain `StandardMaterial3D`s**, not registered
+- **The terminal and the puppeteer's glazed-eyes glow (Hive Eyes then, Puppet now) use plain `StandardMaterial3D`s**, not registered
   in `scripts/warmup.gd`: neither is a custom shader, and both are visually similar to dozens of
   other emissive materials already exercised well before a player can reach the break room or
   trigger Hive Eyes, so a compile-time hitch was judged very unlikely. Not measured with
@@ -1427,7 +1423,8 @@ they're rarely both blocked at once, but worth widening to per-slot placement if
 ever ships. The new icon shapes (concentric arcs / almond eye) are a first pass at "read clearly
 at 26-52px" -- fine at both the idle and Alt-held sizes in the screenshots above, but not tested
 against colourblind palettes or at ultra-low resolutions. (Note, 2026-09-22: the bar itself is
-unchanged, but only Hive Eyes has an in-game source now -- see "Abilities (sweep 3)" above.)
+unchanged, but only Hive Eyes has an in-game source now -- see "Abilities (sweep 3)" above. And
+2026-09-24: Hive Eyes is Puppet now, with its own icon, `art/icons/puppet.svg`.)
 
 ## Default over-the-shoulder camera (2026-09-16)
 

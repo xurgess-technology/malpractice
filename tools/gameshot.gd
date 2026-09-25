@@ -475,12 +475,12 @@ func _pose_hud_holding() -> void:
 
 
 ## SWEEP 4A HOOK (controls): the circular ability bar, small top-left and idle -- Echo ready at
-## level 2, Hive Eyes on a cooldown (so both the ready-pulse-free state and a dim/cooling slot show).
+## level 2, Puppet on a cooldown (so both the ready-pulse-free state and a dim/cooling slot show).
 func _pose_ability_bar_idle() -> void:
 	Input.action_release("ability_alt")
 	_ensure_shift()
 	game.abilities.set_level(bot.peer_id, "echo", 2)
-	game.abilities.set_level(bot.peer_id, "hive_in", 1)
+	game.abilities.set_level(bot.peer_id, "puppet", 1)
 	game.abilities._cd["hive:%d" % bot.peer_id] = game.world_time + 6.0
 	var t := game.table_pos()
 	_look_from(t + Vector3(0.6, 0, 3.4), t + Vector3(0, 1.0, 0))
@@ -488,12 +488,12 @@ func _pose_ability_bar_idle() -> void:
 
 
 ## The same ability bar with Alt held: big circles centred at the bottom, names and reasons shown.
-## Hive Eyes is kept ready but out of range (no Hive nearby) so its "No Hive in range" reason
+## Puppet is kept ready but out of range (no Hive nearby) so its "No Hive in range" reason
 ## renders; Echo is kept on a partial cooldown so its radial sweep and pip levels are visible.
 func _pose_ability_bar_alt() -> void:
 	_ensure_shift()
 	game.abilities.set_level(bot.peer_id, "echo", 3)
-	game.abilities.set_level(bot.peer_id, "hive_in", 2)
+	game.abilities.set_level(bot.peer_id, "puppet", 2)
 	game.abilities._cd["echo:%d" % bot.peer_id] = game.world_time + 9.0
 	game.abilities._cd.erase("hive:%d" % bot.peer_id)
 	var t := game.table_pos()

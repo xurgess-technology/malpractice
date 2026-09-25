@@ -63,6 +63,8 @@ const SCENARIOS := [
 	{"name": "sono", "scenario": "sono", "clients": 1, "timeout": 300},
 	# GRAFTING chunk C: the host grafts a Hive eyeball into a client; the other client sees the eye.
 	{"name": "graft", "scenario": "graft", "clients": 2, "timeout": 400},
+	# PUPPET: client 1 climbs into a Hive and walks it; the host moves it, client 2 sees it go.
+	{"name": "puppet", "scenario": "puppet", "clients": 2, "timeout": 300},
 	# TRINKETS chunk B: a client's defibrillator revives another client where they lie.
 	{"name": "trinkets", "scenario": "trinkets", "clients": 2, "timeout": 400},
 	# POCKETS: a client, a carried client and an item through a seam into the Factory.

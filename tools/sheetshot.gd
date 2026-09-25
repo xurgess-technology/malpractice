@@ -21,7 +21,7 @@ func _ready() -> void:
 	print("[sheetshot] open=", sheet.open, " boots=", game.local_player().boots)
 	await _settle()
 	await _shot("plain")
-	# Row 2 slot 1 (Hive Eyes) and row 3 slot 2 (the boots).
+	# Row 2 slot 1 (Puppet) and row 3 slot 2 (the boots).
 	# A minimized window has no usable cursor, so the hover is set straight on the sheet with its
 	# own _process paused: the same field the mouse would fill, through the same draw path.
 	var vp := get_viewport().get_visible_rect().size

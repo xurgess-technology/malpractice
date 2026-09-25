@@ -21,14 +21,14 @@ const LootTable := preload("res://scripts/economy/loot_table.gd")
 
 ## Part kind -> the ability grafting it grants at level 1. Removing the part takes the ability away.
 ## With brains gone this is the only way to earn an ability (docs/backlog/ABILITIES_REMOVED.md).
-const PART_ABILITY := {"eye_hive": "hive_in"}
+const PART_ABILITY := {"eye_hive": "puppet"}
 ## The eyeball's radius on a surgeon (the minigames' work plane).
 const EYE_RADIUS := 0.0135
 ## And on the body afterwards: the size of the eye it replaces (GraftEye.RADIUS). It used to be a
 ## shade bigger to read better, but that was making up for the pupil facing into the skull; a bigger
 ## ball pokes through the lids.
 const BODY_EYE_RADIUS := GraftEye.RADIUS
-## How fast the Hive eye's `Lock` climbs and falls as Hive Eyes starts and stops.
+## How fast the Hive eye's `Lock` climbs and falls as puppeting starts and stops.
 const LOCK_RATE := 3.0
 ## What it rests at. Your own torch never lights your own face, so at a flat 0 the grafted eye was
 ## nothing but a pinpoint in the mirror; a low ember reads as a Hive eye without flaring.
@@ -209,11 +209,11 @@ func apply(peer_id: int, kind: String) -> void:
 	if had != "" and had != kind and PART_ABILITY.has(had):
 		game.abilities.clear_ability(peer_id, String(PART_ABILITY[had]))
 		if p != null:
-			game.tell(p, "The socket is your own again. Hive Eyes is gone.", 4.0)
+			game.tell(p, "The socket is your own again. Puppet is gone.", 4.0)
 	if kind != "" and kind != had and PART_ABILITY.has(kind):
 		game.abilities.set_level(peer_id, String(PART_ABILITY[kind]), 1)
 		if p != null:
-			game.tell(p, "The Hive eye settles in and starts to see. Hive Eyes 1.", 5.0)
+			game.tell(p, "The Hive eye settles in and starts to see. Puppet 1: climb into a nearby Hive from its slot.", 5.0)
 
 
 func _value_of(kind: String) -> int:
@@ -247,9 +247,9 @@ func _physics_process(delta: float) -> void:
 				PartScript.attach(human, kind, BODY_EYE_RADIUS)
 		if kind == "":
 			continue
-		# The glow: low normally, high while they are in Hive Eyes. Replicated, because `hive_view`
-		# is (Player report key "hv"), so every machine works out the same value.
-		var want := 1.0 if bool(p.get("hive_view")) else 0.0
+		# The glow: low normally, high while they are puppeting a Hive. Replicated, because `puppeting`
+		# is (Player report key "pp"), so every machine works out the same value.
+		var want := 1.0 if bool(p.get("puppeting")) else 0.0
 		var v := move_toward(float(_lock.get(peer, 0.0)), want, delta * LOCK_RATE)
 		_lock[peer] = v
 		# The eye never goes fully dark: LOCK_IDLE is its resting ember. The first-person tint keeps

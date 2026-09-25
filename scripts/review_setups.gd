@@ -124,6 +124,10 @@ const SETUPS := {
 	# HIT FEEDBACK (2026-09-22): bone saws in hand, two Hives coming for you, and Dr. Botsworth
 	# standing there to saw as well. A landed hit flashes its target red and knocks it back.
 	"hit": {"seed": 4242, "stage": "_hit"},
+	# PUPPET (2026-09-24): Puppet in slot 1 (Alt+1) and two Hives standing a few metres ahead,
+	# facing away. Climb into one, look about, walk it around; your own body waits where you left it.
+	# With -Count 2 every player has Puppet, and there is a Hive each.
+	"puppet": {"seed": 4242, "stage": "_puppet", "join": "_puppet_join"},
 	# TAB SHEET (2026-09-22): hit Tab. Both abilities at level 2, rocket boots on and a mixed
 	# handful, so all three rows have something in them and the boots have an Unequip to press.
 	"sheet": {"seed": 4242, "stage": "_sheet"},
@@ -309,16 +313,16 @@ static func give(game: Game, kind: String, count := 1, value := 0, extra := {}) 
 	return i
 
 
-## Both abilities (Hive Eyes and Echo) at the given level.
+## Both abilities (Puppet and Echo) at the given level.
 static func give_abilities(game: Game, level := 2) -> void:
 	var p = game.local_player()
 	game.abilities.set_level(p.peer_id, "echo", level)
-	game.abilities.set_level(p.peer_id, "hive_in", level)
+	game.abilities.set_level(p.peer_id, "puppet", level)
 	# No "New ability" cards in the way: they are for a first play.
 	var hud = game.get_tree().get_first_node_in_group("hud")
 	if hud != null:
 		hud._card_seen["echo"] = true
-		hud._card_seen["hive_in"] = true
+		hud._card_seen["puppet"] = true
 
 
 ## Drop an item on the floor at `pos` (host).
@@ -978,6 +982,52 @@ static func _hit(game: Game) -> void:
 	game.say("Saw the Hives, and saw Botsworth. Red flash, knocked back, still coming. Q shoves (that one stuns).", 10.0)
 
 
+static func _puppet(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	# Nothing else going on, and nothing that can end the review early. No god mode: a body left
+	# standing while you are away in a Hive is meant to be at risk.
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game._clear_monsters()
+	await tree.physics_frame
+	var base: Vector3 = game._floor_at(game.clock_pos())
+	var out := open_direction(game, base + Vector3.UP * 1.2, 10.0)
+	var side := out.cross(Vector3.UP).normalized()
+	place(game, base, base + out * 6.0 + Vector3.UP * 1.2)
+	clear_hands(game)
+	p.set_flashlight(true)
+	for q in game.players.values():
+		if q != null and q.alive:
+			game.abilities.set_level(q.peer_id, "puppet", 1)
+	var hud = tree.get_first_node_in_group("hud")
+	if hud != null:
+		hud._card_seen["puppet"] = true   # the new-ability card is for a first play, not a review
+	# Two Hives a few metres ahead, looking away from you (so they are not on you before you try it).
+	var hives: Array = []
+	for i in 2:
+		var at: Vector3 = game._floor_at(base + out * (6.0 + i * 1.5) + side * (float(i) * 2.4 - 1.2))
+		if not game._point_is_clear(at + Vector3.UP * 1.0):
+			at = game._floor_at(base + out * (4.5 + i * 1.5))
+		var h = game._add_monster("hive", at)
+		h.rotation.y = atan2(-out.x, -out.z)
+		hives.append(h)
+	await tree.physics_frame
+	print("[review] puppet: %d Hives ahead, Puppet 1 for %d player(s)" % [hives.size(), game.players.size()])
+	game.say("Alt+1: climb into the nearest Hive. Mouse looks, move keys walk it, E or Esc comes back.", 10.0)
+
+
+## A joiner stands beside the host as usual; its own HUD skips the new-ability card too.
+static func _puppet_join(game: Game, host_player) -> void:
+	place_beside(game, host_player)
+	var hud = game.get_tree().get_first_node_in_group("hud")
+	if hud != null:
+		hud._card_seen["puppet"] = true
+
+
 static func _graft_stage(game: Game, vat_kind: String, owner: String, already: bool) -> void:
 	var tree := game.get_tree()
 	var p = game.local_player()
@@ -1003,7 +1053,7 @@ static func _graft_stage(game: Game, vat_kind: String, owner: String, already: b
 		game.grafts.apply(p.peer_id, "eye_hive")   # you already wear the Hive eyeball
 	var hud = tree.get_first_node_in_group("hud")
 	if hud != null:
-		hud._card_seen["hive_in"] = true   # the new-ability card is for a first play, not a review
+		hud._card_seen["puppet"] = true   # the new-ability card is for a first play, not a review
 	# You, strapped to that table, awake and looking up.
 	clear_hands(game)
 	p.teleport(game._floor_at(table + tb * Vector3(0.0, 0.0, 1.2)))

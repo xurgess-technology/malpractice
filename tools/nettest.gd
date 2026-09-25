@@ -47,6 +47,8 @@ extends Node
 ##   onlooker_poof    host + 1 client: the host runs at a real, brain-placed Onlooker and banishes it;
 ##                    the poof (a burst and a cloud of smoke where it stood) appears on the client's
 ##                    machine too, in the right place, and clears itself away
+##   puppet           client 1 climbs into a Hive and walks it about; the host walks it on client 1's
+##                    input, client 1's camera rides it and its body stays put, client 2 sees it walk
 ##   trinkets         (chunk B) client 1 shocks a downed client 2 awake with a defibrillator over the
 ##                    wire; client 2 comes up where it lay on its own machine, and the paddles are
 ##                    spent on both
@@ -176,6 +178,7 @@ func _run() -> void:
 		"hit_feedback": await _sc_hit_feedback()   # HIT FEEDBACK: the red flash and the push
 		"sono": await _sc_sono()   # docs/SONOGRAPHER.md chunk B: the Sonographer's echo over the wire
 		"graft": await _sc_graft()   # GRAFTING chunk C
+		"puppet": await _sc_puppet()   # PUPPET: a client drives a Hive
 		"trinkets": await _sc_trinkets()   # TRINKETS chunk B
 		"pockets": await _sc_pockets()   # POCKETS
 		"doors": await _sc_doors()   # DOORS HOOK
@@ -1056,7 +1059,7 @@ func _sc_two_patients():
 
 ## GRAFTING chunk C (docs/GRAFTING.md): the host grafts a Hive eyeball into a client's surgeon on an
 ## OR table, with the vat on that table's stand. The other client watches: the graft, the swapped eye
-## on the patient's body and its glow while Hive Eyes runs all have to reach it.
+## on the patient's body and its glow while Puppet runs all have to reach it.
 func _sc_graft():
 	if role == "host":
 		if not await _start_shift_when_full():
@@ -1100,14 +1103,14 @@ func _sc_graft():
 				return
 		if not await _until(func(): return game.grafts.graft_of(patient.peer_id) == "eye_hive", 30.0, "the graft to take"):
 			return
-		if game.abilities.slot_of(patient.peer_id, "hive_in") < 0:
-			return _end(false, "the graft gave no Hive Eyes slot")
+		if game.abilities.slot_of(patient.peer_id, "puppet") < 0:
+			return _end(false, "the graft gave no Puppet slot")
 		_say("grafted: %s, vat now %s" % [game.grafts.graft_of(patient.peer_id), String(vat.x)])
-		# The glow: hive_view is replicated, so the other machine must light the eye up too.
-		patient.hive_view = true
+		# The glow: puppeting is replicated, so the other machine must light the eye up too.
+		patient.puppeting = true
 		_send("glow", {"on": true})
 		await _wall_wait(2.0)
-		patient.hive_view = false
+		patient.puppeting = false
 		if not await _until(func(): return _count_msgs("ok") >= 2 or _count_msgs("fail") > 0, 90.0, "both clients' reports"):
 			return
 		await _finish_together("the host grafted a Hive eyeball into a client, and the other machine saw the eye and its glow")
@@ -1132,11 +1135,115 @@ func _sc_graft():
 		return _end(false, "the patient's own left eye is still showing over the graft")
 	if not await _until(func(): return _count_msgs("glow") > 0, 120.0, "the glow order"):
 		return
-	if not await _until(func(): return float(game.grafts._lock.get(pid, 0.0)) > 0.6, 20.0, "the eye to light up while Hive Eyes runs"):
+	if not await _until(func(): return float(game.grafts._lock.get(pid, 0.0)) > 0.6, 20.0, "the eye to light up while Puppet runs"):
 		return
 	_say("saw the graft, the swapped eye and its glow (lock %.2f)" % float(game.grafts._lock.get(pid, 0.0)))
 	_send("ok", {})
 	await _finish_together("the graft, the eye on the body and its glow all reached this machine")
+
+
+## PUPPET: client 1 climbs into a Hive and walks it. Its input crosses to the host (report_state
+## [20]/[21]), the host walks the Hive, and the walk reaches every machine: client 1's own camera
+## rides it, client 2 sees it go. Client 1's own body stays put, and the Hive has its head back after.
+func _sc_puppet():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		game._clear_monsters()
+		await _frames(2)
+		var c1: int = _peer_of(1)
+		var p1 = game.players[c1]
+		var body_at: Vector3 = p1.global_position
+		var fwd: Vector3 = -p1.global_transform.basis.z
+		fwd.y = 0.0
+		fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
+		var h: Node = game._add_monster("hive", _nav_point(p1.global_position + fwd * 7.0))
+		await _frames(3)
+		h.mode = MonsterScript.Mode.IDLE
+		h.brain.timer = 999.0
+		h.calm = 999.0
+		# Walk it back toward the client's body: the corridor between them is known to be open.
+		var to: Vector3 = p1.global_position - h.global_position
+		var yaw := atan2(-to.x, -to.z)
+		game.abilities.set_level(c1, "puppet", 1)
+		_send("pp_go", {"id": h.monster_id, "yaw": yaw, "slot": game.abilities.slot_of(c1, "puppet")})
+		var seen := {"on": false, "moved": 0.0, "from": Vector3.ZERO, "body": 0.0}
+		var watch := func():
+			if not game.monsters.has(h.monster_id):
+				return
+			if int(h.puppet_by) == c1:
+				if not seen.on:
+					seen.on = true
+					seen.from = h.global_position
+				seen.moved = maxf(float(seen.moved), (h.global_position - (seen.from as Vector3)).length())
+				seen.body = maxf(float(seen.body), p1.global_position.distance_to(body_at))
+		if not await _do_until(watch, func(): return bool(seen.on), 60.0, "client 1 to climb into the Hive"):
+			return
+		if not await _do_until(watch, func(): return not p1.puppeting, 30.0, "client 1's puppeting to end"):
+			return
+		if float(seen.moved) < 1.5:
+			return _end(false, "the host only walked the Hive %.2f m on client 1's input" % float(seen.moved))
+		if float(seen.body) > 0.3:
+			return _end(false, "client 1's own body moved %.2f m while it was away" % float(seen.body))
+		if int(h.puppet_by) != 0:
+			return _end(false, "the Hive is still puppeted by %d after it ended" % int(h.puppet_by))
+		_say("client 1 walked the Hive %.2f m; its body moved %.2f m; the Hive has its head back" % [float(seen.moved), float(seen.body)])
+		await _finish_together("client 1 puppeted a Hive, the host walked it, and it let go")
+		return
+	if not await _wait_shift_as_client():
+		return
+	if not await _until(func(): return _count_msgs("pp_go") > 0, 90.0, "the puppet order"):
+		return
+	var go: Dictionary = _msgs("pp_go")[0].data
+	var hid := int(go.id)
+	var c1: int = _peer_of(1)
+	if not await _until(func(): return game.monsters.has(hid), 30.0, "the Hive on this machine"):
+		return
+	var h: Node = game.monsters[hid]
+	if index == 1:
+		var me := _me()
+		var body_at: Vector3 = me.global_position
+		if not await _until(func(): return game.abilities.slot_of(me.peer_id, "puppet") >= 0, 30.0, "Puppet in a slot"):
+			return
+		me.bot_move = Vector2.ZERO
+		me.bot_yaw = float(go.yaw)
+		me.bot_ability_slot = game.abilities.slot_of(me.peer_id, "puppet")
+		me.bot_ability += 1
+		if not await _until(func(): return me.puppeting and game.abilities.camera() != null, 30.0, "to be inside the Hive with its camera"):
+			return
+		me.bot_move = Vector2(0, -1)
+		var from: Vector3 = h.global_position
+		var st := {"most": 0.0, "cam": true}
+		var track := func():
+			st.most = maxf(float(st.most), h.global_position.distance_to(from))
+			if me.puppeting and game.abilities.camera() == null:
+				st.cam = false
+		if not await _do_until(track, func(): return not me.puppeting, 30.0, "the puppeting to end"):
+			return
+		me.bot_move = Vector2.ZERO
+		var most := float(st.most)
+		var cam_ok := bool(st.cam)
+		if most < 1.5:
+			return _end(false, "the Hive only moved %.2f m on the puppeteer's own screen" % most)
+		if not cam_ok:
+			return _end(false, "the Puppet camera dropped out while still puppeting")
+		if me.global_position.distance_to(body_at) > 0.3:
+			return _end(false, "my own body walked off (%.2f m) while I was in the Hive" % me.global_position.distance_to(body_at))
+		_say("drove the Hive %.2f m, watched through its camera the whole time" % most)
+		await _finish_together("client 1 walked a Hive from inside it")
+		return
+	# Client 2 watches.
+	if not await _until(func(): return game.players.has(c1) and bool(game.players[c1].puppeting), 60.0, "client 1 to be puppeting (report key pp)"):
+		return
+	var from2: Vector3 = h.global_position
+	var st2 := {"most": 0.0}
+	var track2 := func(): st2.most = maxf(float(st2.most), h.global_position.distance_to(from2))
+	if not await _do_until(track2, func(): return not bool(game.players[c1].puppeting), 30.0, "client 1 to come back"):
+		return
+	if float(st2.most) < 1.5:
+		return _end(false, "the puppeted Hive only moved %.2f m on client 2's screen" % float(st2.most))
+	_say("saw client 1 slump and the Hive walk %.2f m" % float(st2.most))
+	await _finish_together("client 2 saw the puppeted Hive walk")
 
 
 ## TRINKETS chunk B: a trinket used on a teammate has to work on the other machine. The host knocks

@@ -8,12 +8,12 @@ older grafting notes.
 
 The first graft in the game, deliberately small. The team catches a Hive, takes one of its eyes
 out on an OR table, keeps it in a specimen vat, then straps a surgeon down and swaps one of their
-eyes for it. The grafted surgeon has one normal eye and one orange Hive eye, and gets **Hive Eyes**
-from it. The surgeon's own eye goes into the vat and can be swapped back in or sold.
+eyes for it. The grafted surgeon has one normal eye and one orange Hive eye, and gets **Puppet**
+from it (this was Hive Eyes until 2026-09-24; Puppet replaced it: see DESIGN.md). The surgeon's own eye goes into the vat and can be swapped back in or sold.
 
 **Grafting is the only way to earn an ability.** Brains and the break-room blender used to be the
 other source and are gone (`docs/backlog/ABILITIES_REMOVED.md`), so this graft is now the single
-source of Hive Eyes -- and the only source of any ability in the game. Echo has no source at all
+source of Puppet -- and the only source of any ability in the game. Echo has no source at all
 until the trachea graft lands (`docs/GRAFTING_TRACHEA.md`). Levels are set outright now (there are
 no fractional points any more): the graft grants level 1, and taking the part back out clears it.
 
@@ -27,14 +27,14 @@ no fractional points any more): the graft grants level 1, and taking the part ba
    player table. Afterwards it gets carried back to the benches.
 6. **Another player runs Eyeball Grafting** on the strapped surgeon. Their eye goes into the vat
    and the Hive eye goes into their socket.
-7. The surgeon now has **Hive Eyes, level 1**. The eye glows low normally and high while the
+7. The surgeon now has **Puppet, level 1**. The eye glows low normally and high while the
    ability is in use.
 8. **Swapping back** is the same surgery with the surgeon's eye in the vat on the table. They lose
-   Hive Eyes, and the Hive eye goes back into the vat.
+   Puppet, and the Hive eye goes back into the vat.
 
 ## Decisions (locked by Zach)
 
-- **One eye, one level.** A graft gives Hive Eyes level 1. There's no second eye and no levelling;
+- **One eye, one level.** A graft gives Puppet level 1. There's no second eye and no levelling;
   the level system is going to be redone from scratch.
 - **The grafted surgeon is awake.** They lie strapped down in first person, looking up, and watch
   the tools come at their own eye. This is the moment the feature exists for, so the patient's
@@ -53,7 +53,7 @@ no fractional points any more): the graft grants level 1, and taking the part ba
   in the hand. The item taken out of a Hive is called **Hive's eyeball**. Every body part is named
   this way, "X's Y".
 - **A first-person tell:** a grafted surgeon sees a faint orange tint or vignette on the left edge
-  of their view (the side of the grafted eye), stronger while Hive Eyes is active.
+  of their view (the side of the grafted eye), stronger while Puppet is active.
 - **Eyes can be sold** by throwing them into the crematorium furnace, like any loot.
 
 ## Calls the theory session made (approved by Zach)
@@ -79,7 +79,7 @@ no fractional points any more): the graft grants level 1, and taking the part ba
   resets them.
 - **The graft lasts the run,** through death, like rocket boots, and is lost on a game over,
   like the ability it gave you.
-- **Hive Eyes comes only from the graft.** There is no other route to it, and no other route to
+- **Puppet comes only from the graft.** There is no other route to it, and no other route to
   any ability at all.
 
 ## Chunks
@@ -123,8 +123,8 @@ A and B can run at the same time. C starts after both are merged.
   `surgeon_graft` variant with the left eye as a stitched Hive eye (`art/stylized/README.md`).
   It shows in third person, on other players' screens and in the Personnel mirrors.
 - The glow: the Hive eye material's `Lock` value (0 = low pinpoint, 1 = the whole ball lit).
-  Low normally, high while the surgeon is in Hive Eyes. Replicated.
-- Grafting puts Hive Eyes level 1 in the next free ability slot, with the new-ability card;
+  Low normally, high while the surgeon is puppeting a Hive. Replicated.
+- Grafting puts Puppet level 1 in the next free ability slot, with the new-ability card;
   swapping back removes it.
 - The first-person orange tint on the left edge.
 - Update DESIGN.md (the Hive row, a Grafting section, the lab wall) and docs/CONTRACTS.md.
@@ -133,12 +133,12 @@ A and B can run at the same time. C starts after both are merged.
 
 ## Done when
 
-- A whole run of the loop works from a normal shift: catch, extract, vat, strap, graft, Hive Eyes,
+- A whole run of the loop works from a normal shift: catch, extract, vat, strap, graft, Puppet,
   swap back, sell an eye.
 - It works in co-op: a nettest scenario for the graft, with the eye swap and glow seen by the
   other machine.
 - Headless checks: an eye spoils outside a vat and not inside; a spoiled eye can't be grafted; the
-  graft is refused without a vat on the stand; a graft gives Hive Eyes 1 and swapping back takes it
+  graft is refused without a vat on the stand; a graft gives Puppet 1 and swapping back takes it
   away; you can't get up after the scoop.
 
 ## Not in this part

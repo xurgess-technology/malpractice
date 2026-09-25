@@ -103,6 +103,13 @@ var hp: int = 4
 var max_hp: int = 4
 var sedation_left: float = 0.0  ## host seconds; clients only know is_sedated()
 var dragged_by: int = 0         ## peer id dragging it (set by combat), 0 nobody
+## PUPPET (scripts/abilities/abilities.gd): the peer driving this Hive, 0 nobody. Host only; its
+## brain does not think while it is set, and the body walks where that player's `puppet_move` and
+## `puppet_yaw` say instead (_puppet_step). Clients only see the body move.
+var puppet_by: int = 0
+## Host: the world_time the puppeteer arrives (the end of the camera's fly-in). Until then the Hive
+## just stands, already out of its own head.
+var puppet_from: float = 0.0
 var hit_count: int = 0          ## bumps on every take_hit; replicated so every machine flinches
 
 ## POCKETS 2 phase 6, the Onlooker: is it there at all? It pops in and out rather than walking off,
@@ -318,6 +325,8 @@ func _physics_process(delta: float) -> void:
 			moving = false
 			speed = 0.0
 			velocity = Vector3.ZERO
+		elif dragged_by == 0 and puppet_by != 0 and mode != Mode.STUNNED and mode != Mode.RETREAT:
+			_puppet_step(delta)   # PUPPET: a shove or a hit still knocks it about (the brain runs that)
 		elif dragged_by == 0:
 			brain.think(delta)
 			if kind == SONOGRAPHER:
@@ -341,6 +350,47 @@ func _physics_process(delta: float) -> void:
 			rotation.y = lerp_angle(rotation.y, _target_yaw, k)
 	_update_visual(delta)
 	_update_sound(delta)
+
+
+## PUPPET (host): walk where the puppeteer asks, facing where they look inside it. Movement is
+## relative to that look, like a player's own. No lunges and no targets: it is not itself just now.
+const PUPPET_SPEED := 2.0
+const PUPPET_TURN := 8.0
+
+
+func _puppet_step(delta: float) -> void:
+	lunge_t = 0.0
+	state = State.WANDER
+	var p = game.players.get(puppet_by) if game != null else null
+	if p == null or not is_instance_valid(p) or float(game.world_time) < puppet_from:
+		mode = Mode.IDLE
+		stop()
+		return
+	var yaw := float(p.puppet_yaw)
+	var mv: Vector2 = p.puppet_move
+	rotation.y = lerp_angle(rotation.y, yaw, clampf(delta * PUPPET_TURN, 0.0, 1.0))
+	if mv.length() < 0.05:
+		mode = Mode.IDLE
+		stop()
+		return
+	mode = Mode.WANDER
+	var dir := Vector3(mv.x, 0.0, mv.y).rotated(Vector3.UP, yaw)
+	velocity.x = dir.x * PUPPET_SPEED
+	velocity.z = dir.z * PUPPET_SPEED
+	velocity.y = 0.0 if is_on_floor() else velocity.y - 18.0 * delta
+	var before := global_position
+	move_and_slide()
+	var moved := Vector2(global_position.x - before.x, global_position.z - before.z).length()
+	moving = moved > 0.002
+	speed = moved / maxf(delta, 0.0001)
+
+
+## PUPPET (host): the puppeteer let go. Its own brain takes over again from wherever it was left.
+func puppet_release() -> void:
+	puppet_by = 0
+	puppet_from = 0.0
+	if brain != null and brain.has_method("puppet_released"):
+		brain.puppet_released()
 
 
 ## Dragged: sit where combat says. Only the origin and the yaw of the pin are used; the body
