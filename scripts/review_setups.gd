@@ -1509,7 +1509,6 @@ static func _bleed(game: Game) -> void:
 	print("[review] bleed: standing at %v, %.1f m from it" % [spot, spot.distance_to(at)])
 
 
-<<<<<<< HEAD
 # ---------------------------------------------------------------------------
 # FLASHLIGHT POSE (2026-09-24)
 
@@ -1524,35 +1523,12 @@ const TORCH_WATCH_SIDE := 2.6
 ## there is always a teammate's torch to look at; the host runs it too until its window is touched.
 static func _flashlight_pair(game: Game) -> void:
 	var tree := game.get_tree()
-=======
-## fix-pocket-zfighting: the pocket-space props were drawn inside out, so a box standing on the floor
-## showed the inside of its own bottom face, which fought the floor for every pixel. Look at the foot
-## of a starting block (`zfight_pool`) or of a bank of washers (`zfight_laundry`) and walk about.
-static func _zfight_pool(game: Game) -> void:
-	await _zfight_stage(game, func(lay: Dictionary, w: Callable) -> Array:
-		var Nat := preload("res://scripts/level/pockets/natatorium.gd")
-		var bz: float = lay.blocks[4]
-		var foot: Vector3 = w.call(Vector2(float(Nat.POOL.end.x) + 0.45, bz))
-		return [foot + Vector3(2.2, 0.0, 1.0), foot + Vector3(0.0, 0.1, 0.0)])
-
-
-static func _zfight_laundry(game: Game) -> void:
-	await _zfight_stage(game, func(lay: Dictionary, w: Callable) -> Array:
-		var isl: Dictionary = lay.islands[mini(8, lay.islands.size() - 1)]
-		var foot: Vector3 = w.call(Vector2(isl.tile) + Vector2(0.5, 0.5))
-		# In the aisle in front of the island's other row, looking at the foot of its doors.
-		return [foot + Vector3(0.3, 0.0, 3.0), foot + Vector3(0.0, 0.05, 1.9)])
-
-
-static func _zfight_stage(game: Game, spot: Callable) -> void:
->>>>>>> fix-pocket-zfighting
 	var p = game.local_player()
 	game.set_dev_tools(true, p)
 	game.loop._end_call()
 	game.loop.first_called = true
 	game.loop.extra_done = true
 	game.dev.request("no_game_over", {"on": true})
-<<<<<<< HEAD
 	game.dev.request("god", {"on": true})
 	game.dev.request("monsters_off", {"on": true})
 	game._clear_monsters()
@@ -1705,7 +1681,33 @@ class TorchDemo extends Node:
 			host = null   # someone is at the host window: it is theirs now
 			print("[review] flashlight_pair: the host window was touched; the demo stops driving it")
 
-=======
+
+## fix-pocket-zfighting: the pocket-space props were drawn inside out, so a box standing on the floor
+## showed the inside of its own bottom face, which fought the floor for every pixel. Look at the foot
+## of a starting block (`zfight_pool`) or of a bank of washers (`zfight_laundry`) and walk about.
+static func _zfight_pool(game: Game) -> void:
+	await _zfight_stage(game, func(lay: Dictionary, w: Callable) -> Array:
+		var Nat := preload("res://scripts/level/pockets/natatorium.gd")
+		var bz: float = lay.blocks[4]
+		var foot: Vector3 = w.call(Vector2(float(Nat.POOL.end.x) + 0.45, bz))
+		return [foot + Vector3(2.2, 0.0, 1.0), foot + Vector3(0.0, 0.1, 0.0)])
+
+
+static func _zfight_laundry(game: Game) -> void:
+	await _zfight_stage(game, func(lay: Dictionary, w: Callable) -> Array:
+		var isl: Dictionary = lay.islands[mini(8, lay.islands.size() - 1)]
+		var foot: Vector3 = w.call(Vector2(isl.tile) + Vector2(0.5, 0.5))
+		# In the aisle in front of the island's other row, looking at the foot of its doors.
+		return [foot + Vector3(0.3, 0.0, 3.0), foot + Vector3(0.0, 0.05, 1.9)])
+
+
+static func _zfight_stage(game: Game, spot: Callable) -> void:
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
 	game.dev.request("monsters_off", {"on": true})
 	var pk = game.pockets
 	if pk != null and pk.busy:
@@ -1722,4 +1724,3 @@ class TorchDemo extends Node:
 	p.flashlight_on = true
 	p.refresh_own_lights()
 	await game.get_tree().physics_frame
->>>>>>> fix-pocket-zfighting
