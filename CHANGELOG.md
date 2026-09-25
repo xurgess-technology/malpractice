@@ -5,6 +5,9 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-24 (0.11.x)**
 
+- **0.11.1**: The Onlooker is made of smoke now 👤
+    - Changed: The Onlooker is a torn black shape wrapped in drifting dark smoke -- his edges never quite settle, so you can't really get a look at him. At a distance in fog he's a dark presence instead of a pale dot.
+    - Changed: Rush him and he bursts into smoke instead of sinking into the floor, leaving a cloud that hangs there and fades over a few seconds. His eyes go last.
 - **0.11.0**: Your teammates actually hold their flashlights now 🔦
     - Changed: Other players hold a real flashlight -- arm up, pointed where they're looking -- and the beam comes out of the lens instead of out of nowhere. Off, it hangs at their side.
     - Changed: You can see a teammate's flashlight turn on, off and blue to scan from your own screen, lens glow and all.
