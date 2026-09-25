@@ -3740,6 +3740,16 @@ func _mirror_menu() -> Node:
 	return _mirror_menu_node
 
 
+## SHOWERS (2026-09-24): the level's Showers node (built by hospital_builder.gd from entrance.gd's
+## spots), found rather than owned, exactly like _mirror_menu() above.
+var _showers_node_cache: Node = null
+
+func _showers() -> Node:
+	if _showers_node_cache == null or not is_instance_valid(_showers_node_cache):
+		_showers_node_cache = level.find_child("Showers", true, false) if level != null and is_instance_valid(level) else null
+	return _showers_node_cache
+
+
 ## CUSTOMIZATION: one camera and mouse decision for the mirror menu, read by main.gd exactly like
 ## surgery_camera() above.
 func mirror_camera() -> Camera3D:
@@ -4417,6 +4427,7 @@ func _global_fields() -> Dictionary:
 		"dt": dev_tools,  # DEV HOOK: the pharmacy's secret order
 		"mn": money,  # inventory: team money
 		"fh": economy.furnace.hatch_open if economy.furnace != null and is_instance_valid(economy.furnace) else false,  # hub: the furnace hatch
+		"shw": _showers().net_state() if _showers() != null else {},  # hub: the personnel showers
 		"pj": projector_on,  # terminal redesign: the break room projector
 		"wn": economy.waiting_nurse.net_state() if economy.waiting_nurse != null and is_instance_valid(economy.waiting_nurse) else {},  # hub: the waiting room's Night Nurse
 		"pn": pill_notes.duplicate(),  # SWEEP 4A HOOK (pharmacy, chunk 3): OR green blip notes
@@ -4663,6 +4674,10 @@ func _apply_state(state: Dictionary, msg: Dictionary, keyframe: bool) -> void:
 	# Hub rebuild: the crematorium furnace's hatch.
 	if economy.furnace != null and is_instance_valid(economy.furnace) and g.has("fh"):
 		economy.furnace.set_hatch(bool(g.fh))
+	# SHOWERS (2026-09-24): the personnel room's water on/off, per shower.
+	var shw := _showers()
+	if shw != null:
+		shw.apply_net_state(g.get("shw", {}))
 	var wn = g.get("wn", {})
 	if economy.waiting_nurse != null and is_instance_valid(economy.waiting_nurse) and wn is Dictionary and not wn.is_empty():
 		economy.waiting_nurse.apply_net_state(wn)

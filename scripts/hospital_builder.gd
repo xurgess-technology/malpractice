@@ -12,6 +12,7 @@ extends RefCounted
 
 const LightRooms := preload("res://scripts/level/light_rooms.gd")
 const MirrorsScript := preload("res://scripts/personnel/mirrors.gd")
+const ShowersScript := preload("res://scripts/personnel/showers.gd")
 const Brick := preload("res://scripts/level/brick.gd")
 const MG := preload("res://scripts/mapgen.gd")
 const S := preload("res://scripts/level/level_state.gd")
@@ -395,6 +396,7 @@ static func commit_steps(p: Dictionary, parent: Node3D) -> Array:
 	if part == PART_BASE:
 		steps.append(func(): _commit_lectern(p, parent))
 		steps.append(func(): _commit_mirrors(p, parent))
+		steps.append(func(): _commit_showers(p, parent))
 	mark.call("anchors")
 	# Lights.
 	var llist: Array = p.lights
@@ -1308,7 +1310,10 @@ static func _fill_landmarks(gen: Dictionary, info: Dictionary) -> void:
 		var sinks: Array = []
 		for s in pr.sinks:
 			sinks.append(at.call(s))
-		info["personnel"] = {"lockers": lockers, "sinks": sinks, "mirror": at.call(pr.mirror),
+		var showers: Array = []
+		for s in pr.get("showers", []):
+			showers.append(at.call(s))
+		info["personnel"] = {"lockers": lockers, "sinks": sinks, "showers": showers, "mirror": at.call(pr.mirror),
 				"scanner": at.call(pr.scanner), "screen": at.call(pr.screen)}
 
 
@@ -1324,6 +1329,17 @@ static func _commit_mirrors(p: Dictionary, root: Node3D) -> void:
 	# meta, so LightRooms.apply stops at it and never reaches them (mirrors.gd _add_lamp).
 	mirrors.setup(spots.personnel, func(pos: Vector2, y: float) -> Vector3: return _w(pos, y),
 			LightRooms.ensure(p.gen))
+
+
+## SHOWERS (2026-09-24): the personnel room's six showers -- host-authoritative water on/off,
+## scripts/personnel/showers.gd, built from the same spots.personnel the mirrors are.
+static func _commit_showers(p: Dictionary, root: Node3D) -> void:
+	var spots: Dictionary = p.gen.spots
+	if not spots.has("personnel") or (spots.personnel as Dictionary).get("showers", []).is_empty():
+		return
+	var showers: Node3D = ShowersScript.new()
+	root.add_child(showers)
+	showers.setup(spots.personnel.showers, func(pos: Vector2, y: float) -> Vector3: return _w(pos, y))
 
 
 ## Builds at the "lectern" spot MapGen reserved in the break room (docs/CONTRACTS.md "Hospital"

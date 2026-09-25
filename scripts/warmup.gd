@@ -32,6 +32,7 @@ const HumanModelScript := preload("res://scripts/human/human_model.gd")  # HUMAN
 const CustomizationScript := preload("res://scripts/personnel/customization.gd")  # CUSTOMIZATION
 const TerminalModelScript := preload("res://scripts/database/terminal_model.gd")  # HUB REDESIGN
 const SonoEchoScript := preload("res://scripts/monsters/sono_echo.gd")  # the Sonographer's echo fan and flash
+const ShowersScript := preload("res://scripts/personnel/showers.gd")  # SHOWERS: personnel room water on/off
 
 
 ## Run once. Safe to call again; later calls return immediately.
@@ -99,6 +100,7 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	AimHighlight.warm(shelf)   # AFFORDANCE HOOK: the aim-highlight rim shader (scripts/aim_highlight.gd)
 	HitFlash.warm(shelf)   # HIT FEEDBACK: the red hurt flash a landed hit puts on its target
 	WorldItem.warm_glow(shelf)   # HOVER DROP: the glow a dropped stack picks up (scripts/world_item.gd)
+	ShowersScript.warm(shelf)   # SHOWERS: the falling stream and floor mist, and loads the water loop
 	SonoEchoScript.warm(shelf)   # the Sonographer's echo: the grainy fan and the imaging flash
 	OrScreenScript.warm(shelf)  # ORSCREEN HOOK: the wall monitor's glass shader and viewport
 	# HUB REDESIGN: the database terminal's bigger desk, and (the more expensive part) its live

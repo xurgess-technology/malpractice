@@ -90,6 +90,8 @@ func _ready() -> void:
 		["hub_personnel_machine_close", _pose_hub.bind(Vector2(28.6, 15.6), Vector2(32.0, 16.9), 1.4)],
 		["hub_personnel_mirror", _pose_hub.bind(Vector2(24.2, 16.2), Vector2(25.3, 19.0), 1.4)],
 		["hub_personnel_showers", _pose_hub.bind(Vector2(25.5, 17.8), Vector2(30.5, 14.4), 1.2)],
+		# SHOWERS (2026-09-24): the same spot, with the nearest shower's water turned on.
+		["hub_personnel_shower_on", _pose_hub_shower_on],
 		["hub_waiting", _pose_hub.bind(Vector2(14.0, 24.5), Vector2(1.5, 21.0), 1.0)],
 		["hub_pharmacy", _pose_hub.bind(Vector2(18.5, 26.5), Vector2(23.5, 24.0), 1.4)],
 		["hub_triage", _pose_hub.bind(Vector2(19.8, 25.8), Vector2(16.3, 23.8), 1.0)],
@@ -213,6 +215,27 @@ func _pose_hub(from: Vector2, at: Vector2, h: float) -> bool:
 	var f := er.position + from * C.TILE
 	var t := er.position + at * C.TILE
 	_look_from(Vector3(f.x, 0, f.y), Vector3(t.x, h, t.y))
+	return true
+
+
+## SHOWERS (2026-09-24): standing right in front of the first shower with its water running, so the
+## stream and the floor mist are unmistakably in frame (not a wide shot where they'd read as noise).
+func _pose_hub_shower_on() -> bool:
+	var showers := game.level.find_child("Showers", true, false) if game.level != null else null
+	if showers == null or (showers.get("_showers") as Array).is_empty():
+		print("[hospitalshot] no Showers node on this level")
+		return false
+	showers.set_on(0, true)
+	var sh: Node3D = showers.get("_showers")[0]
+	var out: Vector3 = -sh.global_basis.z.normalized()
+	_look_from(sh.global_position + out * 2.2 + Vector3(0, 0.2, 0), sh.global_position + Vector3(0, 1.1, 0))
+	# The torch this close blows the stream out white; the shower's own doorway light is enough.
+	if bot.has_method("set_flashlight"):
+		bot.set_flashlight(false)
+	# Extra settle so the stream is mid-flow (not just its first frame or two of drops) by the time
+	# the caller's own SETTLE_FRAMES wait takes the shot.
+	for i in 40:
+		await get_tree().process_frame
 	return true
 
 

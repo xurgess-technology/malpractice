@@ -142,6 +142,8 @@ const SETUPS := {
 	# wall close by. Throw one at a shallow angle, a steep one and straight down, and time how long
 	# each takes to stand up into its hover.
 	"tumble": {"seed": 4242, "stage": "_tumble"},
+	# SHOWERS (2026-09-24): standing beside a personnel shower with an empty hand. Press E.
+	"showers": {"seed": 4242, "stage": "_showers"},
 }
 
 
@@ -1679,6 +1681,25 @@ class TorchDemo extends Node:
 				Input.action_release("scan")
 			host = null   # someone is at the host window: it is theirs now
 			print("[review] flashlight_pair: the host window was touched; the demo stops driving it")
+
+
+## SHOWERS (2026-09-24, Zach: "make the showers able to be turned on and off with E"): standing a
+## step back from the first personnel shower, facing it, hands empty. Press E: a stream falls off
+## the head, a low mist where it hits the floor, and the water loop starts. E again turns it off.
+static func _showers(game: Game) -> void:
+	var pr: Dictionary = game.level_info.get("personnel", {})
+	var list: Array = pr.get("showers", [])
+	if list.is_empty():
+		print("[review] showers: this level has no personnel showers")
+		return
+	var s: Dictionary = list[0]
+	var sp: Vector3 = s.position
+	var out := (Basis(Vector3.UP, float(s.get("yaw", 0.0))) * Vector3(0, 0, -1)).normalized()
+	place(game, game._floor_at(sp + out * 1.3), sp + Vector3(0.0, 1.4, 0.0))
+	clear_hands(game)
+	game.local_player().selected = 0
+	game.say("Aim at the shower head and press E: water on, water off. It should sound and look the same on a teammate's screen.", 9.0)
+	print("[review] showers: %d showers on this level, standing in front of the first at %s" % [list.size(), str(sp.snappedf(0.1))])
 
 
 ## TUMBLE TUNING (2026-09-24): open floor with a wall close on one side, four throwables in hand
