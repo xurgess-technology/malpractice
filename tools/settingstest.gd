@@ -112,6 +112,7 @@ func _run() -> void:
 	Settings.set_value("key_jump", KEY_J)
 	Settings.set_value("key_ability_alt", KEY_X)
 	Settings.set_value("key_scan", KEY_V)
+	Settings.set_value("key_robot", KEY_O)   # THE SURGICAL ROBOT
 	Settings.set_value("soft_squeal", true)   # the Sonographer's quieter deafen squeal
 	Settings.set_value("look", 12345)   # CUSTOMIZATION: the packed surgeon look
 	Settings.set_value("patterns_unlocked", 5)   # POCKETS 2 phase 4: scrub pattern unlock mask
@@ -119,7 +120,7 @@ func _run() -> void:
 	for key in Settings.DEFAULTS.keys():
 		_check(seen.has(key), "changed emitted for %s" % key)
 	# SWEEP 4A HOOK (controls): a rebind applies to the InputMap action right away.
-	for pair in [["key_crouch", "crouch", KEY_C], ["key_jump", "jump", KEY_J], ["key_ability_alt", "ability_alt", KEY_X], ["key_scan", "scan", KEY_V]]:
+	for pair in [["key_crouch", "crouch", KEY_C], ["key_jump", "jump", KEY_J], ["key_ability_alt", "ability_alt", KEY_X], ["key_scan", "scan", KEY_V], ["key_robot", "robot_remote", KEY_O]]:
 		var evs: Array = InputMap.action_get_events(String(pair[1]))
 		var found := false
 		for ev in evs:

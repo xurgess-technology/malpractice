@@ -1796,6 +1796,7 @@ game.furnace_can_sell(kind) -> bool  # loot and placebo_pills; nothing else
 game.furnace_value(kind, slot) -> int  # eyes: spoiled value; placebo_pills: 0; else slot.v
 game.PILL_PRICE / game.PILL_COUNT    # $15, 10 pills a bottle
 game.ROCKET_BOOTS_PRICE              # $100 a pair (catalog line "rocket_boots", count 1)
+game.ROBOT_CORE_PRICE                # $500 a core (catalog line "robot_core", count 1; see "The surgical robot")
 game.player_faceplanted(p)           # host; a rocket dive hit a wall head on: damage_player(p, 1, "faceplant")
 ```
 
@@ -2987,7 +2988,7 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
 - **The offer** hangs off the table's existing prompt: `_table_prompt` -> `player_surgery.operate_
   prompt` -> `grafts.table_prompt` while somebody lies strapped there with no case. The refusals are
   "!No vat on the table.", "!The vat on the table is empty.", "!X's eyeball is
-  spoiled.", "!X already has one.", "!X has two normal eyes.", "!You cannot operate on yourself." and
+  spoiled.", "!X already has one.", "!X has two normal eyes.", "!You cannot operate on yourself. (The surgical robot can.)" (not for someone remoted into the robot, see "The surgical robot") and
   "!Hold the scalpel to start the graft."; a free table with a loaded vat on it says
   "!Nobody is strapped to this table." to someone holding a scalpel, an eye spoon or the forceps. The case is
   created by the first `begin` (`player_surgery.start_graft`).
@@ -3062,6 +3063,97 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
 - Tests: `tools/grafttest.tscn` (the graft section: the stands, the refusals, the four steps with
   Dr. Botsworth operating, Puppet 1 in and out, and not getting up after the scoop),
   nettest scenario `graft`.
+
+### The surgical robot (2026-09-24; was docs/backlog/SWEEP4B.md "A solo surgical robot")
+
+The OR's first patient table has a surgical robot at its head end. It starts every run dead; a
+**robot core** from the pharmacy ($500) plugged into it powers it for the rest of the run; then
+anybody can press **P** anywhere to remote in and operate on whoever is on its table from its
+camera, through the ordinary surgery flow. It is how a solo player gets grafted: strap yourself to
+the robot's table, press P, and operate on yourself. `scripts/robot/robot.gd` (`game.robot`, child
+"Robot" of Game on every machine, for its RPCs), `robot_fixture.gd` (the body), `robot_view.gd`
+(the remote overlay).
+
+```gdscript
+game.robot.powered / remote_peer / boot_t / look   # host authoritative, global field "rb"
+game.robot.fixture / table_index                   # every machine, rebuilt with the level (on_level_built)
+game.robot.linked(p) -> bool          # p is remoted in (powered and remote_peer == p)
+game.robot.local_linked() / local_camera()   # this machine's player; its camera, else null
+game.robot.covers(table_pos) -> bool  # a surgery at that table is the robot's (flat 1.2 m of its table)
+game.robot.link_block(p) -> String    # why p cannot remote in ("" = can); replicated state only
+game.robot.local_toggle()             # P (and Esc while in): asks the host, or says why not locally
+game.robot.set_link(p, on) / drop(p)  # host; drop also runs game.end_operations(p)
+game.robot.op_prompt(p) / remote_interact(p)   # the table's prompt from the robot / E, host side
+game.robot.fixture_prompt(p) / fixture_used(p) # the fixture's aim prompt / plugging a core in, host
+game.robot.on_reset()                 # host, from game.reset_money(): a new run starts it dead
+game.ROBOT_CORE_PRICE (500)           # PHARMACY_CATALOG line "robot_core", count 1
+```
+
+- **Where it stands.** `on_level_built()` (called after `vats.on_level_built`) puts the fixture at
+  `OFFSET` (-1.85 m along the table's long axis, the head end) from `game.patient_tables[0]`,
+  facing along +X over the table. It is an interactable itself (interact_id `"robot"`, group
+  `interactable`, a `C.L_WORLD` collider on its base and column; the boom and arms are overhead).
+  **The OR gurney** (`scripts/gurney/gurney.gd`, parked at `entrance.gd`'s `spots["gurney"]`, tile
+  (9.5, 10.5) down the middle of the room) is about 6.8 m from it: the robot's footprint stays inside
+  the tables' own row (its south face is level with the table's side), so the aisle in front of the
+  tables is clear and a pushed gurney rolls past the robot's corner and back; being `C.L_WORLD`, the
+  robot's base stops a gurney shoved straight at it like any wall (`gurney._box_hits`).
+- **Plugging in.** Aimed at with a `robot_core` anywhere in your hands: "Plug in the robot core";
+  E consumes one (`consume_hand`), sets `powered` and `boot_t`, plays `robot_plug`, and says so.
+  Otherwise the prompt says it is dead and what it needs, that it is in use, or that P remotes in.
+  **Persistence: the robot stays on for the whole run** (through deaths and shifts: the fixture is
+  rebuilt with each level but `powered` lives on `game.robot`), and `game.reset_money()` -- a game
+  over -- switches it off with the money, the boots and the grafts. The core is used up; there is
+  no unplugging. Boot: `BOOT_TIME` (2.6 s) of flicker and twitching, `robot_boot`, during which P
+  says it is still starting up.
+- **Remoting in** (`robot_remote`, P, rebindable as settings key `key_robot`). main.gd sends P
+  (and Esc, when not mid-step) to `local_toggle()`, which checks `link_block` locally (a hint and
+  `robot_denied` if not) and asks the host (`_rpc_link`). Refused when: no robot, no power, still
+  booting, **in use by someone else ("Robot in use (X)")**, you are down, carried, held,
+  puppeting a Hive (`puppeting`), carrying or dragging, pushing the OR gurney ("Let go of the
+  gurney first."), or operating at a table in person. Allowed strapped to a table -- that is the
+  point. The host throws the operator out (`drop`) on anything that takes them out of play
+  (`_host_tick`: gone, dead, downed, carried, held, puppeting, carrying, dragging or pushing the
+  gurney; and every hurt, through `game._end_operations`, so a hit, a knock-down or death unlinks
+  you). Leaving ends whatever they were doing through it (`end_operations`), as walking away from a
+  table does.
+- **While in.** `Player.robot_linked()`. The body stays where it is and takes no movement
+  (`_local_step`: `can_move` false); strapped, `_pinned_step` hands over to the link and E is no
+  longer the get-up hold. The mouse turns the robot's eye (`local_look_input`, within `LOOK_YAW` /
+  `LOOK_PITCH`; the operator sends its look to the host at 10 Hz, `_rpc_look`, and it rides "rb" so
+  everyone sees the eye turn). `_update_aim_core` gives aim id `"robot_op"` and `op_prompt(p)`,
+  which is the table's own `_table_prompt(p, table_index)` (the strap-in offer becomes "!Nobody is
+  on the table."). E (`Player._robot_link_input`) goes out as an ordinary interact; the host's
+  `player_pressed_interact` routes `"robot_op"` to `remote_interact`, which runs the table's own
+  `_proxy_used` -- so every check (tools, sedation, the graft's refusals) is the table's. 1-4 and the
+  wheel still pick the tool: **the robot works with the tools in the operator's own hands** (it has
+  arms, not a supply cupboard), exactly as a surgeon at the table would. main.gd renders
+  `local_camera()` (after any surgery camera, which it is not: the HUD keeps the prompt and the item
+  bar); `surgery_system._head_camera()` blends a step's shot out of and back into the robot's eye
+  instead of your head. Your own body is shown to you while you are in (`Player.set_dev_body`), so
+  you can see yourself on the table. `robot_view.gd` draws scanlines, a frame and a "REMOTE" line
+  (CanvasLayer 1, under the HUD).
+- **Operating on yourself.** `surgery_system._host_tick` does not walk an operator away from a table
+  the robot covers while they are linked; `grafts.table_prompt` lets a linked operator be on the
+  table and be the patient ("!You cannot operate on yourself. (The surgical robot can.)" otherwise);
+  `player_surgery.operate_prompt` lets them carry on. Nothing else about the graft changes.
+- **What everyone sees** (`robot_fixture.animate`, every machine, from replicated state): dead, the
+  three arms hang slack and the lights are out; booting, the status strip fills and the arms twitch
+  up; on, the arms fold under the hub and the lens is teal; someone in, the arms rise over the table,
+  the lens goes amber, the eye turns with their look and a spot lamp lights the table; operating
+  (the table's surgery has the robot's operator), the working arm goes to the step's site
+  (`mg.global_position`, built on every machine), the others hover, the lens and strip go red, and a
+  servo whirrs now and then. The core shows in its socket once plugged in.
+- Sounds `robot_plug`, `robot_boot`, `robot_link`, `robot_unlink`, `robot_denied`, `robot_servo`
+  (`tools/gen_audio_robot.mjs`). Warmup: `robot.gd` `warm()` builds a working fixture.
+- Known limits: it serves only the first patient table (`patient_tables[0]`), and the dev panel has
+  no button for it (review setups `robot`, `robot_graft` and `robot_buy` stand in).
+- Tests: `tools/robottest.tscn` (headless: buying, plugging in, P in and out, operating on a Hive from
+  across the OR, grafting yourself alone with E never getting you up, the gurney parked clear of it
+  and pushed past it and back with P refused on the handle, a hit throwing you out, a game over
+  switching it off), nettest scenario `robot`, `tools/robotshot.tscn` (the smoke look,
+  `tools\robotshot.ps1`, shots into `tools/robot_shots/`). Review setups `robot`, `robot_graft`,
+  `robot_buy`.
 
 ### Ability bar (HUD, local-only, sweep 4a)
 
@@ -3291,4 +3383,4 @@ shift 2), nettest scenario `doors`, devtest door checks, `tools/perfprobe.tscn -
 (`{"seed": 4242, "stage": "_name"}`) and one static function that stages things with the helpers
 `place`, `clear_hands`, `give` (a stack, with extra stack keys like `bt`, `used`, `x`), `give_abilities`
 and `floor_item`. An unknown name is logged with the known ones and the menu opens as usual. Setups so
-far: `icons`, `items`, `graft`, `graft_back`, `trinkets`, `puppet`, `gurney`, `service_dog` (and many more: `SETUPS` is the list).
+far: `icons`, `items`, `graft`, `graft_back`, `trinkets`, `puppet`, `gurney`, `service_dog`, `robot`, `robot_graft`, `robot_buy` (and many more: `SETUPS` is the list).

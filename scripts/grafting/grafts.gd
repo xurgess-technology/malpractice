@@ -95,13 +95,17 @@ func vat_for(p) -> Node:
 ## the same thing. The refusals are the ones docs/GRAFTING.md lists: no vat on the table, the eye is
 ## spoiled, they already have one, nobody is strapped down.
 func table_prompt(q) -> String:
-	if game == null or q == null or not q.alive or q.downed or q.on_table:
+	# THE SURGICAL ROBOT: remoted into the robot at this table, you can operate from anywhere --
+	# including lying strapped to it yourself, which is what the robot is for (solo grafting).
+	var via_robot: bool = game != null and game.get("robot") != null and bool(game.robot.linked(q)) \
+		and bool(game.robot.covers(game.player_table_top()))
+	if game == null or q == null or not q.alive or q.downed or (q.on_table and not via_robot):
 		return ""
 	var p = game.someone_on_table()
 	if p == null or not p.strapped():
 		return ""
-	if q == p:
-		return "!You cannot operate on yourself."
+	if q == p and not via_robot:
+		return "!You cannot operate on yourself. (The surgical robot can.)"
 	var vat := vat_for(p)
 	if vat == null:
 		return "!No vat on the table."

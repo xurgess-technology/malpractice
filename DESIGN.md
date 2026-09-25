@@ -89,6 +89,7 @@ All items are physical 3D objects: on shelves, in containers, in hands, on the O
 - **Charged throw**: hold the drop key to charge a throw, release to fire it (a quick tap still just drops). Used to sell loot into the crematorium furnace and to throw placebo pills.
 - **Placebo pills**: a $15 bottle of 10, sold only at the pharmacy, does nothing mechanically and burns for $0. Swallow one from the bottle, or throw one at a teammate (a warm, cozy screen effect and a line only they see) or at a patient/monster (the line floats above them in quotes for everyone nearby; an OR patient's monitor shows a hopeful green blip, vitals unchanged). A miss just leaves it on the floor as a pickup.
 - **Rocket boots**: $100 a pair, sold only at the pharmacy. Worn, not carried: taking a pair puts them on (hands stay free), one pair each, kept through death until a new run. Hold crouch through a sprint-dive and they light: you fly straight ahead, level and fast, on a second bar under stamina (fuel, about 1.5 s of burn, refilling on the ground). Let go and you drop into the normal dive landing. Fly head first into a wall and you faceplant: the burn stops, you bounce back and drop, and it costs a heart.
+- **Robot core**: $500, sold only at the pharmacy. Carry it to the OR and press E on the dead surgical robot at the head end of the first patient table to plug it in; it boots and stays powered for the rest of the run (a game over switches it off). Then **P** (rebindable) from anywhere remotes you into it: your body freezes where it stands, you look out of the robot's camera, and E runs the normal surgery flow on whoever is on that table, with the tools in your own hands (1, 2 or the wheel picks which). One operator at a time; a hit, going down, being carried or grabbed drops you out. It only serves the first table.
 - **TODO**: the shopping cart, more item types (sedative dart, batteries, keys).
 
 ### Trinkets
@@ -195,6 +196,10 @@ of: **Hive's eyeball**, **Zach's eyeball**.
   right up while you are using **Puppet 1**, which the graft gives you in your next free ability
   slot. Your own view carries a faint orange tint down its left edge, stronger while the ability is
   running. Swap your own eye back in and the ability goes with it.
+- **Alone? Use the surgical robot.** With the robot powered (a robot core from the pharmacy, see
+  **Items**), set the vat on the stand of the robot's table (the first one), strap yourself to it,
+  then press P and graft your own eye through the robot's camera, all four steps. E never gets you
+  up while you are remoted in.
 - A graft lasts the whole run, through death, and is lost on a game over, like the ability it gave
   you. Eyes sell at the crematorium furnace like any other loot.
 

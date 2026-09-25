@@ -138,6 +138,8 @@ const FP := {
 	"communion_wine": {"grip": "power", "pos": Vector3(0.0, 0.1, 0.0), "axis": Vector3(0, 1, 0), "face": Vector3(0, 0, 1)},
 	"tequila": {"grip": "power", "pos": Vector3(0.0, 0.1, 0.0), "axis": Vector3(0, 1, 0), "face": Vector3(0, 0, 1)},
 	"placebo_pills": {"grip": "power", "pos": Vector3(0.0, 0.035, 0.0), "axis": Vector3(0, 1, 0), "face": Vector3(0, 0, 1)},
+	# THE SURGICAL ROBOT: the core is held like a bottle, round its glass middle, glowing end up.
+	"robot_core": {"grip": "power", "pos": Vector3(0.0, 0.107, 0.0), "axis": Vector3(0, 1, 0), "face": Vector3(0, 0, 1)},
 	"fabric_softener": {"grip": "palm", "size": 0.2},
 	# The quarter bucket's bail lies flat at the rim, so the pail sits in the hand instead.
 	"quarter_bucket": {"grip": "palm", "size": 0.16},

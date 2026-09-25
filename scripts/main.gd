@@ -644,6 +644,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# THE SURGICAL ROBOT: Esc while remoted in (and not mid-step, above) comes back to your body.
+	if event.is_action_pressed("pause") and not game.paused and game.robot != null and game.robot.local_linked():
+		game.robot.local_toggle()
+		get_viewport().set_input_as_handled()
+		return
+
 	# A memo on the tip fax: Esc tears it off, and the pause menu stays shut until it has gone.
 	if event.is_action_pressed("pause") and not game.paused and tips != null and tips.is_showing():
 		tips.dismiss()
@@ -657,6 +663,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# While paused the settings fax owns input (Resume, Main menu, Quit game on the page).
 	if game.paused:
+		return
+
+	# THE SURGICAL ROBOT: P (rebindable, "robot_remote") remotes in to the OR's robot, or back out.
+	if event.is_action_pressed("robot_remote") and game.robot != null and not game.mirror_menu_open() \
+			and (char_sheet == null or not char_sheet.open):
+		game.robot.local_toggle()
+		get_viewport().set_input_as_handled()
 		return
 
 	# Dead players click to change who they are watching.
@@ -730,9 +743,15 @@ func _process(_delta: float) -> void:
 	var puppet_cam: Camera3D = game.abilities.camera() if game.phase != Game.Phase.MENU and game.abilities != null else null
 	if puppet_cam != null:
 		surgery_cam = puppet_cam
+	# THE SURGICAL ROBOT: remoted in, you look out of the robot's eye (not a "surgery camera": the
+	# HUD keeps the prompt and the item bar, which is how you pick the robot's next tool).
+	var robot_cam: Camera3D = game.robot.local_camera() if game.phase != Game.Phase.MENU and game.robot != null else null
 	if surgery_cam != null:
 		if not surgery_cam.current:
 			surgery_cam.make_current()
+	elif robot_cam != null:
+		if not robot_cam.current:
+			robot_cam.make_current()
 	elif dev_panel != null and dev_panel.free_cam_on():   # DEV HOOK: the dev free camera
 		if not dev_panel.free_cam.current:
 			dev_panel.free_cam.make_current()

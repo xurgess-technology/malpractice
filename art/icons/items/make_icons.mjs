@@ -161,6 +161,23 @@ add("rocket_boots", "Rocket boots", "shop", { body: `
 <rect x="62" y="136" width="30" height="36" rx="8" fill="${STEEL}" stroke="${O}" stroke-width="7"/>
 <path d="M172 146 Q192 146 206 156" fill="none" stroke="#f08a80" stroke-width="5"/>` });
 
+// THE SURGICAL ROBOT: the robot core. An upright glass cell between two steel caps, a teal coil
+// inside, a carry ring on top and contact pins under it. Centred; only monster parts glow, so the
+// coil is just a bright flat teal.
+add("robot_core", "Robot core", "shop", { body: `
+<circle cx="128" cy="30" r="13" fill="none" stroke="${O}" stroke-width="20"/>
+<circle cx="128" cy="30" r="13" fill="none" stroke="${STEEL}" stroke-width="8"/>
+<rect x="84" y="62" width="88" height="128" rx="10" fill="#bfe8ee" stroke="${O}" stroke-width="9"/>
+<rect x="120" y="70" width="16" height="112" rx="6" fill="${TEAL}" stroke="${O}" stroke-width="5"/>
+<path d="M98 88 L158 88 M98 110 L158 110 M98 132 L158 132 M98 154 L158 154" stroke="${TEAL}" stroke-width="9"/>
+<path d="M98 88 L158 88 M98 110 L158 110 M98 132 L158 132 M98 154 L158 154" stroke="${O}" stroke-width="2" opacity="0.5"/>
+<path d="M96 76 L96 176" stroke="#fff" stroke-width="7" opacity="0.7"/>
+<rect x="72" y="40" width="112" height="28" rx="8" fill="${STEEL}" stroke="${O}" stroke-width="9"/>
+<rect x="72" y="186" width="112" height="30" rx="8" fill="${STEEL}" stroke="${O}" stroke-width="9"/>
+<path d="M84 50 L172 50" stroke="${STEEL_HI}" stroke-width="5"/>
+<rect x="100" y="214" width="14" height="18" rx="3" fill="${STEEL}" stroke="${O}" stroke-width="6"/>
+<rect x="142" y="214" width="14" height="18" rx="3" fill="${STEEL}" stroke="${O}" stroke-width="6"/>` });
+
 // ---- Monster parts ----
 add("hive_eyeball", "Hive's eyeball", "monster", { glow: "#ff8a2a",
   defs: `<clipPath id="ball"><circle cx="118" cy="128" r="56"/></clipPath>`, body: `

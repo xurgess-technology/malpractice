@@ -804,6 +804,9 @@ func _input(event: InputEvent) -> void:
 		return
 	if puppeting or dev_input_held:
 		return   # the mouse is not yours while you look through a Hive
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and robot_linked():
+		game.robot.local_look_input(event.relative)   # THE SURGICAL ROBOT: the mouse turns its camera
+		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		# Settings hook: "sensitivity" multiplies the base look speed.
 		var sens: float = MOUSE_SENS * float(Settings.get_value("sensitivity"))
@@ -845,6 +848,10 @@ func _local_step(delta: float) -> void:
 	# and then the surgeon stands still.
 	var can_move: bool = alive and (g == null or not g.paused) and stun <= 0.0 \
 		and (bot_active or (Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not dev_input_held))
+	# THE SURGICAL ROBOT: remoted in, the body stands where it is; the keys drive the robot instead.
+	var linked := robot_linked()
+	if linked:
+		can_move = false
 
 	var input_dir := Vector2.ZERO
 	var want_sprint := false
@@ -969,6 +976,8 @@ func _local_step(delta: float) -> void:
 	# Downed hook: downed, E calls for help; carrying, E puts them down (or on the table, above).
 	elif can_move and not bot_active and not diving and Input.is_action_just_pressed("interact") and (downed or carrying != 0 or dragging_monster >= 0 or pushing_gurney()):
 		interact_count += 1
+	if linked:
+		_robot_link_input()   # THE SURGICAL ROBOT: E and the hand keys, from the robot's camera
 
 	# OR GURNEY: a gurney swings round slowly and never through a wall.
 	if pushing_gurney():
@@ -1379,6 +1388,14 @@ func _pinned_step(delta: float) -> void:
 	if local_driver:
 		var keys: bool = not bot_active and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and not dev_input_held and (game == null or not game.paused)
+		if robot_linked():
+			# THE SURGICAL ROBOT: strapped to the table and remoted into the robot, E operates (on
+			# you) instead of getting you up, and the hand keys still pick the tool.
+			_update_aim()
+			_robot_link_input()
+			if game != null and game.is_host():
+				_consume_actions()
+			return
 		if bot_active:
 			_yaw = bot_yaw
 			_pitch = bot_pitch
@@ -1433,6 +1450,39 @@ func _strapped_look() -> void:
 	if bot_active:
 		bot_yaw = _yaw
 		bot_pitch = _pitch
+
+
+## THE SURGICAL ROBOT (scripts/robot/robot.gd): this player is remoted into the OR's robot.
+func robot_linked() -> bool:
+	return game != null and game.get("robot") != null and bool(game.robot.linked(self))
+
+
+## THE SURGICAL ROBOT: the keys that still mean something while remoted in, for whoever drives this
+## body here. E operates at the robot's table (aim id "robot_op", which game.player_pressed_interact
+## hands to the robot); 1-4 and the wheel pick the tool the robot will use (it works with your
+## hands); nothing else. A step in progress has the mouse and E itself (surgery_system), so this
+## stands back while the cursor is free. P and Esc are main.gd's.
+func _robot_link_input() -> void:
+	wants_interact = false
+	scan_holding = false
+	if bot_active:
+		if bot_press != _bot_press_seen:
+			_bot_press_seen = bot_press
+			interact_count += 1
+		return
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED or dev_input_held or (game != null and game.paused):
+		return
+	if Input.is_action_just_pressed("interact") and aim_id != "" and not aim_prompt.begins_with("!"):
+		interact_count += 1
+	if Input.is_action_pressed("ability_alt"):
+		return
+	for i in C.CARRY_CAP:
+		if Input.is_action_just_pressed("slot_%d" % (i + 1)):
+			selected = head_of(i)
+	if Input.is_action_just_pressed("slot_next"):
+		select_step(1)
+	if Input.is_action_just_pressed("slot_prev"):
+		select_step(-1)
 
 
 ## The Nurse who holds this player (every machine's copy of her), or null.
@@ -1629,6 +1679,11 @@ func _update_aim_core() -> void:
 	aim_prompt = ""
 	aim_hold = 0.0
 	if not alive or puppeting:   # nothing in reach while you are elsewhere
+		return
+	# THE SURGICAL ROBOT: remoted in, the only thing in reach is the robot's table, from its camera.
+	if robot_linked():
+		aim_id = "robot_op"   # robot.gd OP_AIM
+		aim_prompt = String(game.robot.op_prompt(self))
 		return
 	# Downed hook: on the floor or the table there is nothing to use, only a call for help.
 	if downed:

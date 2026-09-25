@@ -68,7 +68,10 @@ extends Node
 ##   rocket_boots     the host gives client 1 a pair of rocket boots; client 1 rocket-dives into a wall
 ##                    it put up on its own machine and the host takes the heart; client 2 sees the
 ##                    boots on client 1 and the burn
-##   wall             (terminal redesign, chunk 4) the break room screen is shared: client 1 holds its
+##   robot            (the surgical robot) client 1 plugs a robot core into the OR's robot with E,
+##                    remotes in with P from across the OR and cuts round a strapped Hive's eye through
+##                    it; client 2 sees the robot power up, who is in it, and its arms go to the site
+##   wall            (terminal redesign, chunk 4) the break room screen is shared: client 1 holds its
 ##                    laser on SIGN IN and its own database (not the host's) fills the cards, and a scan
 ##                    it makes while signed in reaches them too; it clicks MONSTERS and the host and
 ##                    client 2 follow, client 2 sees client 1's laser dot; client 1 walks away and
@@ -195,6 +198,7 @@ func _run() -> void:
 		"doors": await _sc_doors()   # DOORS HOOK
 		"wall": await _sc_wall()   # terminal redesign, chunk 4
 		"rocket_boots": await _sc_rocket_boots()   # ROCKET BOOTS
+		"robot": await _sc_robot()   # THE SURGICAL ROBOT
 		"syringe_draw": await _sc_syringe_draw()   # SYRINGE DRAW: two handheld draws at once
 		"veins": await _sc_veins()   # SKILL TREE: the vein machine shared
 		"service_dog": await _sc_service_dog()   # SERVICE DOG: fetch over the wire
@@ -204,6 +208,111 @@ func _run() -> void:
 # =========================================================================
 # scenarios
 # =========================================================================
+
+## THE SURGICAL ROBOT: the whole remote path over the wire. The host straps a Hive to the robot's
+## table and hands client 1 a core and a scalpel. Client 1 walks up, E plugs the core in (the host's
+## reach and prompt checks), waits out the boot, presses P (an RPC; the host decides), stands across
+## the OR and presses E from the robot's camera -- the aim id the host routes to the robot -- and plays
+## the cut with its bot hand while its body is out of walk-away range. Client 2 has to see the robot
+## powered, client 1 in it, and the arms at the site on its own machine.
+func _sc_robot():
+	if role == "host":
+		if not await _start_shift_when_full():
+			return
+		var r = game.robot
+		if r == null or r.fixture == null:
+			return _end(false, "no robot in the level")
+		var ti: int = int(r.table_index)
+		var cid: int = game.dissection.dev_strap("hive", 1.0, ti)
+		if cid < 0:
+			return _end(false, "could not strap a Hive to the robot's table")
+		var c1 = game.players.get(_peer_of(1))
+		for i in c1.slots.size():
+			c1.slots[i] = Player.empty_slot()
+		if not game.give_hand(c1, "robot_core", 1) or not game.give_hand(c1, "scalpel", 1):
+			return _end(false, "client 1 would not take the core and the scalpel")
+		_send("rb", {"table": ti})
+		if not await _until(func(): return r.powered, 90.0, "client 1 to plug the core in"):
+			return
+		_say("client 1 plugged the core in; it has %d left" % int(c1.hand_count("robot_core")))
+		if not await _until(func(): return int(r.remote_peer) == int(c1.peer_id), 60.0, "client 1 to remote in"):
+			return
+		var c: Dictionary = game.case_by_id(cid)
+		if not await _until(func(): return int(c.get("step_index", 0)) >= 1, 120.0, "the cut to finish through the robot"):
+			return
+		var far: Vector3 = c1.global_position - game.table_position(ti)
+		_say("the cut finished through the robot; client 1's body is %.1f m from the table" % Vector2(far.x, far.z).length())
+		if Vector2(far.x, far.z).length() < 3.2:
+			return _end(false, "client 1 was standing at the table, so the remote was not tested")
+		await _finish_together("a client plugged in the robot, remoted in and operated through it; the other client watched")
+		return
+	if not await _wait_shift_as_client():
+		return
+	if not await _until(func(): return _count_msgs("rb") > 0, 90.0, "the robot order"):
+		return
+	var r2 = game.robot
+	var ti2 := int(_msgs("rb")[0].data.table)
+	var me := _me()
+	if index == 2:
+		if not await _until(func(): return r2.powered, 90.0, "the robot to power up on client 2"):
+			return
+		var c1_id := _peer_of(1)
+		if not await _until(func(): return int(r2.remote_peer) == c1_id, 90.0, "client 1 in the robot, seen on client 2"):
+			return
+		if not await _until(func(): return r2._operating_site() != null, 90.0, "the robot's arms at work on client 2"):
+			return
+		var arm_tip: Vector3 = r2.fixture.to_global(r2.fixture.arms[1].cur)
+		var site: Vector3 = r2._operating_site()
+		await _wall_wait(0.5)
+		arm_tip = r2.fixture.to_global(r2.fixture.arms[1].cur)
+		_say("client 2 sees the working arm %.2f m from the site" % arm_tip.distance_to(site))
+		if arm_tip.distance_to(site) > 0.6:
+			_send("fail", {"why": "the working arm is %.2f m from the site on client 2" % arm_tip.distance_to(site)})
+			return _end(false, "the working arm did not reach the site")
+		await _finish_together("saw the robot power up, client 1 in it and its arms at the site")
+		return
+	# Client 1: to the robot, plug the core in.
+	if not await _until(func(): return me.hand_count("robot_core") > 0 and me.hand_count("scalpel") > 0, 30.0, "the core and scalpel in hand"):
+		return
+	var fx: Node3D = r2.fixture
+	me.teleport(game._floor_at(fx.global_position + fx.global_transform.basis * Vector3(0.3, 0.0, 1.2)))
+	me.bot_move = Vector2.ZERO
+	me.bot_aim_id = "robot"
+	await _frames(10)
+	if not await _until(func(): return me.aim_prompt == "Plug in the robot core", 10.0, "the plug-in prompt ('%s')" % me.aim_prompt):
+		return
+	me.bot_press += 1
+	if not await _until(func(): return r2.powered, 20.0, "the robot to power up here"):
+		return
+	me.bot_aim_id = ""
+	if not await _until(func(): return r2.booting() >= 1.0, 20.0, "the boot"):
+		return
+	# Across the OR, out of walk-away range, then P.
+	me.teleport(game._floor_at(game.table_position(ti2) + Vector3(0, 0, 4.5).rotated(Vector3.UP, game.table_yaw_of(ti2))))
+	await _frames(10)
+	# P, and again now and then until the host agrees: this machine's clock can run a hair ahead of
+	# the host's, so the first press may land while the host still has the robot booting (a real
+	# player just presses it again).
+	if not await _do_until(func():
+			if not r2.local_linked() and Engine.get_physics_frames() % 60 == 0:
+				r2.local_toggle(),
+			func(): return r2.local_linked(), 20.0, "the host to let me into the robot"):
+		return
+	me.selected = maxi(0, _slot_of("scalpel"))
+	game.surgery_bot_skill = 1.0
+	if not await _until(func(): return String(me.aim_prompt).begins_with("Operate"), 20.0, "the robot's table to offer the cut ('%s')" % me.aim_prompt):
+		return
+	var sys = game.surgery_for_table(ti2)
+	if not await _do_until(func():
+			if not sys.is_local_operating() and Engine.get_physics_frames() % 30 == 0:
+				me.bot_press += 1,
+			func(): return sys.is_local_operating(), 30.0, "the cut to start through the robot"):
+		return
+	_say("operating through the robot from %.1f m away" % Vector2(me.global_position.x - game.table_position(ti2).x, me.global_position.z - game.table_position(ti2).z).length())
+	if not await _until(func(): return int(game.case_on_table(ti2).get("step_index", 0)) >= 1, 120.0, "the cut to finish"):
+		return
+	await _finish_together("plugged the core in, remoted in and cut round the Hive's eye through the robot")
+
 
 ## ROCKET BOOTS: `boots` reaches the wearer and everyone else; the burn replicates (report bit 256
 ## -> report_full "rk"); a client's own faceplant (faceplant_count, report_state[16]) costs a heart

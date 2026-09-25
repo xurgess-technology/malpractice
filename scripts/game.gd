@@ -226,6 +226,7 @@ const AbilitiesScript := preload("res://scripts/abilities/abilities.gd")
 const VatsScript := preload("res://scripts/grafting/vats.gd")
 const GraftsScript := preload("res://scripts/grafting/grafts.gd")
 const TrinketsScript := preload("res://scripts/trinkets/trinkets.gd")
+const RobotScript := preload("res://scripts/robot/robot.gd")
 var sono_echo: Node = null    # the Sonographer's echo: the fan, the imaging flash, the deafen squeal
 var combat: Node = null       # bone saw swings, anesthetic jabs, dragging and strapping monsters
 ## The OR's player-pushed gurney (scripts/gurney/gurney.gd), child "Gurney" of Game, every machine.
@@ -237,6 +238,7 @@ var vats: Node = null         # GRAFTING part one: specimen vats, eye spoilage (
 var grafts: Node = null       # GRAFTING chunk C: Eyeball Grafting on a strapped surgeon (scripts/grafting/grafts.gd)
 var abilities: Node = null    # Echo and Puppet, their levels and slots (scripts/abilities/)
 var trinkets: Node = null     # TRINKETS chunk B: what the six trinkets do (scripts/trinkets/trinkets.gd)
+var robot: Node = null        # THE SURGICAL ROBOT: the OR's robot, its core and the P link (scripts/robot/robot.gd)
 # POCKETS HOOK: pocket spaces (the Factory, the Restaurant), their seams and crossings.
 const PocketSpacesScript := preload("res://scripts/level/pockets/pocket_spaces.gd")
 const PocketPlanScript := preload("res://scripts/level/pockets/pocket_plan.gd")
@@ -350,6 +352,12 @@ func _ready() -> void:
 	grafts.name = "Grafts"
 	add_child(grafts)
 	grafts.setup(self)
+	# THE SURGICAL ROBOT: the OR robot you plug a core into and remote into with P. Same path on
+	# every machine, for its RPCs.
+	robot = RobotScript.new()
+	robot.name = "Robot"
+	add_child(robot)
+	robot.setup(self)
 	# TRINKETS chunk B: what the six trinkets do. Same path on every machine.
 	trinkets = TrinketsScript.new()
 	trinkets.name = "Trinkets"
@@ -841,6 +849,7 @@ func _build_level(for_seed: int) -> void:
 	_add_occluders()
 	_add_landmarks()
 	vats.on_level_built(level_info)   # GRAFTING part one: the lab wall's vat spots, the starting vats, the OR's scalpel and spoon
+	robot.on_level_built()   # THE SURGICAL ROBOT: at the head end of the first patient table
 	ExteriorScript.build(level, level_info)   # the storeys, signs and planters facing the lot
 	# DOORS HOOK: the level's doors and the wings' generation.
 	doors.clear()
@@ -1381,6 +1390,11 @@ func player_pressed_interact(p: Node, target_id: String) -> void:
 	if target_id == "vat_hand":
 		vats.hand_put(p)   # GRAFTING part one: a vat and an eye both in hand
 		return
+	if target_id == RobotScript.OP_AIM:
+		# THE SURGICAL ROBOT: E from the robot's camera. No reach test: the robot is the one at the
+		# table, and remote_interact asks the table's own questions.
+		robot.remote_interact(p)
+		return
 	if target_id == "syringe_hand":
 		# SYRINGE DRAW: a syringe in hand and something to fill it from. No reach test and no node
 		# prompt on this path, so the station re-asks every question for itself.
@@ -1882,6 +1896,8 @@ func reset_money() -> void:
 		abilities.on_reset()   # the grafts that grant them go at the same time
 	if grafts != null:
 		grafts.on_reset()   # GRAFTING chunk C: a graft lasts the run, and goes with a game over
+	if robot != null:
+		robot.on_reset()   # THE SURGICAL ROBOT: a plugged-in core lasts the run, like the boots
 	if trinkets != null:
 		trinkets.on_reset()   # TRINKETS chunk B: rings, tags and boosts go with the run
 
@@ -1892,6 +1908,8 @@ const PILL_PRICE := 15
 const PILL_COUNT := 10
 ## ROCKET BOOTS: one pair.
 const ROCKET_BOOTS_PRICE := 100
+## THE SURGICAL ROBOT: the core that powers the OR's robot for the rest of the run.
+const ROBOT_CORE_PRICE := 500
 
 
 ## Hub rebuild, chunk 3: what the pharmacy's fax order form offers, in order. A new entry here
@@ -1901,6 +1919,7 @@ const PHARMACY_MAX_QTY := 99
 const PHARMACY_CATALOG := [
 	{"kind": "placebo_pills", "name": "Placebo pills", "count": PILL_COUNT, "price": PILL_PRICE},
 	{"kind": "rocket_boots", "name": "Rocket boots", "count": 1, "price": ROCKET_BOOTS_PRICE},
+	{"kind": "robot_core", "name": "Robot core", "count": 1, "price": ROBOT_CORE_PRICE},   # THE SURGICAL ROBOT
 ]
 
 
@@ -3170,6 +3189,8 @@ func knock_down_monster(m: Node, dir: Vector3 = Vector3.ZERO, seconds: float = 4
 ## Host: end whatever operation p is doing, on either table.
 func _end_operations(p: Node) -> void:
 	end_operations(p)   # loop: every patient table and the player table
+	if robot != null:
+		robot.drop(p)   # THE SURGICAL ROBOT: hurt, downed or dead, you are thrown out of the robot
 
 
 ## True when nobody is left on their feet: every player (not waiting to join) is downed or dead.
@@ -4615,6 +4636,7 @@ func _global_fields() -> Dictionary:
 		"cb": combat.net_state(), "dx": dissection.net_state(), "ab": abilities.net_state(),
 		"gu": gurney.net_state(),   # OR GURNEY: where it rests, who pushes it, who rides it
 		"gf": grafts.net_state(),   # GRAFTING chunk C: who has a grafted part
+		"rb": robot.net_state(),   # THE SURGICAL ROBOT: powered, who is in it, its look
 		"tk": trinkets.net_state(),   # TRINKETS chunk B: rings, laptop screens, tagged monsters, EpiPens
 	}
 	# loop: the cases, one field per case so a vitals tick resends a float, not every case:
@@ -4875,6 +4897,7 @@ func _apply_state(state: Dictionary, msg: Dictionary, keyframe: bool) -> void:
 	dissection.apply_net_state(g.get("dx", {}))
 	abilities.apply_net_state(g.get("ab", {}))
 	grafts.apply_net_state(g.get("gf", {}))   # GRAFTING chunk C
+	robot.apply_net_state(g.get("rb", {}))   # THE SURGICAL ROBOT
 	trinkets.apply_net_state(g.get("tk", {}))   # TRINKETS chunk B
 	var new_tools := bool(g.get("dt", dev_tools))   # DEV HOOK
 	if new_tools != dev_tools:

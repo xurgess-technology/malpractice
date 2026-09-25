@@ -80,6 +80,8 @@ const SCENARIOS := [
 	{"name": "wall", "scenario": "wall", "clients": 2, "timeout": 300},
 	# ROCKET BOOTS: boots on a client, its burn seen by another, its faceplant hurting on the host.
 	{"name": "rocket_boots", "scenario": "rocket_boots", "clients": 2, "timeout": 240},
+	# THE SURGICAL ROBOT: a client plugs the core in and operates through the robot; another watches.
+	{"name": "robot", "scenario": "robot", "clients": 2, "timeout": 400},
 	# HIT FEEDBACK: the red flash on a hit monster and on a hit player reaches a client's machine.
 	{"name": "hit_feedback", "scenario": "hit_feedback", "clients": 1, "timeout": 240},
 	# SKILL TREE: a client at the vein machine buys a skill; the host's has_skill sees it, the other

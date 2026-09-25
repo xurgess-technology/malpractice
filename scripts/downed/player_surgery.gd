@@ -295,7 +295,8 @@ func operate_prompt(q: Node) -> String:
 	var p := patient()
 	if p == null:
 		return game.grafts.table_prompt(q)   # GRAFTING chunk C: a strapped surgeon and a loaded vat
-	if q == p:
+	# THE SURGICAL ROBOT: through the robot you can carry on operating on yourself.
+	if q == p and not (game.robot != null and game.robot.linked(q) and game.robot.covers(table_pos())):
 		return ""
 	if is_graft():
 		var step_g := Procedures.step(String(case.ailment_id), int(case.step_index))
