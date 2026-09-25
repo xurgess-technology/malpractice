@@ -64,7 +64,7 @@ var drop_charge: float = 0.0
 var _drop_holding: bool = false
 var _drop_hold_t: float = 0.0
 const DROP_TAP_MAX := 0.15
-const DROP_CHARGE_FULL := 1.1
+const DROP_CHARGE_FULL := 1.4
 ## THROW HOOK (scripts/hands/throw_pose.gd): the live wind-up the hands pose from, client-owned and
 ## replicated (report_state index 15, report_full "tw"): 0..1 charge while the drop key is held past
 ## the tap, -1 for THROW_FOLLOW_TIME after a charged throw fires (the follow-through), else 0.

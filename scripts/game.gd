@@ -143,6 +143,8 @@ var _snap_accum: float = 0.0
 ## with the new entity's fields: a Hive wearing a Sonographer's kind, which could not be strapped.
 var _next_monster_id: int = 0
 var _next_item_id: int = 0
+## The Service Dog: the last offer tag handed out (dog_new_tag). Never reused in a session.
+var _dog_tag_seq: int = 0
 var _rng := RandomNumberGenerator.new()
 var _noises: Array = []
 var _footstep_acc: Dictionary = {}
@@ -1547,6 +1549,8 @@ func pickup_item(p: Node, it: Node) -> void:
 		p.slots[i]["x"] = String(it.x)   # GRAFTING part one: an eye's owner, a vat's contents
 		if String(it.x) == TrinketsScript.USED_MARK:
 			p.slots[i]["used"] = true   # TRINKETS chunk B: a spent trinket stays spent, and greyed
+	if int(it.dog_tag) != 0:
+		p.slots[i]["dg"] = int(it.dog_tag)   # SERVICE DOG: the offer's identity travels with the item
 	var pos: Vector3 = it.global_position
 	mark_db(String(it.kind), "sighted", p)   # wall terminal: an item this player has held shows in their database
 	world_items.erase(it.item_id)
@@ -1593,7 +1597,7 @@ func player_faceplanted(p: Node) -> void:
 ## (toss()) and the item replicates like any other drop. A charged placebo pill is special: only
 ## one pill leaves the bottle (the rest stays in hand) and it is tracked for a mid-air hit.
 const THROW_MIN_SPEED := 1.2
-const THROW_MAX_SPEED := 11.0
+const THROW_MAX_SPEED := 18.0
 const THROW_MIN_UP := 0.6
 const THROW_MAX_UP := 2.6
 
@@ -1649,10 +1653,16 @@ func drop_selected(p: Node, charge: float = 0.0) -> void:
 	it.value = int(s.get("v", 0))
 	it.bt = float(s.get("bt", -1000000.0))   # GRAFTING: the eye spoil clock
 	it.x = String(s.get("x", ""))   # GRAFTING part one
+	it.dog_tag = int(s.get("dg", 0))   # SERVICE DOG
 	it.toss(from, vel)
 	p.clear_slot(head)
 	_sound("thud", from.origin)
 	emit_noise(from.origin, 0.4, "drop")
+	# SERVICE DOG: a charged throw (anything past a tap) of an item a dog offered is what it wanted,
+	# whoever threw it. The tap is already charge 0 here (Player.DROP_TAP_MAX is the seconds of hold
+	# that count as one), so "past a tap" is the same small floor the placebo pill uses.
+	if int(it.dog_tag) != 0 and charge > MonsterScript.DogBrain.THROW_MIN_CHARGE:
+		dog_item_thrown(int(it.dog_tag))
 
 
 ## Hit, shoved or gone: every hand lets go and fragile stacks lose some of their contents
@@ -1682,6 +1692,7 @@ func _drop_hands(p: Node, violent: bool) -> void:
 		it.value = v
 		it.bt = float(s.get("bt", -1000000.0))   # GRAFTING: the eye spoil clock
 		it.x = String(s.get("x", ""))   # GRAFTING part one
+		it.dog_tag = int(s.get("dg", 0))   # SERVICE DOG: still that dog's item; being hit is not a throw
 		it.toss(from, dir * randf_range(2.0, 3.5) + Vector3.UP * 2.0)
 		p.clear_slot(i)
 		emit_noise(from.origin, 0.4, "drop")
@@ -1724,6 +1735,7 @@ func storage_place(p: Node, ct: Node3D, slot: int) -> void:
 	if s.has("bt"):
 		it.bt = float(s.bt)   # GRAFTING: the spoil clock travels with it
 	it.x = String(s.get("x", ""))   # GRAFTING part one
+	it.dog_tag = int(s.get("dg", 0))   # SERVICE DOG
 	p.clear_slot(head)
 	_sound("items_clink", ct.slot_transform(slot).origin)
 
@@ -2533,6 +2545,106 @@ func spawn_pocket_monster(kind: String, pos: Vector3) -> Node:
 	return _add_monster(kind, pos)
 
 
+# -------------------------------------------------------------------------
+# SERVICE DOG (scripts/monsters/service_dog_brain.gd). What it carries lives in its brain, not in the
+# world: taking an item in its mouth removes the WorldItem exactly as a player's pickup does, and
+# setting it down spawns a fresh one. So an offer's identity is a TAG, not a node: dog_new_tag()
+# hands one out, the dropped WorldItem carries it (`dog_tag`, host only), a pickup copies it into
+# the hand slot as "dg", and every way a stack leaves a hand copies it back out. drop_selected tells
+# the dogs when a tagged stack goes out as a charged throw (dog_item_thrown).
+
+## Host: a fresh offer tag.
+func dog_new_tag() -> int:
+	_dog_tag_seq += 1
+	return _dog_tag_seq
+
+
+## Host: the dog sets `stack` ({kind, count, v, bt, x}) down from its mouth at `from`, moving at `vel`
+## (a gentle drop at a surgeon's feet). The item tumbles and settles into its hover like any drop.
+func dog_place_item(stack: Dictionary, from: Transform3D, vel: Vector3, tag: int) -> Node:
+	if not is_host() or String(stack.get("kind", "")) == "":
+		return null
+	var it := _spawn_item(String(stack.kind), int(stack.get("count", 1)), from, WorldItem.State.LOOSE)
+	it.value = int(stack.get("v", 0))
+	it.bt = float(stack.get("bt", -1000000.0))
+	it.x = String(stack.get("x", ""))
+	it.dog_tag = tag
+	it.toss(from, vel)
+	_sound("thud", from.origin)
+	return it
+
+
+## Host: the dog takes `it` in its mouth. The WorldItem goes (as a pickup) and its stack comes back.
+func dog_take_item(it: Node) -> Dictionary:
+	if not is_host() or it == null or not is_instance_valid(it) or not world_items.has(it.item_id):
+		return {}
+	var stack := {"kind": String(it.kind), "count": int(it.count), "v": int(it.value), "bt": float(it.bt), "x": String(it.x)}
+	var pos: Vector3 = it.global_position
+	world_items.erase(it.item_id)
+	it.queue_free()
+	_sound("pickup", pos)
+	return stack
+
+
+## Host: the loose WorldItem carrying `tag`, or null (in somebody's hands, sold, gone).
+func dog_tagged_item(tag: int) -> Node:
+	if tag == 0:
+		return null
+	for it in world_items.values():
+		if is_instance_valid(it) and int(it.dog_tag) == tag and int(it.state) == WorldItem.State.LOOSE:
+			return it
+	return null
+
+
+## Host: is the item carrying `tag` anywhere at all -- in the world (loose or shelved) or in a hand?
+func dog_tag_exists(tag: int) -> bool:
+	if tag == 0:
+		return false
+	for it in world_items.values():
+		if is_instance_valid(it) and int(it.dog_tag) == tag:
+			return true
+	for p in players.values():
+		for sl in p.slots:
+			if int((sl as Dictionary).get("dg", 0)) == tag:
+				return true
+	return false
+
+
+## Host: whatever carries `tag` in the world is nobody's offer any more (its dog was killed or put
+## under). Hands keep their "dg"; with no dog asking for it, a throw of it satisfies nothing.
+func dog_release_tag(tag: int) -> void:
+	if tag == 0:
+		return
+	for it in world_items.values():
+		if is_instance_valid(it) and int(it.dog_tag) == tag:
+			it.dog_tag = 0
+
+
+## Host: the Service Dog's drain takes one heart off `p` (service_dog_brain.gd, on the Onlooker's
+## pacing). NOT damage_player: that drops everything in their hands and cancels a wind-up, and the
+## whole point of the drain is that the counter -- pick the item up, throw it -- stays open to them
+## while it goes on. No knockback, no hands dropped; at 0 they go down as they would from anything.
+func dog_drain_heart(m: Node, p: Node) -> void:
+	if not is_host() or p == null or not is_instance_valid(p) or not p.alive or p.downed or p.invuln > 0.0:
+		return
+	if dev_on() and dev.is_god(p):
+		return  # DEV HOOK: god mode
+	p.hp = maxi(0, int(p.hp) - 1)
+	if p.has_method("flinch"):
+		p.flinch()
+	_broadcast("hit", {"id": p.peer_id, "hp": p.hp, "knock": Vector3.ZERO})
+	Audio.play("hurt", p.global_position)
+	if p.hp <= 0:
+		down_player(p, "monster:%s" % String(m.kind) if m != null else "monster:service_dog")
+
+
+## Host: a stack tagged `tag` just went out as a charged throw. The dog that offered it is satisfied.
+func dog_item_thrown(tag: int) -> void:
+	for m in monsters.values():
+		if is_instance_valid(m) and String(m.kind) == MonsterScript.SERVICE_DOG and m.brain != null and m.brain.item_thrown(tag):
+			return
+
+
 ## Host (dev and tests): a Hive at `pos`. Lived on the brains node until brains were removed.
 func spawn_hive(pos: Vector3) -> Node:
 	if not is_host():
@@ -3018,6 +3130,8 @@ func kill_monster(m: Node) -> void:
 			q.teleport(q.held_from)
 	if combat != null:
 		combat.on_monster_removed(m)   # SWEEP 3 HOOK
+	if m.brain != null and m.brain.has_method("released"):
+		m.brain.released()   # SERVICE DOG: what it carried drops; its offer is nobody's now
 	var data := {"kind": m.kind, "pos": m.global_position, "y": m.rotation.y}
 	m.queue_free()
 	dev.monster_died_fx(data)
@@ -4897,6 +5011,7 @@ func _drop_hands_in_place(p: Node) -> bool:
 		it.value = int(s.get("v", 0))  # inventory: loot keeps its value
 		it.bt = float(s.get("bt", -1000000.0))   # GRAFTING: the eye spoil clock
 		it.x = String(s.get("x", ""))   # GRAFTING part one
+		it.dog_tag = int(s.get("dg", 0))   # SERVICE DOG
 		it.toss(xf, Vector3(cos(a), 0.0, sin(a)) * 0.4)
 		p.clear_slot(i)
 	if any:

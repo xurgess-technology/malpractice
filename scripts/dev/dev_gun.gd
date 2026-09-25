@@ -173,8 +173,15 @@ static func monster_corpse(parent: Node, kind: String, pos: Vector3, yaw: float)
 	elif model.has_method("play"):
 		model.play("idle", 0.0, 0.0)
 	var tw := root.create_tween()
-	tw.tween_property(model, "rotation:x", PI / 2.0 * 0.96, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.parallel().tween_property(model, "position:y", 0.25, 0.45)
+	if model.get("dog") != null:
+		# SERVICE DOG: a four-legged body falls onto its side, not onto its nose.
+		model.dog.lying = 1.0
+		model.dog.tick(0.0)
+		tw.tween_interval(0.45)
+	else:
+		tw.tween_property(model, "rotation:x", PI / 2.0 * 0.96, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	if model.get("dog") == null:
+		tw.parallel().tween_property(model, "position:y", 0.25, 0.45)
 	tw.tween_interval(CORPSE_TIME)
 	tw.tween_property(root, "position:y", pos.y - 1.2, 1.5)
 	tw.tween_callback(root.queue_free)

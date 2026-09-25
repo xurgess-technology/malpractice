@@ -12,6 +12,7 @@ const NurseRig := preload("res://scripts/monsters/night_nurse_rig.gd")
 const HiveRig := preload("res://scripts/monsters/hive_rig.gd")
 const SonoRig := preload("res://scripts/monsters/sonographer_rig.gd")
 const OnlookerRig := preload("res://scripts/monsters/onlooker_rig.gd")
+const DogRig := preload("res://scripts/monsters/service_dog_rig.gd")
 
 const RIG_KEY := "patient/human"
 const LOOPING := ["idle", "walk", "sprint"]
@@ -29,6 +30,9 @@ var hive = null
 ## The Sonographer's model: its pose modifier and its look interface (sonographer_rig.gd), null for
 ## every other look. It is `shaper` too.
 var sono = null
+## The Service Dog's body and its inputs (service_dog_rig.gd: the GLB when there is one, else the
+## placeholder primitives), null for every other look. monster.gd routes the dog past the shaper.
+var dog = null
 ## Movable ears: [{node: Node3D pivot on the head, side: +1 left / -1 right, rest: outward radians}]
 var ears: Array = []
 var _ear_listen := 0.0
@@ -56,6 +60,11 @@ func setup(monster_kind: String) -> void:
 	# a step, so there is nothing to animate. monster.gd routes this kind past the shaper entirely.
 	if kind == "onlooker":
 		OnlookerRig.build(self)
+		return
+	# The Service Dog: its own body either way (a GLB `monster/service_dog` once the art lands, the
+	# placeholder primitives until then), driven by monster.gd's _dog_visual, never by the shaper.
+	if kind == "service_dog":
+		dog = DogRig.build(self)
 		return
 	rig = Assets.spawn(RIG_KEY) if Assets.has(RIG_KEY) else null
 	if rig != null:
@@ -185,6 +194,8 @@ func eye_offset() -> Vector3:
 		return hive.eye_offset
 	if sono != null:
 		return sono.eye_offset
+	if dog != null:
+		return Vector3(0.0, 0.0, 0.16)   # the head bone sits between the sockets; +Z is its snout
 	return Vector3(0.0, 0.13, 0.1)
 
 
@@ -226,6 +237,8 @@ func _anim_key() -> String:
 		return HiveRig.KEY
 	if sono != null:
 		return SonoRig.KEY
+	if dog != null:
+		return DogRig.KEY
 	return RIG_KEY
 
 

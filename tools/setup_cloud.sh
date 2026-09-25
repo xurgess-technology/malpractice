@@ -45,3 +45,9 @@ fi
 
 godot4 --version
 blender --version
+
+# Global class_name symbols (C in scripts/consts.gd, MapGen, etc.) and autoloads only resolve
+# once Godot has imported the project and written .godot/global_script_class_cache.cfg (gitignored,
+# regenerated on import). Without this, headless --script runs like tools/mapcheck.gd fail with
+# "Identifier ... not declared" parse errors that have nothing to do with the script itself.
+godot4 --headless --path . --import

@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-25 (0.12.x)**
 
+- **0.12.3**: THE SERVICE DOG 🐕
+    - Added: A new monster, the Service Dog -- a tall, gaunt, bloodied borzoi in a service vest. It wanders with a two-handed item in its mouth, brings it to you and sets it down like it wants to play fetch, then growls a warning. Throw the item back (any charge past a tap) and it fetches happily and wanders off; ignore the warning and it rears onto its hind legs, opens its jaws on a glowing throat orb, and drains your hearts with a spectral thread until someone throws the item -- teammates can save you. It's vulnerable to a shove, the needle, dragging and the saw like a Hive, but only while it's on all fours; standing and draining, nothing touches it, and killing it on the ground pays nothing.
+- **0.12.2**: Throws go the distance
+    - Changed: A fully charged throw is much faster and travels much further -- you can actually chuck something down a hallway now. Takes a little longer to wind up to full charge too.
 - **0.12.1**: The OR has a gurney 🛏️
     - Added: A gurney parks in the OR every shift. Grab it with empty hands and push it at full walking speed -- much faster than lugging someone over your shoulder -- but you have to wheel it to them. Load a downed teammate or a sedated monster, bring them back, and slide them onto the table to start surgery.
     - Added: G tips whoever's on it onto the floor. Get hit while pushing and you let go; the gurney stays put with its passenger. A monster that wakes up on it rolls off and comes for you.

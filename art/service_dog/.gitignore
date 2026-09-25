@@ -1,0 +1,6 @@
+__pycache__/
+*.log
+*.err
+*.blend1
+# dog_build.py --export writes this, then the game copy under assets/models/monsters/service_dog/
+service_dog_embedded.glb
