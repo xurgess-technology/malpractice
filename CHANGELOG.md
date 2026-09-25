@@ -5,6 +5,10 @@ patch per thing we did that day. How to add to it: [RULES.md](RULES.md#changelog
 
 **2026-09-25 (0.12.x)**
 
+- **0.12.6**: A perf pass after the skill tree, robot and gurney 📉
+    - Fixed: The skill tree's vein scanner was quietly redrawing its whole screen every frame, hidden, for the entire session -- about 810 extra draw calls everywhere, all the time. It only draws when someone's actually near it now.
+    - Note: A full sweep after this batch of content (Service Dog, gurney, robot, skill tree, hands, Puppet, longer throws) found nothing else worth a line here -- see docs/FAILING_TESTS.md for the details, including two test-harness bugs that were quietly passing broken.
+
 - **0.12.5**: A surgical robot, for solo grafts 🤖
     - Added: A $500 robot core from the pharmacy, plugged into a fixture by the OR's first patient table. Press P from anywhere to remote in, and its camera runs the normal surgery flow -- including strapping yourself to its table and grafting solo.
     - Fixed: Pressing P while pushing the gurney used to freeze you mid-push; it now refuses with a reason instead.

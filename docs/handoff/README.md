@@ -4,15 +4,20 @@ Written by the orchestrator so a cloud agent can carry on. NOW.md is gitignored 
 this is its stand-in. The older handoffs in this folder (graft-surgery, icon-bar, ...) are from
 2026-09-18 and long since merged; they're kept for history only.
 
-**Update (2026-09-25, later the same day):** items 1-3 below are done. `skill-tree` merged as
+**Update (2026-09-25, later the same day):** all four items below are done. `skill-tree` merged as
 **0.12.4** and `surgical-robot` as **0.12.5**, each independently verified (their own tests plus
 `monster_lab`/`dogtest`) after merging in the other's changes and the Service Dog/gurney/hands work
 already on `main`. The nettest `bandwidth` stall (item 3, `docs/FAILING_TESTS.md` section 1n) is
 fixed and merged too (no changelog entry -- it's test tooling): the `shelf_count()` theory was
 right, `_shift_bot` now fetches a step's tool from wherever it is instead of assuming the shelf
 count means someone's already holding it; `bandwidth` runs in ~55 s now, was stalling to the 900 s
-timeout. **What's left is item 4: the perf re-check and full sweep**, below -- it hasn't run on the
-combined `main` yet.
+timeout. **Item 4, the perf re-check and full sweep, is also done, merged as 0.12.6**: it found and
+fixed a real regression (the skill tree's vein-scanner SubViewport was rendering unseen every
+frame, ~810 extra draw calls everywhere), plus two test-harness bugs (`grafttest` was passing with
+half its checks never run; a `vats.gd` shutdown error). The only red result is the mortal playtest
+(`--seed=12345` and `--seed=2`), confirmed pre-existing on the 0.10.55 baseline, not a regression --
+see `docs/FAILING_TESTS.md` section 1o. **The whole 2026-09-24 list is done. Nothing has been
+played by Zach yet** -- that's the actual next step, not more headless work.
 
 **Also on `main` from earlier today:** the Service Dog (a new monster) and longer throws, merged in
 at the prior handoff as 0.12.2 and 0.12.3.
@@ -26,7 +31,7 @@ Eleven items, "pick an order for this and do it all to completion". Merge mode i
 | # | Item | State |
 |---|---|---|
 | 1 | Pocket-space textures flickering | **Merged, 0.11.2**: pocket props were drawn inside out |
-| 2 | Make sure the perf audit is done | **Open**: the audit itself landed in 0.10.54; the re-check after all the new content is still owed (below) |
+| 2 | Make sure the perf audit is done | **Merged, 0.12.6**: the re-check found and fixed a real regression |
 | 3 | Onlooker: shadowy fog; rushing him = poof into fading smoke | **Merged, 0.11.1** |
 | 4 | Tune the thrown-item tumble | **Merged, 0.11.3** |
 | 5 | Player-pushed gurney in the OR | **Merged, 0.12.1** |
@@ -98,15 +103,40 @@ a short resolved note. One unrelated, unexplained runner crash (`nettest_run.gd`
 "caller thread can't call `propagate_notification()`") turned up once in 14 runs, with the child
 processes progressing normally -- not investigated, not blocking.
 
-### 4. Perf re-check and the full sweep (item 2 of Zach's list)
-Run these after 1 and 2 land:
-- `perfprobe` on the hospital
-- `perfprobe --pockets`
-- every headless test scene
-- the playtest shifts
-- `tools/nettest_run.gd`
+### Done: perf re-check and the full sweep (item 2 of Zach's list, merged 0.12.6)
+Ran `perfprobe` on the hospital and (partially, see below) the pocket spaces, every headless test
+scene, the playtest shifts and the full `nettest_run.gd` suite, all on this same cloud box, with
+software Vulkan (`mesa-vulkan-drivers` under Xvfb) so the real Forward+ renderer's draw-call and
+node-count numbers are comparable (fps itself is meaningless here, pinned around 7). Compared
+against a `git archive` export of `11159d1` (0.10.55) as "before", same flags both sides
+(`--quality=1 --frames=200`, seed 4242).
 
-Fix what regressed, or write it into docs/FAILING_TESTS.md. Items 3, 5 and 6 all added content, so look closest at the Onlooker's smoke, the gurney and the robot. **A cloud Linux box's frame times don't compare with Zach's Windows machine.** Compare before and after on the same box (check out `11159d1`, 0.10.55, for "before"), or leave the absolute numbers for a local run.
+- **Found and fixed: ~810 extra draw calls in every hospital view.** The skill tree's
+  `VeinMachine.warm()` left its warmup SubViewport on `UPDATE_ALWAYS` -- a SubViewport renders
+  regardless of its parent's visibility, so the hidden warmup shelf's vein screen (~795 draws) was
+  being redrawn, unseen, every frame of every session. Fixed in `scripts/warmup.gd`: every
+  SubViewport under `WarmupKeepAlive` goes to `UPDATE_DISABLED` once the shelf sleeps.
+- **After the fix vs. 0.10.55:** draws down 4-36% in 6 of 9 hospital views; up modestly (9-24%) in
+  the three OR views, almost certainly the robot fixture's ~55 shadow-casting mesh pieces plus the
+  gurney -- not a regression, just new geometry that's always in the OR now. Physics-script time is
+  within this box's noise everywhere. Nodes are +392 everywhere (new systems' warmup instances).
+  Pocket-space perf was only checked for `none` and `factory` (same pattern, fix confirmed) before
+  being cut short in favor of the correctness sweep; `natatorium`, `chapel` and `laundromat` weren't
+  measured, and neither was a close-up A/B of the gurney/robot/Onlooker specifically -- all four
+  need a local Windows run if they're wanted.
+- **Two test-harness bugs found and fixed, unrelated to perf:** `grafttest` was a false PASS
+  (pre-existing on 0.10.55) -- a `String(null)` SCRIPT ERROR killed its `_run` coroutine at the
+  first step, and `await` on the dead coroutine let it print PASS with 66 of 115 checks never run;
+  fixed to fail loudly on an aborted run instead. A `vats.gd` shutdown error (assigning a freed
+  marker to a typed `Area3D` var before the `is_instance_valid` check) fired on any level teardown,
+  not just shutdown as `1n` had guessed; fixed, `downedtest`/`devtest` are now at 0 SCRIPT ERRORs.
+- **Everything else: green.** All ~27 headless test scenes, `mapcheck`/`spawncheck`/`loottest`/
+  `minimapcheck`, four of five playtest shifts (`--god`), and all 31 default `nettest` scenarios
+  plus the opt-in `bandwidth`/`bandwidth_amp`, zero SCRIPT ERRORs anywhere.
+- **The one red result:** the mortal playtest (no `--god`) goes down on both `--seed=12345` and
+  `--seed=2` -- confirmed identical on the 0.10.55 baseline, so this is pre-existing bot behavior
+  in `tools/playtest.gd`, not a regression from this batch. Documented as `docs/FAILING_TESTS.md`
+  section 1o. Use `--god` to check that a shift can be completed.
 
 ## Things Zach should look at when he plays (feel calls, not bugs)
 - **Onlooker:**
