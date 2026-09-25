@@ -1,0 +1,271 @@
+"""Service Dog materials: six Principled BSDF materials. The first four are chosen per face by
+dog_geometry.py's vertex masks; the last two are forced onto specific faces by `Part.add_patch`
+(the vest's iconography) regardless of any mask.
+
+  Dog_Coat       dark, wiry, matte -- the body, legs, tail, ears
+  Dog_Skull      pale, gaunt bone-white -- the skull and jaw only (image refs 1/3/4)
+  Dog_Vest_Clean bright, saturated safety-vest orange -- the strap/panel where it is not worn
+  Dog_Vest_Worn  the same canvas, darker and desaturated, for the low/edge wear mask
+  Dog_Vest_Cross the red-cross patch (first-aid iconography, so the vest reads as a service
+                 animal's at a glance, not just a colour block)
+  Dog_Vest_Badge a small pale ID-badge patch, the vest's second piece of iconography
+
+Revision 13 (2026-09-24, styling pass -- see README): Zach asked for actual surface detail --
+grime/fur variation and blood, matching how the rest of the project's monsters get this (a baked
+texture atlas: art/seal/, art/night_nurse/'s `*_materials.py` + `*_build.py` bake pass), not the
+flat per-face colour blocks this file used through Revision 12. `Dog_Coat`, `Dog_Skull`,
+`Dog_Vest_Clean` and `Dog_Vest_Worn` (the four big-area materials; the two small icon patches stay
+flat and clean so they read unambiguously, per Zach's earlier "make the cross unmistakable" note)
+now build a small procedural Cycles node graph -- patchy fur-clump noise, grime concentrated low on
+the legs/body, and a scattering of dried-blood stains -- that `dog_build.py`'s new `bake()` step
+bakes to a real image per mesh (`Dog_Body_Albedo` / `Dog_Vest_Albedo`) through each part's own
+(already-existing, already-packed) UV layer, exactly the seal/night-nurse pattern, just without a
+separate high-poly sculpt to bake AO/normal detail from (this mesh has none) -- a self-bake of the
+procedural colour only, not a full PBR atlas.
+"""
+import bpy
+
+
+def _principled(name, base_color, roughness, metallic=0.0):
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes.get('Principled BSDF')
+    bsdf.inputs['Base Color'].default_value = (*base_color, 1.0)
+    bsdf.inputs['Roughness'].default_value = roughness
+    if 'Metallic' in bsdf.inputs:
+        bsdf.inputs['Metallic'].default_value = metallic
+    mat.use_fake_user = True
+    return mat
+
+
+class _NB:
+    """A minimal node-tree builder -- just enough for the grime/blood graphs below (a much smaller
+    subset of art/seal/blender_src/seal_materials.py's `NB`, since this mesh has no infection mask,
+    UV2 atlas or flow-frame attribute to support)."""
+
+    def __init__(self, mat):
+        self.mat = mat
+        self.nt = mat.node_tree
+        self.x = -800
+
+    def n(self, kind, **props):
+        node = self.nt.nodes.new(kind)
+        node.location = (self.x, 0)
+        self.x += 180
+        for k, v in props.items():
+            setattr(node, k, v)
+        return node
+
+    def link(self, a, b):
+        self.nt.links.new(a, b)
+
+    def value(self, v):
+        node = self.n('ShaderNodeValue')
+        node.outputs[0].default_value = v
+        return node.outputs[0]
+
+    def noise(self, scale, detail=2.0, roughness=0.5, w=0.0):
+        node = self.n('ShaderNodeTexNoise')
+        node.noise_dimensions = '4D'
+        node.inputs['Scale'].default_value = scale
+        node.inputs['Detail'].default_value = detail
+        node.inputs['Roughness'].default_value = roughness
+        node.inputs['W'].default_value = w
+        return node.outputs['Fac']
+
+    def ramp(self, fac, stops):
+        """`stops`: [(pos, value_or_color), ...], value can be a float or an (r,g,b) tuple."""
+        node = self.n('ShaderNodeValToRGB')
+        node.color_ramp.elements[0].position = stops[0][0]
+        node.color_ramp.elements[0].color = self._c(stops[0][1])
+        node.color_ramp.elements[1].position = stops[-1][0]
+        node.color_ramp.elements[1].color = self._c(stops[-1][1])
+        for pos, val in stops[1:-1]:
+            e = node.color_ramp.elements.new(pos)
+            e.color = self._c(val)
+        self.link(fac, node.inputs['Fac'])
+        return node.outputs['Color'], node.outputs['Alpha']
+
+    @staticmethod
+    def _c(v):
+        if isinstance(v, tuple):
+            return (*v, 1.0) if len(v) == 3 else v
+        return (v, v, v, 1.0)
+
+    def mix_color(self, fac, a, b):
+        node = self.n('ShaderNodeMix', data_type='RGBA', clamp_factor=True)
+        for idx, v in ((0, fac), (6, a), (7, b)):
+            if isinstance(v, (int, float)):
+                node.inputs[idx].default_value = self._c(v)
+            elif isinstance(v, tuple):
+                node.inputs[idx].default_value = self._c(v)
+            else:
+                self.link(v, node.inputs[idx])
+        return node.outputs[2]
+
+    def math(self, op, a, b=None, clamp=True):
+        node = self.n('ShaderNodeMath', operation=op, use_clamp=clamp)
+        for i, v in enumerate((a, b)):
+            if v is None:
+                continue
+            if isinstance(v, (int, float)):
+                node.inputs[i].default_value = v
+            else:
+                self.link(v, node.inputs[i])
+        return node.outputs[0]
+
+    def position(self):
+        return self.n('ShaderNodeNewGeometry').outputs['Position']
+
+    def sep(self, vec):
+        s = self.n('ShaderNodeSeparateXYZ')
+        self.link(vec, s.inputs[0])
+        return s.outputs['X'], s.outputs['Y'], s.outputs['Z']
+
+
+def _grimy_material(name, base_color, roughness, *, grime_color, blood_color=None,
+                     grime_seed=0.0, blood_seed=7.0, ground_bias=True, blood_amount=0.05,
+                     blood_scale=2.2, blood_power=4.0):
+    """A Principled BSDF whose Base Color is base_color with patchy fur-clump micro-noise, blotchy
+    grime (concentrated low on the body/legs when `ground_bias`, since that is where a real animal
+    actually picks up dirt) and, if `blood_color` is given, a scatter of small dried-blood stains
+    layered on top -- all driven by object-space Position, so the pattern is coherent in 3D (no UV
+    seams) and reads the same regardless of how a given part's UV island happens to be laid out."""
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = nt.nodes.get('Principled BSDF')
+    b = _NB(mat)
+    pos = b.position()
+    _, _, z = b.sep(pos)
+
+    # Fur-clump micro-variation: a fine, high-frequency noise nudging brightness +-35% (Revision 14:
+    # +-12% turned out to be genuinely imperceptible once lit and shaded, not merely "subtle" --
+    # see README Revision 14).
+    micro = b.noise(46.0, detail=2.0, roughness=0.55, w=grime_seed)
+    micro_mul = b.math('MULTIPLY', b.math('SUBTRACT', micro, 0.5), 0.70)
+    micro_mul = b.math('ADD', micro_mul, 1.0)
+
+    # Grime patches: coarse noise thresholded into blotches, biased toward low Z (legs/belly/hem)
+    # for `ground_bias` materials (the coat, the vest's own lower edge) via a smooth 0..1 ramp on Z.
+    grime_n = b.noise(5.5, detail=3.0, roughness=0.6, w=grime_seed + 11.0)
+    if ground_bias:
+        height_bias = b.math('SUBTRACT', 1.0, b.math('MULTIPLY', z, 0.55))
+        grime_n = b.math('MULTIPLY', grime_n, b.math('ADD', 0.35, b.math('MULTIPLY', height_bias, 0.65)))
+    grime_mask, _ = b.ramp(grime_n, [(0.28, 0.0), (0.52, 1.0)])
+    # grime_mask is an RGB output (greyscale ramp); use its red channel as a 0..1 factor.
+    grime_fac_sep = b.n('ShaderNodeSeparateColor')
+    b.link(grime_mask, grime_fac_sep.inputs['Color'])
+    grime_fac = grime_fac_sep.outputs['Red']
+    grime_fac = b.math('MULTIPLY', grime_fac, 1.0)  # Revision 14: was 0.85, capped too low to read
+
+    grimed = b.mix_color(grime_fac, base_color, grime_color)
+    dirtied = b.n('ShaderNodeMixRGB', blend_type='MULTIPLY')
+    b.link(grimed, dirtied.inputs['Color1'])
+    b.link(micro_mul, dirtied.inputs['Color2'])
+    dirtied.inputs['Fac'].default_value = 1.0
+    out_color = dirtied.outputs['Color']
+
+    if blood_color is not None:
+        # Dried-blood SPLATTERS (Revision 16 -- Revision 15 way overshot into a full-body wash;
+        # Zach wants discrete splatters/drips with clearly clean coat/vest/skull showing through
+        # everywhere else, not "a fainter version of the same wash"). Same underlying technique (a
+        # noise raised to a power, giving each splatter's edge a soft, organic, soaked-in falloff
+        # rather than a hard cutout) but tuned for discreteness, not coverage:
+        #  - `blood_power` is HIGH (6.0, vs Revision 15's 1.7) so the transition from clean to bloody
+        #    is sharp and binary-ish -- only the noise's own high spots read as blood at all, instead
+        #    of most of its range doing so.
+        #  - `blood_scale` (esp. the coat/vest default, lower than Revision 14/15's) makes each
+        #    surviving spot a recognisable splatter-sized blob rather than a fine, evenly-distributed
+        #    speckle -- fewer, bigger, more deliberate-looking marks.
+        blood_n = b.noise(blood_scale, detail=3.0, roughness=0.55, w=blood_seed)
+        peaked = b.math('POWER', blood_n, blood_power)
+        # `blood_amount` is a coverage knob, not a raw factor.
+        blood_fac = b.math('MULTIPLY', peaked, blood_amount * 3.0)
+        out_color = b.mix_color(blood_fac, out_color, blood_color)
+
+    b.link(out_color, bsdf.inputs['Base Color'])
+    bsdf.inputs['Roughness'].default_value = roughness
+    mat.use_fake_user = True
+    return mat
+
+
+def coat_material():
+    # Near-black, slightly warm charcoal, with fur-clump noise, grime biased low on the legs/belly
+    # (a real animal picks up dirt from the ground, not the shoulders) and a few dried-blood stains
+    # (image ref tone: "wrong dog", not merely dirty) -- Revision 13.
+    # Revision 14: `grime_color` used to be DARKER than the near-black base -- on an already near-
+    # zero-luminance coat, "even darker" is invisible (this is what actually made Revision 13's
+    # grime read as nothing at all, not just subtle). Real dirt is dusty and LIGHTER/warmer than wet
+    # black fur, so the grime colour now reads as a visible warm-grey smudge, not more black-on-black.
+    # Revision 15 pushed blood_amount up for "genuinely covered" and overshot into a full-body wash
+    # ("WAYYYYY too much" -- Zach). Revision 16: amount cut to well under half of Revision 15's, and
+    # `blood_scale` lowered so the surviving marks read as a few recognisable splatters/drips, not an
+    # even, fainter tint of the same wash -- see `_grimy_material`'s own comment on `blood_power`.
+    return _grimy_material('Dog_Coat', (0.028, 0.026, 0.030), 0.78,
+                            grime_color=(0.11, 0.09, 0.07), blood_color=(0.50, 0.035, 0.025),
+                            grime_seed=1.0, blood_seed=4.0, blood_amount=0.45, blood_scale=1.3)
+
+
+def skull_material():
+    # Pale, gaunt bone-white for the skull and jaw. Revision 15 (Zach: "make sure the face/skull
+    # gets real coverage too, not just the body/legs like the last pass"): the skull's own blood
+    # coverage now matches the coat's, not a lighter touch -- the palest surface on the model is
+    # exactly where blood should read most starkly against the base colour.
+    # blood_scale raised well above the other materials': the skull is a small, confined area in
+    # object space, and the default low-frequency blood noise (tuned for the much bigger coat/vest)
+    # was landing the ENTIRE skull inside a single low-noise cell -- rendering as plain white with no
+    # blood at all regardless of blood_amount, even though the same noise field visibly worked
+    # elsewhere. A higher-frequency noise actually varies across the skull's own small footprint.
+    # Revision 16: same over-coverage complaint applied here too, and the same sharpened
+    # `blood_power` for discrete splatters -- but `blood_scale` STAYS notably higher than the coat/
+    # vest's (4.5 vs 1.3): dropping it back toward their lower frequency reintroduces Revision 14's
+    # bug (the whole small skull sitting inside a single noise cell, reading as either fully clean or
+    # fully bloodied with no in-between). `blood_amount` also had to land much higher here (1.6, vs
+    # the ~0.5-0.65 that worked for the coat/vest) for the same reason: at the skull's small scale,
+    # even the sharpened mask needs a bigger push to actually clear threshold anywhere visible.
+    return _grimy_material('Dog_Skull', (0.72, 0.69, 0.63), 0.55,
+                            grime_color=(0.38, 0.36, 0.32), blood_color=(0.48, 0.045, 0.032),
+                            grime_seed=2.0, blood_seed=9.0, ground_bias=True, blood_amount=1.6,
+                            blood_scale=4.5)
+
+
+def vest_clean_material():
+    # Bright, saturated safety-vest orange; the base garment's own colour still reads unmistakably
+    # first per Zach's original note (the grime channel's own cap still limits how much of THAT
+    # shows), but Revision 15's blood coverage is deliberately NOT capped the same way -- Zach wants
+    # the vest genuinely bloodied, not just lightly worn, and a saturated red reads unmistakably
+    # against the orange regardless.
+    return _grimy_material('Dog_Vest_Clean', (0.62, 0.24, 0.05), 0.6,
+                            grime_color=(0.18, 0.09, 0.03), blood_color=(0.55, 0.015, 0.015),
+                            grime_seed=3.0, blood_seed=13.0, blood_amount=0.65, blood_scale=1.3)
+
+
+def vest_worn_material():
+    # Darker, greyer and a little desaturated: grime and old stains, not fresh canvas. Kept to a
+    # minority of the vest by dog_geometry.py's stain mask so it never competes with the base
+    # garment's readability. Revision 16: same splatter treatment as the other three materials.
+    return _grimy_material('Dog_Vest_Worn', (0.28, 0.14, 0.08), 0.85,
+                            grime_color=(0.09, 0.05, 0.03), blood_color=(0.42, 0.02, 0.015),
+                            grime_seed=5.0, blood_seed=17.0, blood_amount=0.6, blood_scale=1.3)
+
+
+def vest_cross_material():
+    # Revision 7: the old (0.62, 0.03, 0.02) shared the exact same red channel as
+    # Dog_Vest_Clean's (0.62, 0.24, 0.05) -- the two colours only differed in green/blue, which
+    # washed out under directional lighting and made the cross unreadable at any distance. A true
+    # bright red (higher red channel than the vest, near-zero green/blue) is unambiguous against
+    # the vest's orange regardless of lighting. Left flat (no grime/blood texture, Revision 13):
+    # this is small first-aid iconography, and Zach has twice asked for it to read unambiguously,
+    # not weathered.
+    return _principled('Dog_Vest_Cross', (0.85, 0.04, 0.03), 0.45)
+
+
+def vest_badge_material():
+    return _principled('Dog_Vest_Badge', (0.85, 0.82, 0.72), 0.4)
+
+
+def build_all():
+    # Order matters: dog_geometry.py's VEST_CROSS_MAT / VEST_BADGE_MAT are indices into this list.
+    return [coat_material(), skull_material(), vest_clean_material(), vest_worn_material(),
+            vest_cross_material(), vest_badge_material()]

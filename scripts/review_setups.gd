@@ -33,6 +33,11 @@ const MirrorsScript := preload("res://scripts/personnel/mirrors.gd")
 
 const SETUPS := {
 	"icons": {"seed": 4242, "stage": "_icons"},
+	# BETTER HANDS: in the OR with a bone saw, a scalpel, anesthetic and the reflex hammer in hand
+	# (scroll through them; click to swing the saw, jab, bonk; hold G to throw), and every other
+	# holdable item laid out on the floor ahead to pick up and look at. Toggle the torch (F) to see its
+	# lens go dark.
+	"hands": {"seed": 4242, "stage": "_hands"},
 	# POCKETS 2 phase 2 (docs/POCKET_SPACES_2.md): standing on the Natatorium's deck at the water's
 	# edge, a lifeguard whistle and a pool chemical drum to hand, the stocked first-aid cabinet on the
 	# lifeguard stand behind you. Walk the pool and walk the deck and listen to the difference.
@@ -156,6 +161,14 @@ const SETUPS := {
 	# SKILL TREE (docs/SKILL_TREE.md): at the vein machine in Personnel, a step back from the hand
 	# plate with a few skill points to spend. Press E. `--fresh` forgets every skill first.
 	"skill_tree": {"seed": 4242, "stage": "_skill_tree"},
+	# OR GURNEY (2026-09-24): beside the OR's gurney with empty hands; a downed teammate in the hall
+	# outside the OR doors and a sedated Hive further down it. Push it out, load them, bring them back.
+	"gurney": {"seed": 4242, "stage": "_gurney"},
+	# SERVICE DOG (placeholder body): a wing corridor, empty hands, and the Service Dog a few metres
+	# off with a heart monitor in its mouth, looking at you. It walks up and sets it at your feet;
+	# pick it up and THROW it (hold the drop key, not a tap) before the clock runs out, or it stands up and drains you.
+	# A defibrillator lies nearby for its next round. `-Count 2`: your teammate's throw counts too.
+	"service_dog": {"seed": 4242, "stage": "_service_dog"},
 }
 
 
@@ -369,6 +382,36 @@ static func _icons(game: Game) -> void:
 	game.local_player().selected = 0
 	floor_item(game, "heart_monitor", t + Vector3(0.1, 0, 2.3), 1, 200)
 	floor_item(game, "defibrillator", t + Vector3(1.1, 0, 2.3), 1, 300)
+
+
+## BETTER HANDS: see SETUPS. The floor rows run across the open side of the room in front of you.
+static func _hands(game: Game) -> void:
+	var t: Vector3 = game.table_pos()
+	var eye := t + Vector3(0.6, 0, 3.4)
+	var dir := open_direction(game, eye + Vector3.UP * 0.5, 6.0)
+	var side := Vector3(-dir.z, 0.0, dir.x)
+	place(game, eye, eye + dir * 2.0 + Vector3.UP * 0.9)
+	clear_hands(game)
+	give(game, "bone_saw")
+	give(game, "scalpel")
+	give(game, "anesthetic", 3)
+	give(game, "reflex_hammer", 1, 60)
+	game.local_player().selected = 0
+	var held := ["bone_saw", "scalpel", "anesthetic", "reflex_hammer", "rocket_boots"]
+	var kinds: Array = []
+	for k in Items.ITEMS.keys():
+		if not held.has(k) and not Items.is_worn(k):
+			kinds.append(k)
+	for k in preload("res://scripts/economy/loot_table.gd").kinds():
+		if not held.has(k) and not kinds.has(k):
+			kinds.append(k)
+	var per_row := 7
+	for i in kinds.size():
+		var row := i / per_row
+		var col := i % per_row
+		var at := eye + dir * (1.2 + row * 0.7) + side * ((col - (per_row - 1) * 0.5) * 0.55)
+		var n := 3 if Items.stacks(String(kinds[i])) else 1
+		floor_item(game, String(kinds[i]), at, n, 50 if Items.is_loot(String(kinds[i])) else 0)
 
 
 ## TAB SHEET (2026-09-22): open floor by the OR, hands part full, both abilities at level 2 and
@@ -1217,6 +1260,57 @@ static func _downed(game: Game) -> void:
 	print("[review] downed: bot %d down at %s, free table %d at %s" % [bid, mate_at, table, t])
 
 
+## OR GURNEY (2026-09-24, scripts/gurney/gurney.gd): standing beside the OR's gurney where it parks,
+## hands empty. Dr. Bled (a bot) lies downed in the hall just outside the OR's double doors, and a
+## sedated Hive (asleep for ten minutes) lies further down the same hall. E on the gurney takes the
+## handle; push it out through the doors, bring it alongside Dr. Bled and E loads them; push them back
+## in and E beside a free table lays them on it (the stitches start, as after a carry). The Hive the
+## same way: its Eyeball Extraction starts on the table. G tips a rider off; E with nothing near lets go.
+## Dev mode is on (F1) with monsters off and no game over. With `-Count 2` the second window stands
+## beside you: that is the view of a teammate watching the gurney go by.
+static func _gurney(game: Game) -> void:
+	var tree := game.get_tree()
+	var me = game.local_player()
+	game.set_dev_tools(true, me)
+	var dev = game.dev
+	dev.request("monsters_off", {"on": true})
+	dev.request("no_game_over", {"on": true})
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	dev.request("clear_patient")
+	var g = game.gurney
+	var park: Vector3 = g.park_pos
+	var b := Basis(Vector3.UP, float(g.park_yaw))
+	# The entrance building's own grid (scripts/level/entrance.gd): the gurney parks at tile (9.5, 10.5),
+	# the OR doors are at x 14, rows 8-9, and the hall outside (the spine) is x 15-17.
+	var ot: Vector3 = park - Vector3(9.5, 0.0, 10.5) * C.TILE
+	var mate_at: Vector3 = game._floor_at(ot + Vector3(16.3, 0.0, 12.0) * C.TILE)
+	var hive_at: Vector3 = game._floor_at(ot + Vector3(16.3, 0.0, 16.5) * C.TILE)
+	var bid: int = dev.spawn_bot("bot", me, "Dr. Bled")
+	for i in 4:
+		await tree.physics_frame
+	var mate = game.players.get(bid)
+	if mate != null and is_instance_valid(mate):
+		dev.brains.erase(bid)   # no orders, no wandering: it is a body to fetch
+		mate.teleport(mate_at)
+		await tree.physics_frame
+		game.knock_down_player(mate, "review")
+	var m = game._add_monster("hive", hive_at)
+	if m != null:
+		for i in 3:
+			await tree.physics_frame
+		m.sedate(600.0)
+	# Beside the handle end, looking at the gurney with the doors beyond it.
+	var stand: Vector3 = park + b * Vector3(-0.9, 0.0, 2.1)
+	place(game, game._floor_at(stand), park + b * Vector3(0.0, 0.8, -1.2))
+	clear_hands(game)   # the handle needs both hands
+	for i in 30:
+		await tree.physics_frame
+	game.say("E on the gurney to push it. Dr. Bled is down in the hall outside, a sleeping Hive past them: E loads, E beside a free table unloads, G tips off.", 14.0)
+	print("[review] gurney: parked at %s, Dr. Bled (bot %d) down at %s, hive %s at %s" % [park, bid, mate_at, str(m != null), hive_at])
+
+
 ## MINIMAP: a free run of the hospital with the fogged floor plan in the top right corner. Nothing
 ## chasing you and nothing to lose, because the map is the whole point: walk out of the hub into a
 ## wing and watch the plan ink itself in behind you. The hub is drawn from the start; a ward room
@@ -1846,3 +1940,49 @@ static func _skill_tree(game: Game) -> void:
 	game.local_player().selected = 0
 	game.say("Put your palm on the reader (E). Watch the scan and the veins grow, click a node, INFUSE it. Esc steps away.", 9.0)
 	print("[review] skill_tree: %d points, %d skills unlocked" % [Skills.points, Skills.unlocked.size()])
+
+
+## SERVICE DOG: standing in a wing corridor (a monster spawn, so a hallway the dog may wander) with
+## empty hands, the Service Dog a few metres down it facing you, a heart monitor in its mouth. It
+## comes up, puts it down in front of you and growls (the fetch clock is not shown anywhere).
+## A charged throw (hold the drop key) of that heart monitor satisfies it; let the clock run out and
+## it stands up and drains your hearts until someone throws it. You cannot lose the run (no game over);
+## you CAN lose hearts. A defibrillator on the floor nearby is the next thing it will go and fetch.
+static func _service_dog(game: Game) -> void:
+	var tree := game.get_tree()
+	var p = game.local_player()
+	game.set_dev_tools(true, p)
+	game.loop._end_call()
+	game.loop.first_called = true
+	game.loop.extra_done = true
+	game.dev.request("no_game_over", {"on": true})
+	game._clear_monsters()
+	await tree.physics_frame
+	var base: Vector3 = game.clock_pos()
+	var spawns: Array = game.level_info.get("monster_spawns", [])
+	if not spawns.is_empty():
+		base = spawns[0]
+	var out := open_direction(game, base + Vector3.UP * 1.2, 14.0)
+	var stand: Vector3 = game._floor_at(base)
+	place(game, stand, stand + out * 6.0 + Vector3.UP * 1.2)
+	clear_hands(game)
+	p.set_flashlight(true)
+	var at: Vector3 = game._floor_at(base + out * 7.0)
+	if not game._point_is_clear(at + Vector3.UP * 1.0):
+		at = game._floor_at(base + out * 4.5)
+	var dog = game._add_monster("service_dog", at)
+	dog.rotation.y = atan2(out.x, out.z)   # models face -Z: this has it facing back up the corridor at you
+	dog.brain.give({"kind": "heart_monitor", "count": 1, "v": 90})
+	# Somewhere clear on this side of it (behind you is often a wall: spawns sit near corridor ends).
+	var side := out.cross(Vector3.UP).normalized()
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	for c in [base - out * 2.0, base + side * 1.1, base - side * 1.1, base + out * 2.5 + side * 0.9, base + out * 2.5]:
+		var f: Vector3 = game._floor_at(c)
+		var q := PhysicsRayQueryParameters3D.create(stand + Vector3.UP * 0.5, f + Vector3.UP * 0.5)
+		q.collision_mask = C.L_WORLD
+		if absf(f.y - stand.y) < 0.3 and game._point_is_clear(f + Vector3.UP * 0.5) and space.intersect_ray(q).is_empty():
+			floor_item(game, "defibrillator", f, 1, 110)
+			break
+	await tree.physics_frame
+	print("[review] service_dog: the dog %.1f m down the corridor with a heart monitor" % stand.distance_to(at))
+	game.say("It wants to play. Pick up what it brings you and THROW it (hold the drop key).", 9.0)

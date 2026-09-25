@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cdoglab01"]
+
+[ext_resource type="Script" path="res://tools/dog_lab.gd" id="1_dlab"]
+
+[node name="DogLab" type="Node3D"]
+script = ExtResource("1_dlab")

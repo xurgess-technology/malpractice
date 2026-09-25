@@ -142,6 +142,18 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	var fp_torch: Node3D = preload("res://scripts/hands/fp_arms.gd").make_torch()
 	shelf.add_child(fp_torch)
 	fp_torch.position = Vector3(x + 0.4, 0.3, 0.3)
+	# BETTER HANDS: a gloved hand closed in a fist (every bone, the cuff and the bent wrist), and the
+	# torch with its lens dark (the light switched off).
+	var arms_script := preload("res://scripts/hands/fp_arms.gd")
+	var fp_fist: Node3D = arms_script.make_arm(1.0, C.PLAYER_COLORS[0])
+	shelf.add_child(fp_fist)
+	fp_fist.position = Vector3(x + 0.2, 0.3, 0.6)
+	arms_script.apply(fp_fist, arms_script.SHAPE_FIST, 1.0)
+	arms_script.aim_forearm(fp_fist, Vector3(0.3, -0.5, 1.0))
+	var fp_torch_off: Node3D = arms_script.make_torch()
+	shelf.add_child(fp_torch_off)
+	fp_torch_off.position = Vector3(x + 0.4, 0.3, 0.6)
+	(fp_torch_off.get_node("Lens") as MeshInstance3D).material_override = arms_script.lens_material(false)
 	# FLASHLIGHT POSE: the torch a teammate's body holds, lit (its lens, flare and shaft shaders).
 	var tp_torch = preload("res://scripts/hands/body_torch.gd").new()
 	shelf.add_child(tp_torch)
@@ -264,7 +276,13 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	# POCKETS 2 phase 6: "onlooker" builds its unshaded shadow material and its emissive eyes, the
 	# first unshaded-plus-emission pair a shift draws. Without it the thing pops in with a hitch,
 	# and a hitch is a tell on a monster whose whole point is that it arrives in silence.
-	for kind in ["night_nurse", "hive", "sonographer", "onlooker"]:  # SWEEP 3 HOOK (monsters)
+	# "service_dog" (2026-09-24): its own Blender model and quadruped rig (art/service_dog/,
+	# dog_rig.gd, routed through service_dog_rig.gd). Warms its baked coat/vest grime-and-blood
+	# textures, the throat orb's glass-shell and inner-wisp materials (the soul-drain sequence's
+	# harvestable piece, dog_rig.gd's `_build_orb`, including its procedural swirl NoiseTexture2D)
+	# so the first Service Dog of a session does not hitch on their texture generation or shader
+	# compile.
+	for kind in ["night_nurse", "hive", "sonographer", "onlooker", "service_dog"]:  # SWEEP 3 HOOK (monsters)
 		var model: Node3D = MonsterModel.new()
 		shelf.add_child(model)
 		model.setup(kind)
@@ -300,6 +318,12 @@ static func run(game: Node, progress: Callable = Callable(), ready_to_draw: Call
 	# models now; their skinning and the merged gurney compile here).
 	for n in crew.find_children("*", "CollisionObject3D", true, false):
 		n.queue_free()
+	# OR GURNEY: the OR's own player-pushed gurney is this same model (crew.gd make_gurney_model);
+	# drawn here on its own too, so the pushed one never stalls on first sight.
+	var or_gurney: Node3D = (load("res://scripts/loop/crew.gd") as GDScript).make_gurney_model()
+	or_gurney.scale = Vector3.ONE * 0.4
+	or_gurney.position = Vector3(0.4, -0.6, -1.4)
+	shelf.add_child(or_gurney)
 	var ph: Node3D = (load("res://scripts/loop/phone.gd") as GDScript).create()
 	ph.remove_from_group("interactable")   # only a look-alike: never the real "phone"
 	ph.remove_meta("interact_id")

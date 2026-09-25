@@ -237,6 +237,14 @@ func _agents() -> Array:
 			kind = "bot"
 		if int(p.get("carrying")) != 0 or int(p.get("dragging_monster")) >= 0:
 			kind = "carrier" if kind == "player" else kind
+		# OR GURNEY: someone pushing the gurney meets a door with its front end, 2.5 m ahead of them,
+		# and has no hand free for E: they push doors like a carrier, sensed at the gurney's nose.
+		var gy = game.get("gurney")
+		if gy != null and int(gy.pusher) == int(p.peer_id) and int(p.peer_id) != 0:
+			var nose: Vector3 = gy.nose()
+			out.append({"kind": "carrier" if kind == "player" else kind, "pos": nose, "push_pos": nose,
+				"fwd": -p.global_transform.basis.z, "node": p})
+			continue
 		out.append({"kind": kind, "pos": p.global_position, "fwd": -p.global_transform.basis.z, "node": p})
 	for m in game.monsters.values():
 		if m == null or not is_instance_valid(m):
@@ -484,6 +492,15 @@ func _push_check(d: Node, a: Dictionary) -> void:
 				return
 			_drive(d, want, SPEED_NURSE)
 			_count("night_nurse")
+		"service_dog":
+			# It noses a door open wherever it is going: wandering, fetching, following, or coming for
+			# you. By mode, not by `moving`: pressed against a shut door it is not moving at all.
+			if m == null or not [M.Mode.WANDER, M.Mode.DOG_SEEK, M.Mode.DOG_APPROACH, M.Mode.DOG_WARN,
+					M.Mode.DOG_DRAIN, M.Mode.DOG_RETRIEVE].has(int(m.mode)):
+				return
+			_drive(d, want, SPEED_CLOSE)
+			_count("service_dog")
+			_fx(d, "doors_creak", NOISE_CREAK, "door")
 
 
 func _monster_wants_through(m: Node) -> bool:

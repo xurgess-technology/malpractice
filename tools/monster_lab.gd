@@ -40,6 +40,8 @@ class LabGame extends Node3D:
 	## POCKETS 2 phase 6: a LabPockets while the Onlooker scenario runs, null otherwise, exactly as
 	## game.pockets is null outside a shift. Every other scenario sees the null and is unchanged.
 	var pockets: Node = null
+	## OR GURNEY: the real game's gurney, which combat and the player ask after. There isn't one here.
+	var gurney: Node = null
 	## What onlooker_watch.gd seeds its roll from.
 	var seed_value := 0
 	var shift := 1

@@ -575,6 +575,107 @@ there to prevent; the smoke thins with distance instead. Every smoke material an
 is built once and shared, and warmup draws a poof. Nettest `onlooker_poof` proves the poof on a
 client; `tools/onlookershot.ps1` photographs it in every pocket; review with `--setup=onlooker_rush`.
 
+### The Service Dog (2026-09-24, branch `service-dog-brain`)
+
+`Monster.SERVICE_DOG` `"service_dog"`, a fifth kind in `Monster.KINDS`. It wants to play fetch and is
+not asking. Brain `scripts/monsters/service_dog_brain.gd` (host only), body
+`scripts/monsters/service_dog_rig.gd` (every machine), the drained surgeon's own effects
+`scripts/monsters/dog_drain_fx.gd` (local only).
+
+**The offer.** It carries a two-handed item (`Items.is_bulky`) in its mouth, or goes looking for a
+loose, settled one it may wander to (`monster_may_wander_to`). Carrying one, it notices a surgeon
+(a cone and a clear line, like the Hive), walks up (`DOG_APPROACH`, a walk), lowers its head and
+sets the item on the floor at their feet (`DOG_OFFER`), then stands and watches with a clock
+running (`DOG_WARN`, `FETCH_WINDOW` 12 s), growling once or twice. A **real throw of that same
+item, by anybody** satisfies it: `charge` as `game.drop_selected(p, charge)` gets it (0..1) above
+`THROW_MIN_CHARGE` 0.1. A tap reaches `drop_selected` as charge 0; `Player.DROP_TAP_MAX` is seconds of
+hold and is never compared with a charge. Satisfied: `DOG_RETRIEVE`, it trots to wherever the item
+is, takes it back in its mouth and wanders, `CONTENT_TIME` before it will offer again.
+
+**The drain** (`DOG_DRAIN`, replaced the old rear-and-attack; `DOG_REAR_RETIRED` keeps its number).
+When the clock runs out -- not before -- it rises onto its hind legs over `REAR_RISE` (about 2.4 m
+to the head), jaws wide, and the orb at the back of its throat lights. While its **original target
+only** is within `DRAIN_RANGE` (4 m, flat) with a clear line from its throat to their face, hearts go
+on the Onlooker's pacing: a meter that fills in range and bleeds down out of it (`DRAIN_DECAY`), the
+first heart at `DRAIN_GRACE`, then gaps of `DRAIN_TICK_FIRST` x `DRAIN_TICK_RAMP`^n floored at
+`DRAIN_TICK_MIN` (three hearts in about 11 s). Hearts go through `game.dog_drain_heart`, **not**
+`damage_player`: no knockback, nothing dropped from the hands, no wind-up cancelled, because it does
+not hold them and the counter (pick it up, throw it) has to stay open; at 0 they go down as usual.
+It follows upright and silently at `SPEED_DRAIN` (a little under a surgeon's walk), standing
+`DRAIN_STAND` off; the following is its own function (`_drain_follow`) so a glide can replace it.
+It ends when **anybody** makes a real throw of that item (it drops over `REAR_DROP`, jaws shut, orb
+dims, `DOG_RETRIEVE`), or when its target is down, dead or gone (the same, as if nothing happened).
+If the item leaves the world with nobody holding it (sold, freed) it stands down.
+
+**Vulnerable on all fours, untouchable standing.** `is_capturable("service_dog")` is true;
+`Monster.capturable_now()` and `can_be_hurt()` are false in `DOG_DRAIN`. On all fours it is a Hive:
+a shove stuns it (`STUNNED`, `SHOVE_STUN`; the fetch clock does not run while it is down, and it
+goes back to what it was doing), the needle puts it under (it drops what it carries, and its offer
+is released: `game.dog_release_tag`), a sedated dog can be dragged, and the saw kills it in 2 hits
+(`max_hp_for`), dropping what it carried. No monster pays a bounty, so a kill pays nothing (the
+test asserts it). Standing, the brain's `shoved` / `stun` ignore it, the saw returns `"immune"`, and
+combat's `_capturable` (now asking `capturable_now()` first) refuses the needle.
+**Not strappable yet:** strapping needs a `Procedures` monster patient and a table body, which is
+the surgery flow (the Sonographer is in the same place); `drag_aim` offers "Put the Service Dog
+down" at a table.
+
+**Identity is a tag, not a node.** Taking an item in its mouth removes the WorldItem like a pickup
+(`game.dog_take_item`) and setting it down spawns a new one (`game.dog_place_item`), so an offer is
+`brain.offer_tag` (`game.dog_new_tag`, never reused). The WorldItem carries it as `dog_tag` (host
+only, not replicated); `game.pickup_item` copies it into the hand slot as `"dg"`, and every way a
+stack leaves a hand (`drop_selected`, `_drop_hands`, `_drop_hands_in_place`, `storage_place`) copies
+it back out. `drop_selected` calls `game.dog_item_thrown(tag)` for a real throw of a tagged stack.
+`game.dog_tagged_item(tag)` is the loose item, `game.dog_tag_exists(tag)` "anywhere at all".
+
+**Roster**: none on shift 1, one from shift 2 (`Monster.dog_count`), outside `MAX_MONSTERS`,
+placed at a `monster_spawns` point like the Sonographer and the Nurse.
+
+**Replication** (only the dog's report carries these): `"ck"` -> `dog_carry`, `"dt"` ->
+`dog_target` (peer id it is offering to or draining), `"ol"` -> `dog_left` (fetch clock, 0.25 s
+steps; a client counts down between snapshots), `"gr"` -> `dog_growls` (a counter: each growl
+plays once everywhere), `"ok"` -> `dog_offer_kind`, `"og"` -> `dog_glow` (the orb, 0..1, 1/32 steps).
+The mode is `md`. The host only turns the orb full while its target is in range with a clear line,
+so `Monster.dog_draining()` (DOG_DRAIN, fully upright, `og` > 0.7) is "draining this second" on
+every machine without a field of its own. From it every machine draws **the thread** (a thin
+orb-coloured line from the target's mouth to the orb, `DrainThread`, seen by everyone), and
+`dog_drain_fx.gd` asks "is a dog draining ME?" from `dt` on its own machine: the screen
+desaturates (the Look environment's `adjustment_saturation`), the audio goes distant
+(`Audio.set_drain_muffle`, the fog's low-pass) and the torch dims (**on trial**, `FLASH_DIM`), all
+ramping in over `RAMP_SECONDS` and clearing over `CLEAR_SECONDS`. No field exists for the local
+effects.
+
+**The body** (`service_dog_rig.gd`) is a **placeholder**: primitives on a few pivots, tall and
+lanky (shoulders ~1.1 m, head ~1.5 m, ~2.4 m standing). `build(model)` prefers a GLB when
+`Assets.has("monster/service_dog")`. Inputs: `speed`, `moving`, `rear`, `head_down`, `growl`,
+`look_yaw`, `carrying`, `lying`, the stun window's `daze` / `rise` / `stagger`, and
+`set_drain_glow(v)`; then `tick()`. Sockets: `mouth` (the carried item), `orb` -- a node named
+**`Orb`**, its own mesh and material (never baked into the head), so a later task can take it out
+(`orb_world()`) -- and `Head`. For the GLB: clips `idle`, `walk`, `rear_up`, `drain_idle`,
+`upright_walk`, `drop_down` through `Assets.anim_name` (missing ones fall back to idle/walk); the orb
+is a node named `Orb` (or `Site_orb` / a `throat` bone as its socket, where ours goes); the mouth is
+`Site_mouth` or a BoneAttachment on bone `jaw`/`head`.
+
+**With the art track's model** (`service-dog-art`: `dog_rig.gd`'s `DogPoser`, checked against
+its Revision 11): when `res://scripts/monsters/dog_rig.gd` exists, `service_dog_rig.gd` builds the
+GLB through that script's `build(model)`, reparents the GLB under itself (so the lying roll applies),
+takes the poser's `OrbAttach/Orb` and `Head` as its sockets (`set_drain_glow` forwards to the
+poser's orb material), feeds the poser `look_at` (skeleton space) / `look_weight` / `ear_alert` /
+`twitch`, and plays the art's `place` / `growl` clips where they fit. One-shot clips (`rear_up`,
+`drop_down`, `place`) are time-scaled to the brain's `REAR_RISE` / `REAR_DROP` / `OFFER_TIME`
+whatever length they were authored at. Offer and pick-up distances come from the body's measured
+mouth reach (`reach()`, `Monster.dog_reach()`), not the placeholder's neck. `model.dog` is always
+this wrapper, never the poser: merging `service-dog-art` means taking this branch's side of
+`monster_model.gd` and dropping the art's own `DogRig.build` case in `setup()` (keep its
+`eye_offset` line).
+
+**No HUD, on purpose** (Zach, 2026-09-24): no prompt text and no countdown on screen. The tells are
+the dog's: the item set at your feet, the growl, its stare, standing up, the orb and the thread.
+**Doors**: it noses hinged doors open in any travelling mode. **Sounds**: `monsters_dog_growl`,
+`monsters_dog_snarl` (shoved down), `monsters_dog_step` (on all fours); standing and draining it is
+silent (tools/gen_audio_monsters.mjs). **Tests**: `tools/dogtest.tscn` (headless: the whole loop,
+the drain, the vulnerability), nettest `service_dog` (a client drained, and its own throw ending
+it), `tools/dogshot.tscn` (the smoke look, needs a renderer). **Review**: `--setup=service_dog`.
+
 ### Monsters, sweep 3 (monsters worker): the Hive, fighting and capturing
 
 Kinds: `Monster.HIVE` `"hive"`, `DISCHARGED`, `NIGHT_NURSE` (`Monster.KINDS`).
@@ -2134,6 +2235,61 @@ game.downed_view           # scripts/downed/downed_view.gd: blood trails, the lo
 - Tests: `tools/downedtest.tscn` (headless), `tools/downedshot.tscn` (windowed shots into
   `tools/downed_shots/`), nettest scenario `downed`, devtest downed checks.
 
+### The OR gurney (`or-gurney`, 2026-09-24)
+
+`scripts/gurney/gurney.gd`, `game.gurney` (child "Gurney" of Game, every machine). The paramedics'
+gurney model (`crew.gd` `make_gurney_model()`, static, shared mesh), player-pushed. Host
+authoritative; the snapshot's global field `gu` is `{p, y, u, k, r}` (rest position and yaw, the
+pusher's peer id, rider kind "" / "player" / "monster", rider id).
+
+```gdscript
+Gurney.HANDLE_BACK 1.5  NOSE 1.05  SPEED_K 1.0  TURN_RATE 2.4 rad/s  TOP_Y 0.8  LOAD_REACH 1.8  TABLE_REACH 2.8
+g.pose() -> Transform3D           # every machine: pushed, derived from its copy of the pusher (never sent); else the rest pose
+g.pusher / pusher_node() / pose_yaw() / nose() / lie_yaw() / lie_top() / rider_player_pose() / monster_pose()
+g.rider_kind / rider_id / has_rider() / rides(kind, id) / rider_name()
+g.load_candidate(q) -> {kind, id, aim, name}   # nearest downed teammate / sedated undragged monster within LOAD_REACH of its long axis
+g.table_target() -> {id, index}   # the free table (TABLE_REACH, middle to middle) the rider would go onto
+g.pusher_aim(q) -> [aim id, E prompt, drop-key text]   # Player._update_aim_core while pushing
+g.aim_prompt(q)                   # the parked gurney's aim box ("gurney"): push it / "Place X on the gurney" for a carrier
+g.grab(q) / release() / release_if_pusher(q) / pusher_pressed(q, aim) / pusher_drop(q)   # host
+g.take_from_carrier(q) / take_from_dragger(q) / unload_to_table(q, ti) / tip_off() / park()  # host
+g.steer(q, from_yaw, want_yaw, delta) -> float   # the pusher's machine: capped turn, refused into walls
+game.lay_on_table(p, ti)          # host: a downed player onto a table (place_on_player_table ends here too)
+combat.strap_monster(m, ti, q)    # host: a monster case on table ti (combat.strap ends here too)
+Combat.GURNEY_DRAGGER (-900000)   # a monster's dragged_by while it lies on the gurney
+Player.on_gurney ("og") / pushing_gurney() / look_along_gurney()
+```
+
+- **Parked**: `level_info.gurney` (`entrance.gd` spot `gurney`: the middle of the OR, front end to the
+  doors), else 2.9 m off the OR table. `game._populate_shift_world` calls `park()` every shift: back
+  there, let go, empty. Parked, it has a world-layer blocker (solid to everyone) and the aim box.
+- **Pushing**: E on the aim box with empty hands (and not carrying, dragging, operating, downed...)
+  takes the handle: the host moves the pusher to the handle, facing along it (the reliable
+  `gu_grab` event does it on the pusher's own machine), flipping ends if the handle side is
+  blocked. Pushed, the blocker and aim box switch off and the pusher's own body gets the gurney's
+  box as a second `CollisionShape3D` ("GurneyShape", only on the machine that moves that body), so
+  walls and shut doors stop it; `steer` caps the turn and refuses a turn into something solid.
+  Walk speed, no sprint, jump, crouch, shove or use. Doors sense a pusher as a carrier standing at
+  the gurney's nose. The host lets go for them when they can't push any more (hit, shoved,
+  downed, stunned, grabbed, left); the gurney stays where it was. Rattle (`loop_gurney`) and a 0.3
+  noise every second while it rolls.
+- **E while pushing** (host re-decides from its own state; the aim id only guards against surprise):
+  rider and a table in reach -> `unload_to_table`; nothing on it and someone in reach -> load them;
+  else let go. **G** tips the rider off beside it (a downed rider gets the `placed` event), else
+  lets go. A carrier's E on the parked gurney (`carrier_pressed_interact`, aim "gurney") and a
+  dragger's (`combat.dragger_pressed_interact`) load straight from the shoulder or the drag.
+- **A downed rider**: `on_gurney`, pinned by `game.pinned_pose` (and again in `Player._process`, so it
+  never trails its pusher by a frame), lying in the table frame `lie_yaw` / `lie_top` with the head
+  at the handle end, the `Lying` clip, eye 0.28 m; the local rider's look turns with the gurney.
+  Nobody can lift them off by hand (their aim box is off); they keep bleeding at the normal rate.
+  Bled out or gone, the host clears the rider.
+- **A monster rider**: `dragged_by = GURNEY_DRAGGER`, so it thinks no more than a dragged one, every
+  machine pins it through `combat.monster_pin` (-> `monster_pose`), and nobody can drag it. Only a
+  kind with a monster case (the Hive) is offered a table; anything else only comes off with G. If it
+  wakes (`monster.wake` clears `dragged_by`) the host rolls it off beside the gurney and it hunts.
+- Tests: `tools/gurneytest.tscn` (headless), nettest `gurney`, the smoke look `tools\gurneyshot.ps1`
+  (shots into `tools/gurney_shots/`), review setup `gurney`.
+
 ### Strapping yourself down (grafting chunk B, 2026-09-18, docs/GRAFTING.md)
 
 A healthy surgeon can lie on the table themselves, awake, and hold E to get up. The state is the
@@ -2329,6 +2485,26 @@ p.carry_cam.front_view()                     # swung round facing the player: no
   (`Body/HeldThirdPerson`) keep their paths: each frame they are moved onto the socket, and their
   child `Held` carries the grip transform (first person: two-handed things fit 0.22 m, big loot
   0.13 m; third person two-handed things 0.55 m).
+- **First-person grips (2026-09-24, BETTER HANDS)**: the first-person hands no longer use the table
+  above (the body still does). `fp_arms.gd` is a gloved hand: a rounded palm, four fingers of three
+  bones (`Rig/F0..F3`, `J1`, `J2`), a three-bone thumb (`Rig/Thumb`, `T1`, `T2`) and a forearm that
+  bends at the wrist (`Rig/Forearm`, aimed each frame at an elbow below the camera, `ELBOW_L/R`, at
+  most `WRIST_MAX`). A hand's pose is a *shape* `{f: [[knuckle, middle, tip] x4], t: [opposition,
+  base, middle, tip]}` (`Arms.apply(arm, shape, side)`, `shape_from_curl(c)`, `blend_shapes`);
+  `Arms.chain(shape, side)` gives the same bones as capsules. Every kind names a grip in
+  `Grips.FP` -- `power` (a fist across a handle: saw, scalpel, hammer, bottles), `hook` (a bail in the
+  fingers), `pinch` (forceps, pulse ox), `palm` (the default: on the palm, fingers cupped) -- plus the
+  model point, `axis` and `face` (see grips.gd), and `__torch` / `__jab` for the torch and the jab's
+  syringe. `tools/gripbake.tscn` places each model and runs `grip_solver.gd` (the palm pushes the model
+  out of itself; each finger and the thumb close until a bone touches the model's surface) and writes
+  `scripts/hands/grip_bake.gd`; the game reads only that: `Grips.fp_held(kind, n) -> {xf, k, grip,
+  shape, shape_r, spread}` (`n` = `Grips.fp_shown_count`). **A new holdable kind, a changed item model
+  or a changed hand needs `godot --headless --path . res://tools/gripbake.tscn` re-run**
+  (`-- --only=kind`); `tools/handstest.tscn` fails on any kind without a clean bake. Fist poses are
+  aimed by their handle: `Poses.grip_pose(p, h, n, side)` (`TORCH_GRIP`, `LEFT_POWER`, `JAB_GRIP`,
+  `THROW_FIST` for a one-handed fist's throw, saw swing and hammer bonk). The first-person torch
+  lens is dark while the light is off (`Arms.lens_material(lit)`; scan_fx still tints it blue).
+  Contact sheet: `tools\handshot.ps1` (tools/hand_shots/). Review: `--setup=hands`.
 - **First person**: right hand the torch (thumb up), left hand the selected stack; two-handed things
   take both hands and the torch tucks down at the right. Poses (camera space, `hand_poses.gd`) blend
   the wind-up / strike / recover of `combat.action_of`; walk bob, sway lagging the mouse, a 0.38 s
@@ -3115,4 +3291,4 @@ shift 2), nettest scenario `doors`, devtest door checks, `tools/perfprobe.tscn -
 (`{"seed": 4242, "stage": "_name"}`) and one static function that stages things with the helpers
 `place`, `clear_hands`, `give` (a stack, with extra stack keys like `bt`, `used`, `x`), `give_abilities`
 and `floor_item`. An unknown name is logged with the known ones and the menu opens as usual. Setups so
-far: `icons`, `items`, `graft`, `graft_back`, `trinkets`, `puppet` (and many more: `SETUPS` is the list).
+far: `icons`, `items`, `graft`, `graft_back`, `trinkets`, `puppet`, `gurney`, `service_dog` (and many more: `SETUPS` is the list).

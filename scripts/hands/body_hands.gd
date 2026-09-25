@@ -265,7 +265,8 @@ func update(delta: float) -> void:
 			al += Vector3(cos(_shake_t * 53.0), sin(_shake_t * 66.0), 0.0) * amp
 			tor.x -= 0.1 * float(act.charge)
 	# THROW HOOK: the drop key's charged throw (scripts/hands/throw_pose.gd), over the hold pose.
-	var busy_body: bool = player.carrying != 0 or player.dragging_monster >= 0 or player.downed or player.carried_by != 0 or player.on_table
+	var busy_body: bool = player.carrying != 0 or player.dragging_monster >= 0 or player.downed or player.carried_by != 0 or player.on_table \
+		or player.on_gurney or player.pushing_gurney()
 	var saw_swing := not act.is_empty() and String(act.k) == "saw"
 	var wind: float = WindupScript.saw_wind(act) if saw_swing else (float(player.throw_wind) if act.is_empty() and not busy_body else 0.0)
 	_throw.update(delta, wind, _two,
@@ -502,8 +503,8 @@ func _human_clip(delta: float, act: Dictionary) -> void:
 	elif player.carried_by != 0:
 		want = "carried"
 		_oneshot_t = 0.0
-	elif player.on_table:
-		want = "lying"
+	elif player.on_table or player.on_gurney:
+		want = "lying"   # OR GURNEY: riding the gurney is lying on a table that moves
 		_oneshot_t = 0.0
 	elif dive:
 		want = "dive"
@@ -512,6 +513,11 @@ func _human_clip(delta: float, act: Dictionary) -> void:
 	elif down:
 		want = "crawl"
 		rate = 1.0 if player.moving and player.alive else 0.0
+		_oneshot_t = 0.0
+	elif player.pushing_gurney() and anim.has_animation(String(clips.get("push", ""))):
+		# OR GURNEY: both hands on the handle, the paramedics' own Push clip, frozen when it stops.
+		want = "push"
+		rate = clampf(_speed / 1.25, 0.0, 1.8)
 		_oneshot_t = 0.0
 	elif player.moving:
 		_oneshot_t = 0.0
