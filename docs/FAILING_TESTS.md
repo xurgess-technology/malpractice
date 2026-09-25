@@ -4,7 +4,19 @@
 written down, so seeing them does not mean your change broke something. If you fix one, delete its
 section here (and its entry in docs/KNOWN_ISSUES.md, if it has one) in the same commit.
 
-Last checked: 2026-09-22, `main` at `c933607` (0.10.17), by the `strap-fix` task: the whole
+Last checked: **2026-09-25, `main` at `f3a60f9` (0.12.5)** plus this sweep's three fixes, by the
+item-4 sweep (cloud Linux, `godot4` 4.7.2): **every** `tools/*test.tscn`, `monster_lab`,
+`exitcheck`, `faxcheck`, `mapcheck`, `spawncheck`, `loottest`, `minimapcheck`, five playtest
+shifts, and the whole default `nettest_run.gd` suite (**31 of 31 pass**, zero SCRIPT ERROR in any
+process log). Everything is green except the mortal playtest (section 1o, and not new). Found on
+the way: grafttest had been reporting PASS with half its checks never run (note below 1n, fixed),
+and a perf regression, not a test failure, fixed in `scripts/warmup.gd` (the warmup shelf's
+vein-machine screen redrawing ~800 draw calls a frame, unseen, in every view since 0.12.4). The
+`-s` check scripts all print `Identifier not found: Net` compile errors from
+`scripts/personnel/mirror_aim.gd`. They are the same on 0.10.55 and harmless: `-s` has no autoloads,
+and every one of them still reaches its OK.
+
+Before that: 2026-09-22, `main` at `c933607` (0.10.17), by the `strap-fix` task: the whole
 `nettest_run.gd` suite plus the headless scenes it touched, each failure below re-run against
 `c933607` itself to be sure it was not the branch's doing.
 
@@ -261,11 +273,46 @@ instrumenting `_shift_bot` confirmed it:
   (`nettest_run.gd`) segfaulted mid-shift ("The caller thread can't call the function
   `propagate_notification()` on this node", then signal 11) while its children were progressing
   normally. That crash is not this bug and was not investigated; re-run before believing it.
-- **Still open, low priority: `vats.gd` shutdown error.** A run that ends in a failure can still
-  print `SCRIPT ERROR: Trying to assign invalid previously freed instance. at: Vats._arm_markers
-  (res://scripts/grafting/vats.gd:545)` from `_physics_process`, right after `[net] peer N
-  disconnected` at teardown. It is a freed-node touch racing the physics tick during shutdown, not a
-  cause of anything; guard `_arm_markers` with `is_instance_valid` next time someone is in `vats.gd`.
+- **The `vats.gd` error is fixed too (2026-09-25, item-4 sweep).** `SCRIPT ERROR: Trying to assign
+  invalid previously freed instance. at: Vats._arm_markers (res://scripts/grafting/vats.gd:545)`
+  was not shutdown-only: it fires on any level teardown (mid-run in `downedtest`, lobby -> next
+  shift, and after `devtest`'s result). `_arm_markers` *did* check `is_instance_valid`, but it
+  fetched each marker into an `Area3D`-typed variable first, and assigning a freed instance to a
+  typed variable is itself the error. It now fetches untyped and casts after the check.
+
+## grafttest said PASS with half of it never run -- fixed 2026-09-25 (item-4 sweep)
+
+Kept because the trap is general. `grafttest` printed `result=PASS failures=0` with **66** checks
+while a `SCRIPT ERROR: Invalid call 'String' constructor` killed `_run` at the extraction's first
+step. STEER! replaced `eye_ops.gd` for the cut and has no `variant` property, so
+`String(sys.mg.get("variant"))` was `String(null)`. It was the same at 0.10.55 (`11159d1`), so it
+did not come with the 2026-09-24/25 content. The scoop, the nerve snip, the vat, and every graft and
+swap-back check with Dr. Botsworth had not run since the arcade rebuild. They run now, **115 checks,
+all passing**: the product was fine and only the test had gone blind.
+
+- **The trap.** A script error aborts a GDScript coroutine, and whatever `await`s it carries on as if
+  it had returned. `await _run()` then `_finish()` reads "no failures" and prints PASS. The only
+  trace is one `SCRIPT ERROR` line in the log, above a green result. Every harness in `tools/` with
+  that shape can do this. **Read a test's SCRIPT ERROR lines before believing its PASS.** On this
+  sweep every other scene had none.
+- **The fix, in `tools/grafttest.gd`.** `_playing()` reads the game's own `variant` when it has one,
+  else the case's current step's. The graft's no-botching check falls back to the case's `no_fail`
+  flag (the arcade games take it through their ctx and STEER! keeps no property of it). And
+  `_ran_to_end`, set on the last line of the awaited chain, is checked before `_finish()`, so an
+  aborted run now fails instead of passing.
+
+## 1o. The mortal playtest goes down (not new)
+
+- `tools/playtest.tscn -- --seed=12345` (no `--god`): **FAIL**, `the bot went down at t=276 after 3
+  hits` (all from a Hive). `-- --seed=2`: **FAIL** at t=81, three Sonographer hits.
+- **Not a regression.** Both seeds fail the same way on 0.10.55 (`11159d1`), seed 2 frame for frame
+  (t=73/77/81) and seed 12345 at t=279 instead of 276, from a Sonographer instead of a Hive. The bot
+  has no fighting or fleeing beyond the pinned-by-a-monster sidestep, so an unarmed mortal shift
+  is roughly a coin toss against the monster roster. Every `--god` shift passes (seed 2 gunshot,
+  12345 amputation, 4242 over two shifts, 7 with `--extra`).
+- **What would fix it** is bot behaviour in `tools/playtest.gd` (keeping its distance, hiding,
+  sedating), not the game. Until then use `--god` for "can a shift be completed", and read a
+  mortal run's `hit by` lines for what hurt it.
 
 How to run things is at the bottom of this file.
 
@@ -395,6 +442,14 @@ The Godot binary is `C:\Users\ZachBurgess\Desktop\Godot_v4.7.2-stable_win64.exe\
   is the whole five-space sweep plus the bare-hospital baseline, one process per kind, about
   25 minutes on an idle machine. It needs a **real rendering window** (it uses SW_SHOWNOACTIVATE,
   which draws without taking focus); never run it headless or minimized, and close it when done.
+- **perfprobe on a cloud Linux box (no GPU)** works through software Vulkan: `apt-get install
+  mesa-vulkan-drivers`, then `xvfb-run -a -s "-screen 0 1920x1080x24" godot4 --path . --resolution
+  1280x720 res://tools/perfprobe.tscn -- --no-steam --quality=1 --frames=200` (add `--pocket=<kind>`
+  per kind; the `.ps1` wrapper is Windows-only). llvmpipe is fill-bound at about 7 fps in every view
+  and the warmup takes 3-7 minutes, so **fps means nothing there**. Draw calls, node count and phys
+  ms are the comparable columns, and only against another commit run on the same box
+  (`git archive <commit> | tar -x -C <dir>`, import it, run the same flags). That is how the
+  vein-screen regression was found (2026-09-25): +~810 draws in every view against 0.10.55.
 - **A pocket space's own air is blended in by where the CAMERA stands** (`PocketSpaces.air_factor`:
   0 within a few metres of a seam opening, 1 by 14 m in), so a view taken just inside an entrance
   draws the whole room in the *hospital's* fog and ambient. `tools/gameshot.gd --pocket=<kind>`
