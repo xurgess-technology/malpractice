@@ -15,6 +15,11 @@ var dev: Node
 var me: Player
 var t := 0.0
 var _done := false
+## Set by the last line of the chain _run awaits (the end of _graft_checks). A script error aborts
+## a coroutine and its awaiter carries on as if it had returned, so without this a _run that died
+## half way through still reported PASS -- it did, from the arcade rebuild until 2026-09-25, with
+## the extraction's last three steps and every graft check never run.
+var _ran_to_end := false
 var _failures: Array = []
 
 
@@ -31,6 +36,7 @@ func _ready() -> void:
 	_data_checks()
 	_minigame_checks()
 	await _run()
+	_check(_ran_to_end, "the test ran to the end (a SCRIPT ERROR above aborted it otherwise)")
 	_finish()
 
 
@@ -376,13 +382,13 @@ func _run() -> void:
 	var sys = game.surgery_for_table(table)
 	game._proxy_used(game.table_interact_id(table), me)
 	var began := await _until(func(): return sys.is_local_operating() and sys.mg != null, 5.0)
-	_check(began and String(c.ailment_id) == "eye_extraction" and String(sys.mg.get("variant")) == "cut", "E with the scalpel makes the case Eyeball Extraction and plays the cut")
+	_check(began and String(c.ailment_id) == "eye_extraction" and _playing(sys, c) == "cut", "E with the scalpel makes the case Eyeball Extraction and plays the cut")
 	var ok1 := await _until(func(): return int(c.get("step_index", 0)) >= 1, 40.0)
 	_check(ok1 and bool(c.flags.get("eye_cut", false)), "the cut finishes (flags %s)" % str(c.flags))
 	await _seconds(0.5)
 	game.give_hand(me, "eye_spoon", 1)
 	game._proxy_used(game.table_interact_id(table), me)
-	var began2 := await _until(func(): return sys.is_local_operating() and sys.mg != null and String(sys.mg.get("variant")) == "scoop", 5.0)
+	var began2 := await _until(func(): return sys.is_local_operating() and sys.mg != null and _playing(sys, c) == "scoop", 5.0)
 	_check(began2, "then the spoon step (scoop)")
 	var ok2 := await _until(func(): return int(c.get("step_index", 0)) >= 2, 40.0)
 	_check(ok2 and bool(c.flags.get("eye_out", false)), "the scoop finishes (flags %s)" % str(c.flags))
@@ -392,7 +398,7 @@ func _run() -> void:
 	game.give_hand(me, "scalpel", 1)
 	me.selected = _slot_of("scalpel")
 	game._proxy_used(game.table_interact_id(table), me)
-	var began3 := await _until(func(): return sys.is_local_operating() and sys.mg != null and String(sys.mg.get("variant")) == "snip", 5.0)
+	var began3 := await _until(func(): return sys.is_local_operating() and sys.mg != null and _playing(sys, c) == "snip", 5.0)
 	_check(began3, "then the nerve snip")
 	var ok3 := await _until(func(): return int(c.get("step_index", 0)) >= 3, 60.0)
 	_check(ok3 and bool(c.flags.get("eye_removed", false)), "the snip cuts it free (step %d, flags %s)" % [int(c.get("step_index", 0)), str(c.flags)])
@@ -406,7 +412,7 @@ func _run() -> void:
 	game.give_hand(me, "forceps", 1)
 	me.selected = _slot_of("forceps")
 	game._proxy_used(game.table_interact_id(table), me)
-	var began4 := await _until(func(): return sys.is_local_operating() and sys.mg != null and String(sys.mg.get("variant")) == "place", 5.0)
+	var began4 := await _until(func(): return sys.is_local_operating() and sys.mg != null and _playing(sys, c) == "place", 5.0)
 	_check(began4, "then the forceps step that puts the eye in the vat")
 	var ok4 := await _until(func(): return String(c.get("state", "")) != "on_table", 90.0)
 	_check(ok4 and String(c.state) == "stable" and bool(c.flags.get("eye_in_vat", false)),
@@ -503,6 +509,7 @@ func _graft_checks() -> void:
 	_check(String(Eyes.unpack(String(vat.x)).get("kind", "")) == "eye_hive", "the Hive eyeball is back in the vat")
 	dev.control_botsworth()
 	await _frames(4)
+	_ran_to_end = true   # the last line of the whole chain _run awaits
 
 
 ## One whole graft, Botsworth operating. `first` only changes the messages. False on a timeout.
@@ -518,11 +525,15 @@ func _graft_run(bw, ti: int, first: bool) -> bool:
 		bw.selected = _slot_of_for(bw, tools[i])
 		await _frames(3)
 		game._proxy_used(game.table_interact_id(ti), bw)
-		var began := await _until(func(): return sys.is_local_operating() and sys.mg != null and String(sys.mg.get("variant")) == names[i], 6.0)
+		var began := await _until(func(): return sys.is_local_operating() and sys.mg != null and _playing(sys, ps.case) == names[i], 6.0)
 		_check(began, "%s: step %d plays the %s" % [tag, i + 1, names[i]])
 		if not began:
 			return false
+		# The arcade games take `no_fail` from the case's flags through their ctx and most keep no
+		# property of it (STEER! does not), so ask the case when the game has none.
 		var nb = sys.mg.get("no_fail")
+		if nb == null:
+			nb = ps.case.get("flags", {}).get("no_fail", false)
 		if i == 0:
 			_check(bool(nb), "%s: no botching on grafts (no_fail %s)" % [tag, str(nb)])
 		var done := await _until(func(): return ps.case.is_empty() or int(ps.case.get("step_index", 0)) > i, 60.0)
@@ -628,6 +639,18 @@ func _seconds(s: float) -> void:
 	var end := t + s
 	while t < end:
 		await get_tree().physics_frame
+
+
+## Which eye step `sys` is playing: the minigame's own `variant` when it has one (the legacy
+## eye_ops.gd), else the current step's -- the arcade games that replaced it (STEER! plays the
+## cut) have no `variant`, and String(null) aborted _run mid-test.
+func _playing(sys, c: Dictionary) -> String:
+	if sys == null or sys.mg == null:
+		return ""
+	var v = sys.mg.get("variant")
+	if v != null:
+		return String(v)
+	return String(Procedures.step(String(c.get("ailment_id", "")), int(c.get("step_index", -1))).get("variant", ""))
 
 
 func _until(cond: Callable, timeout: float) -> bool:
