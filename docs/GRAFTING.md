@@ -49,6 +49,10 @@ no fractional points any more): the graft grants level 1, and taking the part ba
   the forceps.
 - **Another player has to operate.** You can't graft yourself, and there's no solo robot yet.
   For testing alone, the dev panel lets you take control of Dr. Botsworth (below).
+  *Since 2026-09-25 the solo robot exists:* buy a robot core ($500, pharmacy), plug it into the
+  surgical robot at the head end of the first OR table, strap yourself to that table and press P to
+  remote in and graft yourself (docs/CONTRACTS.md "The surgical robot", DESIGN.md "Grafting").
+  Another player can still operate by hand as before.
 - **Eyes are labelled with their owner.** A surgeon's eye is "Zach's eyeball" on the vat label and
   in the hand. The item taken out of a Hive is called **Hive's eyeball**. Every body part is named
   this way, "X's Y".
@@ -143,5 +147,6 @@ A and B can run at the same time. C starts after both are merged.
 
 ## Not in this part
 
-Other species' parts, levels past 1, a second Hive eye, graft botches, the solo surgical robot,
+Other species' parts, levels past 1, a second Hive eye, graft botches, the solo surgical robot (built
+later, on its own branch: see above),
 Hives seeing through the grafted surgeon (in the backlog), and the Growths redesign (dropped).

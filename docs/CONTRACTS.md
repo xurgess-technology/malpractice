@@ -3062,7 +3062,7 @@ game.grafts.graft_of(peer_id) -> String      # "eye_hive" or ""; snapshot field 
   Dr. Botsworth operating, Puppet 1 in and out, and not getting up after the scoop),
   nettest scenario `graft`.
 
-### The surgical robot (2026-09-24, docs/backlog/SWEEP4B.md "A solo surgical robot")
+### The surgical robot (2026-09-24; was docs/backlog/SWEEP4B.md "A solo surgical robot")
 
 The OR's first patient table has a surgical robot at its head end. It starts every run dead; a
 **robot core** from the pharmacy ($500) plugged into it powers it for the rest of the run; then

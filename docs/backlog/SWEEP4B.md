@@ -13,8 +13,6 @@ grafting design that used to be here was dropped on 2026-09-18; grafting starts 
   and is the only thing that would, now that brains are gone and grafting is the sole source of an
   ability. Later, Echo turns into the Sonographer's own echo: the same wedge, the grafted surgeon's
   throat glowing as they charge it. (Zach, 2026-09-18.)
-- **A solo surgical robot** at an OR table, so a solo player can be grafted. For now another player
-  has to operate (Dr. Botsworth covers testing through the dev panel).
 
 ## Dev panel
 - Database: unlock all entries, reset.
