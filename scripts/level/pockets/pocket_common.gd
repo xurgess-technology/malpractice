@@ -399,6 +399,13 @@ static func vface(geo: Geo, cx: int, cy: int, mat: String, centre: Vector3, n: V
 # =========================================================================
 
 ## Merged procedural mesh: parts per material, one surface per material.
+##
+## Every face is wound CLOCKWISE seen from outside, Godot's front face (the same as Geo.quad and
+## monsters/shapes.gd). Until fix-pocket-zfighting the box and cylinder were wound the other way, so
+## every prop in every pocket space was drawn inside out: back-face culling threw away the faces
+## you should see and kept the far ones, and a box standing on the floor showed you the INSIDE of its
+## own bottom face at y = 0, fighting the floor for every pixel (the "flickering" under the
+## Laundromat's washers and the Natatorium's starting blocks). tools/zfightshot.gd measures it.
 class MeshBuilder extends RefCounted:
 	var sts := {}
 	var mat_of := {}
@@ -430,7 +437,7 @@ class MeshBuilder extends RefCounted:
 			var c: Array = f[1]
 			var uvs: Vector2 = f[2]
 			var uv := [Vector2(0, uvs.y), Vector2(uvs.x, uvs.y), Vector2(uvs.x, 0), Vector2(0, 0)]
-			for k in [0, 1, 2, 0, 2, 3]:
+			for k in [0, 2, 1, 0, 3, 2]:
 				st.set_normal(n)
 				st.set_uv(uv[k])
 				st.add_vertex(xf * (c[k] as Vector3))
@@ -447,7 +454,7 @@ class MeshBuilder extends RefCounted:
 			var d1 := Vector3(cos(a1), 0, sin(a1))
 			var p := [d0 * radius + Vector3(0, -hy, 0), d1 * radius + Vector3(0, -hy, 0), d1 * tr + Vector3(0, hy, 0), d0 * tr + Vector3(0, hy, 0)]
 			var ns := [d0, d1, d1, d0]
-			for k in [0, 2, 1, 0, 3, 2]:
+			for k in [0, 1, 2, 0, 2, 3]:
 				st.set_normal((xf.basis * (ns[k] as Vector3)).normalized())
 				st.set_uv(Vector2(float(i if k in [0, 3] else i + 1) / segments, 1.0 if k < 2 else 0.0))
 				st.add_vertex(xf * (p[k] as Vector3))
@@ -457,7 +464,7 @@ class MeshBuilder extends RefCounted:
 					var rr: float = cap[1]
 					var nn: Vector3 = cap[2]
 					var tri := [Vector3(0, y, 0), d0 * rr + Vector3(0, y, 0), d1 * rr + Vector3(0, y, 0)]
-					var order := [0, 1, 2] if nn.y < 0.0 else [0, 2, 1]
+					var order := [0, 2, 1] if nn.y < 0.0 else [0, 1, 2]
 					for k in order:
 						st.set_normal((xf.basis * nn).normalized())
 						st.set_uv(Vector2(0.5, 0.5))

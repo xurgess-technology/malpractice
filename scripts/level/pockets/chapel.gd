@@ -328,7 +328,10 @@ static func build_steps(lay: Dictionary, origin: Vector2i, out: Dictionary, root
 				mb.cylinder("s", stone, Transform3D(Basis(), Vector3(cos(ang) * 0.5, PIER_TOP * 0.5, sin(ang) * 0.5)), 0.17, PIER_TOP, 8)
 			mb.box("c", stone, Transform3D(Basis(), Vector3(0, PIER_TOP + 0.18, 0)), Vector3(1.45, 0.36, 1.45))
 			# The shaft carries on up into the dark as a vaulting rib.
-			mb.box("d", dark_stone, Transform3D(Basis(), Vector3(0, (CEIL + PIER_TOP) * 0.5, 0)), Vector3(0.55, CEIL - PIER_TOP, 0.55))
+			# It springs from the capital's top, not its underside, or the rib's foot sits in the
+			# capital's soffit and the two fight for it (fix-pocket-zfighting).
+			var rib0 := PIER_TOP + 0.36
+			mb.box("d", dark_stone, Transform3D(Basis(), Vector3(0, (CEIL + rib0) * 0.5, 0)), Vector3(0.55, CEIL - rib0, 0.55))
 			return mb.commit())
 		for p: Vector2i in lay.piers:
 			var at: Vector3 = world.call(Vector2(p) + Vector2(0.5, 0.5))
@@ -651,7 +654,11 @@ static func _build_sacristy(root: Node3D, body: StaticBody3D, props: Common.Prop
 	var mb := Common.MeshBuilder.new()
 	var a: Vector3 = world.call(Vector2(SACRISTY_BLOCK.position), SACRISTY_CEIL)
 	var b: Vector3 = world.call(Vector2(SACRISTY_BLOCK.end), SACRISTY_TOP)
-	mb.box("s", slab, Transform3D(Basis(), (a + b) * 0.5), b - a)
+	# The roof slab is drawn a centimetre inside the block's own faces: flush, its underside sat in the
+	# sacristy ceiling's plane and its sides in the nave walls' planes, and each pair fought for the
+	# pixels (fix-pocket-zfighting). The collider keeps the full size.
+	var inset := Vector3(0.01, 0.0, 0.01)
+	mb.box("s", slab, Transform3D(Basis(), (a + b) * 0.5 + Vector3(0, 0.005, 0)), b - a - inset * 2.0 - Vector3(0, 0.01, 0))
 	Common.collider(body, Transform3D(Basis(), (a + b) * 0.5), b - a)
 	# A vesting bench with a folded alb on it.
 	var bp: Vector3 = world.call(Vector2(SACRISTY.position.x + 2.5, SACRISTY.end.y - 0.5))
