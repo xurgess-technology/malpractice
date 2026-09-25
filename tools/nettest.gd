@@ -826,8 +826,19 @@ func _sc_full_shift():
 		return _end(false, "the shift was lost: %s" % game.message)
 	if not st.crew:
 		return _end(false, "never saw the paramedics bring the patient")
+	# The phase change is a reliable RPC but a case's state rides the (unreliable, per-field acked)
+	# snapshots, so a client can hear the shift end before its replica of the case turns "stable":
+	# the host goes from stable to clocked out in about a second. Seen 2 runs in 5 once `bandwidth`
+	# got that far. The case stays in game.cases after the shift ends, so wait for it to converge.
 	if not st.stable:
-		return _end(false, "clocked out without seeing the patient stable")
+		var seen_stable := func():
+			for c in game.cases:
+				if String(c.state) == "stable":
+					return true
+			return false
+		if not await _until(seen_stable, 10.0, "the patient to read stable after clocking out"):
+			return
+		_say("the patient's stable state arrived after the shift ended")
 	if not await _until(func(): return game.money > int(st.money), 20.0, "the paycheck"):
 		return
 	if stats and st.shift_t >= 0.0:
@@ -2954,7 +2965,14 @@ func _shift_bot(st: Dictionary) -> void:
 			me.drop_count += 1   # not needed any more
 			return
 	if short.is_empty():
-		return   # someone else is holding it
+		# Everything is in the OR -- but "in the OR" (game.shelf_count) includes the storage
+		# shelves, and the step's tool is used from the operator's hands. Fetch it from wherever it
+		# sits, as playtest.gd and looptest.gd do. Without this a tool that starts on the shelves
+		# (vats.gd stocks forceps there every level) was never picked up by anyone: `bandwidth`,
+		# seed 4242, sat at GW step 1 until its 900 s timeout (docs/FAILING_TESTS.md).
+		# Every idle bot heads for the nearest one (world_items only, so never one in a hand): the
+		# first to hold it operates, and the rest pick up spares from drawers, which is harmless.
+		short = {tool: uses}
 	var kinds := short.keys()
 	kinds.sort()
 	var kind: String = kinds[index % kinds.size()]

@@ -226,46 +226,46 @@ pockets, and separately `--seeds=8 --builds=8` with `--build_pocket=none` and
   report `navigation map never synchronised` on one seed under a loaded machine -- a timing flake,
   confirmed here on seed 8 with `--build_pocket=factory` (fails in an 8-seed batch, passes alone).
 
-## 1n. nettest `bandwidth` (Bob's gunshot, seed 4242): stuck at step 1, cause not yet fixed
+## 1n was the test's bot, not the game -- fixed 2026-09-25 (`nettest-bandwidth-fix`)
 
-**In progress, handed off 2026-09-25.** `bandwidth` (`tools/nettest_run.gd -- --only=bandwidth`)
-got stuck at GW step 1 ("extract", DODGE!/`forceps`) for ~850 s before timing out at 890 s, on a
-run logged at `tools/nettest_logs/bandwidth_*.log`. `full_shift_lag` (a different scenario config,
-same `full_shift` handler) passes, so this is not a blanket `full_shift` break.
+`bandwidth` (`tools/nettest_run.gd -- --only=bandwidth`, Bob's gunshot, seed 4242) sat at GW step 1
+("extract", forceps) from about 55 s until its 900 s timeout. **The leading theory was right**, and
+instrumenting `_shift_bot` confirmed it:
 
-- **What the logs show:** every one of the four players' hands arrays, for the whole stuck period,
-  show only `anesthetic` or `gauze` -- `forceps` never once appears in anyone's hands. Nobody ever
-  picked it up.
-- **Leading theory, not yet confirmed by instrumentation:** `tools/nettest.gd`'s `_shift_bot` only
-  calls `_nearest_item(kind)` to fetch an item when that kind is in `short` (`need - game.shelf_count
-  (kind)`, `_shift_bot` around line 2690). `shelf_count()` (`scripts/game.gd:1690`) counts an item
-  sitting in an OR storage container as already "there", same as one already in a player's hand. A
-  reusable tool that spawned onto the OR shelf (rather than loose in the world) satisfies `short`
-  immediately, so the bot never walks to the shelf and picks it up -- it behaves as if "someone
-  else is holding it" (the comment at that `return`), when actually nobody is. `can_begin()`
-  (`scripts/surgery/surgery_system.gd:189`) is unchanged and firmly requires the item held in hand
-  to operate, so if this is right, the fetch-from-shelf step is the one the bot skips.
-- **What is NOT yet checked:** whether `forceps` actually spawned into a `storage_` container this
-  seed (vs. loose in the world, vs. not spawned at all -- `ItemSpawner.plan` still includes it via
-  `Items.SURGICAL`, unaffected by the arcade rebuild, so it should spawn same as always). Also not
-  yet checked: whether this same shelf-vs-hand gap would already have bitten `tourniquet` /
-  `bone_saw` (also reusable tools, uses=0) in the amputation case, which would mean it is not new
-  and not specific to DODGE!/forceps at all. `full_shift_lag` uses seed 4247, a different roll, so
-  it does not rule this out either way.
-- **Next step:** instrument `_shift_bot`'s `short` and `game.shelf_count("forceps")` on a scratch
-  run of `--only=bandwidth`, or dump `game.world_items` for the `forceps` stack, to see whether it
-  really is parked in a container the bot is ignoring. If confirmed, the fix is teaching
-  `_shift_bot` (test-side) to also fetch a reusable tool out of `short`'s blind spot -- or, if a
-  reusable tool sitting unclaimed on a shelf is a real softlock a human player could also hit, this
-  is a product bug in `_shift_bot`'s design assumption, not just the bot.
-- **`vats.gd` shutdown error, separately confirmed harmless:** every stuck run ends with
-  `SCRIPT ERROR: Trying to assign invalid previously freed instance. at: Vats._arm_markers
-  (res://scripts/grafting/vats.gd:545)`, called from `_physics_process` (line 496), immediately
-  after `[net] peer N disconnected` at the 890 s timeout kill. It only ever appears at/after
-  process teardown once the host or a client has already torn its world down, so it reads as a
-  freed-node touch during shutdown racing the physics tick, not a cause of the stall. Not
-  investigated further; low priority, but worth a five-minute look (guard `_arm_markers` with an
-  `is_instance_valid` check on whatever it assigns) next time someone is in `vats.gd`.
+- **The mechanism.** `scripts/grafting/vats.gd`'s `on_level_built` has stocked one pair of forceps
+  (with a scalpel and an eye spoon) on the OR's storage shelves at every level build since 0.10.24
+  (2026-09-22), so a graft is never blocked by a search. `game.shelf_count()` counts the shelves
+  *and* everyone's hands as "in the OR" (that is its contract: the OR monitor, the dev panel and
+  the syringe station all read it that way). `_shift_bot` in `tools/nettest.gd` fetched only what
+  `need - shelf_count` left short, and when nothing was short it returned ("someone else is holding
+  it"). At step 1 forceps needed 1 and the shelf had 1, so every bot stood still. Logged on the
+  host: `forceps need=1 shelf_count=1`, the only counted pair `IN_CONTAINER:storage_0`, nobody's
+  hands holding one. No other ailment a shift case can roll is affected: the only other pre-stocked
+  tools (scalpel, eye spoon) are used only by the graft procedures, and amputation's tourniquet and
+  bone saw are never on the shelves at clock-in.
+- **Why only nettest.** `tools/playtest.gd` and `tools/looptest.gd` already had the fallback
+  (`from_storage`): when nothing is short, fetch the current step's item from wherever it sits.
+  `_shift_bot` now does the same. `full_shift_lag` and `bandwidth_amp` never showed it because
+  their seeds roll an amputation.
+- **After the fix:** step 1 to step 2 in 9-13 s of game time; the whole scenario **passes in 70-140
+  s wall** (11 of 14 runs green; see below for the other three). `full_shift_lag` and
+  `bandwidth_amp` still pass.
+- **A second test bug it uncovered.** With the stall gone, 2 of the first 5 runs failed with
+  `clocked out without seeing the patient stable` on one client. The phase change reaches clients as
+  a reliable RPC, but a case's state rides the unreliable, acked snapshots, and the host goes from
+  "stable" to clocked out in about a second -- so a client can hear the shift end before its replica
+  of the case turns stable. The case stays in `game.cases` after the shift (every client read
+  "stable" there in the runs that were logged), so `_sc_full_shift` now waits up to 10 s for it to
+  converge instead of requiring it be seen mid-shift, and says so when it had to. Five runs after
+  that change: four passed, one never finished because the **runner process itself**
+  (`nettest_run.gd`) segfaulted mid-shift ("The caller thread can't call the function
+  `propagate_notification()` on this node", then signal 11) while its children were progressing
+  normally. That crash is not this bug and was not investigated; re-run before believing it.
+- **Still open, low priority: `vats.gd` shutdown error.** A run that ends in a failure can still
+  print `SCRIPT ERROR: Trying to assign invalid previously freed instance. at: Vats._arm_markers
+  (res://scripts/grafting/vats.gd:545)` from `_physics_process`, right after `[net] peer N
+  disconnected` at teardown. It is a freed-node touch racing the physics tick during shutdown, not a
+  cause of anything; guard `_arm_markers` with `is_instance_valid` next time someone is in `vats.gd`.
 
 How to run things is at the bottom of this file.
 
