@@ -1351,7 +1351,8 @@ static func _commit_showers(p: Dictionary, root: Node3D) -> void:
 ## Net / Audio autoloads, which `godot -s` (tools/mapcheck.gd) never has (see mirrors.gd).
 static func _commit_vein_machine(p: Dictionary, root: Node3D) -> void:
 	var spots: Dictionary = p.gen.spots
-	if not spots.has("personnel") or not (spots.personnel as Dictionary).has("scanner") 			or not MirrorsScript._autoloads_present():
+	if not spots.has("personnel") or not (spots.personnel as Dictionary).has("scanner") \
+			or not MirrorsScript._autoloads_present():
 		return
 	var vm: Node3D = load("res://scripts/personnel/vein_machine.gd").new()
 	vm.setup(spots.personnel, func(pos: Vector2, y: float) -> Vector3: return _w(pos, y),

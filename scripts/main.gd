@@ -684,7 +684,8 @@ func _update_mouse() -> void:
 \
 		or (game.economy != null and game.economy.fax_ui_open()) \
 		or game.surgery_wants_mouse() \
-		or game.mirror_menu_open() 		or game.vein_open() \
+		or game.mirror_menu_open() \
+		or game.vein_open() \
 		or (dev_panel != null and dev_panel.is_open()) \
 		or (char_sheet != null and char_sheet.open)  # TAB SHEET: the cursor is how you hover a slot
 	var want := Input.MOUSE_MODE_VISIBLE if free else Input.MOUSE_MODE_CAPTURED
